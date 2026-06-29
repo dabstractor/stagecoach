@@ -157,8 +157,25 @@ func (g *gitRunner) RevParseHEAD(ctx context.Context) (sha string, isUnborn bool
 	return strings.TrimSpace(stdout), false, nil
 }
 
-func (g *gitRunner) WriteTree(ctx context.Context) (string, error) {
-	panic("gitRunner.WriteTree: not yet implemented — see P1.M1.T2.S3")
+// WriteTree materializes the current index into a tree object and returns its SHA. It is a
+// read-only-with-respect-to-refs operation: it writes a tree object to the object store but does
+// NOT modify the index or HEAD (PRD §13.2). It is the immutable-snapshot primitive consumed by
+// CommitTree (P1.M1.T2.S4) and the rescue protocol (P1.M3.T3).
+//
+// write-tree fails (non-zero exit, 128 on git 2.x) when the index has unresolved merge conflicts
+// (unmerged stage 1/2/3 entries). That is surfaced here as run()'s exitCode != 0 (err stays nil per
+// run()'s invariant); the error names "unresolved merge conflicts" and includes the trimmed stderr,
+// whose text contains "unmerged"/"error building trees" on a real conflict (git_plumbing_reference
+// §1: the stable signal is exit ≠ 0; do NOT match a single exact stderr phrase).
+func (g *gitRunner) WriteTree(ctx context.Context) (sha string, err error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "write-tree")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git write-tree: unresolved merge conflicts in index (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
 }
 
 func (g *gitRunner) CommitTree(ctx context.Context, tree string, parents []string, msg string) (string, error) {

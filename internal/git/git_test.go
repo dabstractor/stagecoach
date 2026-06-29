@@ -120,7 +120,6 @@ func TestStubsPanic(t *testing.T) {
 	ctx := context.Background()
 	g := New(".")
 
-	assertPanics(t, "WriteTree", func() { _, _ = g.WriteTree(ctx) })
 	assertPanics(t, "CommitTree", func() { _, _ = g.CommitTree(ctx, "tree", nil, "msg") })
 	assertPanics(t, "UpdateRefCAS", func() { _ = g.UpdateRefCAS(ctx, "ref", "new", "old") })
 	assertPanics(t, "DiffTree", func() { _, _ = g.DiffTree(ctx, "sha", false) })
