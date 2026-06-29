@@ -654,14 +654,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Rescue Protocol",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the rescue protocol (PRD §18.3 / FR43-FR45): when generation or parsing fails after the snapshot was taken, print the TREE_SHA, the exact manual recovery command, and optionally the candidate message.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Rescue message formatting (TREE_SHA + recovery command + candidate message)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S3"
@@ -687,7 +687,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T4.S1",
                   "title": "Stub provider (fake agent) for integration testing",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T5.S1",
