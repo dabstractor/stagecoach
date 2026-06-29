@@ -1,0 +1,145 @@
+package provider
+
+import (
+	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
+)
+
+// mustBin skips the test if any named binary is not resolvable on PATH.
+func mustBin(t *testing.T, names ...string) {
+	t.Helper()
+	for _, n := range names {
+		if _, err := exec.LookPath(n); err != nil {
+			t.Skipf("required binary %q not in PATH: %v", n, err)
+		}
+	}
+}
+
+// 1. Normal run: `cat` echoes stdin to stdout verbatim.
+func TestExecute_CatEchoesStdin(t *testing.T) {
+	mustBin(t, "cat")
+	spec := CmdSpec{Command: "cat", Args: nil, Stdin: "hello world\n", Env: os.Environ()}
+	out, _, err := Execute(context.Background(), spec, 0)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil", err)
+	}
+	if out != "hello world\n" {
+		t.Errorf("stdout = %q, want %q", out, "hello world\n")
+	}
+}
+
+// 2. Large stdin: 1MiB round-trips byte-for-byte (proves stdin piping, not a tiny buffer).
+func TestExecute_LargeStdin(t *testing.T) {
+	mustBin(t, "cat")
+	payload := strings.Repeat("x", 1<<20) // 1 MiB
+	spec := CmdSpec{Command: "cat", Stdin: payload, Env: os.Environ()}
+	out, _, err := Execute(context.Background(), spec, 30*time.Second)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil", err)
+	}
+	if out != payload {
+		t.Errorf("large stdin: len(stdout) = %d, want %d", len(out), len(payload))
+	}
+}
+
+//  3. THE KEYSTONE — timeout kills the process: `sleep 30` + 200ms timeout ⇒ DeadlineExceeded,
+//     AND Execute returns within seconds (not 30s) — proving cmd.Cancel fired and killed the group.
+func TestExecute_TimeoutKillsProcess(t *testing.T) {
+	mustBin(t, "sleep")
+	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Stdin: "", Env: os.Environ()}
+	start := time.Now()
+	_, _, err := Execute(context.Background(), spec, 200*time.Millisecond)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Execute took %v; the process-group kill should have fired within ~3s (WaitDelay)", elapsed)
+	}
+}
+
+// 4. Parent-context cancel ⇒ context.Canceled (distinguished from timeout).
+func TestExecute_ParentContextCancel(t *testing.T) {
+	mustBin(t, "sleep")
+	ctx, cancel := context.WithCancel(context.Background())
+	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Env: os.Environ()}
+	go func() { time.Sleep(150 * time.Millisecond); cancel() }()
+	_, _, err := Execute(ctx, spec, 0) // no timeout; rely on parent cancel
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+// 5. stderr captured SEPARATELY + non-zero exit surfaced: `cat /nonexistent` writes to stderr, exits 1.
+func TestExecute_StderrCaptureAndNonZeroExit(t *testing.T) {
+	mustBin(t, "cat")
+	spec := CmdSpec{Command: "cat", Args: []string{"/nonexistent/path/xyz"}, Env: os.Environ()}
+	out, errb, err := Execute(context.Background(), spec, 5*time.Second)
+	if err == nil {
+		t.Fatal("err = nil, want non-nil (non-zero exit)")
+	}
+	if errb == "" {
+		t.Errorf("stderr = empty, want a 'No such file' message")
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty", out)
+	}
+}
+
+// 6. Env propagation: a manifest/env var reaches the child (`printenv VAR` prints its value).
+func TestExecute_EnvPropagation(t *testing.T) {
+	mustBin(t, "printenv")
+	env := append(os.Environ(), "STAGEHAND_TEST_VAR=s3cr3t")
+	spec := CmdSpec{Command: "printenv", Args: []string{"STAGEHAND_TEST_VAR"}, Env: env}
+	out, _, err := Execute(context.Background(), spec, 5*time.Second)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil", err)
+	}
+	if strings.TrimSpace(out) != "s3cr3t" {
+		t.Errorf("env var: stdout = %q, want %q", out, "s3cr3t")
+	}
+}
+
+//  7. No stdin (positional/flag delivery): Stdin="" ⇒ no pipe ⇒ child gets /dev/null ⇒ cat exits 0
+//     immediately with empty output (and does NOT hang).
+func TestExecute_NoStdinDoesNotHang(t *testing.T) {
+	mustBin(t, "cat")
+	spec := CmdSpec{Command: "cat", Stdin: "", Env: os.Environ()}
+	out, _, err := Execute(context.Background(), spec, 3*time.Second)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil", err)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty (no stdin)", out)
+	}
+}
+
+// 8. Command not found ⇒ wrapped Start() error.
+func TestExecute_CommandNotFound(t *testing.T) {
+	spec := CmdSpec{Command: "definitely-not-a-real-binary-xyz-stagehand", Env: os.Environ()}
+	_, _, err := Execute(context.Background(), spec, 3*time.Second)
+	if err == nil {
+		t.Fatal("err = nil, want non-nil (command not found)")
+	}
+	if !strings.Contains(err.Error(), "start") && !strings.Contains(err.Error(), "not found") && !strings.Contains(err.Error(), "executable") {
+		t.Errorf("err = %v, want it to mention start/not found/executable", err)
+	}
+}
+
+// 9. Non-zero exit: `false` exits 1 ⇒ non-nil wrapped error (exit-failure path).
+func TestExecute_NonZeroExit(t *testing.T) {
+	mustBin(t, "false")
+	spec := CmdSpec{Command: "false", Env: os.Environ()}
+	out, _, err := Execute(context.Background(), spec, 0)
+	if err == nil {
+		t.Fatal("err = nil, want non-nil (`false` exits 1)")
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty", out)
+	}
+}
