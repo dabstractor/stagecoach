@@ -570,14 +570,14 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Prompt Construction (Style Learning + Anti-Reuse)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the system-prompt builder (PRD §17) that learns style from the last 20 commits, detects multi-line vs single-line, enforces anti-reuse of example wording, and assembles the user payload (instruction + diff, with rejection block on retry).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Mature-repo system prompt (style examples + anti-reuse + multi-line rule)",
-                  "status": "Complete",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T3.S3"
@@ -594,7 +594,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "New-repo conventional-commit fallback prompt",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T3.S3"
@@ -610,7 +610,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S3",
                   "title": "User payload assembly (instruction + diff + rejection block)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T3.S1"

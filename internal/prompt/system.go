@@ -120,6 +120,48 @@ func countNonBlankLines(s string) int {
 //
 // Defensive: nil/empty examples emit NO "---" lines and no panic (the orchestrator gates on
 // CommitCount>1, so examples are non-empty in practice). See design-decisions.md §9.
+// fallbackPromptBody is PRD §17.2 MINUS the final target/format line: role, the SHORT §17.2 raw-output
+// contract (no "no quoting", no body clause — new repo ⇒ single-line subject), and the essence
+// instruction. Committed VERBATIM from PRD §17.2 (Appendix A). NO trailing newline — BuildFallbackPrompt
+// owns the single "\n\n" (one blank line) before the target line, mirroring S1's rule that constants
+// carry no trailing newline so inter-block newline placement lives in exactly one auditable place.
+//
+// Unlike §17.1 (S1), §17.2 is ALL ASCII — no em-dash, no non-ASCII bytes; the "~" in the target line is
+// an ASCII tilde. See research design-decisions.md §4.
+const fallbackPromptBody = `You are a commit message generator.
+
+Output ONLY the commit message. No preamble, no markdown, no code fences.
+
+Focus on the ESSENCE of the change (the intent/purpose), not implementation
+details like filenames or function names.`
+
+// BuildFallbackPrompt implements PRD §9.3 FR14 / §17.2: the new-repo (≤1 commit) conventional-commit
+// fallback system prompt. When the orchestrator (P1.M3.T4) finds git.CommitCount(...) <= 1 it calls
+// THIS instead of S1's BuildSystemPrompt — there is no history to learn style from, so the model is
+// taught the Conventional Commits scaffold (type(scope): description) directly.
+//
+// ASSEMBLY (PRD §17.2, exact):
+//
+//	fallbackPromptBody                       // role + short output contract + essence (no trailing \n)
+//	'\n' '\n'                                // exactly ONE blank line
+//	fmt.Sprintf("Target ~%d characters (~7 words). Format: type(scope): description", subjectTarget)
+//
+// THE interpolation call (research design-decisions.md §2 — the load-bearing decision): ONLY the `50`
+// in §17.2's "Target ~50 characters (~7 words). Format: type(scope): description" becomes `%d` — exact
+// analogy with S1's subjectTargetLine (where §17.1's "Target ~50 characters for the subject line."
+// became "Target ~%d characters for the subject line."). "(~7 words)" stays VERBATIM (a fixed gloss,
+// not a spec; scaling it would add an undocumented ÷7 magic constant). With the default
+// cfg.SubjectTargetChars=50 (P1.M1.T4.S1) the output is BYTE-IDENTICAL to PRD §17.2.
+//
+// Do NOT reuse S1's subjectTargetLine — it emits the §17.1 wording, wrong for §17.2.
+//
+// Defensive: subjectTarget is a plain int with no failure mode; fmt.Sprintf cannot fail. Returns string
+// only (no error). See design-decisions.md §1/§2/§3.
+func BuildFallbackPrompt(subjectTarget int) string {
+	return fallbackPromptBody + "\n\n" +
+		fmt.Sprintf("Target ~%d characters (~7 words). Format: type(scope): description", subjectTarget)
+}
+
 func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int) string {
 	var b strings.Builder
 

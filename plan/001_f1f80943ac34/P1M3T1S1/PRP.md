@@ -41,8 +41,8 @@ description: |
   ⚠️ **THE detection is a SEPARATE exported helper.** Add `func DetectMultiline(examples []string)
   bool` — a faithful port of commit-pi's awk heuristic (`has_multiline=$(… | awk
   '/^---$/{if(lines>1)found=1; lines=0; next} {lines++} END{print found+0}')`): true ⇔ ANY example has
-  >1 NON-BLANK line. Implement via `countNonEmptyLines(msg) > 1` (NOT `strings.Contains(msg, "\n")` — the
-  awk strips blanks THEN counts; the exact port removes all doubt). See commit-pi-origin.md §2.
+  >1 NON-EMPTY line. Implement via `countNonEmptyLines(msg) > 1` (NOT `strings.Contains(msg, "\n")` — the
+  awk strips empty lines then counts; the exact port removes all doubt). See commit-pi-origin.md §2.
 
   ⚠️ **THE canonical strings come from PRD §17.1, NOT commit-pi.** commit-pi shipped the JSON contract
   ("Return valid JSON only…", "no double quotes"); PRD §17.4 replaced it with raw output. Port the PRD.
@@ -65,7 +65,7 @@ description: |
   Deliverable: `internal/prompt/system.go` (`package prompt`, imports `fmt`+`strings`) — `BuildSystemPrompt`
   + `DetectMultiline` + unexported `countNonEmptyLines` + the verbatim canonical string constants.
   PLUS `internal/prompt/system_test.go` (`package prompt`, imports `strings`+`testing`) — table-driven
-  `TestBuildSystemPrompt` + `TestDetectMultiline` + `TestCountNonBlankLines`. Touches ONLY these two NEW
+  `TestBuildSystemPrompt` + `TestDetectMultiline` + `TestCountNonEmptyLines`. Touches ONLY these two NEW
   files — NO go.mod/go.sum change (stdlib only), NO edit to any provider/config/git/cmd file.
 
 ---
@@ -92,7 +92,7 @@ example text verbatim.
      `multilineRuleAllow`, `multilineRuleSingle`.
 2. **CREATE** `internal/prompt/system_test.go` (`package prompt`, imports `strings`, `testing`) —
    `TestBuildSystemPrompt` (one exact-match canonical case + a structural-properties table),
-   `TestDetectMultiline` (table), `TestCountNonBlankLines` (table).
+   `TestDetectMultiline` (table), `TestCountNonEmptyLines` (table).
 
 No other files touched. **No go.mod/go.sum change** (stdlib `fmt`+`strings` only). NO edit to any file in
 `internal/provider/`, `internal/config/`, `internal/git/`, `cmd/`, `pkg/`, the `Makefile`, or any sibling
@@ -173,7 +173,7 @@ no subprocess. Both functions are deterministic string transformations; `BuildSy
 - [ ] Each example is preceded by exactly one `---` line; `strings.Count(prompt, "\n---\n")` semantics
       hold (`---` count == `len(examples)` for the non-empty case).
 - [ ] The `(up to 20, ≤100 lines total)` annotation is ABSENT from the output.
-- [ ] `DetectMultiline` returns `true` iff ANY example has >1 NON-BLANK line (awk-faithful); `nil`/empty
+- [ ] `DetectMultiline` returns `true` iff ANY example has >1 NON-EMPTY line (awk-faithful); `nil`/empty
       → `false`; never panics.
 - [ ] `subjectTarget` is interpolated via `fmt.Sprintf("Target ~%d characters for the subject line.",
       subjectTarget)` (literal `~` preserved); a test with `subjectTarget=72` asserts `Target ~72…`.
@@ -280,7 +280,7 @@ Makefile                        # build/test(-race)/coverage/lint/clean/help —
 internal/
   prompt/
     system.go         # NEW — BuildSystemPrompt + DetectMultiline + countNonEmptyLines + 4 canonical consts
-    system_test.go    # NEW — TestBuildSystemPrompt (exact-match + structural) + TestDetectMultiline + TestCountNonBlankLines
+    system_test.go    # NEW — TestBuildSystemPrompt (exact-match + structural) + TestDetectMultiline + TestCountNonEmptyLines
 # All other files UNCHANGED. go.mod/go.sum UNCHANGED. After S1: the prompt layer's mature-repo path
 # exists; S2 adds the new-repo prompt (§17.2), S3 adds the user payload (§17.3) to the same package.
 ```
@@ -296,12 +296,13 @@ internal/
 
 // CRITICAL (DetectMultiline is a SEPARATE exported function, faithful awk port): add
 //   func DetectMultiline(examples []string) bool
-// Returns true iff ANY example has >1 NON-BLANK line — a faithful port of commit-pi's awk
+// Returns true iff ANY example has >1 NON-EMPTY line — a faithful port of commit-pi's awk
 //   awk '/^---$/{if(lines>1)found=1; lines=0; next} {lines++} END{print found+0}'
-// Implement via countNonEmptyLines(msg) > 1, NOT strings.Contains(msg, "\n"). The awk strips blanks
-// THEN counts; countNonEmptyLines mirrors that exactly (a whitespace-only body line is counted by both,
-// missed by a naive Contains-derived check would actually agree, but the exact port removes all doubt
-// and documents provenance). (commit-pi-origin §2, design-decisions §2)
+// Implement via countNonEmptyLines(msg) > 1 (which uses `line != ""`), NOT strings.Contains(msg, "\n")
+// and NOT a TrimSpace-based count. The awk runs over `sed '/^$/d'` output, which strips only
+// truly-empty lines — a whitespace-only line SURVIVES and is counted. `line != ""` mirrors that
+// EXACTLY; the boolean agrees with the alternatives on RecentMessages' trimmed output, but `line
+// != ""` is the literally-faithful port. (commit-pi-origin §2, design-decisions §2)
 
 // CRITICAL (canonical strings from PRD §17.1, NOT commit-pi): commit-pi shipped the JSON contract
 // ("Return valid JSON only…", "no double quotes inside the message"); PRD §17.4 replaced it with raw
@@ -408,14 +409,14 @@ func subjectTargetLine(subjectTarget int) string {
 //	examples=$(git log --format="---%n%B" -20 | sed '/^$/d' | head -100)
 //	has_multiline=$(echo "$examples" | awk '/^---$/{if(lines>1)found=1; lines=0; next} {lines++} END{print found+0}')
 //
-// The awk counts, per commit (delimited by "---"), the number of NON-BLANK lines (sed stripped blanks
-// first); found=1 if ANY commit had >1 non-blank line. git.RecentMessages (P1.M1.T3.S3) has already
+// The awk counts, per commit (delimited by "---"), the number of NON-EMPTY lines (sed stripped blanks
+// first); found=1 if ANY commit had >1 non-empty line. git.RecentMessages (P1.M1.T3.S3) has already
 // split on the NUL delimiter, trimmed each message, and capped at 100 lines keeping complete messages,
-// so DetectMultiline only needs the per-message ">1 non-blank line" test. It returns true iff ANY
-// example has more than one non-blank line. nil/empty → false; never panics.
+// so DetectMultiline only needs the per-message ">1 non-empty line" test. It returns true iff ANY
+// example has more than one non-empty line. nil/empty → false; never panics.
 //
 // Why countNonEmptyLines and NOT strings.Contains(msg, "\n"): they agree for every realistic git
-// message, but the awk strips blanks THEN counts, and countNonEmptyLines mirrors that exactly —
+// message, but the awk strips empty lines then counts, and countNonEmptyLines mirrors that exactly —
 // removing all doubt about whitespace-only body lines (which sed '/^$/d' does NOT strip, so the awk
 // counts them, and so does countNonEmptyLines). See research commit-pi-origin.md §2.
 func DetectMultiline(examples []string) bool {
@@ -427,13 +428,14 @@ func DetectMultiline(examples []string) bool {
 	return false
 }
 
-// countNonEmptyLines returns the number of non-blank lines in s (a line is blank iff strings.TrimSpace
-// of it is empty — mirroring commit-pi's `sed '/^$/d'` which strips truly-empty lines, then counting).
-// It is the per-message embodiment of the awk's `lines` counter.
+// countNonEmptyLines mirrors commit-pi's `sed '/^$/d'` EXACTLY: a truly-empty line is dropped, a
+// whitespace-only line SURVIVES and is counted (sed's /^$/ matches only the empty string — do NOT use
+// strings.TrimSpace, which would also drop "   "). It is the per-message embodiment of the awk's
+// `lines` counter.
 func countNonEmptyLines(s string) int {
 	n := 0
 	for _, line := range strings.Split(s, "\n") {
-		if strings.TrimSpace(line) != "" {
+		if line != "" { // exact sed '/^$/d' mirror — NOT strings.TrimSpace
 			n++
 		}
 	}
@@ -702,7 +704,7 @@ func TestBuildSystemPrompt_EmptyExamples(t *testing.T) {
 	}
 }
 
-// TestDetectMultiline is the table for the FR12 detection (faithful awk port: >1 non-blank line ⇒ true).
+// TestDetectMultiline is the table for the FR12 detection (faithful awk port: >1 non-empty line ⇒ true).
 func TestDetectMultiline(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -717,7 +719,7 @@ func TestDetectMultiline(t *testing.T) {
 		{"mixed, one multi-line → true", []string{"feat: a", "fix: b\n\nBody."}, true},
 		{"whitespace-only body line counts (awk-faithful) → true", []string{"feat: a\n   \nbody"}, true},
 		{"subject + trailing blanks trimmed upstream ⇒ single-line here → false", []string{"subject"}, false},
-		{"only blanks → 0 non-blank lines → false", []string{"\n\n"}, false},
+		{"only blanks → 0 non-empty lines → false", []string{"\n\n"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -728,8 +730,8 @@ func TestDetectMultiline(t *testing.T) {
 	}
 }
 
-// TestCountNonBlankLines targets the helper directly (the awk's per-message `lines` counter).
-func TestCountNonBlankLines(t *testing.T) {
+// TestCountNonEmptyLines targets the helper directly (the awk's per-message `lines` counter).
+func TestCountNonEmptyLines(t *testing.T) {
 	cases := []struct {
 		in   string
 		want int
@@ -737,8 +739,8 @@ func TestCountNonBlankLines(t *testing.T) {
 		{"", 0},
 		{"one", 1},
 		{"a\nb", 2},
-		{"a\n\nb", 2},          // internal blank not counted
-		{"a\n   \nb", 2},       // whitespace-only not blank-counted as content but still non-blank line
+		{"a\n\nb", 2},    // internal blank not counted
+		{"a\n   \nb", 3}, // whitespace-only line SURVIVES (sed '/^$/d' keeps it) → 3 non-empty lines
 		{"\n\n", 0},
 		{"\n\nfoo\n\n", 1},
 	}
@@ -775,8 +777,8 @@ Task 1: CREATE internal/prompt/system.go — constants + BuildSystemPrompt + Det
   - DEFINE the four unexported canonical string constants VERBATIM from PRD §17.1: maturePromptHeader
       (role + RAW-output contract + essence + "…from this repository:"), antiReuseProhibition (WITH the
       em-dash U+2014), multilineRuleAllow, multilineRuleSingle. NO trailing newlines on constants.
-  - IMPLEMENT unexported `countNonEmptyLines(s string) int` (Split on "\n", count lines whose TrimSpace
-      is non-empty).
+  - IMPLEMENT unexported `countNonEmptyLines(s string) int` (Split on "\n", count lines that are
+      non-empty via `line != ""` — exact sed '/^$/d' mirror, NOT TrimSpace).
   - IMPLEMENT exported `DetectMultiline(examples []string) bool` — loop, return true on first message
       with countNonEmptyLines > 1; nil/empty → false.
   - IMPLEMENT exported `subjectTargetLine(subjectTarget int) string` — fmt.Sprintf("Target ~%d characters
@@ -796,7 +798,7 @@ Task 2: CREATE internal/prompt/system_test.go — table-driven suite
   - IMPLEMENT TestBuildSystemPrompt_EmptyExamples (nil + empty slice: no panic, no "---", all blocks
       present).
   - IMPLEMENT TestDetectMultiline (table: nil/empty/single/mixed/whitespace-body/blanks-only).
-  - IMPLEMENT TestCountNonBlankLines (table) + the `near` failure helper.
+  - IMPLEMENT TestCountNonEmptyLines (table) + the `near` failure helper.
   - GOTCHA: no subprocess, no temp repo, no git — pure-function tests.
 
 Task 3: VERIFY (no further file change)
@@ -829,7 +831,7 @@ if hasMultiline {
 b.WriteByte('\n')                             // NO blank line → target
 b.WriteString(subjectTargetLine(subjectTarget))
 
-// THE detection — faithful awk port (per-message ">1 non-blank line"), NOT strings.Contains.
+// THE detection — faithful awk port (per-message ">1 non-empty line"), NOT strings.Contains.
 func DetectMultiline(examples []string) bool {
 	for _, msg := range examples {
 		if countNonEmptyLines(msg) > 1 {
@@ -841,7 +843,7 @@ func DetectMultiline(examples []string) bool {
 func countNonEmptyLines(s string) int {
 	n := 0
 	for _, line := range strings.Split(s, "\n") {
-		if strings.TrimSpace(line) != "" { // mirrors sed '/^$/d'
+		if line != "" { // exact sed '/^$/d' mirror (NOT TrimSpace)
 			n++
 		}
 	}
@@ -919,7 +921,7 @@ git diff --exit-code go.mod go.sum && echo "go.mod/go.sum unchanged ✓"
 ```bash
 # Run the new suite verbosely (every subtest listed)
 go test -race -v ./internal/prompt/ -run TestBuildSystemPrompt
-go test -race -v ./internal/prompt/ -run 'TestDetectMultiline|TestCountNonBlankLines'
+go test -race -v ./internal/prompt/ -run 'TestDetectMultiline|TestCountNonEmptyLines'
 
 # Full prompt package
 go test -race ./internal/prompt/
@@ -962,7 +964,7 @@ git diff --exit-code internal/provider internal/config internal/git cmd pkg Make
 #   2. The properties table pins each design decision independently (em-dash not hyphen; raw not JSON;
 #      annotation absent; "---" count == len; rule selection; subjectTarget interp; no-blank-line
 #      rule→target).
-#   3. DetectMultiline is the faithful awk port: >1 NON-BLANK line ⇒ true (countNonEmptyLines, not
+#   3. DetectMultiline is the faithful awk port: >1 NON-EMPTY line ⇒ true (countNonEmptyLines, not
 #      strings.Contains — the whitespace-only-body row documents the exact-port choice).
 #   4. Empty/nil examples never panic (defensive — the orchestrator gates on CommitCount>1).
 #
@@ -984,7 +986,7 @@ git diff --exit-code internal/provider internal/config internal/git cmd pkg Make
 
 - [ ] `func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int) string` — EXPORTED,
       string-only (no error), `hasMultiline` is a PARAMETER (not computed inside).
-- [ ] `func DetectMultiline(examples []string) bool` — EXPORTED, faithful awk port (>1 non-blank line).
+- [ ] `func DetectMultiline(examples []string) bool` — EXPORTED, faithful awk port (>1 non-empty line).
 - [ ] The assembled prompt matches PRD §17.1 exactly: raw-output contract (NOT JSON), em-dash (NOT
       hyphen), "---" before each example, blank-line topology, "(up to 20…)" annotation EXCLUDED.
 - [ ] `subjectTarget` interpolated as `Target ~%d characters…` (literal "~"); not hardcoded.
@@ -1020,7 +1022,7 @@ git diff --exit-code internal/provider internal/config internal/git cmd pkg Make
 - ❌ Don't compute `hasMultiline` inside `BuildSystemPrompt` — it is a PARAMETER (the work-item signature
       is binding). Detection is the separate `DetectMultiline` helper. (design-decisions §1/§2)
 - ❌ Don't implement detection as `strings.Contains(msg, "\n")` — port the awk faithfully via
-      `countNonEmptyLines(msg) > 1` (the awk strips blanks then counts). (commit-pi-origin §2)
+      `countNonEmptyLines(msg) > 1` (the awk strips empty lines then counts). (commit-pi-origin §2)
 - ❌ Don't hardcode `50` for the subject target — interpolate `subjectTarget` via `fmt.Sprintf("Target
       ~%d characters…", n)`. (design-decisions §6)
 - ❌ Don't define constants WITH trailing newlines — keep them clean and let BuildSystemPrompt own all
@@ -1046,7 +1048,7 @@ ambiguity about what to port faithfully vs. refine). The 12 non-obvious calls (s
 DetectMultiline + faithful awk port, em-dash, EXCLUDED annotation, raw-not-JSON, subjectTarget wiring,
 blank-line topology, leaf-package imports, empty-defensive) are each backed by an authoritative source
 (PRD §17.1/§17.4, the commit-pi script, config.Config.SubjectTargetChars) and pinned by dedicated test
-rows (the exact-match canonical test + the 10-row properties table + the DetectMultiline/countNonBlank
+rows (the exact-match canonical test + the 10-row properties table + the DetectMultiline/countNonEmpty
 tables). The copy-ready Go in the Implementation Blueprint is independently derived from PRD §17.1 (not
 from any existing code), so implementing it produces a test-passing file directly. The one residual
 risk — an editor silently converting the em-dash to a hyphen, or a copy-paste dropping a blank line — is

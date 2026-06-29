@@ -50,8 +50,9 @@ func DetectMultiline(examples []string) bool
   ```
   Separating them also makes `BuildSystemPrompt` trivially unit-testable (pass any bool).
 - **Faithful port of commit-pi's awk** (see commit-pi-origin.md §2): `true` ⇔ ANY example has >1
-  NON-BLANK line. Implement via `countNonEmptyLines(msg) > 1` (NOT `strings.Contains(msg, "\n")` — the
-  awk strips blanks then counts; the exact port removes all doubt about whitespace-only edge lines).
+  NON-EMPTY line. Implement via `countNonEmptyLines(msg) > 1` using `line != ""` (NOT `strings.Contains`,
+  and NOT a `TrimSpace != ""` count). The awk runs over `sed '/^$/d'` output, which strips only
+  truly-empty lines — a whitespace-only line SURVIVES and is counted; `line != ""` mirrors that exactly.
 
 ## §3 — Canonical constants: verbatim from PRD §17.1, NOT commit-pi
 
@@ -94,8 +95,8 @@ accidental hyphen that looks identical in many editors).
 
 ## §7 — Imports: `fmt` + `strings` ONLY; no config/git/provider; go.mod UNCHANGED
 
-- `system.go` imports EXACTLY `fmt` (the `Sprintf`) and `strings` (the `strings.Builder` + `Split` +
-  `TrimSpace` in `countNonEmptyLines`). NO third-party, NO `internal/config`, NO `internal/git`,
+- `system.go` imports EXACTLY `fmt` (the `Sprintf`) and `strings` (the `strings.Builder` + `Split`
+  in `countNonEmptyLines`). NO third-party, NO `internal/config`, NO `internal/git`,
   NO `internal/provider`.
 - It consumes `[]string` (from `RecentMessages`) and `int` (from `config`) — both plain types, no
   package coupling. This keeps `internal/prompt` a leaf in the import graph (config/git/provider never
@@ -175,11 +176,11 @@ rule                      // the selected multi-line rule  (NO trailing newline)
   - nil / empty → false.
   - all single-line → false.
   - one multi-line (`subject\n\nbody`) → true.
-  - whitespace-only body lines (`subject\n   \nbody`) → true (non-blank count > 1 — the awk-faithful
+  - whitespace-only body lines (`subject\n   \nbody`) → true (non-empty count > 1 — the awk-faithful
     behavior; documents the exact-port choice over `strings.Contains`).
   - a message that is `subject\n\n` (subject + trailing blanks) → after RecentMessages trim it is
     `subject` → false; but DetectMultiline takes the trimmed slice, so feed `[]string{"subject"}` → false.
-- **`TestCountNonBlankLines`** (optional, targets the helper): `""`→0, `"one"`→1, `"a\n\nb"`→2,
-  `"a\n   \nb"`→2, `"\n\n"`→0.
+- **`TestCountNonEmptyLines`** (optional, targets the helper): `""`→0, `"one"`→1, `"a\n\nb"`→2,
+  `"a\n   \nb"`→3 (whitespace-only line SURVIVES), `"\n\n"`→0.
 - No subprocess, no temp repo, no `git` — `BuildSystemPrompt`/`DetectMultiline` are pure functions.
   (The git-side integration — feeding real `RecentMessages` output — is the orchestrator's job, P1.M3.T4.)

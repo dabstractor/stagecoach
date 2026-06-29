@@ -238,6 +238,100 @@ func TestCountNonBlankLines(t *testing.T) {
 	}
 }
 
+// TestBuildFallbackPrompt_CanonicalExact asserts the FULL assembled string for subjectTarget=50, pinning
+// PRD §17.2 byte-for-byte (role + blank + short output contract + blank + 2-line essence + blank + the
+// type(scope) target/format line). Independently derived from PRD §17.2 (not from the implementation).
+func TestBuildFallbackPrompt_CanonicalExact(t *testing.T) {
+	got := BuildFallbackPrompt(50)
+
+	const want = "You are a commit message generator.\n" +
+		"\n" +
+		"Output ONLY the commit message. No preamble, no markdown, no code fences.\n" +
+		"\n" +
+		"Focus on the ESSENCE of the change (the intent/purpose), not implementation\n" +
+		"details like filenames or function names.\n" +
+		"\n" +
+		"Target ~50 characters (~7 words). Format: type(scope): description"
+
+	if got != want {
+		t.Errorf("BuildFallbackPrompt(50) mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	}
+}
+
+// TestBuildFallbackPrompt_Properties is a table of structural invariants. It guards (a) every §17.2
+// block is present, (b) the §17.2 ADDITIONS are present, and (c) — the anti-copy-paste guards — every
+// §17.1 MATURE-prompt element is ABSENT (the #1 implementation risk is copy-pasting S1's constants).
+func TestBuildFallbackPrompt_Properties(t *testing.T) {
+	p := BuildFallbackPrompt(50)
+	cases := []struct {
+		name      string
+		needle    string
+		mustExist bool
+	}{
+		// §17.2 blocks present.
+		{"role present", "You are a commit message generator.", true},
+		{"short output contract present", "Output ONLY the commit message. No preamble, no markdown, no code fences.", true},
+		{"essence line 1 present", "Focus on the ESSENCE of the change (the intent/purpose), not implementation", true},
+		{"essence line 2 present", "details like filenames or function names.", true},
+		// §17.2 ADDITIONS present (vs §17.1).
+		{"conventional-commit format present", "Format: type(scope): description", true},
+		{"~7 words gloss present", "(~7 words)", true},
+		// §17.1 MATURE elements ABSENT (anti-copy-paste guards).
+		{"§17.1 'no quoting' clause ABSENT", "no quoting", false},
+		{"§17.1 body clause ABSENT", "If a body is warranted", false},
+		{"§17.1 examples intro ABSENT", "Match the tone and style", false},
+		{"§17.1 '---' markers ABSENT", "---", false},
+		{"§17.1 anti-reuse block ABSENT", "CRITICAL: You MUST NOT copy", false},
+		{"§17.1 'for the subject line' wording ABSENT", "for the subject line", false},
+		{"§17.1 multi-line rule ABSENT", "multi-line", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			has := strings.Contains(p, tc.needle)
+			if tc.mustExist && !has {
+				t.Errorf("expected %q in BuildFallbackPrompt(50); not found", tc.needle)
+			}
+			if !tc.mustExist && has {
+				t.Errorf("BuildFallbackPrompt(50) must NOT contain §17.1 element %q (copy-paste leak)", tc.needle)
+			}
+		})
+	}
+
+	// Blank-line topology: body + exactly ONE blank line + target line; no trailing newline.
+	if !strings.HasSuffix(p, "Format: type(scope): description") {
+		t.Errorf("prompt must end with the format line (no trailing newline); got suffix %q", suffix(p, 40))
+	}
+	if strings.HasSuffix(p, "\n") {
+		t.Error("prompt must NOT end with a trailing newline")
+	}
+	if n := strings.Count(p, "\n\n"); n != 3 {
+		t.Errorf("expected exactly 3 blank-line separators (\\n\\n) in §17.2; got %d", n)
+	}
+}
+
+// TestBuildFallbackPrompt_SubjectTargetInterpolated pins §2: a non-default subjectTarget changes ONLY
+// the char count; "(~7 words)" survives verbatim; no hardcoded 50 leaks.
+func TestBuildFallbackPrompt_SubjectTargetInterpolated(t *testing.T) {
+	p := BuildFallbackPrompt(72)
+	if !strings.Contains(p, "Target ~72 characters (~7 words). Format: type(scope): description") {
+		t.Errorf("subjectTarget=72 not interpolated as expected; got %q", suffix(p, 80))
+	}
+	if strings.Contains(p, "~50 characters") {
+		t.Error("subjectTarget=72 must NOT leak a hardcoded '~50 characters'")
+	}
+	if !strings.Contains(p, "(~7 words)") {
+		t.Error("the fixed '(~7 words)' gloss must survive a non-default subjectTarget (§2)")
+	}
+}
+
+// suffix returns the last n bytes of s (for readable failure output).
+func suffix(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
+}
+
 // near returns a short window around the first occurrence of needle in s (for readable failure output).
 func near(s, needle string) string {
 	i := strings.Index(s, needle)
