@@ -563,7 +563,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Generation Pipeline: Prompts, Orchestrator, Dedupe, Rescue, and Public API",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Assemble the core generation pipeline from the foundation and provider layers: prompt construction (style learning + anti-reuse), the CommitStaged orchestrator (the atomic snapshot→generate→parse→dedupe→commit flow), the duplicate-rejection retry loop, the rescue protocol, and the thin public API wrapper. This milestone produces the testable end-to-end flow using a stub provider.",
           "tasks": [
             {
@@ -680,7 +680,7 @@
               "type": "Task",
               "id": "P1.M3.T4",
               "title": "Generate Orchestrator (CommitStaged) + Stub Provider for Testing",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the core orchestrator (PRD §11.3): commitStaged(ctx, cfg) that runs the full pipeline — snapshot → prompt → generate → parse → dedupe-retry → commit → report — WITHOUT deciding what to stage (preserving the v2 decomposition boundary). Includes a stub provider for isolated end-to-end testing.",
               "subtasks": [
                 {
@@ -703,7 +703,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T4.S2",
                   "title": "CommitStaged orchestrator: full pipeline (snapshot → generate → parse → dedupe → commit)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2",
@@ -740,14 +740,14 @@
               "type": "Task",
               "id": "P1.M3.T5",
               "title": "Public Library API (pkg/stagehand)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the thin public API wrapper (PRD §14.1) that lets integrators (git GUIs, CI hooks, pre-commit) call the core without reimplementing it. GenerateCommit(ctx, opts) (Result, error).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T5.S1",
                   "title": "GenerateCommit public API (Options + Result + thin wrapper)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T4.S2"

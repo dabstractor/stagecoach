@@ -1,7 +1,3 @@
-// Package generate provides commit-message generation primitives for Stagehand's
-// generation pipeline. This subtask implements the duplicate-rejection primitives
-// (PRD §9.7 FR30 / FR32) that the orchestrator's retry loop (P1.M3.T4) is built
-// from: ExtractSubject (FR30) and IsDuplicate (FR32).
 package generate
 
 import "strings"
