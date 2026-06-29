@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Project Scaffold & Go Module Initialization",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Create the Go module, directory structure per PRD §14, and build tooling so all subsequent work has a compilable, testable foundation.",
               "subtasks": [
                 {
@@ -41,7 +41,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Create Makefile with build/test/lint/coverage targets",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -66,7 +66,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Git wrapper interface and command runner helper",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
