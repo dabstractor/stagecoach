@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -352,6 +353,10 @@ const (
 	defaultMaxDiffBytes = 300000 // byte cap on the non-markdown aggregate (commit-pi default)
 )
 
+// maxRecentMessageLines is the total line cap across the style-example block (PRD §9.3/FR11).
+// RecentMessages stops before exceeding this limit, keeping COMPLETE messages only (D4).
+const maxRecentMessageLines = 100
+
 // defaultExcludes is the commit-pi noise-filter pathspec set (lock files, snapshots, sourcemaps,
 // vendored code). Used when StagedDiffOptions.Excludes is empty; a non-empty opts.Excludes REPLACES
 // it. The structural markdown excludes (":!*.md", ":!*.markdown") are appended SEPARATELY in the
@@ -484,16 +489,82 @@ func (g *gitRunner) HasStagedChanges(ctx context.Context) (bool, error) {
 	}
 }
 
+// RecentMessages returns up to n most-recent FULL commit messages (PRD §9.3/FR11, §17.1) for the
+// mature-repo prompt builder's style-example block (P1.M3.T1.S1). It runs
+// `git log --format=%x00%B -<n>`, which emits a NUL byte BEFORE each commit body — a delimiter that
+// CANNOT collide with commit message text (FINDING 9: commit-pi's `---%n%B` split on `---` broke on
+// markdown horizontal rules inside bodies; %x00 cannot occur in object content, verified). The output
+// is split on "\x00", each part is trimmed, empties (including the leading pre-first-NUL element) are
+// dropped, and the TOTAL line count is capped at maxRecentMessageLines (100, PRD FR11) keeping COMPLETE
+// messages only (partial style examples would mislead the model — no truncation sentinel is appended).
+// Git log returns newest-first, so the slice is newest-first. It is read-only (PRD §18.1).
+//
+// On an unborn repo (zero commits) git log exits 128; RecentMessages returns (nil, nil) defensively
+// (callers gate on RevParseHEAD/CommitCount and take the new-repo fallback path when empty). Requesting
+// more messages than exist is NOT an error — git returns only what is available.
 func (g *gitRunner) RecentMessages(ctx context.Context, n int) ([]string, error) {
-	panic("gitRunner.RecentMessages: not yet implemented — see P1.M1.T3.S3")
+	if n <= 0 {
+		return nil, nil // defensive guard (D7): caller passes 20 (PRD FR11); avoids undefined `git log -0`
+	}
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "log", "--format=%x00%B", fmt.Sprintf("-%d", n))
+	if err != nil {
+		return nil, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code == 128 {
+		return nil, nil // unborn repo — no messages; defensive (callers gate on RevParseHEAD/CommitCount)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("git log: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+
+	var messages []string
+	totalLines := 0
+	for _, part := range strings.Split(stdout, "\x00") {
+		msg := strings.TrimSpace(part)
+		if msg == "" {
+			continue // leading pre-first-NUL element, or a genuinely-empty message
+		}
+		lines := strings.Count(msg, "\n") + 1
+		if totalLines+lines > maxRecentMessageLines {
+			break // keep COMPLETE messages only; stop before exceeding the cap (D4)
+		}
+		messages = append(messages, msg)
+		totalLines += lines
+	}
+	return messages, nil
 }
 
 func (g *gitRunner) RecentSubjects(ctx context.Context, n int) ([]string, error) {
 	panic("gitRunner.RecentSubjects: not yet implemented — see P1.M1.T3.S4")
 }
 
+// CommitCount returns the number of commits reachable from HEAD (PRD §9.3/FR10). It decides the
+// mature-repo (>1 commit) vs new-repo (≤1 commit) prompt branch (PRD §17.1 vs §17.2). It runs
+// `git rev-list --count HEAD`, which prints a single integer on success (exit 0) and exits 128 on an
+// unborn repo (zero commits — the SAME exit-code signal RevParseHEAD S2 uses for isUnborn). On unborn
+// it returns (0, nil) per contract; callers SHOULD but need not short-circuit via RevParseHEAD first
+// (the method is safe to call on unborn). It is read-only with respect to refs/index (PRD §18.1).
+//
+// Note (FINDING-adjacent): a non-repo directory ALSO exits 128 ("fatal: not a git repository") and is
+// therefore indistinguishable from unborn at this layer — inherited from RevParseHEAD's exit-128
+// semantic and acceptable (callers gate on RevParseHEAD; a non-repo never reaches here in the happy
+// path). Any other non-zero exit (not 0, not 128) is a real error.
 func (g *gitRunner) CommitCount(ctx context.Context) (int, error) {
-	panic("gitRunner.CommitCount: not yet implemented — see P1.M1.T3.S3")
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-list", "--count", "HEAD")
+	if err != nil {
+		return 0, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code == 128 {
+		return 0, nil // unborn repo (zero commits) — exit-code signal, NOT an error (matches RevParseHEAD S2)
+	}
+	if code != 0 {
+		return 0, fmt.Errorf("git rev-list --count HEAD: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	n, perr := strconv.Atoi(strings.TrimSpace(stdout))
+	if perr != nil {
+		return 0, fmt.Errorf("git rev-list --count HEAD: unparseable output %q: %w", stdout, perr)
+	}
+	return n, nil
 }
 
 func (g *gitRunner) AddAll(ctx context.Context) error {
