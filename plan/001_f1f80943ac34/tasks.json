@@ -680,14 +680,14 @@
               "type": "Task",
               "id": "P1.M3.T4",
               "title": "Generate Orchestrator (CommitStaged) + Stub Provider for Testing",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the core orchestrator (PRD §11.3): commitStaged(ctx, cfg) that runs the full pipeline — snapshot → prompt → generate → parse → dedupe-retry → commit → report — WITHOUT deciding what to stage (preserving the v2 decomposition boundary). Includes a stub provider for isolated end-to-end testing.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T4.S1",
                   "title": "Stub provider (fake agent) for integration testing",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T5.S1",
@@ -703,7 +703,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T4.S2",
                   "title": "CommitStaged orchestrator: full pipeline (snapshot → generate → parse → dedupe → commit)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2",
