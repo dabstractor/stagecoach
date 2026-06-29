@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -137,6 +138,48 @@ func (g *gitRunner) run(ctx context.Context, repo string, args ...string) (stdou
 	return stdout, stderr, -1, runErr // start / I/O failure
 }
 
+// runWithInput is run() plus a stdin pipe. It exists because run() cannot set cmd.Stdin (its body
+// leaves stdin as /dev/null), and commit-tree with -F - must read the commit message from stdin
+// (FINDING 4: -F - avoids ALL quoting/special-character/leading-dash issues that -m would suffer).
+// It is the ONLY other place Stagehand shells out to git; it is co-located with run() and shares
+// its structure exactly (LookPath → -C repo → separate buffers → errors.As(ExitError) with
+// err==nil for non-zero exits). run() itself is intentionally left unmodified (see research §1).
+//
+// Identity: cmd.Env is NOT set here, so the child inherits the parent environment. Production
+// callers commit AS the configured user (git resolves user.name/user.email from config/env);
+// tests set repo-local user.name/user.email via `git config` (see committree_test.go).
+func (g *gitRunner) runWithInput(ctx context.Context, repo string, stdin io.Reader, args ...string) (stdout string, stderr string, exitCode int, err error) {
+	gitPath, lerr := exec.LookPath("git")
+	if lerr != nil {
+		return "", "", -1, fmt.Errorf("git binary not found in PATH: %w", lerr)
+	}
+
+	full := make([]string, 0, len(args)+2)
+	full = append(full, "-C", repo) // repo via flag, not cmd.Dir (gotcha G1 of S1)
+	full = append(full, args...)
+
+	cmd := exec.CommandContext(ctx, gitPath, full...) // []string args, NO shell (PRD §19)
+	cmd.Stdin = stdin                                 // ← the one difference from run()
+	var out, errb bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+
+	runErr := cmd.Run()
+	stdout, stderr = out.String(), errb.String()
+
+	if runErr == nil {
+		return stdout, stderr, 0, nil
+	}
+	if cerr := ctx.Err(); cerr != nil { // context cancelled (timeout/signal) — not a git exit
+		return stdout, stderr, -1, cerr
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) { // non-zero git exit → capture code, err stays nil
+		return stdout, stderr, exitErr.ExitCode(), nil
+	}
+	return stdout, stderr, -1, runErr // start / I/O failure
+}
+
 // ---- Stubs: each method is implemented in its own later subtask. They panic to fail fast. ----
 
 // RevParseHEAD returns the SHA HEAD currently points at. On a repository with zero commits it
@@ -178,8 +221,32 @@ func (g *gitRunner) WriteTree(ctx context.Context) (sha string, err error) {
 	return strings.TrimSpace(stdout), nil
 }
 
-func (g *gitRunner) CommitTree(ctx context.Context, tree string, parents []string, msg string) (string, error) {
-	panic("gitRunner.CommitTree: not yet implemented — see P1.M1.T2.S4")
+// CommitTree creates a commit object for tree with the given parents and message and returns its
+// SHA. The message is delivered via stdin with `-F -` (NOT -m) so it is bulletproof against special
+// characters, leading dashes, quotes, and newlines (FINDING 4; verified empirically that a message
+// beginning with "-n -p --foo" is stored verbatim). parents == nil/empty ⇒ root commit (no -p);
+// each element of a non-empty parents slice appends a `-p <parent>` (repeatable, forward-compatible
+// with v2 merge commits). Like write-tree, this does NOT move any ref: the returned commit is a
+// dangling object until UpdateRefCAS (P1.M1.T2.S5) publishes it (PRD §13.2, §18.1).
+//
+// commit-tree fails (non-zero exit, 128 on git 2.x) when tree or a parent is not a valid object;
+// that is surfaced here as runWithInput's exitCode != 0 (err stays nil per its invariant).
+func (g *gitRunner) CommitTree(ctx context.Context, tree string, parents []string, msg string) (sha string, err error) {
+	args := make([]string, 0, 4+len(parents)*2)
+	args = append(args, "commit-tree", tree)
+	for _, p := range parents {
+		args = append(args, "-p", p) // repeatable; root commit = empty parents (no -p appended)
+	}
+	args = append(args, "-F", "-") // message via stdin — avoids all quoting pitfalls (FINDING 4)
+
+	stdout, stderr, code, err := g.runWithInput(ctx, g.workDir, strings.NewReader(msg), args...)
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git commit-tree: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
 }
 
 func (g *gitRunner) UpdateRefCAS(ctx context.Context, ref, newSHA, expectedOld string) error {
