@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // FileChange is one entry in a diff-tree "what landed" listing.
@@ -138,8 +139,22 @@ func (g *gitRunner) run(ctx context.Context, repo string, args ...string) (stdou
 
 // ---- Stubs: each method is implemented in its own later subtask. They panic to fail fast. ----
 
-func (g *gitRunner) RevParseHEAD(ctx context.Context) (string, bool, error) {
-	panic("gitRunner.RevParseHEAD: not yet implemented — see P1.M1.T2.S2")
+// RevParseHEAD returns the SHA HEAD currently points at. On a repository with zero commits it
+// returns sha="" and isUnborn=true, detected via git's exit code 128 (NOT stdout emptiness —
+// `git rev-parse HEAD` prints the literal string "HEAD\n" to stdout on an unborn repo, which is
+// the latent bug in commit-pi; see critical_findings.md FINDING 1).
+func (g *gitRunner) RevParseHEAD(ctx context.Context) (sha string, isUnborn bool, err error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", false, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code == 128 {
+		return "", true, nil // unborn repo — exit-code signal, NOT string emptiness
+	}
+	if code != 0 {
+		return "", false, fmt.Errorf("git rev-parse HEAD: unexpected exit %d: %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), false, nil
 }
 
 func (g *gitRunner) WriteTree(ctx context.Context) (string, error) {

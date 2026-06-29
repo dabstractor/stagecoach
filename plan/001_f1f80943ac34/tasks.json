@@ -83,7 +83,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S2",
                   "title": "RevParseHEAD with unborn-repo detection (exit-code check, NOT string emptiness)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -98,7 +98,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S3",
                   "title": "WriteTree with merge-conflict failure detection",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
