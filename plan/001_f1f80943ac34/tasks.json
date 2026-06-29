@@ -381,7 +381,7 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Built-in Provider Manifests (6 verified agents)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Compile in the six default provider manifests verified against real --help output. pi, claude, gemini, and opencode are first-class; codex and cursor include the discrepancy fixes identified during research.",
               "subtasks": [
                 {
@@ -423,7 +423,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S3",
                   "title": "codex and cursor manifests (with research discrepancy fixes)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -442,14 +442,14 @@
               "type": "Task",
               "id": "P1.M2.T3",
               "title": "Provider Registry (name → manifest with override merge)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the registry that holds built-in manifests merged with user-defined overrides from config files, supports look-up by name, detection of installed agents on $PATH, and TOML serialization for `providers show`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T3.S1",
                   "title": "Registry with built-in + user-override merge, $PATH detection, and TOML marshal",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S2",

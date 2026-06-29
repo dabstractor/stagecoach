@@ -89,6 +89,46 @@ output = "raw"
 strip_code_fence = true
 `
 
+// codexTOML — PRD §12.7 codex VERBATIM EXCEPT two lines revised per the work-item contract +
+// external_deps.md §codex (the discrepancy resolution). This is the ONLY intentional deviation set from
+// the verbatim PRD codex TOML; decoding it must match builtinCodex().
+//
+//	(1) prompt_delivery = "stdin"      (§12.7 said "positional"; codex exec reads stdin via "-")
+//	(2) bare_flags = ["--sandbox","read-only","--ephemeral"]  (§12.7 had "--ask-for-approval","never" —
+//	    NOT a codex exec flag; dropped; --ephemeral added).
+const codexTOML = `name = "codex"
+detect = "codex"
+command = "codex"
+subcommand = ["exec"]
+prompt_delivery = "stdin"   # REVISED #1 from §12.7 "positional" (codex exec reads stdin via "-")
+print_flag = ""
+model_flag = "-m"
+default_model = ""
+system_prompt_flag = ""
+provider_flag = ""
+bare_flags = ["--sandbox", "read-only", "--ephemeral"]   # REVISED #2: dropped --ask-for-approval; added --ephemeral
+output = "raw"
+strip_code_fence = true
+`
+
+// cursorTOML — PRD §12.7 cursor VERBATIM (no revision). Decoding it must match builtinCursor().
+// Note: detect/command = "agent" (≠ name "cursor"); subcommand = [] decodes to a NON-NIL empty slice
+// (FINDING D) — builtinCursor sets Subcommand: []string{}.
+const cursorTOML = `name = "cursor"
+detect = "agent"
+command = "agent"
+subcommand = []
+prompt_delivery = "positional"
+print_flag = "-p"
+model_flag = "--model"
+default_model = ""
+system_prompt_flag = ""
+provider_flag = ""
+bare_flags = ["--mode", "ask", "--trust"]
+output = "raw"
+strip_code_fence = true
+`
+
 // ---------------------------------------------------------------------------
 // renderArgs — local §12.2 argv-builder (test-only scaffolding, NOT the P1.M2.T4 renderer).
 // Faithful port of PRD §12.2 "Command rendering algorithm".
@@ -119,15 +159,15 @@ func renderArgs(m Manifest, provider, model, sys string) []string {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: KeysAndCount — exactly 4 keys: pi, claude, gemini, opencode
+// Test 1: KeysAndCount — exactly 6 keys: pi, claude, gemini, opencode, codex, cursor
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_KeysAndCount(t *testing.T) {
 	m := BuiltinManifests()
-	if len(m) != 4 {
-		t.Fatalf("BuiltinManifests() returned %d keys, want 4", len(m))
+	if len(m) != 6 {
+		t.Fatalf("BuiltinManifests() returned %d keys, want 6", len(m))
 	}
-	for _, k := range []string{"pi", "claude", "gemini", "opencode"} {
+	for _, k := range []string{"pi", "claude", "gemini", "opencode", "codex", "cursor"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing key %q", k)
 		}
@@ -251,7 +291,7 @@ func TestBuiltinManifests_ClaudeFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 5: Validate — both built-ins pass Validate()
+// Test 5: Validate — all built-ins pass Validate()
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_Validate(t *testing.T) {
@@ -264,7 +304,7 @@ func TestBuiltinManifests_Validate(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 6: DecodeParity — built-in == decode of verbatim §12.3/§12.4/§12.5/§12.6 TOML
+// Test 6: DecodeParity — built-in == decode of verbatim §12.3–§12.7 TOML
 //         (THE byte-faithfulness keystone)
 // ---------------------------------------------------------------------------
 
@@ -278,6 +318,8 @@ func TestBuiltinManifests_DecodeParity(t *testing.T) {
 		{"claude", builtinClaude(), claudeTOML},
 		{"gemini", builtinGemini(), geminiTOML},       // geminiTOML = §12.5 with stdin revision
 		{"opencode", builtinOpenCode(), opencodeTOML}, // opencodeTOML = verbatim §12.6
+		{"codex", builtinCodex(), codexTOML},          // codexTOML = §12.7 codex with BOTH revisions
+		{"cursor", builtinCursor(), cursorTOML},       // cursorTOML = verbatim §12.7 cursor
 	} {
 		var decoded Manifest
 		if err := toml.Unmarshal([]byte(tc.toml), &decoded); err != nil {
@@ -436,5 +478,125 @@ func TestBuiltinManifests_RenderedCommand_OpenCode(t *testing.T) {
 	}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("opencode rendered argv:\n got %v\nwant %v", argv, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: CodexFields — every codex field asserted (TWO revisions + explicit-empty + absent-nil)
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_CodexFields(t *testing.T) {
+	m := builtinCodex()
+	assertStr(t, "Detect", m.Detect, "codex")
+	assertStr(t, "Command", m.Command, "codex")
+	wantSub := []string{"exec"}
+	if !reflect.DeepEqual(m.Subcommand, wantSub) {
+		t.Errorf("Subcommand = %v, want %v", m.Subcommand, wantSub)
+	}
+	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin") // REVISED #1 from §12.7 "positional"
+	assertStr(t, "PrintFlag", m.PrintFlag, "")                // NON-NIL explicit empty
+	assertStr(t, "ModelFlag", m.ModelFlag, "-m")
+	assertStr(t, "DefaultModel", m.DefaultModel, "")              // NON-NIL explicit empty (model from ~/.codex/config.toml)
+	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "")      // NON-NIL explicit empty (prepend)
+	assertStr(t, "ProviderFlag", m.ProviderFlag, "")              // NON-NIL explicit empty
+	assertNilStr(t, "DefaultProvider", m.DefaultProvider)         // ABSENT in §12.7 → nil
+	wantBare := []string{"--sandbox", "read-only", "--ephemeral"} // REVISED #2
+	if !reflect.DeepEqual(m.BareFlags, wantBare) {
+		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
+	}
+	assertStr(t, "Output", m.Output, "raw")
+	if m.StripCodeFence == nil || *m.StripCodeFence != true {
+		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+	// Absent → nil
+	assertNilStr(t, "PromptFlag", m.PromptFlag)
+	assertNilStr(t, "JsonField", m.JsonField)
+	assertNilStr(t, "RetryInstruction", m.RetryInstruction)
+	if m.Env != nil {
+		t.Errorf("Env = %v, want nil", m.Env)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: CursorFields — every cursor field asserted (Detect/Command="agent" ≠ Name,
+//          NON-NIL-EMPTY Subcommand, explicit-empty + absent-nil)
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_CursorFields(t *testing.T) {
+	m := builtinCursor()
+
+	if m.Name != "cursor" {
+		t.Errorf("Name = %q, want %q", m.Name, "cursor")
+	}
+	assertStr(t, "Detect", m.Detect, "agent") // §12.7 detect = "agent" — the binary is `agent` (≠ Name "cursor")
+	assertStr(t, "Command", m.Command, "agent")
+	// Subcommand: §12.7 writes subcommand = [] → NON-NIL empty slice (FINDING D). Assert BOTH non-nil AND len 0.
+	if m.Subcommand == nil {
+		t.Fatal("Subcommand = nil, want NON-NIL empty []string{} (§12.7 subcommand = [] per FINDING D)")
+	}
+	if len(m.Subcommand) != 0 {
+		t.Errorf("Subcommand = %v, want empty", m.Subcommand)
+	}
+	assertStr(t, "PromptDelivery", m.PromptDelivery, "positional")
+	assertStr(t, "PrintFlag", m.PrintFlag, "-p")
+	assertStr(t, "ModelFlag", m.ModelFlag, "--model")
+	assertStr(t, "DefaultModel", m.DefaultModel, "")         // NON-NIL explicit empty (user must set)
+	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "") // NON-NIL explicit empty (prepend)
+	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
+	assertNilStr(t, "DefaultProvider", m.DefaultProvider)    // ABSENT → nil
+	wantBare := []string{"--mode", "ask", "--trust"}
+	if !reflect.DeepEqual(m.BareFlags, wantBare) {
+		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
+	}
+	assertStr(t, "Output", m.Output, "raw")
+	if m.StripCodeFence == nil || *m.StripCodeFence != true {
+		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+	// Absent → nil
+	assertNilStr(t, "PromptFlag", m.PromptFlag)
+	assertNilStr(t, "JsonField", m.JsonField)
+	assertNilStr(t, "RetryInstruction", m.RetryInstruction)
+	if m.Env != nil {
+		t.Errorf("Env = %v, want nil", m.Env)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: RenderedCommand_Codex — stdin delivery: argv has NO payload (piped via "-");
+//         sys prepended to stdin payload; no print/sys/provider flag.
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Codex(t *testing.T) {
+	argv := renderArgs(builtinCodex(), "", "gpt-5", "<sys>") // model explicit (default is "")
+	want := []string{
+		"codex", "exec", // command + subcommand
+		"-m", "gpt-5", // model_flag + user-set model
+		"--sandbox", "read-only", "--ephemeral", // REVISED bare_flags (read-only + session-clean)
+		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin via "-" (NOT in argv). No print/sys/provider flag.
+	}
+	if !reflect.DeepEqual(argv, want) {
+		t.Errorf("codex rendered argv:\n got %v\nwant %v", argv, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 16: RenderedCommand_Cursor — positional delivery: payload IS the trailing positional arg (§12.2).
+// NOTE: this is the §12.2 ALGORITHM order (renderArgs). §12.7's illustrative "Rendered" block shows
+// `agent -p --mode ask --trust --model gpt-5 "<…>"` (different token order). Same tokens; cursor parses
+// flags in any order → identical semantics. §12.2 is authoritative (the real P1.M2.T4 renderer).
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Cursor(t *testing.T) {
+	flags := renderArgs(builtinCursor(), "", "gpt-5", "") // model explicit (default is "")
+	argv := append(flags, "<sys>\n\n<payload>")           // positional: payload appended per §12.2
+	want := []string{
+		"agent",            // command (§12.7 command = "agent")
+		"--model", "gpt-5", // model_flag + user-set model
+		"--mode", "ask", "--trust", // bare_flags (read-only + skip ws-trust)
+		"-p",                 // print_flag LAST per §12.2
+		"<sys>\n\n<payload>", // positional payload (sys prepended — no sys flag on agent)
+	}
+	if !reflect.DeepEqual(argv, want) {
+		t.Errorf("cursor rendered argv:\n got %v\nwant %v", argv, want)
 	}
 }

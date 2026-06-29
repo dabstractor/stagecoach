@@ -1,23 +1,26 @@
 package provider
 
 // BuiltinManifests returns the compiled-in default provider manifests (PRD §12.3 pi, §12.4 claude,
-// §12.5 gemini, §12.6 opencode), keyed by manifest name. These are the zero-config defaults a user
-// override (config [provider.<name>]) merges onto via MergeManifest (S2) in the registry (P1.M2.T3).
+// §12.5 gemini, §12.6 opencode, §12.7 codex + cursor), keyed by manifest name. These are the zero-config
+// defaults a user override (config [provider.<name>]) merges onto via MergeManifest (S2) in the registry
+// (P1.M2.T3).
 //
 // The manifests are constructed FRESH on every call (no package-level var): strPtr/boolPtr allocate new
 // pointers and slice literals allocate new backing arrays each call, so no caller can corrupt a built-in
 // by mutating a returned BareFlags/Env. MergeManifest (S2) already never mutates base, so the normal
 // registry path is safe either way — fresh-per-call additionally guards against any direct mutation.
 //
-// This subtask adds gemini + opencode (§12.7.1 "read-only constraint" providers: no global tool-disable
-// switch; constrained to read-only, never-ask profiles). pi + claude (the "explicit tool-disable switch"
-// pair) landed in S1. The remaining two (codex, cursor) are added by S3.
+// The full §12.7 set: pi + claude (the "explicit tool-disable switch" pair, S1), gemini + opencode
+// (read-only constraint, S2), and codex + cursor (read-only constraint, S3 — codex's two revisions
+// resolve the external_deps.md §codex discrepancy). All six providers are now present.
 func BuiltinManifests() map[string]Manifest {
 	return map[string]Manifest{
 		"pi":       builtinPi(),
 		"claude":   builtinClaude(),
 		"gemini":   builtinGemini(),
 		"opencode": builtinOpenCode(),
+		"codex":    builtinCodex(),
+		"cursor":   builtinCursor(),
 	}
 }
 
@@ -141,5 +144,87 @@ func builtinOpenCode() Manifest {
 		Output:           strPtr("raw"),
 		StripCodeFence:   boolPtr(true),
 		// PromptFlag, DefaultProvider, JsonField, RetryInstruction, Env: nil (absent in §12.6).
+	}
+}
+
+// builtinCodex returns the codex manifest per PRD §12.7 (VERIFIED vs `codex exec --help`, external_deps.md
+// §codex), with TWO revisions that resolve the §codex discrepancy flagged in external_deps.md:
+//
+//	(1) PromptDelivery="stdin" (§12.7 said "positional") — codex exec reads stdin via "-" (external_deps.md
+//	    §codex BONUS FINDING); stdin avoids arg-length limits on ~300 KB diffs.
+//	(2) BareFlags=["--sandbox","read-only","--ephemeral"] (§12.7 said
+//	    ["--sandbox","read-only","--ask-for-approval","never"]) — --ask-for-approval is NOT a codex exec
+//	    flag (it lives on interactive `codex`; codex exec is already non-interactive); --ephemeral keeps
+//	    the one-shot session-clean.
+//
+// codex has no global tool-disable switch; --sandbox read-only constrains it to a read-only, never-ask
+// profile (§12.7.1 "read-only constraint").
+//
+// NOTE: (1) Subcommand=["exec"] (§12.7 subcommand = ["exec"] → NON-NIL 1-element). (2) PrintFlag/
+// DefaultModel/SystemPromptFlag/ProviderFlag are strPtr("") — §12.7 WRITES them "" (NON-NIL empty): exec
+// is already non-interactive (no print flag), model comes from ~/.codex/config.toml (no default), no
+// sys-prompt flag (sys PREPENDED to the payload per §12.2), no sub-provider. (3) DefaultProvider is NIL
+// — §12.7 OMITS the key. (4) The sys prompt is prepended (no --system-prompt flag on codex exec).
+//
+// TO CONFIRM (integration): that `codex exec` writes the assistant's final answer to stdout and exits 0
+// on success. Expected; -o <file> (write last message to file) and --json (JSONL events) are fallback
+// output channels if stdout proves unreliable. Verify during the real-agent scaffold (P1.M5.T1.S2).
+func builtinCodex() Manifest {
+	return Manifest{
+		Name:             "codex",
+		Detect:           strPtr("codex"),
+		Command:          strPtr("codex"),
+		Subcommand:       []string{"exec"}, // §12.7 `subcommand = ["exec"]` → NON-NIL 1-element slice
+		PromptDelivery:   strPtr("stdin"),  // REVISED #1 from §12.7 "positional" (codex exec reads stdin via "-")
+		PrintFlag:        strPtr(""),       // §12.7 explicit empty (NON-NIL) — exec is already non-interactive
+		ModelFlag:        strPtr("-m"),
+		DefaultModel:     strPtr(""), // §12.7 explicit empty (NON-NIL) — model from ~/.codex/config.toml
+		SystemPromptFlag: strPtr(""), // §12.7 explicit empty (NON-NIL) — no sys flag on exec; sys prepended (§12.2)
+		ProviderFlag:     strPtr(""), // §12.7 explicit empty (NON-NIL) — codex has no sub-provider
+		BareFlags: []string{
+			"--sandbox", "read-only", // read-only, never-mutate profile
+			"--ephemeral", // REVISED #2: run without persisting session files (replaces invalid --ask-for-approval)
+		},
+		Output:         strPtr("raw"),
+		StripCodeFence: boolPtr(true),
+		// PromptFlag, DefaultProvider, JsonField, RetryInstruction, Env: nil (absent in §12.7).
+	}
+}
+
+// builtinCursor returns the cursor manifest per PRD §12.7 (VERIFIED vs `agent --help`, external_deps.md
+// §cursor), VERBATIM (no revisions). The standalone Cursor Agent binary is `agent` (so Detect/Command =
+// "agent", NOT "cursor" — cursor is the ONLY provider where detect ≠ name). cursor's -p print mode
+// defaults to FULL tool access; we override with --mode ask ("Q&A style, read-only, no edits") + --trust
+// (skip the workspace-trust prompt) so it cannot mutate the repo (§12.7.1 "read-only constraint").
+//
+// NOTE: (1) Detect/Command = "agent" (≠ Name "cursor") — §12.7 writes detect/command = "agent". (2)
+// Subcommand = []string{} — §12.7 writes subcommand = []; a present empty array decodes NON-NIL empty
+// (FINDING D); write it explicitly (do NOT omit → nil). (3) DefaultModel/SystemPromptFlag/ProviderFlag
+// are strPtr("") — §12.7 WRITES them "" (NON-NIL empty): cursor has per-account model availability (no
+// single default), no sys-prompt flag (sys prepended), no sub-provider. (4) DefaultProvider is NIL —
+// §12.7 OMITS the key. (5) The sys prompt is prepended (no --system-prompt flag on agent).
+//
+// TO CONFIRM (integration): that `--mode ask` wins over `-p`'s default full-tools profile — i.e. the
+// combo (-p --mode ask --trust) is genuinely read-only. Expected (ask is defined as read-only Q&A);
+// verify against a real run during the real-agent scaffold (P1.M5.T1.S2).
+func builtinCursor() Manifest {
+	return Manifest{
+		Name:             "cursor",
+		Detect:           strPtr("agent"), // §12.7 detect = "agent" — the binary is `agent` (≠ Name "cursor")
+		Command:          strPtr("agent"), // §12.7 command = "agent"
+		Subcommand:       []string{},      // §12.7 `subcommand = []` → NON-NIL empty slice (FINDING D); do NOT omit
+		PromptDelivery:   strPtr("positional"),
+		PrintFlag:        strPtr("-p"), // §12.7 `-p` = non-interactive (writes answer to stdout)
+		ModelFlag:        strPtr("--model"),
+		DefaultModel:     strPtr(""), // §12.7 explicit empty (NON-NIL) — user must set (per-account availability)
+		SystemPromptFlag: strPtr(""), // §12.7 explicit empty (NON-NIL) — no sys flag on agent; sys prepended (§12.2)
+		ProviderFlag:     strPtr(""), // §12.7 explicit empty (NON-NIL) — cursor has no sub-provider
+		BareFlags: []string{
+			"--mode", "ask", // "Q&A style, read-only" — overrides -p's default full-tools profile
+			"--trust", // skip the workspace-trust prompt (else -p would block)
+		},
+		Output:         strPtr("raw"),
+		StripCodeFence: boolPtr(true),
+		// PromptFlag, DefaultProvider, JsonField, RetryInstruction, Env: nil (absent in §12.7).
 	}
 }
