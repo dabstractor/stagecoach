@@ -442,14 +442,14 @@
               "type": "Task",
               "id": "P1.M2.T3",
               "title": "Provider Registry (name → manifest with override merge)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the registry that holds built-in manifests merged with user-defined overrides from config files, supports look-up by name, detection of installed agents on $PATH, and TOML serialization for `providers show`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T3.S1",
                   "title": "Registry with built-in + user-override merge, $PATH detection, and TOML marshal",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S2",
@@ -470,14 +470,14 @@
               "type": "Task",
               "id": "P1.M2.T4",
               "title": "Command Rendering Algorithm",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the algorithm (PRD §12.2) that turns a manifest + resolved model + system prompt + user payload into a concrete command line ([]string args + stdin source) for exec.Command.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T4.S1",
                   "title": "Render manifest to exec.Cmd spec (args + stdin source)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
