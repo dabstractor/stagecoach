@@ -333,7 +333,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Provider System: Manifests, Rendering, Execution, and Parsing",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Build the provider-manifest system (PRD §12) that normalizes the differences between six coding-agent CLIs. Includes the manifest schema, six compiled-in built-in manifests (verified against real --help output), the command-rendering algorithm, the subprocess executor with process-group management and timeout, and the robust output-parsing pipeline. This is the agent-agnosticism core.",
           "tasks": [
             {
@@ -494,7 +494,7 @@
               "type": "Task",
               "id": "P1.M2.T5",
               "title": "Provider Executor (Subprocess Run with Process Groups and Timeout)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the executor that runs the rendered command: pipes stdin, captures stdout/stderr, enforces a context-based timeout, and kills the entire process group on cancellation. Includes the cross-platform process-kill abstraction (Unix Setpgid + Windows build tags).",
               "subtasks": [
                 {
@@ -517,7 +517,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T5.S2",
                   "title": "Cross-platform process-group kill abstraction (Unix + Windows build tags)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -535,14 +535,14 @@
               "type": "Task",
               "id": "P1.M2.T6",
               "title": "Output Parsing Pipeline (Raw/JSON with Robust Fallback)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the parseOutput pipeline (PRD §12.9) that extracts the commit message from the agent's raw stdout: trim, optional code-fence stripping, raw or JSON mode extraction with brace-balanced fallback, newline normalization.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T6.S1",
                   "title": "parseOutput pipeline (trim, fence strip, raw/json, JSON-in-prose, fallback)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
