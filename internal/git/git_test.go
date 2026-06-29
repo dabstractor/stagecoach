@@ -120,6 +120,5 @@ func TestStubsPanic(t *testing.T) {
 	ctx := context.Background()
 	g := New(".")
 
-	assertPanics(t, "RecentSubjects", func() { _, _ = g.RecentSubjects(ctx, 5) })
 	assertPanics(t, "AddAll", func() { _ = g.AddAll(ctx) })
 }

@@ -534,8 +534,50 @@ func (g *gitRunner) RecentMessages(ctx context.Context, n int) ([]string, error)
 	return messages, nil
 }
 
+// RecentSubjects returns up to n most-recent commit SUBJECTS (the first line of each commit message)
+// for duplicate detection (PRD §9.7/FR31). The dedupe loop (P1.M3.T2) builds a set/map from these for
+// O(1) exact-match lookup against a freshly-generated subject (FR32's "if the subject exactly matches
+// one of the 50, retry"). It runs `git log --format=%s -<n>`, which emits EXACTLY ONE LINE per commit:
+// git's %s placeholder is the subject (first line) by definition and CANNOT contain a newline, so the
+// records are safely newline-delimited.
+//
+// NOTE — why a simple "\n" split is correct here (and NOT the %x00 NUL split that RecentMessages
+// uses): FINDING 9's NUL delimiter exists to disambiguate %B FULL BODIES, where a commit body may
+// contain a markdown horizontal rule "---" that a naive "---"/"\n" split would fracture. Subjects
+// (%s) are single-line by construction — no embedded newline is possible, and a "---" inside a
+// subject stays confined to its own line (it cannot start a new record). So splitting on "\n" is both
+// safe and simpler. There is NO line cap (unlike RecentMessages): each subject is exactly one line
+// and the caller bounds the count (PRD FR31: n=50), so the result is at most n short lines — no
+// prompt-budget risk.
+//
+// On an unborn repo (zero commits) git log exits 128; RecentSubjects returns (nil, nil) defensively
+// (callers gate on RevParseHEAD/CommitCount; on a new repo the duplicate check is vacuous — there is
+// nothing to duplicate). Requesting more subjects than exist is NOT an error — git returns only what
+// is available. It is read-only with respect to refs/index (PRD §18.1).
 func (g *gitRunner) RecentSubjects(ctx context.Context, n int) ([]string, error) {
-	panic("gitRunner.RecentSubjects: not yet implemented — see P1.M1.T3.S4")
+	if n <= 0 {
+		return nil, nil // defensive guard (D3): caller passes 50 (PRD FR31); avoids undefined `git log -0`
+	}
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "log", "--format=%s", fmt.Sprintf("-%d", n))
+	if err != nil {
+		return nil, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code == 128 {
+		return nil, nil // unborn repo (zero commits) — exit-code signal, NOT an error (matches RevParseHEAD S2 / RecentMessages T3.S3)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("git log: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+
+	var subjects []string
+	for _, line := range strings.Split(stdout, "\n") {
+		s := strings.TrimSpace(line)
+		if s == "" {
+			continue // trailing newline → trailing empty element; also any genuinely-empty subject
+		}
+		subjects = append(subjects, s)
+	}
+	return subjects, nil
 }
 
 // CommitCount returns the number of commits reachable from HEAD (PRD §9.3/FR10). It decides the
