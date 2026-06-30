@@ -1,0 +1,371 @@
+// Package stagehand is Stagehand's public library surface (PRD §14.1).
+// The entry point is GenerateCommit, which generates (and, unless Options.DryRun, creates) a commit
+// from the currently-staged index. The surface is intentionally tiny: an integrator imports this package
+// instead of reimplementing the pipeline or shelling out to the CLI.
+//
+// Stable as of v1.0.
+package stagehand
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/dustin/stagehand/internal/config"
+	"github.com/dustin/stagehand/internal/generate"
+	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/prompt"
+	"github.com/dustin/stagehand/internal/provider"
+)
+
+// Options configures a GenerateCommit call. All fields are optional (zero value ⇒ inherit the resolved
+// default). This struct is ADDITIVE-ONLY for future versions (Appendix E item 6): new fields may be
+// added, existing fields will not be removed or repurposed.
+//
+// Stable as of v1.0.
+type Options struct {
+	Provider    string        // manifest name; "" → resolved default (auto-detect installed built-ins)
+	Model       string        // "" → manifest default_model
+	SystemExtra string        // appended to the built system prompt (extra integrator instructions)
+	DryRun      bool          // if true, return the message WITHOUT committing (CommitSHA == "")
+	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (120s)
+}
+
+// Result is the outcome of GenerateCommit. On DryRun (or any non-committing outcome) CommitSHA is "".
+//
+// Stable as of v1.0.
+type Result struct {
+	CommitSHA string // the published commit SHA; "" if DryRun or not committed
+	Subject   string // the commit subject (first line)
+	Message   string // the full commit message (subject [+ body])
+	Provider  string // the resolved provider name
+	Model     string // the resolved model
+}
+
+// ---- Typed-error re-exports (so library consumers import only pkg/stagehand) ----
+// These ARE the generate-package symbols (alias / same sentinel), so errors.Is / errors.As work
+// uniformly whether the error came from the delegation path (CommitStaged) or runPipeline.
+
+var (
+	// ErrNothingToCommit is returned when the staged diff is empty (caller should stage first).
+	ErrNothingToCommit = generate.ErrNothingToCommit
+	// ErrTimeout is returned when generation exceeded the timeout.
+	ErrTimeout = generate.ErrTimeout
+	// ErrRescue is returned when generation failed after exhausting retries.
+	ErrRescue = generate.ErrRescue
+	// ErrCASFailed is returned when HEAD moved since the snapshot (non-fast-forward).
+	ErrCASFailed = generate.ErrCASFailed
+)
+
+// RescueError carries the post-snapshot context for a rescue (see generate.RescueError).
+// Returned wrapped for BOTH ErrTimeout and ErrRescue. Type alias — interchangeable with
+// generate.RescueError.
+type RescueError = generate.RescueError
+
+// CASError carries the "HEAD moved" context (see generate.CASError). Type alias.
+type CASError = generate.CASError
+
+// GenerateCommit generates and (unless Options.DryRun) creates a commit from the
+// currently-staged index. It does NOT decide what to stage: the caller stages first (or the CLI
+// layer uses its auto-stage-all). Repo = the current working directory. Returns a typed error
+// (ErrNothingToCommit / ErrTimeout / ErrRescue / ErrCASFailed, or a *RescueError / *CASError) the
+// caller maps to their own UX.
+//
+// Stable as of v1.0.
+func GenerateCommit(ctx context.Context, opts Options) (Result, error) {
+	cfg, repoDir, err := resolveConfig(ctx, opts)
+	if err != nil {
+		return Result{}, err
+	}
+	deps, err := buildDeps(cfg, repoDir)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// Common path: no DryRun, no SystemExtra → delegate to the frozen, tested orchestrator.
+	if !opts.DryRun && opts.SystemExtra == "" {
+		res, gerr := generate.CommitStaged(ctx, deps, cfg)
+		if gerr != nil {
+			return Result{}, gerr
+		}
+		return Result{
+			CommitSHA: res.CommitSHA,
+			Subject:   res.Subject,
+			Message:   res.Message,
+			Provider:  res.Provider,
+			Model:     res.Model,
+		}, nil // drop res.Changes (design §1)
+	}
+
+	// Advanced path: DryRun and/or SystemExtra → self-contained (CommitStaged can't honor these).
+	return runPipeline(ctx, deps, cfg, opts.SystemExtra, opts.DryRun)
+}
+
+// resolveConfig loads the full 7-layer config and applies Options overrides (highest precedence).
+func resolveConfig(ctx context.Context, opts Options) (config.Config, string, error) {
+	repoDir, err := os.Getwd()
+	if err != nil {
+		return config.Config{}, "", fmt.Errorf("stagehand: getwd: %w", err)
+	}
+
+	cfgPtr, err := config.Load(ctx, config.LoadOpts{RepoDir: repoDir, Flags: nil})
+	if err != nil {
+		return config.Config{}, "", fmt.Errorf("stagehand: load config: %w", err)
+	}
+
+	cfg := *cfgPtr // copy to value
+
+	// Apply caller overrides (highest precedence — explicit intent wins over file/env/git-config).
+	if opts.Provider != "" {
+		cfg.Provider = opts.Provider
+	}
+	if opts.Model != "" {
+		cfg.Model = opts.Model
+	}
+	if opts.Timeout != 0 {
+		cfg.Timeout = opts.Timeout
+	}
+
+	return cfg, repoDir, nil
+}
+
+// buildDeps resolves the provider manifest from the registry and constructs generate.Deps.
+func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
+	overrides, err := provider.DecodeUserOverrides(cfg.Providers)
+	if err != nil {
+		return generate.Deps{}, fmt.Errorf("stagehand: provider overrides: %w", err)
+	}
+
+	reg := provider.NewRegistry(overrides)
+
+	name := cfg.Provider
+	if name == "" {
+		var installed []string
+		for _, m := range reg.List() {
+			if reg.IsInstalled(m) {
+				installed = append(installed, m.Name)
+			}
+		}
+		name = reg.DefaultProvider(installed)
+	}
+	if name == "" {
+		return generate.Deps{}, fmt.Errorf(
+			"stagehand: no provider configured and none of the built-ins (%s) are installed",
+			strings.Join([]string{"pi", "claude", "gemini", "opencode", "codex", "cursor"}, ", "))
+	}
+
+	m, ok := reg.Get(name)
+	if !ok {
+		return generate.Deps{}, fmt.Errorf("stagehand: unknown provider %q", name)
+	}
+	if err := m.Validate(); err != nil {
+		return generate.Deps{}, fmt.Errorf("stagehand: provider %q: %w", name, err)
+	}
+
+	return generate.Deps{Git: git.New(repoDir), Manifest: m}, nil
+}
+
+// buildSysPrompt constructs the system prompt. On unborn or CommitCount≤1 → fallback;
+// else → mature with recent messages + multiline detection.
+// This mirrors generate.buildSystemPrompt (unexported — can't import). It reuses the prompt
+// builders; NOT IP duplication.
+func buildSysPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
+	if isUnborn {
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+	}
+	n, err := g.CommitCount(ctx)
+	if err != nil {
+		return "", err
+	}
+	if n <= 1 {
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+	}
+	msgs, err := g.RecentMessages(ctx, 20)
+	if err != nil {
+		return "", err
+	}
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+}
+
+// runPipeline is the self-contained path for DryRun/SystemExtra. It mirrors generate.CommitStaged
+// but (a) appends SystemExtra to the system prompt and (b) DryRun runs a single pass without
+// committing. It reuses the SAME exported primitives CommitStaged uses (git.Git, prompt.*,
+// provider.{Render,Execute,ParseOutput}, generate.{ExtractSubject,IsDuplicate,RescueError,CASError}).
+func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, systemExtra string, dryRun bool) (Result, error) {
+	// Step 1: capture parent + isUnborn.
+	parentSHA, isUnborn, err := deps.Git.RevParseHEAD(ctx)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// Step 2: diff payload; empty → nothing to commit.
+	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
+		MaxDiffBytes: cfg.MaxDiffBytes,
+		MaxMDLines:   cfg.MaxMdLines,
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	if diff == "" {
+		return Result{}, ErrNothingToCommit
+	}
+
+	// Step 3 (commit path only): snapshot. DryRun skips it (no commit → no object-store write).
+	var treeSHA string
+	if !dryRun {
+		treeSHA, err = deps.Git.WriteTree(ctx)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+
+	// Step 4: system prompt (+ SystemExtra) + recent subjects (built ONCE).
+	sysPrompt, err := buildSysPrompt(ctx, deps.Git, cfg, isUnborn)
+	if err != nil {
+		return Result{}, err
+	}
+	if systemExtra != "" {
+		sysPrompt += "\n\n" + systemExtra
+	}
+
+	var recent []string
+	if !isUnborn {
+		recent, err = deps.Git.RecentSubjects(ctx, 50)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+
+	resolved := deps.Manifest.Resolve()
+	model := cfg.Model
+	if model == "" {
+		model = *resolved.DefaultModel
+	}
+
+	// ---- DryRun: single pass, no commit. ----
+	if dryRun {
+		payload := prompt.BuildUserPayload(diff, nil)
+		spec, rerr := deps.Manifest.Render(cfg.Model, cfg.Provider, sysPrompt, payload)
+		if rerr != nil {
+			return Result{}, fmt.Errorf("stagehand: render: %w", rerr)
+		}
+		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout)
+		if execErr != nil {
+			if errors.Is(execErr, context.DeadlineExceeded) {
+				return Result{}, ErrTimeout
+			}
+			return Result{}, fmt.Errorf("stagehand: generate: %w", execErr)
+		}
+		msg, ok, _ := provider.ParseOutput(out, deps.Manifest)
+		if !ok {
+			return Result{}, errors.New("stagehand: dry run: model produced no valid message")
+		}
+		return Result{
+			CommitSHA: "",
+			Subject:   generate.ExtractSubject(msg),
+			Message:   msg,
+			Provider:  deps.Manifest.Name,
+			Model:     model,
+		}, nil
+	}
+
+	// ---- Commit path (SystemExtra set): full generate→dedupe loop + commit. Mirror CommitStaged. ----
+	retryInstr := *resolved.RetryInstruction
+	var rejected []string
+	var candidate, msg string
+	var parseFail, success bool
+	var lastCause error
+
+	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
+		payload := prompt.BuildUserPayload(diff, rejected)
+		if parseFail {
+			payload = retryInstr + "\n\n" + payload
+		}
+
+		spec, rerr := deps.Manifest.Render(cfg.Model, cfg.Provider, sysPrompt, payload)
+		if rerr != nil {
+			return Result{}, fmt.Errorf("stagehand: render: %w", rerr)
+		}
+
+		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout)
+		if execErr != nil {
+			if errors.Is(execErr, context.DeadlineExceeded) {
+				return Result{}, &generate.RescueError{
+					Kind: generate.ErrTimeout, TreeSHA: treeSHA, ParentSHA: parentSHA,
+					Candidate: candidate, Cause: execErr,
+				}
+			}
+			if errors.Is(execErr, context.Canceled) {
+				return Result{}, &generate.RescueError{
+					Kind: generate.ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
+					Candidate: candidate, Cause: execErr,
+				}
+			}
+			// Non-zero exit: fall through to ParseOutput (stdout may be partial-valid).
+			lastCause = execErr
+		} else {
+			lastCause = nil
+		}
+
+		m, ok, _ := provider.ParseOutput(out, deps.Manifest)
+		if !ok {
+			parseFail = true
+			candidate = m
+			continue
+		}
+		parseFail = false
+
+		subject := generate.ExtractSubject(m)
+		if generate.IsDuplicate(subject, recent) {
+			rejected = append(rejected, subject)
+			candidate = m
+			continue
+		}
+
+		msg = m
+		success = true
+		break
+	}
+	if !success {
+		return Result{}, &generate.RescueError{
+			Kind: generate.ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
+			Candidate: candidate, Cause: lastCause,
+		}
+	}
+
+	// Commit (mirror CommitStaged steps 7-8).
+	var parents []string
+	if !isUnborn {
+		parents = []string{parentSHA}
+	}
+	newSHA, err := deps.Git.CommitTree(ctx, treeSHA, parents, msg)
+	if err != nil {
+		return Result{}, err
+	}
+
+	expectedOld := parentSHA
+	if isUnborn {
+		expectedOld = strings.Repeat("0", 40)
+	}
+	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
+		if errors.Is(err, git.ErrCASFailed) {
+			actual, _, _ := deps.Git.RevParseHEAD(ctx)
+			return Result{}, &generate.CASError{
+				TreeSHA: treeSHA, Expected: parentSHA,
+				Actual: actual, Message: msg,
+			}
+		}
+		return Result{}, err
+	}
+
+	return Result{
+		CommitSHA: newSHA,
+		Subject:   generate.ExtractSubject(msg),
+		Message:   msg,
+		Provider:  deps.Manifest.Name,
+		Model:     model,
+	}, nil
+}
