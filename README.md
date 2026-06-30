@@ -63,7 +63,7 @@ stagehand
 # 3. Stage everything and commit in one step
 stagehand -a
 
-# 4. Preview the message without committing
+# 4. Preview the real message (full pipeline: snapshot→generate→parse→dedupe→retry), no commit
 stagehand --dry-run
 ```
 
@@ -93,6 +93,9 @@ opencode  ✓
 pi        ✓         (default)
 ```
 
+> [!NOTE]
+> A provider whose command isn't on `$PATH` fails fast with exit 1 before any snapshot — no partial state, no rescue recipe.
+
 Set a per-repo default with git config:
 
 ```bash
@@ -111,6 +114,11 @@ stagehand config init
 stagehand config path
 # ~/.config/stagehand/config.toml
 ```
+
+> [!NOTE]
+> The template also documents a `[generation]` section: `output` ("raw"|"json") and `strip_code_fence` tune how Stagehand parses agent output across all providers (overriding per-provider values).
+
+Point discovery at a specific file with `stagehand --config path/to/config.toml`. It is honored by every command — including the default commit action — so a provider declared under `[provider.<name>]` there is usable with `--provider <name>` directly.
 
 **Config precedence** (highest → lowest): CLI flags > `STAGEHAND_*` env vars > repo `git config` (`stagehand.*`) > repo `.stagehand.toml` > global config file > provider defaults > built-in defaults.
 

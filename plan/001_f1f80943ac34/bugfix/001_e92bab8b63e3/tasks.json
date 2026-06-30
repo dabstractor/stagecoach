@@ -303,7 +303,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T1.S1",
                   "title": "Sync README.md (config precedence, dry-run, agent configuration)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
