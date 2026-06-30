@@ -80,14 +80,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Provider command pre-flight fail-fast (Issue 3)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Add a pre-snapshot exec.LookPath check so a missing/uninstalled provider command fails fast with exit 1 (PRD §18.2/§13.5) BEFORE the write-tree snapshot, instead of falling through to the rescue path (exit 3 + dangling tree). The check lives in buildDeps (pkg/stagehand/stagehand.go) - the single chokepoint feeding both CommitStaged and runPipeline - and reuses the existing, tested Registry.IsInstalled. Architectural decision: architecture/decisions.md D2. NOTE: P1.M2 is logically independent of P1.M1 (different function: buildDeps vs resolveConfig); it may execute in parallel but edits the same file, so a sequencer should avoid concurrent edits to pkg/stagehand/stagehand.go.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Add pre-snapshot IsInstalled pre-flight in buildDeps",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Insert a reg.IsInstalled(m) check after m.Validate() in buildDeps; on failure return a plain (non-*RescueError) error that exitcode.For maps to exit 1, before any WriteTree runs.",
               "subtasks": [
                 {
@@ -109,7 +109,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Tests: missing provider command fails fast (exit 1, not *RescueError, no dangling tree)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

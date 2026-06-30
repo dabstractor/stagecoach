@@ -144,6 +144,19 @@ func setupStubRepoRaw(t *testing.T, tomlBody string) string {
 	return repo
 }
 
+// objectCountLine returns the "count:" line of `git count-objects -v` for the repo at dir.
+// Used to assert no NEW loose objects (no dangling tree) were written by a failed run.
+func objectCountLine(t *testing.T, dir string) string {
+	t.Helper()
+	for _, line := range strings.Split(gitOut(t, dir, "count-objects", "-v"), "\n") {
+		if strings.HasPrefix(line, "count:") {
+			return line
+		}
+	}
+	t.Fatalf("git count-objects -v: no 'count:' line in output:\n%s", gitOut(t, dir, "count-objects", "-v"))
+	return ""
+}
+
 // ---------------------------------------------------------------------------
 // TestRunDefault_Commit — happy path: staged file → commit + FR42 report
 // ---------------------------------------------------------------------------
@@ -601,6 +614,60 @@ strip_code_fence = true
 	// HEAD is the concurrent commit, NOT the orchestrator's
 	if got := headSHA(t, repo); got != concurrent {
 		t.Errorf("HEAD = %q, want %q (concurrent commit)", got, concurrent)
+	}
+}
+
+// TestRunDefault_MissingProviderCommand_Issue3 proves PRD Issue 3 is fixed end-to-end through the CLI
+// seam: `stagehand --provider <missing-command>` exits 1 with the not-found message and NO §18.3
+// rescue block / no dangling tree. Before P1.M2.T1.S1 this was exit 3 + rescue block + dangling tree.
+func TestRunDefault_MissingProviderCommand_Issue3(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	toml := "[provider.missing]\n" +
+		"command = \"/nonexistent/path/agent\"\n" +
+		"prompt_delivery = \"stdin\"\n" +
+		"output = \"raw\"\n" +
+		"strip_code_fence = true\n"
+	repo := setupStubRepoRaw(t, toml)
+	// setupStubRepoRaw does not commit; add an initial commit so HEAD exists and the new-file
+	// count-objects guard is meaningful.
+	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "commit", "-m", "initial")
+	writeFile(t, repo, "new.txt", "content") // NEW file — see pkg/stagehand test comment for why
+	stageFile(t, repo, "new.txt")
+
+	beforeCount := objectCountLine(t, repo)
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"--provider", "missing"})
+
+	err := Execute(context.Background())
+
+	afterCount := objectCountLine(t, repo)
+
+	if err == nil {
+		t.Fatal("Execute: err = nil, want non-nil (missing provider command)")
+	}
+	if code := exitcode.For(err); code != exitcode.Error {
+		t.Errorf("exitcode.For(err) = %d, want %d (Error)", code, exitcode.Error)
+	}
+	if msg := err.Error(); !strings.Contains(msg, "not found") || !strings.Contains(msg, "Is the agent installed?") {
+		t.Errorf("err.Error() = %q; want to contain 'not found' and 'Is the agent installed?'", msg)
+	}
+	// NO §18.3 rescue block on stderr (the bug printed "❌ Commit generation failed." + "Tree ID:").
+	stderr := errBuf.String()
+	if strings.Contains(stderr, "❌ Commit generation failed.") {
+		t.Errorf("stderr contains the rescue block (want NONE for a missing command):\n%s", stderr)
+	}
+	if strings.Contains(stderr, "Tree ID:") {
+		t.Errorf("stderr contains 'Tree ID:' rescue recipe (want NONE):\n%s", stderr)
+	}
+	// NO dangling tree object.
+	if beforeCount != afterCount {
+		t.Errorf("dangling tree: git count-objects changed\n  before: %s\n  after:  %s", beforeCount, afterCount)
 	}
 }
 

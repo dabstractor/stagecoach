@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dustin/stagehand/internal/config"
+	"github.com/dustin/stagehand/internal/exitcode"
 	"github.com/dustin/stagehand/internal/stubtest"
 )
 
@@ -115,6 +116,19 @@ func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 	t.Cleanup(func() { os.Chdir(wd) })
 
 	return bin
+}
+
+// objectCountLine returns the "count:" line of `git count-objects -v` for the repo at dir.
+// Used to assert no NEW loose objects (no dangling tree) were written by a failed run.
+func objectCountLine(t *testing.T, dir string) string {
+	t.Helper()
+	for _, line := range strings.Split(gitOut(t, dir, "count-objects", "-v"), "\n") {
+		if strings.HasPrefix(line, "count:") {
+			return line
+		}
+	}
+	t.Fatalf("git count-objects -v: no 'count:' line in output:\n%s", gitOut(t, dir, "count-objects", "-v"))
+	return ""
 }
 
 // --- Tests ---
@@ -302,6 +316,111 @@ func TestGenerateCommit_SystemExtra(t *testing.T) {
 	if got := headSHA(t, repoDir); got != res.CommitSHA {
 		t.Errorf("HEAD = %q, want %q", got, res.CommitSHA)
 	}
+}
+
+// TestGenerateCommit_MissingProviderCommand_Issue3 proves PRD Issue 3 is fixed: a provider whose
+// command is not on $PATH fails FAST (exit 1) in buildDeps BEFORE the write-tree snapshot — so the
+// error is NOT a *RescueError, exitcode.For maps it to 1, the message names the missing command, and
+// NO new tree object is written. Before P1.M2.T1.S1 this surfaced as exit 3 (rescue) + a dangling tree.
+func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
+	// Fresh repo with a repo-local .stagehand.toml registering a provider whose command does not exist.
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	const toml = "[provider.missing]\n" +
+		"command = \"/nonexistent/path/agent\"\n" +
+		"prompt_delivery = \"stdin\"\n" +
+		"output = \"raw\"\n" +
+		"strip_code_fence = true\n"
+	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+		t.Fatalf("write .stagehand.toml: %v", err)
+	}
+
+	// Chdir (GenerateCommit resolves the repo via os.Getwd()).
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir %s: %v", repo, err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+
+	// MUST stage a NEW file: if the pre-flight check were removed (regression), WriteTree would write
+	// a new tree object and the count-objects guard below would catch it. With nothing staged, the
+	// pipeline short-circuits to ErrNothingToCommit before WriteTree, masking the regression.
+	writeFile(t, repo, "new.txt", "content")
+	stageFile(t, repo, "new.txt")
+
+	beforeCount := objectCountLine(t, repo)
+
+	_, err = GenerateCommit(context.Background(), Options{Provider: "missing"})
+
+	afterCount := objectCountLine(t, repo)
+
+	// Must error.
+	if err == nil {
+		t.Fatal("GenerateCommit: err = nil, want non-nil (missing provider command)")
+	}
+	// (a) NOT a *RescueError (the bug returned *RescueError -> exit 3 + rescue block + dangling tree).
+	var re *RescueError
+	if errors.As(err, &re) {
+		t.Errorf("error is *RescueError (%v); want a plain pre-generation error (exit 1)", re)
+	}
+	// (b) exitcode.For(err) == 1. A plain error falls through to `return Error`.
+	if code := exitcode.For(err); code != exitcode.Error {
+		t.Errorf("exitcode.For(err) = %d, want %d (Error); err=%v", code, exitcode.Error, err)
+	}
+	// (c) message names the missing command.
+	if msg := err.Error(); !strings.Contains(msg, "not found") || !strings.Contains(msg, "Is the agent installed?") || !strings.Contains(msg, "/nonexistent/path/agent") {
+		t.Errorf("err.Error() = %q; want to contain 'not found', 'Is the agent installed?', and '/nonexistent/path/agent'", msg)
+	}
+	// (d) NO new tree object written (pre-flight ran before WriteTree).
+	if beforeCount != afterCount {
+		t.Errorf("dangling tree: git count-objects changed\n  before: %s\n  after:  %s\n(pre-flight must run before WriteTree)", beforeCount, afterCount)
+	}
+
+	// Optional: dry-run subtest — proves buildDeps protects the runPipeline path too.
+	t.Run("dryrun", func(t *testing.T) {
+		// Create a fresh repo for the dry-run subtest (can't reuse — CWD already restored).
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+			t.Fatalf("write .stagehand.toml: %v", err)
+		}
+		wd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd: %v", err)
+		}
+		if err := os.Chdir(repo); err != nil {
+			t.Fatalf("chdir %s: %v", repo, err)
+		}
+		t.Cleanup(func() { os.Chdir(wd) })
+		writeFile(t, repo, "new2.txt", "content")
+		stageFile(t, repo, "new2.txt")
+
+		beforeCount := objectCountLine(t, repo)
+		_, err = GenerateCommit(context.Background(), Options{Provider: "missing", DryRun: true})
+		afterCount := objectCountLine(t, repo)
+
+		if err == nil {
+			t.Fatal("GenerateCommit dryrun: err = nil, want non-nil")
+		}
+		var re *RescueError
+		if errors.As(err, &re) {
+			t.Errorf("dryrun: error is *RescueError (%v); want plain error", re)
+		}
+		if code := exitcode.For(err); code != exitcode.Error {
+			t.Errorf("dryrun: exitcode.For(err) = %d, want %d (Error)", code, exitcode.Error)
+		}
+		if msg := err.Error(); !strings.Contains(msg, "not found") || !strings.Contains(msg, "Is the agent installed?") {
+			t.Errorf("dryrun: err.Error() = %q; want 'not found' + 'Is the agent installed?'", msg)
+		}
+		if beforeCount != afterCount {
+			t.Errorf("dryrun: dangling tree: count changed\n  before: %s\n  after:  %s", beforeCount, afterCount)
+		}
+	})
 }
 
 // TestResolveConfig_InjectedConfig proves that when opts.Config is non-nil, resolveConfig uses
