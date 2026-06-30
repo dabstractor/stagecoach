@@ -1,0 +1,118 @@
+package ui
+
+import (
+	"fmt"
+	"io"
+	"os"
+)
+
+// ANSI SGR codes (Select Graphic Rendition). Emitted ONLY when u.color is true.
+const (
+	ansiReset  = "\x1b[0m"
+	ansiRed    = "\x1b[31m"
+	ansiGreen  = "\x1b[32m"
+	ansiYellow = "\x1b[33m"
+)
+
+// progressPrefix is the Appendix-B "↳" glyph (U+21B3) + one space, prefixing every progress line.
+const progressPrefix = "↳ "
+
+// IsTerminal reports whether f is a terminal (character device). Stdlib-only TTY heuristic: a real
+// terminal/pty is a char device; a pipe, file, or redirect is not. Sufficient for FR51 color gating.
+// stat-error → false (treat as non-TTY → color off → the safe default). NOT a true isatty ioctl;
+// --no-color / NO_COLOR remain the authoritative overrides. Signature is stable for a future
+// golang.org/x/term swap (out of v1 scope — project stays dep-free; see procgroup_windows.go).
+func IsTerminal(f *os.File) bool {
+	stat, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// noColorEnvSet reports whether the NO_COLOR convention (https://no-color.org) disables color: the var
+// is present AND not an empty string. Byte-identical idiom to config/load.go's STAGEHAND_NO_COLOR
+// handling (line 112) — kept consistent so a user's mental model transfers between the two vars.
+func noColorEnvSet() bool {
+	v, ok := os.LookupEnv("NO_COLOR")
+	return ok && v != ""
+}
+
+// ResolveColor decides whether ANSI color should be emitted (PRD §9.13 FR51, §15.2). Color is ON iff:
+// cfg.NoColor is false (--no-color / STAGEHAND_NO_COLOR, already resolved by config.Load) AND the bare
+// NO_COLOR env var is unset/empty (https://no-color.org) AND stdout is a terminal. The TTY check is
+// PASSED IN (isTTY) so the untestable IO is decoupled from the testable flag/env logic (work item:
+// "can't easily test TTY in unit tests; test the flag/env logic"). Callers pass isTTY = IsTerminal(os.Stdout).
+func ResolveColor(noColor bool, isTTY bool) bool {
+	if noColor {
+		return false
+	}
+	if noColorEnvSet() {
+		return false
+	}
+	return isTTY
+}
+
+// UI renders Stagehand's CLI output with optional ANSI color (PRD §9.13, Appendix B). Progress/Success/
+// Error go to STDERR (FR51: stdout stays clean for piping); the actual RESULT data (commit report,
+// dry-run message) stays PLAIN on stdout via the caller's own print path — never thread it through here.
+// Writers are injectable (cobra's cmd.OutOrStdout/ErrOrStderr in prod, *bytes.Buffer in tests); color is
+// a resolved bool passed to New (tests pass true/false directly — no real TTY needed).
+type UI struct {
+	stdout io.Writer
+	stderr io.Writer
+	color  bool
+}
+
+// New constructs a UI writing to the given streams with the given color resolution. From the CLI:
+//
+//	ui.New(stdout, stderr, ui.ResolveColor(cfg.NoColor, ui.IsTerminal(os.Stdout)))
+//
+// From tests: ui.New(&outBuf, &errBuf, true|false). nil writers default to os.Stdout/os.Stderr.
+func New(stdout, stderr io.Writer, color bool) *UI {
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	return &UI{stdout: stdout, stderr: stderr, color: color}
+}
+
+// Color reports whether color is enabled (for conditional callers / tests).
+func (u *UI) Color() bool { return u.color }
+
+// Green wraps s in ANSI green iff color is enabled; otherwise returns s unchanged (zero ANSI bytes).
+func (u *UI) Green(s string) string { return u.colorize(ansiGreen, s) }
+
+// Red wraps s in ANSI red iff color is enabled; otherwise returns s unchanged (zero ANSI bytes).
+func (u *UI) Red(s string) string { return u.colorize(ansiRed, s) }
+
+// Yellow wraps s in ANSI yellow iff color is enabled; otherwise returns s unchanged (zero ANSI bytes).
+func (u *UI) Yellow(s string) string { return u.colorize(ansiYellow, s) }
+
+func (u *UI) colorize(code, s string) string {
+	if !u.color {
+		return s
+	}
+	return code + s + ansiReset
+}
+
+// Progress writes a progress line to STDERR with the Appendix-B "↳ " prefix (FR51: stdout stays clean
+// for piping). Example: Progress("Generating with pi (glm-5.2)…") -> "↳ Generating with pi (glm-5.2)…\n".
+func (u *UI) Progress(msg string) {
+	fmt.Fprintln(u.stderr, progressPrefix+msg)
+}
+
+// Success writes a success notice to STDERR in green (when color): the Appendix-B "↳ " prefix + msg.
+// Example: Success("Created abc1234") -> green "↳ Created abc1234". (The data report itself stays plain
+// on stdout via the caller's print path.)
+func (u *UI) Success(msg string) {
+	fmt.Fprintln(u.stderr, u.Green(progressPrefix+msg))
+}
+
+// Error writes an error notice to STDERR in red (when color). Example: Error("generation failed").
+// (The frozen §18.3 rescue block is NOT routed through here — it stays plain; see handleGenError.)
+func (u *UI) Error(msg string) {
+	fmt.Fprintln(u.stderr, u.Red(msg))
+}

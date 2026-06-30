@@ -11,6 +11,7 @@ import (
 	"github.com/dustin/stagehand/internal/exitcode"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/ui"
 	"github.com/dustin/stagehand/pkg/stagehand"
 )
 
@@ -36,6 +37,8 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		// so this is unreachable in practice. Still fail loudly rather than nil-deref.
 		return exitcode.New(exitcode.Error, errors.New("stagehand: configuration not loaded"))
 	}
+
+	u := ui.New(stdout, stderr, ui.ResolveColor(cfg.NoColor, ui.IsTerminal(os.Stdout)))
 
 	repoDir, err := os.Getwd()
 	if err != nil {
@@ -71,7 +74,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return exitcode.New(exitcode.Error, fmt.Errorf("git diff --cached --name-only: %w", err))
 			}
-			fmt.Fprintf(stderr, "Nothing staged — staging all changes (%d files).\n", n) // FR18 (verbatim, em-dash)
+			fmt.Fprintln(stderr, u.Yellow(fmt.Sprintf("Nothing staged — staging all changes (%d files).", n))) // FR18 (text verbatim, em-dash; colorized)
 			hasStaged, err = g.HasStagedChanges(ctx)
 			if err != nil {
 				return exitcode.New(exitcode.Error, fmt.Errorf("git diff --cached --quiet: %w", err))
@@ -97,6 +100,17 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	// §3: re-apply the CLI-resolved provider/model/timeout (Layer-7 flags already applied by
 	// PersistentPreRunE) as Options — GenerateCommit re-loads config with Flags:nil, so opts is how the
 	// CLI flags take effect (opts override is highest precedence in resolveConfig).
+	// Build the progress label defensively (provider unknown when auto-detect).
+	label := "Generating"
+	if cfg.Provider != "" {
+		label += " with " + cfg.Provider
+		if cfg.Model != "" {
+			label += " (" + cfg.Model + ")"
+		}
+	}
+	label += "…"
+	u.Progress(label)
+
 	res, err := stagehand.GenerateCommit(ctx, stagehand.Options{
 		Provider: cfg.Provider,
 		Model:    cfg.Model,
