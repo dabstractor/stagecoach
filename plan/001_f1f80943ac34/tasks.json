@@ -781,7 +781,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Root command, global flags, and custom exit-code wiring (cobra)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T4.S4",
@@ -800,7 +800,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Default commit action (auto-stage-all + CommitStaged + success report)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1",
