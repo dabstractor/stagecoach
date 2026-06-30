@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Bugfix-002: Silent wrong-behavior fixes (config path fail-fast, manifest output/strip_code_fence honored, UX error wording)",
-      "status": "Planned",
+      "status": "Complete",
       "description": "Second-pass QA bugfix for Stagehand v1.0 (post bugfix-001). Four SILENT wrong-behavior bugs (no crashes, no data-integrity regressions) centering on the config↔manifest handoff seam and user-facing error wording: (1) an explicit --config/STAGEHAND_CONFIG to a NONEXISTENT file is silently ignored so a real agent is invoked; (2) manifest-level output/strip_code_fence are clobbered by [generation] defaults (JSON mode dead at manifest level); (3) unresolved merge conflicts surface raw multi-line git write-tree stderr; (4) --dry-run exits 3/124 with a full rescue recipe. The snapshot/atomic-commit core (§13/§18.1), rescue/timeout/CAS/signal mapping, and root-commit path are verified correct and MUST NOT regress. Findings in plan/001_f1f80943ac34/bugfix/002_18158df10968/architecture/.",
       "milestones": [
         {
@@ -155,14 +155,14 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Sync changeset-level documentation (Mode B — final sweep)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Per documentation-sync §5 Mode B: cross-cutting overview/feature docs that only make sense once the whole changeset is in place are swept here. README.md and the docs/how-it-works.md overview describe the config-override, generation-output, dry-run, and merge-conflict behaviors at a summary level and must reflect the four fixes. This task depends on EVERY implementing subtask so it runs last.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M5.T1",
               "title": "Sync changeset-level documentation (README.md + overview docs) to reflect all four bugfix-002 fixes",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Sweep the top-level README.md and the docs/how-it-works.md architecture overview so the summarized behaviors match the implemented changes. Per-file docs touched directly by an implementing subtask (docs/cli.md, docs/configuration.md, docs/providers.md) were already updated as Mode A in their own subtasks — this task only reconciles the cross-cutting overview/feature blurbs.",
               "subtasks": [
                 {
@@ -190,7 +190,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T1.S2",
                   "title": "Reconcile docs/how-it-works.md overview (failure/exit-code + rescue sections) with the merge-conflict and dry-run fixes",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1",

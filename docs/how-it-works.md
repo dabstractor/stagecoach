@@ -55,17 +55,20 @@ No provider mutates the repository (PRD §18.1). Every built-in manifest constra
 | Failure | Exit code | Recovery |
 |---------|-----------|----------|
 | Agent missing on `$PATH` | 1 (Error) | Check the `[provider.<name>] command` path; install the agent |
+| Unresolved merge conflicts in the index | 1 (Error) | Resolve the conflicts, then re-run `stagehand` (caught before the snapshot) |
 | Generation failed (parse/retry exhaustion) | 3 (Rescue) | Rescue message with tree SHA |
 | Generation timed out | 124 (Timeout) | Rescue message with tree SHA |
 | CAS failure (HEAD moved meanwhile) | 1 (Error) | HEAD-moved message |
 | Nothing to commit (clean tree) | 2 (NothingToCommit) | Stage files and retry |
 | General error | 1 (Error) | Inspect error message |
 
+The rescue (3) and timeout (124) rows are the real-commit path; under `--dry-run`, a generation failure reports exit 1 instead — see [Rescue protocol](#rescue-protocol).
+
 See [cli.md](cli.md#exit-codes) for the full exit-code table.
 
 ### Rescue protocol
 
-When generation fails after the snapshot is taken (exit 3 or 124), Stagehand prints a recovery block to stderr with the frozen tree SHA and the exact `git commit-tree` command to commit manually:
+When generation fails after the snapshot is taken on a real commit (exit 3 or 124), Stagehand prints a recovery block to stderr with the frozen tree SHA and the exact `git commit-tree` command to commit manually:
 
 ```text
 ❌ Commit generation failed.
@@ -81,6 +84,8 @@ To commit the originally staged files manually:
 ```
 
 If a candidate commit message was produced but rejected (duplicate subject or parse failure), it is appended to the rescue block so the user can paste it into the manual command.
+
+Under `--dry-run`, the full pipeline still runs and the snapshot is still taken, but a generation failure (timeout or parse/duplicate-check exhaustion) exits **1** with a short stderr message and omits this recovery recipe — no commit was ever intended. The recipe and exit codes 3/124 apply to a real `stagehand` commit.
 
 ## Prompt engineering
 
