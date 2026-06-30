@@ -1,0 +1,72 @@
+# ============================================================================
+# pi — reference manifest for the `pi` built-in provider (PRD §12.3)
+# ============================================================================
+#
+# WHAT THIS FILE IS
+#   Human-readable REFERENCE DOCUMENTATION for the `pi` provider. It mirrors the
+#   compiled-in manifest `builtinPi()` in internal/provider/builtin.go BYTE-FOR-BYTE
+#   (modulo comments). It is NOT loaded at runtime — built-ins are compiled into
+#   the Go binary. (The config loader reads .stagehand.toml, not this directory.)
+#
+# HOW TO USE IT AS A CONFIG OVERRIDE (PRD §12.8)
+#   To override the built-in pi (or define a variant), copy the FIELD lines below
+#   (NOT this header) into your config file and wrap them in a `[provider.pi]`
+#   table, then DELETE the `name = "pi"` line — the table key supplies the name.
+#   Change only the fields you want; fields you omit inherit the built-in's value.
+#       # ~/.config/stagehand/config.toml  (or a repo-local .stagehand.toml)
+#       [provider.pi]
+#       default_model = "glm-5.2"          # e.g. override only the model
+#
+# RENDERED COMMAND (external_deps.md §pi; matches commit-pi byte-for-byte)
+#   pi --provider zai --model glm-5-turbo --system-prompt "<sys>" \
+#      --no-tools --no-extensions --no-skills --no-prompt-templates \
+#      --no-context-files --no-session -p   < <user payload via stdin>
+#
+# TOOLS-DISABLE CATEGORY (§12.7.1): EXPLICIT switch — pi offers literal --no-* flags,
+#   so the call is a pure text-in/text-out with NO agent loop (the "bare" ideal).
+# ============================================================================
+
+# --- identity / discovery ---
+name = "pi"                         # identity; the value you pass to --provider.
+detect = "pi"                       # command looked up on $PATH to decide "installed". Absent -> command.
+command = "pi"                      # the executable to run (exec.LookPath; may be absolute).
+
+# --- prompt delivery ---
+prompt_delivery = "stdin"           # pipe the user payload (system prompt + diff) to stdin (DEFAULT;
+                                    # avoids arg-length limits vs positional).
+
+# --- non-interactive mode ---
+print_flag = "-p"                   # -p / --print: process the prompt and exit (one-shot).
+
+# --- model ---
+model_flag = "--model"              # the model-selection flag.
+default_model = "glm-5-turbo"       # model used if the user specifies none.
+
+# --- system prompt ---
+system_prompt_flag = "--system-prompt"  # pi supports a first-class system prompt (delivered via flag).
+
+# --- sub-provider ---
+provider_flag = "--provider"        # pi routes to backends: zai | anthropic | google | ...
+default_provider = ""               # NON-NIL empty: do NOT add --provider unless the user configures
+                                    # one (e.g. set "zai" for GLM). pi's own default provider is "google".
+
+# --- bare mode (§12.7.1: explicit tool-disable switch) ---
+bare_flags = [                      # appended VERBATIM to make the call bare + ephemeral.
+  "--no-tools",                     # disable ALL tools (pure text-in/text-out).
+  "--no-extensions",                # disable extension discovery.
+  "--no-skills",                    # disable skill discovery/loading.
+  "--no-prompt-templates",          # disable prompt-template discovery.
+  "--no-context-files",             # disable AGENTS.md / CLAUDE.md discovery.
+  "--no-session",                   # don't save the session (ephemeral).
+]
+
+# --- output ---
+output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
+strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent wraps the output.
+
+# --- absent fields (PRD §12.1) ---
+# subcommand, prompt_flag, json_field, retry_instruction, and [env] are NOT set for pi and therefore
+# omitted above. At resolve time they take their §12.1 defaults: prompt_delivery -> "stdin",
+# output -> "raw", strip_code_fence -> true, retry_instruction ->
+# "Output ONLY the commit message. No preamble, no markdown, no quotes.",
+# and print_flag/model_flag/etc -> "" (no flag emitted).

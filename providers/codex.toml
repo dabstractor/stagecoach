@@ -1,0 +1,83 @@
+# ============================================================================
+# codex — reference manifest for the `codex` built-in provider (PRD §12.7)
+# ============================================================================
+#
+# WHAT THIS FILE IS
+#   Human-readable REFERENCE DOCUMENTATION for the `codex` provider. It mirrors the
+#   compiled-in manifest `builtinCodex()` in internal/provider/builtin.go BYTE-FOR-BYTE
+#   (modulo comments). It is NOT loaded at runtime — built-ins are compiled into
+#   the Go binary. (The config loader reads .stagehand.toml, not this directory.)
+#
+# HOW TO USE IT AS A CONFIG OVERRIDE (PRD §12.8)
+#   To override the built-in codex (or define a variant), copy the FIELD lines below
+#   (NOT this header) into your config file and wrap them in a `[provider.codex]`
+#   table, then DELETE the `name = "codex"` line — the table key supplies the name.
+#   Change only the fields you want; fields you omit inherit the built-in's value.
+#       # ~/.config/stagehand/config.toml  (or a repo-local .stagehand.toml)
+#       [provider.codex]
+#       default_model = "gpt-5"          # e.g. override only the model
+#
+# RENDERED COMMAND (external_deps.md §codex)
+#   codex exec -m <model> --sandbox read-only --ephemeral < "<sys>\n\n<user payload>"
+#   (stdin delivery; codex exec reads stdin via "-")
+#
+# TOOLS-DISABLE CATEGORY (§12.7.1): READ-ONLY CONSTRAINT — codex has NO global
+#   tool-disable switch; --sandbox read-only constrains it to a read-only,
+#   never-mutate profile. --ephemeral keeps the session clean.
+#
+# DISCREPANCY RESOLUTION (external_deps.md §codex)
+#   Two fields differ from the raw PRD §12.7 prose (verified vs `codex exec --help`):
+#     - prompt_delivery = "stdin"  (PRD said "positional"): codex exec reads stdin
+#       via "-" (avoids arg-length limits on ~300 KB diffs).
+#     - bare_flags = [--sandbox, read-only, --ephemeral] (PRD had --ask-for-approval
+#       never): --ask-for-approval is NOT a codex exec flag (it lives on interactive
+#       `codex`; codex exec is already non-interactive). --ephemeral replaces it.
+# ============================================================================
+
+# --- identity / discovery ---
+name = "codex"                      # identity; the value you pass to --provider.
+detect = "codex"                    # command looked up on $PATH to decide "installed".
+command = "codex"                   # the executable to run (exec.LookPath; may be absolute).
+
+# --- subcommand ---
+subcommand = ["exec"]               # `codex exec` (alias `e`) is the non-interactive runner.
+
+# --- prompt delivery ---
+prompt_delivery = "stdin"           # REV#1 from §12.7 "positional" (codex exec reads stdin via "-";
+                                    # external_deps.md §codex BONUS FINDING). stdin avoids arg-length
+                                    # limits on large diffs.
+
+# --- non-interactive mode ---
+print_flag = ""                     # NON-NIL empty: `codex exec` is already non-interactive (no print flag).
+
+# --- model ---
+model_flag = "-m"                   # the model-selection flag.
+default_model = ""                  # NON-NIL empty: model comes from ~/.codex/config.toml — the user sets one.
+
+# --- system prompt ---
+system_prompt_flag = ""             # NON-NIL empty: no system-prompt flag on `codex exec` — the system prompt
+                                    # is PREPENDED to the payload (§12.2 fallback).
+
+# --- sub-provider ---
+provider_flag = ""                  # NON-NIL empty: codex has no sub-provider concept.
+# default_provider is ABSENT (nil) — codex has no sub-provider, so the key is omitted.
+
+# --- bare mode (§12.7.1: read-only constraint) ---
+bare_flags = ["--sandbox", "read-only", "--ephemeral"]  # sandbox forbids writes/network mutations
+                                    # (read-only, never-mutate). --ephemeral: REV#2 — run without
+                                    # persisting session files (replaces invalid --ask-for-approval).
+
+# --- output ---
+output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
+strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent wraps the output.
+
+# TO CONFIRM (integration): that `codex exec` writes the assistant's final answer
+# to stdout and exits 0 on success. Expected; fallbacks: -o <file> (write last
+# message to file), --json (JSONL events). Resolved by the real-agent suite (P1.M5.T1.S2).
+
+# --- absent fields (PRD §12.1) ---
+# prompt_flag, json_field, retry_instruction, and [env] are NOT set for codex and therefore
+# omitted above. At resolve time they take their §12.1 defaults: prompt_delivery -> "stdin",
+# output -> "raw", strip_code_fence -> true, retry_instruction ->
+# "Output ONLY the commit message. No preamble, no markdown, no quotes.",
+# and print_flag/model_flag/etc -> "" (no flag emitted).
