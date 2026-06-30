@@ -557,6 +557,23 @@ func TestLoad_STAGEHAND_CONFIG_EnvPath(t *testing.T) {
 // Load — error propagation tests
 // ---------------------------------------------------------------------------
 
+func TestLoad_BadRepoLocalFile(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	// Write invalid TOML to .stagehand.toml
+	if err := os.WriteFile(filepath.Join(repo, ".stagehand.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err == nil {
+		t.Fatal("Load err=nil, want error for bad repo-local TOML")
+	}
+	if !strings.Contains(err.Error(), "repo config") {
+		t.Errorf("err=%v, want it to contain 'repo config'", err)
+	}
+}
+
 func TestLoad_BadGlobalFileErrors(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)

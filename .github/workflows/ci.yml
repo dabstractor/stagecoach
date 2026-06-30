@@ -1,0 +1,115 @@
+# .github/workflows/ci.yml — Stagehand CI (PRD §20.4 build/test matrix + §20.3 coverage gate).
+# Scope NOTE: release-on-tag via goreleaser lives in a SEPARATE workflow owned by P1.M5.T3.S2.
+# This file triggers ONLY on push(main) + pull_request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref (only auto-cancel for PRs; let main runs finish).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # --- (1) Build + race-enabled tests across the os x Go matrix -----------------
+  build-test:
+    name: test (${{ matrix.os }} / go${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Maps PRD §20.4's {linux,macos,windows} x {amd64,arm64} onto native GitHub runners:
+        #   ubuntu-latest  = linux/amd64
+        #   macos-13       = macos/amd64  (Intel)
+        #   macos-latest   = macos/arm64  (Apple Silicon)  <-- real arm64 TEST coverage
+        #   windows-latest = windows/amd64
+        # linux/arm64 + windows/arm64 are compile-checked in the cross-build step below.
+        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+        go: ['1.22', '1.23']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true            # auto-keyed on go.sum
+      - name: Build
+        run: go build ./...
+      - name: Cross-build arm64 (covers linux/arm64 + windows/arm64 compile)
+        # Proves the arm64 targets COMPILE without paying for/suffering QEMU test emulation.
+        run: |
+          go env -w GOARCH=arm64 GOOS=linux   && go build ./...
+          go env -w GOARCH=arm64 GOOS=windows && go build ./...
+          go env -u GOARCH GOOS
+      - name: Test (race)
+        run: go test -race ./...
+
+  # --- (2) golangci-lint (single ubuntu job — faster, no windows-lint flake) ----
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          args: --timeout=5m
+
+  # --- (3) govulncheck (single ubuntu job) -------------------------------------
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/golang/govulncheck-action@v1
+        with:
+          go-version: '1.22'
+          go-package: ./...
+
+  # --- (4) Coverage gate (PRD §20.3: >=85% on the 4 core packages) -------------
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: Generate coverage
+        # Per-package OWN-TESTS coverage (the standard interpretation of §20.3). NOT -coverpkg.
+        run: go test -coverprofile=coverage.out ./...
+      - name: Enforce >=85% on internal/{git,provider,generate,config}
+        # Self-contained, statement-weighted gate. No third-party action, no Make dependency.
+        # threshold (PRD §20.3 = 85). If you ratchet a package (see "Coverage-gap decision tree"),
+        # give it a per-package floor below instead of lowering this global threshold.
+        run: |
+          awk '
+            /^mode:/ {next}
+            {
+              f=$1; sub(/:[0-9]+.*$/,"",f);            # f = pkgpath/file.go
+              n=split(f,p,"/"); pkg=""; for(i=1;i<n;i++){pkg=pkg (i>1?"/":"") p[i]}
+              tot[pkg]+=$2; if($3+0>0) cov[pkg]+=$2    # $2=numStatements, $3=hitCount
+            }
+            END{
+              threshold=85
+              t[1]="github.com/dustin/stagehand/internal/git"
+              t[2]="github.com/dustin/stagehand/internal/provider"
+              t[3]="github.com/dustin/stagehand/internal/generate"
+              t[4]="github.com/dustin/stagehand/internal/config"
+              fail=0
+              for(i=1;i<=4;i++){
+                if(!(t[i] in tot)){ printf("::error::%s — no coverage data\n",t[i]); fail=1; continue }
+                pct=(tot[t[i]]>0)? cov[t[i]]/tot[t[i]]*100 : 0
+                printf("%-55s %5.1f%%\n", t[i], pct)
+                if(pct < threshold){ printf("::error::%s coverage %.1f%% < %d%%\n", t[i], pct, threshold); fail=1 }
+              }
+              exit fail
+            }
+          ' coverage.out

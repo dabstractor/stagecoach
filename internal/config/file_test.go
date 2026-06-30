@@ -20,7 +20,28 @@ func writeTempTOML(t *testing.T, body string) string {
 	return path
 }
 
-// --- Test A: TestLoadTOMLValid ---
+// --- TestLoadRepoLocalConfig_BadTOML ---
+
+func TestLoadRepoLocalConfig_BadTOML(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+	if err := os.WriteFile(filepath.Join(dir, ".stagehand.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err = loadRepoLocalConfig()
+	if err == nil {
+		t.Fatal("loadRepoLocalConfig err=nil, want error for bad TOML")
+	}
+}
+
+// --- TestLoadTOMLValid ---
 
 func TestLoadTOMLValid(t *testing.T) {
 	body := `
@@ -225,14 +246,16 @@ func TestLoadRepoLocalConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Save/restore noticeOut
 	origNoticeOut := noticeOut
 	defer func() { noticeOut = origNoticeOut }()
 
 	// Case 1: no .stagehand.toml → nil, nil
-	os.Chdir(dir)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
 	buf := &bytes.Buffer{}
 	noticeOut = buf
 	cfg, err := loadRepoLocalConfig()
@@ -288,6 +311,71 @@ timeout = "60s"
 	}
 	if buf.Len() != 0 {
 		t.Errorf("no provider: notice=%q, want empty", buf.String())
+	}
+}
+
+// --- TestGlobalConfigPath_Wrapper ---
+
+func TestGlobalConfigPath_Wrapper(t *testing.T) {
+	// GlobalConfigPath() is just a wrapper — exercise it to cover the exported function.
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	defer os.Setenv("XDG_CONFIG_HOME", origXDG)
+
+	absTmp := t.TempDir()
+	os.Setenv("XDG_CONFIG_HOME", absTmp)
+	got := GlobalConfigPath()
+	want := filepath.Join(absTmp, "stagehand", "config.toml")
+	if got != want {
+		t.Errorf("GlobalConfigPath() = %q, want %q", got, want)
+	}
+}
+
+// --- TestGlobalConfigPath_UserHomeDirFails ---
+
+func TestGlobalConfigPath_UserHomeDirFails(t *testing.T) {
+	// When both XDG_CONFIG_HOME is empty/relative AND os.UserHomeDir fails,
+	// globalConfigPath falls back to "config.toml" (last-resort, CWD).
+	// We force UserHomeDir failure by removing all home-env vars.
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
+	origUserprofile := os.Getenv("USERPROFILE")
+	defer func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+		os.Setenv("USERPROFILE", origUserprofile)
+	}()
+
+	os.Unsetenv("HOME")
+	os.Unsetenv("USERPROFILE")
+	os.Setenv("XDG_CONFIG_HOME", "") // empty → skip XDG path
+
+	got := globalConfigPath()
+	// On most systems UserHomeDir still succeeds (reads /etc/passwd on Linux).
+	// If it does succeed, just verify the result is well-formed.
+	if got == "config.toml" {
+		// The fallback path was exercised.
+		return
+	}
+	// Otherwise UserHomeDir succeeded — verify it ends with config.toml
+	if !strings.HasSuffix(got, "config.toml") {
+		t.Errorf("globalConfigPath() = %q, want ending with config.toml", got)
+	}
+}
+
+// --- TestLoadTOMLInvalidTOML ---
+
+func TestLoadTOMLInvalidTOML(t *testing.T) {
+	body := `this is [not valid {toml`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if cfg != nil {
+		t.Errorf("invalid TOML: cfg=%v, want nil", cfg)
+	}
+	if err == nil {
+		t.Fatal("invalid TOML: err=nil, want error")
+	}
+	if !strings.Contains(err.Error(), "parse config") {
+		t.Errorf("err=%q, want 'parse config'", err.Error())
 	}
 }
 

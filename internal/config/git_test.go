@@ -38,6 +38,20 @@ func setGitConfig(t *testing.T, dir, key, value string) {
 }
 
 // ---------------------------------------------------------------------------
+// Test parseInt error path
+// ---------------------------------------------------------------------------
+
+func TestParseInt_Error(t *testing.T) {
+	err := parseInt("repo", "stagehand.timeout", "abc", new(int))
+	if err == nil {
+		t.Fatal("parseInt err=nil, want error for non-integer")
+	}
+	if !strings.Contains(err.Error(), "invalid integer") {
+		t.Errorf("err=%v, want 'invalid integer'", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Test A: ReadsValues — contract main case
 // ---------------------------------------------------------------------------
 

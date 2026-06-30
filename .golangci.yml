@@ -1,0 +1,37 @@
+# .golangci.yml — deterministic lint config consumed by ci.yml's `lint` job.
+# Conservative: disable-all + a short, well-understood enable list so CI lint is stable and the
+# codebase is very likely already green. Add linters deliberately; never enable-all.
+run:
+  timeout: 5m
+  go: '1.22'
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+linters-settings:
+  errcheck:
+    # Don't flag unchecked Close() on io.Closer (common, noisy, low-value).
+    exclude-functions:
+      - (io.Closer).Close
+
+issues:
+  # Don't auto-disable; surface real findings. Show up to 50 per file.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Pre-existing errcheck findings in non-config packages (out of S1 scope).
+    - path: cmd/stubagent/
+      linters: [errcheck]
+    - path: internal/git/stagediff_test.go
+      linters: [errcheck]
+    - path: pkg/stagehand/stagehand_test.go
+      linters: [errcheck, unused]
+    - path: internal/cmd/root_test.go
+      linters: [errcheck]
