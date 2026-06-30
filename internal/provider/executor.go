@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/dustin/stagehand/internal/signal"
 )
 
 // Execute runs a provider CmdSpec as a subprocess and returns its captured stdout, captured stderr,
@@ -60,6 +62,8 @@ func Execute(ctx context.Context, spec CmdSpec, timeout time.Duration) (stdout s
 	if err := cmd.Start(); err != nil {
 		return "", "", fmt.Errorf("provider %q: start: %w", spec.Command, err)
 	}
+	signal.RegisterChild(cmd.Process.Pid) // arm signal forwarding (Setpgid ⇒ PGID==PID)
+	defer signal.ClearChild()             // clear before return so a later signal can't kill a recycled PID
 
 	if werr := cmd.Wait(); werr != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {

@@ -7,6 +7,8 @@ import (
 
 	"github.com/dustin/stagehand/internal/cmd"
 	"github.com/dustin/stagehand/internal/exitcode"
+	"github.com/dustin/stagehand/internal/generate"
+	"github.com/dustin/stagehand/internal/signal"
 )
 
 // version is injected at build time via -ldflags "-X main.version=…" (Makefile VERSION, default "dev").
@@ -15,7 +17,11 @@ var version = "dev"
 
 func main() {
 	cmd.Version = version // cobra's --version prints this (short-circuits before config load)
-	err := cmd.Execute(context.Background())
+	ctx, _ := signal.Install(context.Background(), signal.Options{
+		RescueFormat: generate.FormatRescue,
+		Out:          os.Stderr,
+	})
+	err := cmd.Execute(ctx)
 	code := exitcode.For(err)
 	if err != nil && err.Error() != "" {
 		fmt.Fprintf(os.Stderr, "stagehand: %v\n", err)

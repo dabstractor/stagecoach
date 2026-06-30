@@ -19,6 +19,7 @@ import (
 	"github.com/dustin/stagehand/internal/git"
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
+	"github.com/dustin/stagehand/internal/signal"
 )
 
 // Options configures a GenerateCommit call. All fields are optional (zero value ⇒ inherit the resolved
@@ -220,6 +221,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		if err != nil {
 			return Result{}, err
 		}
+		signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4)
 	}
 
 	// Step 4: system prompt (+ SystemExtra) + recent subjects (built ONCE).
@@ -317,6 +319,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			continue
 		}
 		parseFail = false
+		signal.SetCandidate(m) // keep the §18.3 candidate note current
 
 		subject := generate.ExtractSubject(m)
 		if generate.IsDuplicate(subject, recent) {
@@ -346,6 +349,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		return Result{}, err
 	}
 
+	signal.RestoreDefault() // §18.4 step 3: default disposition for the update-ref window
 	expectedOld := parentSHA
 	if isUnborn {
 		expectedOld = strings.Repeat("0", 40)
@@ -360,6 +364,8 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		}
 		return Result{}, err
 	}
+
+	signal.ClearSnapshot() // belt-and-suspenders disarm on success
 
 	return Result{
 		CommitSHA: newSHA,

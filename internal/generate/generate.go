@@ -15,6 +15,7 @@ import (
 	"github.com/dustin/stagehand/internal/git"
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
+	"github.com/dustin/stagehand/internal/signal"
 )
 
 // Deps carries the runtime collaborators that vary by environment/test. Injected
@@ -155,6 +156,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		return Result{}, err
 	}
 	// *** SNAPSHOT TAKEN — HEAD & committed content are frozen w.r.t. this run. ***
+	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4)
 
 	// Step 4: system prompt (built ONCE) + recent subjects (fetched ONCE).
 	sysPrompt, err := buildSystemPrompt(ctx, deps.Git, cfg, isUnborn)
@@ -218,6 +220,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
+		signal.SetCandidate(m) // keep the §18.3 candidate note current
 
 		subject := ExtractSubject(m) // same package — no prefix
 		if IsDuplicate(subject, recent) {
@@ -248,6 +251,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	}
 
 	// Step 8: update-ref CAS — the SOLE ref mutation; never force (design §8).
+	signal.RestoreDefault() // §18.4 step 3: default disposition for the update-ref window
 	expectedOld := parentSHA
 	if isUnborn {
 		expectedOld = strings.Repeat("0", 40) // all-zeros for root commit CAS
@@ -265,6 +269,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	}
 
 	// Step 9: diff-tree — "what landed" for the FR42 report.
+	signal.ClearSnapshot() // belt-and-suspenders disarm on success
 	changes, err := deps.Git.DiffTree(ctx, newSHA, isUnborn)
 	if err != nil {
 		return Result{}, err

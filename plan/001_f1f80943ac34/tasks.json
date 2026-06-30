@@ -858,14 +858,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Signal Handling (SIGINT/SIGTERM → Child Kill → Rescue)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the signal handler (PRD §18.4 / FR45) that intercepts SIGINT/SIGTERM, forwards to the running child's process group, runs the rescue path if the snapshot was taken, and restores the default handler before the final update-ref.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Signal handler: intercept, forward to process group, rescue, restore before commit",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T5.S2",
@@ -892,7 +892,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "Progress messages, TTY detection, and color (NO_COLOR support)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
