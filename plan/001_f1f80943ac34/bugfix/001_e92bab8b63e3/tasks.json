@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Stagehand v1.0 Spec-Compliance & Contract-Conformance Bugfix",
-      "status": "Planned",
+      "status": "Complete",
       "description": "Fix the 7 spec/contract deviations and silent no-ops found in the v1.0 QA pass (PRD Issues 1-7). No data-integrity or crash bugs; the snapshot-based atomic-commit invariant (PRD §13.4/§18.1) holds. The work clusters on four code seams: the CLI<->pkg config double-load (Issues 1,5), the provider-command pre-flight (Issue 3), the divergent dry-run pipeline (Issues 2,6), and the cfg->manifest bridge + auto-stage UX (Issues 4,7). Research is persisted in plan/001_f1f80943ac34/bugfix/001_e92bab8b63e3/architecture/ (system_context.md, decisions.md, and the four seam_*.md recon reports). TDD is implicit per SOW §3: every subtask writes the failing test first, then implements, then passes.",
       "milestones": [
         {
@@ -289,14 +289,14 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Sync changeset-level documentation (Mode B)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Per SOW §5 Mode B: the cross-cutting/overview docs (README.md feature blurbs, docs/*.md overview sections) that only stay coherent once the WHOLE changeset (Issues 1-7) lands. Per-file docs touched directly by each change were already handled Mode-A inside the implementing subtasks (DOCS lines); this final milestone sweeps the overview-level surfaces for drift. Its subtasks declare dependencies on EVERY implementing subtask so they run last.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M5.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Final sweep of README.md and docs/*.md overview sections so they are consistent with the shipped behavior after Issues 1-7. Runs after every implementing subtask.",
               "subtasks": [
                 {
@@ -332,7 +332,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T1.S2",
                   "title": "Sweep docs/*.md overview sections for changeset coherence",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
