@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "v1.0 — Snapshot-Based AI Commit Message Generator",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Ship Stagehand v1.0 per PRD §10.1: a single static Go binary that generates git commit messages by shelling out to the user's installed coding-agent CLI (pi, claude, gemini, opencode, codex, cursor). Implements the snapshot-based atomic commit flow (write-tree → generate → commit-tree → update-ref CAS), style learning with anti-duplicate guarantee, the provider-manifest system, full config precedence, CLI subcommands, and distribution via Homebrew/go install/releases. This phase covers all P0 and P1 functional requirements (FR1–FR51) and goals G1–G10.",
       "milestones": [
         {
@@ -969,7 +969,7 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Distribution, Quality Assurance, and Documentation",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Finalize v1.0 for release: property/invariant test harness, real-agent integration test scaffold, shipped reference manifest files, CI matrix, goreleaser distribution config, the README marketing surface, and changeset-level documentation sync.",
           "tasks": [
             {
@@ -1103,14 +1103,14 @@
               "type": "Task",
               "id": "P1.M5.T4",
               "title": "README (Marketing Surface & Quick Start)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Write the README.md per PRD §21.5: hero pitch, demo, competitive positioning, install paths, quick start, agent configuration, the snapshot workflow diagram, full reference links, adding-a-new-agent contributor hook, and FAQ.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T4.S1",
                   "title": "README.md hero, install, quick start, snapshot workflow, config, contributor guide, FAQ",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S2",
@@ -1137,14 +1137,14 @@
               "type": "Task",
               "id": "P1.M5.T5",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Final catch-all documentation sweep (PRD §5 Mode B) to ensure no cross-cutting docs are stale after the full v1.0 changeset. Reviews docs/ and any overview material that spans the whole feature set.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T5.S1",
                   "title": "Review and update docs/ overview and any cross-cutting documentation",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1",
