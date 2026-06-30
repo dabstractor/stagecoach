@@ -144,7 +144,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Take the write-tree snapshot unconditionally in dry-run (Issue 6)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: runPipeline (pkg/stagehand/stagehand.go:206-355) gates WriteTree behind `if !dryRun` (~line 228), so dry-run creates no snapshot object and never calls signal.SetSnapshot. FR49 requires the full diff->SNAPSHOT->... pipeline; the P1.M4.T4.S1 work-item contract states 'the snapshot is still taken (write-tree runs) but commit-tree/update-ref are skipped'. See architecture/seam_dryrun.md section 2(a) and architecture/decisions.md D3.\n2. INPUT: runPipeline's deps.Git.WriteTree(ctx) (returns tree SHA string), parentSHA, and the signal.SetSnapshot(treeSHA, parentSHA, \"\") call.\n3. LOGIC: Remove the `if !dryRun` gate so WriteTree runs for BOTH paths; call signal.SetSnapshot(treeSHA, parentSHA, \"\") unconditionally (arming rescue for dry-run too, consistent with the shared loop added in S2). The harmless dangling tree in dry-run is intentional per FR49.\n4. OUTPUT: Dry-run now creates the snapshot tree object and arms signal rescue, mirroring the real pipeline up to (but not including) commit-tree/update-ref.\n5. DOCS: [Mode A] docs/how-it-works.md dry-run description - if it states dry-run skips the snapshot, correct it to 'dry-run runs the full pipeline including the snapshot, omitting only the commit'. Affirm docs/cli.md --dry-run row if it implies snapshot is skipped.",

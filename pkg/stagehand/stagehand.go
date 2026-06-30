@@ -241,15 +241,13 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		return Result{}, ErrNothingToCommit
 	}
 
-	// Step 3 (commit path only): snapshot. DryRun skips it (no commit → no object-store write).
-	var treeSHA string
-	if !dryRun {
-		treeSHA, err = deps.Git.WriteTree(ctx)
-		if err != nil {
-			return Result{}, err
-		}
-		signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4)
+	// Step 3: snapshot (FR49 — dry-run runs the full diff→snapshot→… pipeline; the dangling tree in
+	// dry-run is intentional and harmless — commit-tree/update-ref are skipped later for dry-run).
+	treeSHA, err := deps.Git.WriteTree(ctx)
+	if err != nil {
+		return Result{}, err
 	}
+	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4) — both the commit and dry-run paths
 
 	// Step 4: system prompt (+ SystemExtra) + recent subjects (built ONCE).
 	sysPrompt, err := buildSysPrompt(ctx, deps.Git, cfg, isUnborn)
