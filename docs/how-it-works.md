@@ -54,6 +54,7 @@ No provider mutates the repository (PRD §18.1). Every built-in manifest constra
 
 | Failure | Exit code | Recovery |
 |---------|-----------|----------|
+| Agent missing on `$PATH` | 1 (Error) | Check the `[provider.<name>] command` path; install the agent |
 | Generation failed (parse/retry exhaustion) | 3 (Rescue) | Rescue message with tree SHA |
 | Generation timed out | 124 (Timeout) | Rescue message with tree SHA |
 | CAS failure (HEAD moved meanwhile) | 1 (Error) | HEAD-moved message |

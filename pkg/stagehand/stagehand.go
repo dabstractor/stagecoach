@@ -183,6 +183,16 @@ func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
 		return generate.Deps{}, fmt.Errorf("provider %q: %w", name, err)
 	}
 
+	// Pre-flight (PRD §18.2): fail fast with exit 1 BEFORE the snapshot if the provider command is
+	// not on $PATH. Without this, a missing binary is only detected inside Execute's cmd.Start
+	// (well after WriteTree), surfacing as a misleading exit-3 rescue with a dangling tree object.
+	// reg.IsInstalled reuses the tested exec.LookPath(m.DetectCommand()) seam (registry.go:76).
+	if !reg.IsInstalled(m) {
+		return generate.Deps{}, fmt.Errorf(
+			"provider %q: command %q not found. Is the agent installed?",
+			name, m.DetectCommand())
+	}
+
 	return generate.Deps{Git: git.New(repoDir), Manifest: m}, nil
 }
 

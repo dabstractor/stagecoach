@@ -78,7 +78,7 @@ stagehand config path
 | Code | Meaning |
 |------|---------|
 | `0` | Success (commit created, or dry-run message printed). |
-| `1` | General error (generation failed, parse failed after retries, agent missing, CAS, usage). |
+| `1` | General error (generation failed, parse failed after retries, **provider command missing on `$PATH` (checked before the snapshot)**, CAS, usage). |
 | `2` | Nothing to commit (clean tree after auto-stage, or nothing staged with `--no-auto-stage`). |
 | `3` | Rescue condition (snapshot taken, commit not created — manual recovery printed). |
 | `124` | Timeout (generation exceeded `--timeout`). |
