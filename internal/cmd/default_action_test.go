@@ -273,6 +273,14 @@ func TestRunDefault_DryRun(t *testing.T) {
 		t.Errorf("stdout = %q, want %q (message only)", stdout, "feat: dry run")
 	}
 
+	// Appendix B.3: "(no commit created)" on stderr; stdout stays clean for piping (§15.5).
+	if !strings.Contains(errBuf.String(), "(no commit created)") {
+		t.Errorf("stderr = %q, want to contain '(no commit created)'", errBuf.String())
+	}
+	if strings.Contains(stdout, "(no commit created)") {
+		t.Errorf("stdout = %q, must NOT contain '(no commit created)' (pipeable)", stdout)
+	}
+
 	// HEAD unchanged — the last commit should still be "init: add stagehand config"
 	logMsg := gitOut(t, repo, "log", "--format=%s", "-n1")
 	if logMsg != "init: add stagehand config" {

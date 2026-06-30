@@ -125,9 +125,11 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	// ---- Success ----
 	if flagDryRun || res.CommitSHA == "" {
 		// Dry-run (Appendix B.3): stdout = the message ONLY (§15.5 pipe use case). The "↳ Generating…"
-		// / "(no commit created)" decorations are P1.M4.T3/T4. No commit was created.
+		// progress is already on stderr (u.Progress above). "(no commit created)" → STDERR so stdout stays
+		// clean for piping (FR49 / P1.M4.T4.S1). No commit was created.
 		printDryRunMessage(stdout, res.Message)
-		return nil // exit 0
+		fmt.Fprintln(stderr, "(no commit created)") // Appendix B.3; stderr keeps stdout clean for piping
+		return nil                                  // exit 0
 	}
 
 	// Commit path: FR42 report. Compute the DiffTree file list ourselves — pkg/stagehand.Result drops
