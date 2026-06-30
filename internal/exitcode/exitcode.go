@@ -1,4 +1,9 @@
 // Package exitcode maps Stagehand errors to PRD §15.4 process exit codes (0/1/2/3/124).
+// Shipped in P1.M4.T1.S1; verified and hardened in P1.M4.T3.S3.
+//
+// Constant names intentionally omit the "Exit" prefix (e.g. Success, not ExitSuccess) —
+// within package exitcode, exitcode.Success is idiomatic Go. This naming decision (D1)
+// was made in P1.M4.T1.S1 and is deployed at ~40 call sites; do not rename.
 // For() is the single source of truth used by the CLI's main(); it covers explicit *ExitError
 // overrides, the generate-domain mapping (nothing-to-commit/rescue/timeout/CAS), and a default
 // of 1. §15.4 overrides arch/go_ecosystem_patterns.md §1.2's generic table (2=nothing-to-commit,

@@ -767,7 +767,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "CLI & User Experience",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Build the user-facing CLI layer (PRD §15): cobra command structure with global flags, the default commit action, providers/config subcommands, signal handling with rescue, the UI layer (progress messages, color, verbose, exit codes), and dry-run. This milestone wires everything together into the stagehand binary.",
           "tasks": [
             {
@@ -885,7 +885,7 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "UI Layer (Output, Color, Verbosity, Exit Codes)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Implement the UI utilities (PRD §9.13 / §15.4): progress messages to stderr, TTY-aware color with NO_COLOR support, verbose mode, and canonical exit-code constants.",
               "subtasks": [
                 {
@@ -924,7 +924,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T3.S3",
                   "title": "Exit-code constants and ExitError type",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -941,14 +941,14 @@
               "type": "Task",
               "id": "P1.M4.T4",
               "title": "Dry Run Mode",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the --dry-run flag (PRD §9.12 / FR49): run the full diff→snapshot→generate→parse→duplicate-check pipeline, print the message, but do NOT create the commit or move HEAD.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T4.S1",
                   "title": "--dry-run flag (full pipeline, print message, no commit, exit 0)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T5.S1",

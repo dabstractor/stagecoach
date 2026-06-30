@@ -18,6 +18,8 @@ func TestFor(t *testing.T) {
 		{"nil → Success", nil, Success},
 		{"explicit ExitError NothingToCommit", New(NothingToCommit, errors.New("x")), NothingToCommit},
 		{"explicit ExitError custom code", New(7, errors.New("custom")), 7},
+		{"wrapped ExitError → Code (errors.As traverses %w)", fmt.Errorf("wrap: %w", New(7, errors.New("x"))), 7},
+		{"wrapped ExitError NothingToCommit beats sentinel branch", fmt.Errorf("%w", New(NothingToCommit, errors.New("y"))), NothingToCommit},
 		{"ErrNothingToCommit", generate.ErrNothingToCommit, NothingToCommit},
 		{"RescueError(ErrRescue) → 3", &generate.RescueError{Kind: generate.ErrRescue}, Rescue},
 		{"RescueError(ErrTimeout) → 124 (timeout before rescue)", &generate.RescueError{Kind: generate.ErrTimeout}, Timeout},
