@@ -170,6 +170,23 @@ func runDefault(cmd *cobra.Command, args []string) error {
 // main does not double-print; for friendly/generic errors it returns exitcode.New(code, err) so main
 // prints "stagehand: <msg>". (design §4)
 func handleGenError(stderr io.Writer, err error) error {
+	// Dry-run generation failure (PRD §9.12 FR49 + bugfix-002 Issue 4): --dry-run runs the full
+	// pipeline (incl. the snapshot), so a timeout or parse/dedupe-exhaustion surfaces a
+	// *generate.RescueError from the library. For a "preview" that was never going to commit, the
+	// §18.3 manual commit-tree recovery recipe is misleading — so print a short stderr line, map to
+	// exit 1 (exitcode.Error), and omit the recipe. (flagDryRun is a package var, root.go:40.)
+	if flagDryRun {
+		var re *generate.RescueError
+		if errors.As(err, &re) { // dry-run timeout OR rescue (both are *RescueError)
+			msg := "could not generate a commit message; run without --dry-run to see retries and the recovery recipe"
+			if errors.Is(err, generate.ErrTimeout) {
+				msg = "generation timed out; run without --dry-run to see the recovery recipe"
+			}
+			fmt.Fprintln(stderr, msg)
+			return exitcode.New(exitcode.Error, nil) // exit 1, silent (already printed)
+		}
+	}
+
 	var re *generate.RescueError
 	if errors.As(err, &re) { // covers BOTH ErrTimeout and ErrRescue (both are *RescueError)
 		fmt.Fprintln(stderr, generate.FormatRescue(re.TreeSHA, re.ParentSHA, re.Candidate))

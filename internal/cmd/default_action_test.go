@@ -598,6 +598,118 @@ func TestRunDefault_Timeout(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestRunDefault_DryRun_Timeout_Exit1 — --dry-run + timeout → exit 1, short msg, no recipe
+// ---------------------------------------------------------------------------
+
+func TestRunDefault_DryRun_Timeout_Exit1(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	repo := setupStubRepoWithTimeout(t, "feat: slow", 2000, 150*time.Millisecond)
+	writeFile(t, repo, "z.txt", "data")
+	stageFile(t, repo, "z.txt")
+
+	beforeHEAD := headSHA(t, repo)
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"--provider", "stub", "--dry-run"})
+
+	err := Execute(context.Background())
+	if err == nil {
+		t.Fatal("Execute err=nil, want error (dry-run timeout)")
+	}
+
+	code := exitcode.For(err)
+	if code != exitcode.Error {
+		t.Errorf("exitcode.For(err) = %d, want %d (Error=1)", code, exitcode.Error)
+	}
+
+	// stderr contains the short timeout message, NOT the full rescue recipe
+	stderr := errBuf.String()
+	if !strings.Contains(stderr, "generation timed out; run without --dry-run") {
+		t.Errorf("stderr = %q, want to contain 'generation timed out; run without --dry-run'", stderr)
+	}
+	if strings.Contains(stderr, "git commit-tree") {
+		t.Errorf("stderr must NOT contain 'git commit-tree' (no recipe):\n%s", stderr)
+	}
+	if strings.Contains(stderr, "Tree ID:") {
+		t.Errorf("stderr must NOT contain 'Tree ID:' (no recipe):\n%s", stderr)
+	}
+
+	// HEAD unchanged
+	if got := headSHA(t, repo); got != beforeHEAD {
+		t.Errorf("HEAD changed from %q to %q, want unchanged", beforeHEAD, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestRunDefault_DryRun_Rescue_Exit1 — --dry-run + rescue (blank stub) → exit 1, short msg, no recipe
+// ---------------------------------------------------------------------------
+
+func TestRunDefault_DryRun_Rescue_Exit1(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	bin := stubtest.Build(t)
+	repo := setupStubRepoRaw(t, fmt.Sprintf(`[provider.stub]
+command = %q
+prompt_delivery = "stdin"
+output = "raw"
+strip_code_fence = true
+
+[generation]
+max_duplicate_retries = 0
+`, bin))
+
+	t.Setenv("STAGEHAND_STUB_OUT", "")
+
+	// Commit the config first, then add test file
+	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "commit", "-m", "initial")
+	writeFile(t, repo, "z.txt", "data")
+	stageFile(t, repo, "z.txt")
+
+	beforeHEAD := headSHA(t, repo)
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"--provider", "stub", "--dry-run"})
+
+	err := Execute(context.Background())
+	if err == nil {
+		t.Fatal("Execute err=nil, want error (dry-run rescue)")
+	}
+
+	code := exitcode.For(err)
+	if code != exitcode.Error {
+		t.Errorf("exitcode.For(err) = %d, want %d (Error=1, NOT Rescue=3)", code, exitcode.Error)
+	}
+
+	// stderr contains the short rescue message, NOT the full recipe
+	stderr := errBuf.String()
+	if !strings.Contains(stderr, "could not generate a commit message; run without --dry-run") {
+		t.Errorf("stderr = %q, want to contain 'could not generate a commit message; run without --dry-run'", stderr)
+	}
+	if strings.Contains(stderr, "git commit-tree") {
+		t.Errorf("stderr must NOT contain 'git commit-tree' (no recipe):\n%s", stderr)
+	}
+	if strings.Contains(stderr, "Tree ID:") {
+		t.Errorf("stderr must NOT contain 'Tree ID:' (no recipe):\n%s", stderr)
+	}
+	if strings.Contains(stderr, "❌ Commit generation failed.") {
+		t.Errorf("stderr must NOT contain the full rescue header:\n%s", stderr)
+	}
+
+	// HEAD unchanged
+	if got := headSHA(t, repo); got != beforeHEAD {
+		t.Errorf("HEAD changed from %q to %q, want unchanged", beforeHEAD, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestRunDefault_CAS — HEAD moves mid-generation → CAS error, exit 1
 // ---------------------------------------------------------------------------
 

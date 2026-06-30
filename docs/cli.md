@@ -23,7 +23,7 @@ With no subcommand, `stagehand` runs the **default action**: it snapshots your s
 | `--no-color` | bool | TTY-aware | `STAGEHAND_NO_COLOR` | — | Disable color (also honors `NO_COLOR`) |
 | `--all`, `-a` | bool | false | — | — | Run `git add -A` before snapshotting, even if something is staged |
 | `--no-auto-stage` | bool | false | — | — | If nothing is staged, exit instead of auto-staging |
-| `--dry-run` | bool | false | — | — | Run the full snapshot→generate→parse→duplicate-check pipeline (same as a real commit, including the write-tree snapshot and retry) and print the message; do not commit |
+| `--dry-run` | bool | false | — | — | Run the full snapshot→generate→parse→duplicate-check pipeline (same as a real commit, including the write-tree snapshot and retry) and print the message; do not commit. If generation fails (timeout or parse/duplicate-check exhaustion), exits **1** with a short stderr message instead of exit 3/124 + the full recovery recipe (since no commit was ever intended) |
 | `--version` | — | — | — | — | Print the build version (`"dev"` for a local build; the release tag for a released binary) |
 | `--help`, `-h` | — | — | — | — | Print help |
 
@@ -83,7 +83,7 @@ stagehand config path
 | `3` | Rescue condition (snapshot taken, commit not created — manual recovery printed). |
 | `124` | Timeout (generation exceeded `--timeout`). |
 
-Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`.
+Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics.
 
 ## Flag ↔ env ↔ git-config map
 
