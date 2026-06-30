@@ -245,10 +245,7 @@ func TestRoot_FlagOverridesEnvOverridesGit(t *testing.T) {
 	t.Run("cli_wins", func(t *testing.T) {
 		loadedCfg = nil
 		rootCmd.SetArgs([]string{"--provider", "cli-p"})
-		err := Execute(context.Background())
-		if err != nil {
-			t.Fatalf("Execute err=%v", err)
-		}
+		_ = Execute(context.Background()) // RunE may return an error (nothing-to-commit on clean repo)
 		cfg := Config()
 		if cfg == nil || cfg.Provider != "cli-p" {
 			t.Errorf("Provider=%v, want cli-p (CLI > env > git)", cfg)
@@ -264,10 +261,7 @@ func TestRoot_FlagOverridesEnvOverridesGit(t *testing.T) {
 		}
 		flagProvider = "" // reset bound var
 		rootCmd.SetArgs([]string{})
-		err := Execute(context.Background())
-		if err != nil {
-			t.Fatalf("Execute err=%v", err)
-		}
+		_ = Execute(context.Background()) // RunE may return an error (nothing-to-commit on clean repo)
 		cfg := Config()
 		if cfg == nil || cfg.Provider != "env-p" {
 			t.Errorf("Provider=%v, want env-p (env > git)", cfg)

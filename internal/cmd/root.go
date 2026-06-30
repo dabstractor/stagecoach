@@ -71,11 +71,7 @@ var rootCmd = &cobra.Command{
 		loadedCfg = cfg
 		return nil
 	},
-	// STUB: prints help until S2 implements the default commit action
-	// (auto-stage-all → stagehand.GenerateCommit → report). TODO(P1.M4.T1.S2).
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
+	RunE: runDefault,
 }
 
 func init() {
