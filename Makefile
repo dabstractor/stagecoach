@@ -3,13 +3,14 @@
 ## Usage:  make <target>
 ##
 ## Targets:
-##   build      Compile the stagehand binary to ./bin/stagehand
-##   install    Install stagehand into $GOPATH/bin
-##   test       Run all tests with the race detector enabled
-##   coverage   Run tests and print per-function coverage
-##   lint       Run golangci-lint
-##   clean      Remove bin/, coverage.out, and dist/
-##   help       Print this help
+##   build          Compile the stagehand binary to ./bin/stagehand
+##   install        Install stagehand into $GOPATH/bin
+##   test           Run all tests with the race detector enabled
+##   coverage       Run tests and print per-function coverage
+##   coverage-gate  Fail if any of internal/{git,provider,generate,config} < 85% (PRD §20.3)
+##   lint           Run golangci-lint
+##   clean          Remove bin/, coverage.out, and dist/
+##   help           Print this help
 
 .DEFAULT_GOAL := build
 
@@ -26,7 +27,14 @@ BIN      := $(BIN_DIR)/stagehand
 MAIN_PKG := ./cmd/stagehand
 LDFLAGS  := -X main.version=$(VERSION)
 
-.PHONY: build install test coverage lint clean help
+# --- Coverage gate (PRD §20.3) -------------------------------------------------
+# Statement-weighted per-package floor on the 4 core packages. internal/ui has a lower bar
+# (PRD §20.3 — hard to test, low risk) and is intentionally excluded. Runnable locally and in CI.
+MODULE            := $(shell go list -m)
+COVERAGE_THRESHOLD ?= 85
+COVERAGE_PKGS     := ./internal/git/... ./internal/provider/... ./internal/generate/... ./internal/config/...
+
+.PHONY: build install test coverage coverage-gate lint clean help
 
 build: ## Compile the stagehand binary to ./bin/stagehand
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) $(MAIN_PKG)
@@ -40,6 +48,32 @@ test: ## Run all tests with the race detector enabled
 coverage: ## Run tests and print per-function coverage
 	go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
+
+coverage-gate: ## Enforce >=85% statement coverage on internal/{git,provider,generate,config} (PRD §20.3)
+	@echo "coverage gate: threshold=$(COVERAGE_THRESHOLD)% on the 4 core packages (PRD §20.3)"
+	go test -coverprofile=coverage.out $(COVERAGE_PKGS)
+	@awk -v threshold=$(COVERAGE_THRESHOLD) -v mod='$(MODULE)' '\
+	  /^mode:/ { next } \
+	  { \
+	    f=$$1; sub(/:[0-9]+.*$$/, "", f); \
+	    n=split(f, parts, "/"); pkg=""; for (i=1; i<n; i++) pkg = pkg (i>1 ? "/" : "") parts[i]; \
+	    tot[pkg]+=$$2; if ($$3+0 > 0) cov[pkg]+=$$2; \
+	  } \
+	  END { \
+	    t[1]=mod "/internal/git"; t[2]=mod "/internal/provider"; \
+	    t[3]=mod "/internal/generate"; t[4]=mod "/internal/config"; \
+	    fail=0; \
+	    for (i=1; i<=4; i++) { \
+	      if (!(t[i] in tot)) { printf("  ERROR  %-58s no coverage data\n", t[i]); fail=1; continue } \
+	      pct = (tot[t[i]]>0) ? cov[t[i]]/tot[t[i]]*100 : 0; \
+	      mark = (pct+0 >= threshold) ? "OK" : "FAIL"; \
+	      printf("  %-58s %5.1f%%  %s\n", t[i], pct, mark); \
+	      if (pct+0 < threshold) { printf("           >>> %s coverage %.1f%% < %d%% threshold (PRD §20.3)\n", t[i], pct, threshold); fail=1 } \
+	    } \
+	    if (fail) { printf("  coverage gate: FAIL (one or more packages below %d%%)\n", threshold) } \
+	    else      { printf("  coverage gate: PASS (all 4 packages >= %d%%)\n", threshold) }; \
+	    exit fail \
+	  }' coverage.out
 
 lint: ## Run golangci-lint
 	golangci-lint run
