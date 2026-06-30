@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/signal"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // Options configures a GenerateCommit call. All fields are optional (zero value ⇒ inherit the resolved
@@ -33,6 +35,7 @@ type Options struct {
 	SystemExtra string        // appended to the built system prompt (extra integrator instructions)
 	DryRun      bool          // if true, return the message WITHOUT committing (CommitSHA == "")
 	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (120s)
+	Verbose     io.Writer     // optional; when set AND cfg.Verbose, diagnostics (resolved command, raw output, retries) are written here (the CLI passes stderr). nil ⇒ silent. Additive-only (PRD §14.1).
 }
 
 // Result is the outcome of GenerateCommit. On DryRun (or any non-committing outcome) CommitSHA is "".
@@ -85,6 +88,7 @@ func GenerateCommit(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	deps.Verbose = ui.NewVerbose(opts.Verbose, cfg.Verbose)
 
 	// Common path: no DryRun, no SystemExtra → delegate to the frozen, tested orchestrator.
 	if !opts.DryRun && opts.SystemExtra == "" {
@@ -254,7 +258,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		if rerr != nil {
 			return Result{}, fmt.Errorf("stagehand: render: %w", rerr)
 		}
-		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout)
+		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return Result{}, ErrTimeout
@@ -292,7 +296,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			return Result{}, fmt.Errorf("stagehand: render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout)
+		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return Result{}, &generate.RescueError{
@@ -316,6 +320,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		if !ok {
 			parseFail = true
 			candidate = m
+			deps.Verbose.VerboseRetry(attempt+1, "parse failed (no valid commit message)")
 			continue
 		}
 		parseFail = false
@@ -325,6 +330,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		if generate.IsDuplicate(subject, recent) {
 			rejected = append(rejected, subject)
 			candidate = m
+			deps.Verbose.VerboseRetry(attempt+1, fmt.Sprintf("subject %q matches an existing commit", subject))
 			continue
 		}
 

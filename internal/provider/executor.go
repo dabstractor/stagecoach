@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dustin/stagehand/internal/signal"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // Execute runs a provider CmdSpec as a subprocess and returns its captured stdout, captured stderr,
@@ -40,7 +41,7 @@ import (
 //   - non-zero exit  ⇒ wrapped *exec.ExitError           (orchestrator: retry, then rescue)
 //   - start failure  ⇒ wrapped LookPath/start error      (orchestrator: "command not found", exit 1)
 //   - success        ⇒ err == nil
-func Execute(ctx context.Context, spec CmdSpec, timeout time.Duration) (stdout string, stderr string, err error) {
+func Execute(ctx context.Context, spec CmdSpec, timeout time.Duration, vb *ui.Verbose) (stdout string, stderr string, err error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout) // SHADOW — see doc; do not rename
@@ -59,6 +60,7 @@ func Execute(ctx context.Context, spec CmdSpec, timeout time.Duration) (stdout s
 	}
 	setupProcessGroup(cmd) // platform seam (procgroup_*.go): Setpgid + Cancel + WaitDelay
 
+	vb.VerboseCommand(strings.Join(append([]string{spec.Command}, spec.Args...), " "))
 	if err := cmd.Start(); err != nil {
 		return "", "", fmt.Errorf("provider %q: start: %w", spec.Command, err)
 	}
@@ -66,10 +68,12 @@ func Execute(ctx context.Context, spec CmdSpec, timeout time.Duration) (stdout s
 	defer signal.ClearChild()             // clear before return so a later signal can't kill a recycled PID
 
 	if werr := cmd.Wait(); werr != nil {
+		vb.VerboseRawOutput(out.String())
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return out.String(), errb.String(), ctxErr // timeout → DeadlineExceeded; cancel → Canceled
 		}
 		return out.String(), errb.String(), fmt.Errorf("provider %q: %w", spec.Command, werr) // exit failure
 	}
+	vb.VerboseRawOutput(out.String())
 	return out.String(), errb.String(), nil
 }

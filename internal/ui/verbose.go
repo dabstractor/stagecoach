@@ -1,0 +1,73 @@
+package ui
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+// Verbose is Stagehand's --verbose diagnostics sink (PRD §9.13 FR50, §15.2, §19). When ON, it prints
+// the resolved provider command, the raw agent stdout, and each retry attempt to a writer (the CLI's
+// stderr) with a "DEBUG: " prefix (the commit-pi convention named in the work-item contract). When OFF
+// (the default), or when the receiver is nil, or when the writer is nil, EVERY method is a no-op
+// (zero bytes, zero allocations) — so callers thread a *Verbose (possibly nil) and call methods
+// unconditionally with no nil guards.
+//
+// SECURITY (PRD §19): VerboseCommand logs ARGV ONLY (Command+Args). It NEVER logs spec.Env (which
+// carries *_API_KEY credentials). Stdin contents are NOT logged at VERBOSE=1 (deferred to a future
+// VERBOSE=2 — see D9; Config.Verbose is a bool, so VERBOSE=2 is currently un-parseable and out of scope).
+//
+// The writer is INJECTABLE: the CLI passes cmd.ErrOrStderr() (stderr); a library consumer of
+// pkg/stagehand passes its own writer or nil. This keeps the library side-effect-free by default
+// (it never writes to os.Stderr directly). Sibling to output.go (P1.M4.T3.S1's ↳/color layer); this
+// file owns ONLY verbose diagnostics.
+type Verbose struct {
+	w  io.Writer // destination (stderr in prod, *bytes.Buffer in tests); nil ⇒ no-op
+	on bool      // cfg.Verbose — resolved by config.Load across all 7 layers
+}
+
+// NewVerbose constructs a Verbose sink. on=false (the common case) ⇒ every method is a no-op. w may be
+// nil ⇒ every method is a no-op (the library default: a caller that supplies no writer gets silence
+// even if cfg.Verbose is true). From the CLI: ui.NewVerbose(stderr, cfg.Verbose). From tests:
+// ui.NewVerbose(&buf, true|false).
+func NewVerbose(w io.Writer, on bool) *Verbose {
+	return &Verbose{w: w, on: on}
+}
+
+// VerboseCommand prints the resolved provider command (PRD §9.13 FR50). cmd is the rendered argv
+// (Command + Args, space-joined) — the CALLER builds it from CmdSpec; this method never touches Env.
+// Format: "DEBUG: command: <cmd>\n". No-op when v==nil, v.w==nil, or !v.on.
+func (v *Verbose) VerboseCommand(cmd string) {
+	if v == nil || v.w == nil || !v.on {
+		return
+	}
+	fmt.Fprintln(v.w, "DEBUG: command: "+cmd)
+}
+
+// VerboseRawOutput prints the raw agent stdout (PRD §9.13 FR50 — "the raw agent stdout"), pre-parse
+// and pre-fence-strip, so a user can see exactly what the model returned. Format: "DEBUG: raw output:\n"
+// followed by the output verbatim, with a trailing newline ensured (so the next DEBUG line is clean).
+// No-op when v==nil, v.w==nil, or !v.on.
+//
+// NOTE: stdin contents are NOT logged at VERBOSE=1 (deferred to a future VERBOSE=2 — would require
+// Config.Verbose to become an int; currently it is a bool and ParseBool("2") errors).
+func (v *Verbose) VerboseRawOutput(output string) {
+	if v == nil || v.w == nil || !v.on {
+		return
+	}
+	fmt.Fprint(v.w, "DEBUG: raw output:\n")
+	fmt.Fprint(v.w, output)
+	if !strings.HasSuffix(output, "\n") {
+		fmt.Fprint(v.w, "\n")
+	}
+}
+
+// VerboseRetry prints a retry attempt and its reason (PRD §9.13 FR50 — "each retry attempt"). attempt
+// is 1-based (matches Appendix B.4 "Attempt 1"). Format: "DEBUG: attempt <n>: <reason>\n". No-op when
+// v==nil, v.w==nil, or !v.on.
+func (v *Verbose) VerboseRetry(attempt int, reason string) {
+	if v == nil || v.w == nil || !v.on {
+		return
+	}
+	fmt.Fprintf(v.w, "DEBUG: attempt %d: %s\n", attempt, reason)
+}

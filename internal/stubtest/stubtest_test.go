@@ -19,7 +19,7 @@ func TestStub_EchoSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestStub_MultilineOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestStub_NonZeroExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	_, _, err = provider.Execute(context.Background(), *spec, 5*time.Second)
+	_, _, err = provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (exit 1)")
 	}
@@ -71,7 +71,7 @@ func TestStub_TimeoutKilled(t *testing.T) {
 	}
 	start := time.Now()
 	var execErr error
-	_, _, execErr = provider.Execute(context.Background(), *spec, 200*time.Millisecond)
+	_, _, execErr = provider.Execute(context.Background(), *spec, 200*time.Millisecond, nil)
 	elapsed := time.Since(start)
 	err = execErr
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -89,7 +89,7 @@ func TestStub_StderrCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	out, errb, err := provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, errb, err := provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestStub_DrainStdinNoDeadlock(t *testing.T) {
 	}
 	// Override Stdin with a 1 MiB payload to pin drain-before-sleep (§4).
 	spec.Stdin = strings.Repeat("x", 1<<20)
-	out, _, err := provider.Execute(context.Background(), *spec, 10*time.Second)
+	out, _, err := provider.Execute(context.Background(), *spec, 10*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: %v (possible deadlock — stub must drain stdin before sleeping)", err)
 	}
@@ -128,7 +128,7 @@ func TestStub_ScriptCallVarying(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute call 1: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestStub_ScriptCallVarying(t *testing.T) {
 	if err2 != nil {
 		t.Fatalf("Render: %v", err2)
 	}
-	out, _, err = provider.Execute(context.Background(), *spec2, 5*time.Second)
+	out, _, err = provider.Execute(context.Background(), *spec2, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute call 2: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestStub_ScriptCallVarying(t *testing.T) {
 	if err3 != nil {
 		t.Fatalf("Render: %v", err3)
 	}
-	out, _, err = provider.Execute(context.Background(), *spec3, 5*time.Second)
+	out, _, err = provider.Execute(context.Background(), *spec3, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute call 3: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestStub_ScriptBlankIsParseFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, _, err := provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute call 1: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestStub_ScriptBlankIsParseFailure(t *testing.T) {
 	if err2 != nil {
 		t.Fatalf("Render: %v", err2)
 	}
-	out, _, err = provider.Execute(context.Background(), *spec, 5*time.Second)
+	out, _, err = provider.Execute(context.Background(), *spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute call 2: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestStub_MalformedEnvNoPanic(t *testing.T) {
 		Stdin:   "payload",
 		Env:     append(os.Environ(), "STAGEHAND_STUB_EXIT=not-a-number", "STAGEHAND_STUB_OUT=x"),
 	}
-	out, _, err := provider.Execute(context.Background(), spec, 5*time.Second)
+	out, _, err := provider.Execute(context.Background(), spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: %v (malformed EXIT should not cause non-zero exit)", err)
 	}

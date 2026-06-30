@@ -16,6 +16,7 @@ import (
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/signal"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // Deps carries the runtime collaborators that vary by environment/test. Injected
@@ -24,6 +25,7 @@ import (
 type Deps struct {
 	Git      git.Git           // the git boundary (real *gitRunner via git.New(repo) in prod+tests)
 	Manifest provider.Manifest // the provider manifest to Render+Execute (stub in tests)
+	Verbose  *ui.Verbose       // nil-safe --verbose diagnostics sink (P1.M4.T3.S2); logs retries here + passed to provider.Execute for command/raw-output logging
 }
 
 // Result is the outcome of a successful CommitStaged. Carries everything the CLI
@@ -191,7 +193,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout)
+		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.
@@ -217,6 +219,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		if !ok {
 			parseFail = true
 			candidate = m
+			deps.Verbose.VerboseRetry(attempt+1, "parse failed (no valid commit message)")
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
@@ -226,6 +229,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		if IsDuplicate(subject, recent) {
 			rejected = append(rejected, subject)
 			candidate = m
+			deps.Verbose.VerboseRetry(attempt+1, fmt.Sprintf("subject %q matches an existing commit", subject))
 			continue // FR32 retry (consumes an attempt)
 		}
 

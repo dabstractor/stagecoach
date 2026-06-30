@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // mustBin skips the test if any named binary is not resolvable on PATH.
@@ -24,7 +27,7 @@ func mustBin(t *testing.T, names ...string) {
 func TestExecute_CatEchoesStdin(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Args: nil, Stdin: "hello world\n", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 0)
+	out, _, err := Execute(context.Background(), spec, 0, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -38,7 +41,7 @@ func TestExecute_LargeStdin(t *testing.T) {
 	mustBin(t, "cat")
 	payload := strings.Repeat("x", 1<<20) // 1 MiB
 	spec := CmdSpec{Command: "cat", Stdin: payload, Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 30*time.Second)
+	out, _, err := Execute(context.Background(), spec, 30*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -53,7 +56,7 @@ func TestExecute_TimeoutKillsProcess(t *testing.T) {
 	mustBin(t, "sleep")
 	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Stdin: "", Env: os.Environ()}
 	start := time.Now()
-	_, _, err := Execute(context.Background(), spec, 200*time.Millisecond)
+	_, _, err := Execute(context.Background(), spec, 200*time.Millisecond, nil)
 	elapsed := time.Since(start)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
@@ -69,7 +72,7 @@ func TestExecute_ParentContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Env: os.Environ()}
 	go func() { time.Sleep(150 * time.Millisecond); cancel() }()
-	_, _, err := Execute(ctx, spec, 0) // no timeout; rely on parent cancel
+	_, _, err := Execute(ctx, spec, 0, nil) // no timeout; rely on parent cancel
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
@@ -79,7 +82,7 @@ func TestExecute_ParentContextCancel(t *testing.T) {
 func TestExecute_StderrCaptureAndNonZeroExit(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Args: []string{"/nonexistent/path/xyz"}, Env: os.Environ()}
-	out, errb, err := Execute(context.Background(), spec, 5*time.Second)
+	out, errb, err := Execute(context.Background(), spec, 5*time.Second, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (non-zero exit)")
 	}
@@ -96,7 +99,7 @@ func TestExecute_EnvPropagation(t *testing.T) {
 	mustBin(t, "printenv")
 	env := append(os.Environ(), "STAGEHAND_TEST_VAR=s3cr3t")
 	spec := CmdSpec{Command: "printenv", Args: []string{"STAGEHAND_TEST_VAR"}, Env: env}
-	out, _, err := Execute(context.Background(), spec, 5*time.Second)
+	out, _, err := Execute(context.Background(), spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -110,7 +113,7 @@ func TestExecute_EnvPropagation(t *testing.T) {
 func TestExecute_NoStdinDoesNotHang(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Stdin: "", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 3*time.Second)
+	out, _, err := Execute(context.Background(), spec, 3*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -122,7 +125,7 @@ func TestExecute_NoStdinDoesNotHang(t *testing.T) {
 // 8. Command not found ⇒ wrapped Start() error.
 func TestExecute_CommandNotFound(t *testing.T) {
 	spec := CmdSpec{Command: "definitely-not-a-real-binary-xyz-stagehand", Env: os.Environ()}
-	_, _, err := Execute(context.Background(), spec, 3*time.Second)
+	_, _, err := Execute(context.Background(), spec, 3*time.Second, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (command not found)")
 	}
@@ -131,11 +134,40 @@ func TestExecute_CommandNotFound(t *testing.T) {
 	}
 }
 
+//  10. Verbose mode: verifies DEBUG: command and DEBUG: raw output land in the injected buffer,
+//     and that NO env vars (PATH, etc.) leak into the verbose output (PRD §19 security guard).
+func TestExecute_Verbose(t *testing.T) {
+	mustBin(t, "cat")
+	var buf bytes.Buffer
+	vb := ui.NewVerbose(&buf, true)
+	spec := CmdSpec{Command: "cat", Stdin: "feat: hello\n", Env: os.Environ()}
+	out, _, err := Execute(context.Background(), spec, 5*time.Second, vb)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil", err)
+	}
+	if out != "feat: hello\n" {
+		t.Errorf("stdout = %q, want %q", out, "feat: hello\n")
+	}
+	got := buf.String()
+	if !strings.Contains(got, "DEBUG: command: cat\n") {
+		t.Errorf("verbose missing DEBUG command line; got %q", got)
+	}
+	if !strings.Contains(got, "DEBUG: raw output:\nfeat: hello\n") {
+		t.Errorf("verbose missing DEBUG raw output line; got %q", got)
+	}
+	if strings.Contains(got, "PATH") {
+		t.Errorf("SECURITY (§19): env var leaked to verbose output; got %q", got)
+	}
+	if strings.Contains(got, "API_KEY") {
+		t.Errorf("SECURITY (§19): API_KEY leaked to verbose output; got %q", got)
+	}
+}
+
 // 9. Non-zero exit: `false` exits 1 ⇒ non-nil wrapped error (exit-failure path).
 func TestExecute_NonZeroExit(t *testing.T) {
 	mustBin(t, "false")
 	spec := CmdSpec{Command: "false", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 0)
+	out, _, err := Execute(context.Background(), spec, 0, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (`false` exits 1)")
 	}

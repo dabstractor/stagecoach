@@ -116,6 +116,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		Model:    cfg.Model,
 		Timeout:  cfg.Timeout,
 		DryRun:   flagDryRun,
+		Verbose:  stderr,
 	})
 	if err != nil {
 		return handleGenError(stderr, err) // §4: rescue/CAS/timeout/nothing/generic matrix
