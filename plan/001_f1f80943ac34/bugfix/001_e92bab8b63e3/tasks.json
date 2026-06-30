@@ -130,14 +130,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Dry-run pipeline fidelity (Issues 2 & 6)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Make --dry-run run the FULL FR49 pipeline (diff -> snapshot -> generate -> parse -> duplicate-check) with the bounded retry loop (FR29 parse-retry, FR30-33 duplicate rejection), then stop before commit-tree/update-ref. Today runPipeline's dry-run branch is a degraded single-pass that skips the write-tree snapshot (Issue 6) and the duplicate-check/retry loop (Issue 2). The same loop body already exists in runPipeline for the SystemExtra commit path; reuse it. Architectural decision: architecture/decisions.md D3. NOTE: edits pkg/stagehand/stagehand.go (runPipeline); logically independent of M1/M2 but same file.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Make dry-run run the full diff->snapshot->generate->parse->dedupe pipeline",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Take the write-tree snapshot unconditionally in dry-run (Issue 6), then replace the dry-run single-pass with the bounded generate->parse->dedupe loop already present for the SystemExtra commit path, skipping only commit-tree/update-ref (Issue 2).",
               "subtasks": [
                 {
@@ -176,7 +176,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S3",
                   "title": "Update locked-in dry-run timeout test + add dry-run dup-retry/parse-retry/snapshot tests",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S2"

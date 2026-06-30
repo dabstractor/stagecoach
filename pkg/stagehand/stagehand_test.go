@@ -72,6 +72,49 @@ func runGit(t *testing.T, dir string, args ...string) string {
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 
+// setupScriptedRepo initializes a temp git repo with a single commit whose subject is
+// headSubject, changes CWD into it, and registers the stub provider in SCRIPT (call-varying)
+// mode via a repo-local .stagehand.toml. The responses slice is the per-call stdout sequence;
+// blank entries are significant (empty output → parse failure → FR29 retry).
+// Sibling to setupTestRepo; mirrors its initRepo/commitRaw/chdir/cleanup pattern.
+func setupScriptedRepo(t *testing.T, headSubject string, responses []string) string {
+	t.Helper()
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	aux := t.TempDir() // script + counter live outside the repo (keeps git's view clean)
+	script := aux + "/script.txt"
+	if err := os.WriteFile(script, []byte(strings.Join(responses, "\n")), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	counter := aux + "/counter" // absent ⇒ stub reads 0
+
+	var sb strings.Builder
+	sb.WriteString("[provider.stub]\n")
+	sb.WriteString("command = \"" + bin + "\"\n")
+	sb.WriteString("prompt_delivery = \"stdin\"\n")
+	sb.WriteString("output = \"raw\"\n")
+	sb.WriteString("strip_code_fence = true\n")
+	sb.WriteString("\n[provider.stub.env]\n")
+	sb.WriteString("STAGEHAND_STUB_SCRIPT = \"" + script + "\"\n")
+	sb.WriteString("STAGEHAND_STUB_COUNTER = \"" + counter + "\"\n")
+	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(sb.String()), 0o644); err != nil {
+		t.Fatalf("write .stagehand.toml: %v", err)
+	}
+
+	initRepo(t, repo)
+	commitRaw(t, repo, headSubject)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir %s: %v", repo, err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+	return bin
+}
+
 // setupTestRepo initializes a temp git repo with an initial commit, changes CWD into it,
 // and registers the stub provider via a repo-local .stagehand.toml.
 func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
@@ -129,6 +172,22 @@ func objectCountLine(t *testing.T, dir string) string {
 	}
 	t.Fatalf("git count-objects -v: no 'count:' line in output:\n%s", gitOut(t, dir, "count-objects", "-v"))
 	return ""
+}
+
+// looseObjectTypes returns a map of SHA→object type for all objects in the repo at dir.
+// Uses git cat-file --batch-all-objects --batch-check (covers loose + packed).
+// Symmetric to objectCountLine; used to prove a NEW tree object appeared (Issue 6).
+func looseObjectTypes(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := gitOut(t, dir, "cat-file", "--batch-all-objects", "--batch-check")
+	objs := make(map[string]string)
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line) // "<sha> <type> <size>"
+		if len(f) >= 2 {
+			objs[f[0]] = f[1] // sha → type
+		}
+	}
+	return objs
 }
 
 // --- Tests ---
@@ -235,7 +294,7 @@ func TestGenerateCommit_ProviderOverride(t *testing.T) {
 // TestGenerateCommit_Timeout verifies that a stub sleeping longer than opts.Timeout
 // returns ErrTimeout (DryRun path) or *RescueError{Kind:ErrTimeout} (commit path).
 func TestGenerateCommit_Timeout(t *testing.T) {
-	// DryRun path: ErrTimeout (bare sentinel, no TreeSHA).
+	// DryRun path: *RescueError{Kind:ErrTimeout} with a real TreeSHA (S1 snapshot + S2 loop).
 	t.Run("dryrun", func(t *testing.T) {
 		setupTestRepo(t, stubtest.Options{Out: "feat: slow", SleepMS: 2000})
 		repoDir, _ := os.Getwd()
@@ -252,19 +311,22 @@ func TestGenerateCommit_Timeout(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error on timeout, got nil")
 		}
+		// DryRun path: *RescueError{Kind:ErrTimeout} with a real TreeSHA (S1 snapshot + S2 loop).
 		if !errors.Is(err, ErrTimeout) {
 			t.Errorf("errors.Is(err, ErrTimeout) = false, error = %v", err)
 		}
-		// DryRun path returns *RescueError{Kind:ErrTimeout} with real TreeSHA (S1 snapshot).
 		var re *RescueError
 		if !errors.As(err, &re) {
 			t.Fatalf("dryrun: error type = %T, want *RescueError", err)
 		}
-		if !errors.Is(err, ErrTimeout) {
-			t.Errorf("dryrun: errors.Is(err, ErrTimeout) = false, error = %v", err)
+		if re.Kind != ErrTimeout {
+			t.Errorf("dryrun: re.Kind = %v, want ErrTimeout", re.Kind)
 		}
 		if re.TreeSHA == "" {
 			t.Error("dryrun: RescueError.TreeSHA empty, want non-empty (snapshot was taken — S1)")
+		}
+		if code := exitcode.For(err); code != exitcode.Timeout {
+			t.Errorf("dryrun: exitcode.For(err) = %d, want %d (Timeout/124)", code, exitcode.Timeout)
 		}
 	})
 
@@ -296,6 +358,98 @@ func TestGenerateCommit_Timeout(t *testing.T) {
 			t.Error("RescueError.TreeSHA is empty, want non-empty (snapshot was taken)")
 		}
 	})
+}
+
+// TestGenerateCommit_DryRun_DedupeRetry verifies that a dry-run whose FIRST attempt duplicates
+// a recent subject retries to the UNIQUE message (Issue 2 / FR32). The repo's HEAD subject is
+// "feat: existing" and the stub script returns ["feat: existing", "feat: fresh"]; the duplicate
+// first attempt is rejected and the second attempt's "feat: fresh" is returned.
+// Mirrors TestCommitStaged_DedupeRetryThenSuccess at the pkg/stagehand boundary.
+func TestGenerateCommit_DryRun_DedupeRetry(t *testing.T) {
+	setupScriptedRepo(t, "feat: existing", []string{"feat: existing", "feat: fresh"})
+	repoDir, _ := os.Getwd()
+	writeFile(t, repoDir, "a.txt", "data")
+	stageFile(t, repoDir, "a.txt")
+
+	beforeHEAD := headSHA(t, repoDir)
+	res, err := GenerateCommit(context.Background(), Options{Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun dedupe-retry: %v", err)
+	}
+	if res.Message != "feat: fresh" {
+		t.Errorf("Message = %q, want %q (duplicate first attempt should have been rejected & retried past)",
+			res.Message, "feat: fresh")
+	}
+	if res.Subject != "feat: fresh" {
+		t.Errorf("Subject = %q, want %q", res.Subject, "feat: fresh")
+	}
+	if res.CommitSHA != "" {
+		t.Errorf("CommitSHA = %q, want empty (DryRun must not commit)", res.CommitSHA)
+	}
+	if got := headSHA(t, repoDir); got != beforeHEAD {
+		t.Errorf("HEAD changed from %q to %q, want unchanged (DryRun)", beforeHEAD, got)
+	}
+}
+
+// TestGenerateCommit_DryRun_ParseRetry verifies that a dry-run whose first attempt is
+// unparseable retries (FR29) to a valid message. The stub script returns ["", "feat: good after parse retry"];
+// the blank first attempt fails parse, the second attempt succeeds. Asserts no error (the OLD
+// single-pass would have returned a plain error here).
+func TestGenerateCommit_DryRun_ParseRetry(t *testing.T) {
+	setupScriptedRepo(t, "initial", []string{"", "feat: good after parse retry"})
+	repoDir, _ := os.Getwd()
+	writeFile(t, repoDir, "p.txt", "data")
+	stageFile(t, repoDir, "p.txt")
+
+	res, err := GenerateCommit(context.Background(), Options{Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun parse-retry: %v (the unparseable first attempt should have been retried, not surfaced as an error)", err)
+	}
+	if res.Message != "feat: good after parse retry" {
+		t.Errorf("Message = %q, want %q (blank first attempt should have triggered FR29 retry to the valid message)",
+			res.Message, "feat: good after parse retry")
+	}
+	if res.CommitSHA != "" {
+		t.Errorf("CommitSHA = %q, want empty (DryRun)", res.CommitSHA)
+	}
+}
+
+// TestGenerateCommit_DryRun_Snapshot verifies Issue 6: WriteTree runs in dry-run, creating a
+// dangling tree object, while HEAD remains unchanged and CommitSHA is empty (Issue 2). Proves
+// git cat-file finds the snapshotted tree after a dry run.
+func TestGenerateCommit_DryRun_Snapshot(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: snapshot taken"})
+	repoDir, _ := os.Getwd()
+	writeFile(t, repoDir, "snap.txt", "data")
+	stageFile(t, repoDir, "snap.txt") // writes the blob (counted in `before`)
+
+	before := looseObjectTypes(t, repoDir) // captured AFTER staging, BEFORE GenerateCommit
+	beforeHEAD := headSHA(t, repoDir)
+
+	res, err := GenerateCommit(context.Background(), Options{Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun snapshot: %v", err)
+	}
+	if res.CommitSHA != "" {
+		t.Errorf("CommitSHA = %q, want empty (DryRun must not commit)", res.CommitSHA)
+	}
+
+	// Issue 6: WriteTree ran in dry-run → a NEW tree-typed object exists in the object store.
+	after := looseObjectTypes(t, repoDir)
+	newTrees := 0
+	for sha, typ := range after {
+		if _, ok := before[sha]; !ok && typ == "tree" {
+			newTrees++
+		}
+	}
+	if newTrees == 0 {
+		t.Error("dry-run snapshot: no new tree object created; WriteTree was skipped (Issue 6 regression)")
+	}
+
+	// Issue 2: dry-run skips commit-tree/update-ref → HEAD unchanged.
+	if got := headSHA(t, repoDir); got != beforeHEAD {
+		t.Errorf("HEAD changed from %q to %q, want unchanged (DryRun)", beforeHEAD, got)
+	}
 }
 
 // TestGenerateCommit_SystemExtra forces the runPipeline path and commits with extra instructions.
