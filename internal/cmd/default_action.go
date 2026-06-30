@@ -98,9 +98,12 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		return exitcode.New(exitcode.Error, fmt.Errorf("git rev-parse HEAD: %w", err))
 	}
 
-	// §3: re-apply the CLI-resolved provider/model/timeout (Layer-7 flags already applied by
-	// PersistentPreRunE) as Options — GenerateCommit re-loads config with Flags:nil, so opts is how the
-	// CLI flags take effect (opts override is highest precedence in resolveConfig).
+	// §3: hand the CLI-resolved config (cfg, loaded ONCE by PersistentPreRunE — which honors
+	// --config via flagConfig→ConfigPathOverride) into GenerateCommit via Options.Config.
+	// resolveConfig then SKIPS its own config.Load (S1's opts.Config != nil branch): --config is
+	// honored on the default action (Issue 1) and the §19 repo-local notice prints once (Issue 5).
+	// Provider/Model/Timeout/VerboseOn below re-assert the Options>everything precedence (redundant
+	// for the CLI path, mandatory for the standalone-library Options.Config==nil contract).
 
 	// Validate the provider before printing the progress label (Issue 7: avoid optimistically
 	// announcing an invalid provider). This mirrors the same resolution logic as
@@ -125,6 +128,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	u.Progress(label)
 
 	res, err := stagehand.GenerateCommit(ctx, stagehand.Options{
+		Config:    cfg,
 		Provider:  cfg.Provider,
 		Model:     cfg.Model,
 		Timeout:   cfg.Timeout,

@@ -27,7 +27,7 @@ With no subcommand, `stagehand` runs the **default action**: it snapshots your s
 | `--version` | — | — | — | — | Print the build version (`"dev"` for a local build; the release tag for a released binary) |
 | `--help`, `-h` | — | — | — | — | Print help |
 
-The `--config` flag is a path override for config-file discovery — it is not itself a `Config` field. The behavioral flags (`--all`, `--no-auto-stage`, `--dry-run`) have no env-var or git-config analogs.
+The `--config` flag is a path override for config-file discovery — it is not itself a `Config` field. The behavioral flags (`--all`, `--no-auto-stage`, `--dry-run`) have no env-var or git-config analogs. `--config` is honored by every command — including the default commit action, so a user-defined provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` on `stagehand` directly (not just the `providers`/`config` subcommands).
 
 ## Subcommands
 
