@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/stubtest"
 )
 
@@ -301,4 +302,84 @@ func TestGenerateCommit_SystemExtra(t *testing.T) {
 	if got := headSHA(t, repoDir); got != res.CommitSHA {
 		t.Errorf("HEAD = %q, want %q", got, res.CommitSHA)
 	}
+}
+
+// TestResolveConfig_InjectedConfig proves that when opts.Config is non-nil, resolveConfig uses
+// the injected config directly and does NOT call config.Load. The proof: the injected config
+// carries a Providers map entry for a stub provider, and the test runs in a temp dir with NO
+// .stagehand.toml and NO STAGEHAND_CONFIG env — if Load ran, it would find no "stub" provider
+// (built-ins only) and the Providers map would be empty. The injected provider surviving proves
+// Load was skipped.
+func TestResolveConfig_InjectedConfig(t *testing.T) {
+	bin := stubtest.Build(t)
+
+	// Build a config.Config with the stub provider registered in the Providers map.
+	// This is the same shape that config.Load would produce from a .stagehand.toml [provider.stub] table.
+	injected := config.Config{
+		Provider: "stub",
+		Providers: map[string]map[string]any{
+			"stub": {
+				"command":          bin,
+				"prompt_delivery":  "stdin",
+				"output":           "raw",
+				"strip_code_fence": true,
+			},
+		},
+	}
+
+	// Create a temp git repo with NO .stagehand.toml (so config.Load would find no stub provider).
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+
+	// Save and restore CWD (resolveConfig calls os.Getwd).
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	ctx := context.Background()
+
+	t.Run("injected_config_used", func(t *testing.T) {
+		cfg, repoDir, err := resolveConfig(ctx, Options{Config: &injected})
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		if cfg.Provider != "stub" {
+			t.Errorf("cfg.Provider = %q, want %q", cfg.Provider, "stub")
+		}
+		if cfg.Providers == nil || cfg.Providers["stub"] == nil {
+			t.Error("cfg.Providers[\"stub\"] is nil — injected providers map was lost")
+		}
+		if repoDir != repo {
+			t.Errorf("repoDir = %q, want %q", repoDir, repo)
+		}
+	})
+
+	t.Run("options_overrides_apply_on_injected", func(t *testing.T) {
+		// Inject a config with Provider="" and override via Options.Provider.
+		emptyProviderCfg := injected
+		emptyProviderCfg.Provider = ""
+		cfg, _, err := resolveConfig(ctx, Options{Config: &emptyProviderCfg, Provider: "stub"})
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		if cfg.Provider != "stub" {
+			t.Errorf("cfg.Provider = %q, want %q (Options override should win)", cfg.Provider, "stub")
+		}
+	})
+
+	t.Run("timeout_override_applies", func(t *testing.T) {
+		cfg, _, err := resolveConfig(ctx, Options{Config: &injected, Timeout: 5 * time.Minute})
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		if cfg.Timeout != 5*time.Minute {
+			t.Errorf("cfg.Timeout = %v, want %v", cfg.Timeout, 5*time.Minute)
+		}
+	})
 }

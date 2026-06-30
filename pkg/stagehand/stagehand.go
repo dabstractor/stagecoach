@@ -37,6 +37,11 @@ type Options struct {
 	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (120s)
 	Verbose     io.Writer     // optional; when set AND cfg.Verbose, diagnostics (resolved command, raw output, retries) are written here (the CLI passes stderr). nil ⇒ silent. Additive-only (PRD §14.1).
 	VerboseOn   bool          // when true, forces cfg.Verbose=true (highest precedence — CLI --verbose / library consumer override). Overrides config/env/git-config layers.
+	// Config optionally supplies an already-resolved configuration; when non-nil, config.Load is
+	// skipped entirely (the caller — typically the in-module CLI — has already loaded config once).
+	// Options overrides below still apply on top. nil ⇒ config.Load runs as before (standalone path).
+	// Additive-only (PRD §14.1); external out-of-module callers leave this nil.
+	Config *config.Config
 }
 
 // Result is the outcome of GenerateCommit. On DryRun (or any non-committing outcome) CommitSHA is "".
@@ -117,12 +122,16 @@ func resolveConfig(ctx context.Context, opts Options) (config.Config, string, er
 		return config.Config{}, "", fmt.Errorf("getwd: %w", err)
 	}
 
-	cfgPtr, err := config.Load(ctx, config.LoadOpts{RepoDir: repoDir, Flags: nil})
-	if err != nil {
-		return config.Config{}, "", fmt.Errorf("load config: %w", err)
+	var cfg config.Config
+	if opts.Config != nil {
+		cfg = *opts.Config // shallow copy; caller already resolved config — skip config.Load (D1)
+	} else {
+		cfgPtr, err := config.Load(ctx, config.LoadOpts{RepoDir: repoDir, Flags: nil})
+		if err != nil {
+			return config.Config{}, "", fmt.Errorf("load config: %w", err)
+		}
+		cfg = *cfgPtr // copy to value
 	}
-
-	cfg := *cfgPtr // copy to value
 
 	// Apply caller overrides (highest precedence — explicit intent wins over file/env/git-config).
 	if opts.Provider != "" {
