@@ -16,6 +16,9 @@
 .env.*
 !.env.example
 
+# Stagehand repo-local config (per-repo .stagehand.toml; not committed by default per PRD §19)
+.stagehand.toml
+
 # OS-specific files
 .DS_Store
 Thumbs.db
