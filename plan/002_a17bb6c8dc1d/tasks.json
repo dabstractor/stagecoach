@@ -757,7 +757,7 @@
           "type": "Milestone",
           "id": "P3.M3",
           "title": "Arbiter & Leftover Reconciliation",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Implement the arbiter agent call and the three resolution paths: new commit (null), tip amend (target==HEAD), and mid-chain rebuild (target==earlier commit). Stagehand performs ALL git; the arbiter only decides.",
           "tasks": [
             {
@@ -795,14 +795,14 @@
               "type": "Task",
               "id": "P3.M3.T2",
               "title": "Arbiter resolution (new commit, tip amend, mid-chain rebuild)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the three arbiter resolution paths that stagehand executes based on the arbiter's target. All use git plumbing; stagehand owns every ref mutation.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M3.T2.S1",
                   "title": "Implement arbiter resolution: new commit + tip amend + mid-chain chain rebuild",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M3.T1.S1",
@@ -841,7 +841,7 @@
                   "type": "Subtask",
                   "id": "P3.M4.T1.S1",
                   "title": "Implement Decompose() orchestrator — full pipeline + safety cap + planner failure",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M2.T4.S1",

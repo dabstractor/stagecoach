@@ -90,6 +90,16 @@ type Git interface {
 	// AddAll stages all changes (git add -A). Used by the auto-stage-all path (PRD §9.4 / FINDING 11).
 	AddAll(ctx context.Context) error
 
+	// Add stages the given paths (modifications, additions/untracked, AND deletions) into the index
+	// via `git add -- <paths...>`. It MUTATES THE INDEX (writes .git/index) but touches NO ref
+	// (PRD §18.1). It is the path-specific companion to AddAll, consumed ONLY by the arbiter's
+	// mid-chain chain rebuild (PRD §13.6.5 — "add leftover paths"): after ReadTree(tree[j]) the index
+	// == tree[j] and Add(leftoverPaths) folds JUST the leftovers onto it (AddAll would collapse the
+	// chain). Empty paths ⇒ no-op nil. The `--` guards pathspec ambiguity. ALL non-zero exits are
+	// errors (the mutation convention shared with AddAll/ReadTree/WriteTree/CommitTree — no 128-as-
+	// non-error special-case). Read-only w.r.t. refs.
+	Add(ctx context.Context, paths []string) error
+
 	// StagedFileCount returns the number of files currently staged (git diff --cached --name-only,
 	// count of non-empty lines). Used for the FR18 "Nothing staged — staging all changes (N files)."
 	// notice. Read-only with respect to refs and the index.
@@ -764,6 +774,30 @@ func (g *gitRunner) AddAll(ctx context.Context) error {
 	}
 	if code != 0 {
 		return fmt.Errorf("git add -A: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+// Add stages the given paths (modifications, additions/untracked, AND deletions) into the index
+// via `git add -- <paths...>` (PRD §13.6.5 — mid-chain chain rebuild). It MUTATES THE INDEX but
+// touches NO ref (PRD §18.1). It is the path-specific companion to AddAll: after ReadTree(tree[j])
+// the index == tree[j] and Add(leftoverPaths) folds JUST the leftovers onto it (AddAll would
+// collapse the chain to tree[N-1]). Empty paths ⇒ no-op nil. The `--` guards pathspec ambiguity.
+// ALL non-zero exits are errors (the mutation convention shared with AddAll/ReadTree/WriteTree/
+// CommitTree — no 128-as-non-error special-case).
+func (g *gitRunner) Add(ctx context.Context, paths []string) error {
+	if len(paths) == 0 {
+		return nil // no-op (contract: "add leftover paths" — empty set stages nothing)
+	}
+	args := make([]string, 0, 2+len(paths))
+	args = append(args, "add", "--")
+	args = append(args, paths...) // each path one argv element (no shell — PRD §19)
+	_, stderr, code, err := g.run(ctx, g.workDir, args...)
+	if err != nil {
+		return err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return fmt.Errorf("git add: failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return nil
 }
