@@ -73,12 +73,13 @@ See ` + "`stagehand config path`" + ` for the target location.`,
 var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Print the resolved global config path",
-	Long: `Print the resolved global config path (the file ` + "`config init`" + ` writes and Stagehand
-reads as its global config layer).
+	Long: `Print the config file path that ` + "`config init`" + `/` + "`config upgrade`" + ` operate on and that
+Stagehand reads as its global config layer.
 
-This is the DISCOVERED global location ($XDG_CONFIG_HOME/stagehand/config.toml, or
-~/.config/stagehand/config.toml by default) — not a --config/STAGEHAND_CONFIG override, which selects
-a separate read path.`,
+By default this is the DISCOVERED global location ($XDG_CONFIG_HOME/stagehand/config.toml, or
+~/.config/stagehand/config.toml). The --config flag and STAGEHAND_CONFIG env var ARE honored here: when
+either is set, this prints that override path — the same file ` + "`config init`" + `/` + "`config upgrade`" + `
+then target — so you can confirm exactly which file a command will touch.`,
 	Args:          cobra.NoArgs,
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -99,7 +100,9 @@ ordering) is preserved byte-for-byte. Running it twice is safe: a file already a
 left unchanged ("already up to date").
 
 This is the remediation the load-time advisory points at when a config has no config_version or an older
-one. It targets the GLOBAL config (the path printed by ` + "`stagehand config path`" + `).
+one. It targets the file reported by ` + "`stagehand config path`" + ` — by default the GLOBAL config, but
+the --config flag and STAGEHAND_CONFIG env var ARE honored, so ` + "`--config X config upgrade`" + ` (or
+STAGEHAND_CONFIG=X) upgrades file X instead of the global file.
 
 If no config file exists, run ` + "`stagehand config init`" + ` first. If the file is not valid TOML, it is
 left untouched and an error is printed.`,
@@ -127,7 +130,7 @@ func init() {
 // runConfigPath implements `stagehand config path` (FR38). Prints the resolved global config path to
 // stdout (one line). Returns nil. Never calls os.Exit. Works outside a git repo (config load skipped).
 func runConfigPath(cmd *cobra.Command, args []string) error {
-	fmt.Fprintln(cmd.OutOrStdout(), config.GlobalConfigPath())
+	fmt.Fprintln(cmd.OutOrStdout(), config.ResolveConfigPath(flagConfig))
 	return nil
 }
 
@@ -135,7 +138,7 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 // config_version equals CurrentConfigVersion (minimal textual edit), writes it back, and prints a
 // confirmation. Never calls os.Exit; routes errors via exitcode.New. (PRD §9.17 FR-B5.)
 func runConfigUpgrade(cmd *cobra.Command, args []string) error {
-	path := config.GlobalConfigPath()
+	path := config.ResolveConfigPath(flagConfig)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -228,7 +231,7 @@ func leadingHeaderEnd(lines []string) int {
 // Parent dirs are created; the written path is always printed. Never calls os.Exit.
 // The populated-config generation is delegated to config.GenerateBootstrapConfig (P1.M4.T4.S1).
 func runConfigInit(cmd *cobra.Command, args []string) error {
-	path := config.GlobalConfigPath()
+	path := config.ResolveConfigPath(flagConfig)
 
 	force, _ := cmd.Flags().GetBool("force")
 	if !force {

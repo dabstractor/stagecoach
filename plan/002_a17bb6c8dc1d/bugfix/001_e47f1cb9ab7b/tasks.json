@@ -204,14 +204,14 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Honor --config / STAGEHAND_CONFIG override in config subcommands (Issue 4, Major)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "The config init/upgrade/path subcommands hardcode config.GlobalConfigPath() and never consult the --config flag or STAGEHAND_CONFIG env var. Add a shared override-aware path resolver (matching config.Load's precedence) and wire it into all three subcommands so they operate on the file the user actually selected.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Add override-aware config path resolution and wire into config subcommands",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Add config.ResolveConfigPath(flagConfig) that honors --config > STAGEHAND_CONFIG > GlobalConfigPath(). Refactor config.Load to use it (DRY). Update config init/upgrade/path RunE functions to call ResolveConfigPath(flagConfig) instead of GlobalConfigPath().",
               "subtasks": [
                 {
@@ -232,7 +232,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Wire ResolveConfigPath into config init/upgrade/path subcommands",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"

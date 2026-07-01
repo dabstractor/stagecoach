@@ -103,6 +103,155 @@ func TestConfigPath_WorksOutsideGitRepo(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// config path — Issue-4 override tests (--config / STAGEHAND_CONFIG honored)
+// ---------------------------------------------------------------------------
+
+func TestConfigPath_ConfigFlag_PrintsOverride(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	setupNoRepo(t)
+	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG, not the env
+	override := filepath.Join(t.TempDir(), "foo.toml") // parent (TempDir) exists
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"--config", override, "config", "path"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != override {
+		t.Errorf("config path = %q, want override %q (--config must be honored)", got, override)
+	}
+}
+
+func TestConfigPath_StagehandConfigEnv_PrintsOverride(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	setupNoRepo(t)
+	override := filepath.Join(t.TempDir(), "foo.toml")
+	t.Setenv("STAGEHAND_CONFIG", override)
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "path"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != override {
+		t.Errorf("config path = %q, want override %q (STAGEHAND_CONFIG must be honored)", got, override)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// config upgrade — Issue-4 override test (--config honored, global NOT touched)
+// ---------------------------------------------------------------------------
+
+func TestConfigUpgrade_ConfigFlag_UpgradesOverride_NotGlobal(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	home, _, _ := setupNoRepo(t)
+	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG
+	override := filepath.Join(t.TempDir(), "foo.toml")
+	if err := os.WriteFile(override, []byte("config_version = 1\n[defaults]\nprovider = \"pi\"\n"), 0o644); err != nil {
+		t.Fatalf("write override config: %v", err)
+	}
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"--config", override, "config", "upgrade"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	if !strings.Contains(out.String(), "Upgraded") {
+		t.Errorf("stdout = %q, want to contain 'Upgraded'", out.String())
+	}
+
+	// The override file must be upgraded
+	data, _ := os.ReadFile(override)
+	if !strings.Contains(string(data), "config_version = 2") {
+		t.Errorf("override file not upgraded; got:\n%s", data)
+	}
+	if !strings.Contains(string(data), "provider = \"pi\"") {
+		t.Errorf("provider = pi not preserved in override file")
+	}
+
+	// The global config must NOT have been created
+	globalPath := filepath.Join(home, "stagehand", "config.toml")
+	if _, err := os.Stat(globalPath); !os.IsNotExist(err) {
+		t.Errorf("global config %s must NOT exist (upgrade must target the --config file only)", globalPath)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// config init — Issue-4 override test (--config honored, writes to override path)
+// ---------------------------------------------------------------------------
+
+func TestConfigInit_ConfigFlag_WritesOverride(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG
+	override := filepath.Join(t.TempDir(), "foo.toml")
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"--config", override, "config", "init"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	if !strings.Contains(out.String(), "Wrote config to") {
+		t.Errorf("stdout = %q, want to contain 'Wrote config to'", out.String())
+	}
+
+	// The override file must exist and contain config_version = 2
+	data, err := os.ReadFile(override)
+	if err != nil {
+		t.Fatalf("cannot read override config at %s: %v", override, err)
+	}
+	if !strings.Contains(string(data), "config_version = 2") {
+		t.Errorf("override config missing 'config_version = 2'; got:\n%s", data)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// config path — Issue-4 back-compat test (no override → global path)
+// ---------------------------------------------------------------------------
+
+func TestConfigPath_NoOverride_BackCompatGlobal(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	setupNoRepo(t)
+	t.Setenv("STAGEHAND_CONFIG", "") // isolate: no override
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "path"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	got := strings.TrimSpace(out.String())
+	expected := config.GlobalConfigPath()
+	if got != expected {
+		t.Errorf("config path = %q, want global %q (back-compat)", got, expected)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // config init tests — populated default (no flags)
 // ---------------------------------------------------------------------------
 
