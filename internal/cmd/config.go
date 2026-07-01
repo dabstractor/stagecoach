@@ -1,11 +1,11 @@
 // Package cmd implements the config command group for Stagehand (PRD §9.8 FR38, §15.3, §16.2).
-// It provides a `config` cobra command with two leaf subcommands: `init` (bootstrap a populated
+// It provides a `config` cobra command with three leaf subcommands: `init` (bootstrap a populated
 // working config to the global config path, creating parent dirs, refusing to overwrite unless
-// --force) and `path` (print the resolved global config path to stdout). Both are thin views over
-// the P1.M1.T4.S2 globalConfigPath resolver (newly exported as config.GlobalConfigPath()).
+// --force), `path` (print the resolved global config path to stdout), and `upgrade` (rewrite an
+// existing config in place to the current schema version via a minimal textual transform).
 //
-// Both leaves are in shouldSkipConfigLoad (cmd.Name()=="init"/"path"), so root's PersistentPreRunE
-// returns nil immediately — they work OUTSIDE a git repo and never need config.Load.
+// All three leaves are in shouldSkipConfigLoad (cmd.Name()=="init"/"path"/"upgrade"), so root's
+// PersistentPreRunE returns nil immediately — they work OUTSIDE a git repo and never need config.Load.
 //
 // Registered via init() in this file — ZERO edits to root.go (parallel-safe with S2/S3, design D2).
 package cmd
@@ -14,8 +14,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/dustin/stagehand/internal/config"
@@ -34,13 +37,9 @@ var preferredBuiltins = []string{"pi", "opencode", "cursor", "agy", "gemini", "c
 // shouldSkipConfigLoad (cmd.Name()=="init"/"path") so root's PersistentPreRunE returns nil immediately
 // — they work OUTSIDE a git repo and never need config.Load.
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Manage the Stagehand config file",
-	Long: `Inspect or bootstrap the Stagehand global config file.
-
-Subcommands:
-  init   Bootstrap a working config (auto-detects your agent).
-  path   Print the resolved global config path.`,
+	Use:           "config",
+	Short:         "Manage the Stagehand config file",
+	Long:          `Inspect, bootstrap, or upgrade the Stagehand global config file.`,
 	SilenceErrors: true,
 	SilenceUsage:  true,
 }
@@ -86,6 +85,34 @@ a separate read path.`,
 	RunE:          runConfigPath,
 }
 
+// configUpgradeCmd implements `stagehand config upgrade` (PRD §9.17 FR-B5). Rewrites an EXISTING
+// global config in place so its top-level config_version equals CurrentConfigVersion, via a minimal
+// TEXTUAL edit that preserves every other line. Idempotent. Works outside a git repo (shouldSkipConfigLoad).
+var configUpgradeCmd = &cobra.Command{
+	Use:   "upgrade",
+	Short: "Upgrade an existing config to the current schema version",
+	Long: `Rewrite an existing Stagehand config file in place so its config_version matches this binary's
+current schema version (` + fmt.Sprintf("`config_version = %d`", config.CurrentConfigVersion) + `).
+
+Only the top-level config_version line is added or updated — every other line (your values, comments,
+ordering) is preserved byte-for-byte. Running it twice is safe: a file already at the current version is
+left unchanged ("already up to date").
+
+This is the remediation the load-time advisory points at when a config has no config_version or an older
+one. It targets the GLOBAL config (the path printed by ` + "`stagehand config path`" + `).
+
+If no config file exists, run ` + "`stagehand config init`" + ` first. If the file is not valid TOML, it is
+left untouched and an error is printed.`,
+	Args:          cobra.NoArgs,
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	RunE:          runConfigUpgrade,
+}
+
+// configVersionLineRe matches an UNCOMMENTED top-level config_version assignment, capturing the integer
+// value. Anchored at column 0 (a leading '#' is not matched) — commented `# config_version = 2` is ignored.
+var configVersionLineRe = regexp.MustCompile(`^config_version\s*=\s*([0-9]+)`)
+
 func init() {
 	configInitCmd.Flags().String("provider", "", "Target a specific provider instead of auto-detecting")
 	configInitCmd.Flags().Bool("force", false, "Overwrite an existing config file")
@@ -93,6 +120,7 @@ func init() {
 
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configPathCmd)
+	configCmd.AddCommand(configUpgradeCmd)
 	rootCmd.AddCommand(configCmd) // register on S1's root — NO edit to root.go (design D2)
 }
 
@@ -101,6 +129,97 @@ func init() {
 func runConfigPath(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(cmd.OutOrStdout(), config.GlobalConfigPath())
 	return nil
+}
+
+// runConfigUpgrade reads the global config, validates it is parseable TOML, ensures the top-level
+// config_version equals CurrentConfigVersion (minimal textual edit), writes it back, and prints a
+// confirmation. Never calls os.Exit; routes errors via exitcode.New. (PRD §9.17 FR-B5.)
+func runConfigUpgrade(cmd *cobra.Command, args []string) error {
+	path := config.GlobalConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return exitcode.New(exitcode.Error, fmt.Errorf("no config file at %s (run 'stagehand config init' first)", path))
+		}
+		return exitcode.New(exitcode.Error, fmt.Errorf("read config %s: %w", path, err))
+	}
+	// Validity gate: refuse to mangle an unparseable file. Non-strict (map[string]any) — a merely-
+	// incomplete config (e.g. only [defaults]) is fine; only genuine syntax errors fail.
+	var probe map[string]any
+	if err := toml.Unmarshal(data, &probe); err != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("config %s is not valid TOML: %w", path, err))
+	}
+	newContent, changed := upgradeConfigVersion(string(data), config.CurrentConfigVersion)
+	if !changed {
+		fmt.Fprintf(cmd.OutOrStdout(), "Config at %s is already at version %d (no changes).\n", path, config.CurrentConfigVersion)
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("write config %s: %w", path, err))
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Upgraded config at %s to version %d.\n", path, config.CurrentConfigVersion)
+	return nil
+}
+
+// upgradeConfigVersion returns content with the TOP-LEVEL config_version set to version, via a minimal
+// TEXTUAL edit that preserves every other line byte-for-byte (PRD §9.17 FR-B5: "preserving user values …
+// leave all other content unchanged"). It scans only the top-level region (before the first [table] header —
+// config_version is root metadata). Outcomes (D4):
+//   - found with value == version  → content unchanged, changed=false (the "already up to date" path)
+//   - found with value != version  → that ONE line rewritten, changed=true
+//   - not found                    → one `config_version = <version>` line inserted after the leading
+//     comment/blank header block, changed=true
+//
+// PURE (no I/O, no error) → fully unit-testable. v2.0 has no removed/renamed keys, so no other line is
+// touched; this function is the single future extension point (add a version-keyed migration for v3+).
+func upgradeConfigVersion(content string, version int) (string, bool) {
+	lines := strings.Split(content, "\n")
+	want := strconv.Itoa(version)
+
+	// 1. Scan the top-level region for an existing config_version (stop at the first [table] header).
+	for i, line := range lines {
+		if isTableHeader(line) {
+			break // config_version must precede tables; nothing top-level after this is the schema key
+		}
+		if m := configVersionLineRe.FindStringSubmatch(line); m != nil {
+			if strings.TrimSpace(m[1]) == want {
+				return content, false // already current — byte-identical
+			}
+			lines[i] = "config_version = " + want
+			return strings.Join(lines, "\n"), true
+		}
+	}
+
+	// 2. No top-level config_version — insert one after the leading comment/blank header block.
+	insertAt := leadingHeaderEnd(lines)
+	ins := append([]string{}, lines[:insertAt]...)
+	ins = append(ins, "config_version = "+want)
+	ins = append(ins, lines[insertAt:]...)
+	return strings.Join(ins, "\n"), true
+}
+
+// isTableHeader reports whether line is a TOML [table] / [[array-of-tables]] header (non-comment, col 0).
+func isTableHeader(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" || strings.HasPrefix(t, "#") {
+		return false
+	}
+	return strings.HasPrefix(t, "[")
+}
+
+// leadingHeaderEnd returns the index of the first line that is NOT a comment and NOT blank — i.e. the end
+// of the leading comment/blank header block. Used as the insertion point for a new top-level config_version
+// (so it sits with the other root keys, before the first table). Returns len(lines) if the whole file is
+// comments/blanks.
+func leadingHeaderEnd(lines []string) int {
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		return i
+	}
+	return len(lines)
 }
 
 // runConfigInit implements `stagehand config init` (PRD §9.17 FR-B1/B2). Bootstraps a populated

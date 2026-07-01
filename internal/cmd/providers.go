@@ -27,11 +27,7 @@ var providersCmd = &cobra.Command{
 	Long: `Inspect the built-in and user-defined provider manifests Stagehand uses to generate commits.
 
 User-defined providers (from the global or repo-local config file) override built-ins of the same
-name; new names add new providers (PRD §12.8).
-
-Subcommands:
-  list          List all known providers with detection + default status.
-  show <name>   Print a provider's fully-resolved manifest as TOML.`,
+name; new names add new providers (PRD §12.8).`,
 	SilenceErrors: true,
 	SilenceUsage:  true,
 }

@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Foundation — Provider, Manifest & Config V2",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Extend the provider manifest system and config layer to support all v2 prerequisites: tooled mode (tooled_flags), the agy provider, cascading provider priority, decoupled pi defaults, per-role provider/model configuration, tier-based default models, config schema versioning, and a populated config bootstrap. These are the foundational layers that the decompose pipeline (P3) and CLI integration (P4) depend on.",
       "milestones": [
         {
@@ -290,7 +290,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Config Bootstrap & Schema Versioning",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Implement config schema versioning with advisory warnings (FR-B4), rewrite config init to write a populated working config (FR-B1/B2), add config upgrade (FR-B5), add first-run fallback (FR-B3), and fix help de-duplication (FR-B6).",
           "tasks": [
             {
@@ -350,14 +350,14 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "Config upgrade command (FR-B5)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Implement `stagehand config upgrade` — rewrites an existing config to CurrentConfigVersion in place, preserving user values for keys that still exist and commenting out removed/renamed keys.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "Implement config upgrade command",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -376,14 +376,14 @@
               "type": "Task",
               "id": "P1.M4.T4",
               "title": "First-run fallback (FR-B3)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "If stagehand starts with no global config and no STAGEHAND_CONFIG, auto-write the bootstrap config once, print a notice with the path, and continue.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T4.S1",
                   "title": "Implement first-run auto-bootstrap fallback",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T2.S1"

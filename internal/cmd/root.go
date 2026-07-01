@@ -90,13 +90,13 @@ func init() {
 	// --version is auto-added by cobra (Version field above); --help/-h is cobra's built-in.
 }
 
-// shouldSkipConfigLoad returns true for commands that operate on the config PATH itself, not the
-// resolved config — so they work outside a git repo and never need the git-config layer. Matches the
-// task's "skip for config init/path/help" (help/version are already short-circuited by cobra).
-// Forward-compatible: config init/path arrive in S4; for S1 (root only) this always returns false.
+// shouldSkipConfigLoad returns true for commands that operate on the config PATH or FILE
+// itself, not the resolved config — so they work outside a git repo and never need the
+// git-config layer. Matches config init/path/upgrade (help/version are already short-circuited
+// by cobra). Upgrade operates on the config FILE (in-place rewrite), not the resolved config.
 func shouldSkipConfigLoad(cmd *cobra.Command) bool {
 	name := cmd.Name()
-	return name == "init" || name == "path"
+	return name == "init" || name == "path" || name == "upgrade"
 }
 
 // Config returns the config resolved by PersistentPreRunE, or nil if it was skipped/hasn't run.
