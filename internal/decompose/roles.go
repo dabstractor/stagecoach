@@ -15,8 +15,11 @@ package decompose
 import (
 	"fmt"
 
+	"context"
+
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/ui"
 )
@@ -54,6 +57,13 @@ type Deps struct {
 	Config   config.Config
 	Roles    RoleManifests
 	Verbose  *ui.Verbose
+
+	// stager is an OPTIONAL test seam. When non-nil, the orchestrator (decompose.go) calls it instead
+	// of the package-level stageConcept (the real tooled-agent invocation). nil in production (the CLI
+	// builds Deps without it). Lets orchestrator tests inject a stager that actually stages files via
+	// git (the stubtest agent cannot run git), exercising the full happy-path loop end-to-end. The
+	// signature matches stageConcept exactly. See decompose.invokeStager.
+	stager func(ctx context.Context, deps Deps, concept prompt.PlannerCommit) error
 }
 
 // ResolveRoles resolves the four agent roles (planner/stager/message/arbiter, PRD §13.6.2) from

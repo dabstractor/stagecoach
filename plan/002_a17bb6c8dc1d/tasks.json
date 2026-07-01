@@ -552,7 +552,7 @@
       "type": "Phase",
       "id": "P3",
       "title": "Multi-Commit Decomposition",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Implement the full decompose pipeline: decomposition prompts (planner, stager, arbiter), the plan→stage→generate→commit loop with overlapped staging/generation, the arbiter for leftover reconciliation, mid-chain rebuild, and per-concept failure isolation. This is the headline v2 feature (§13.6).",
       "milestones": [
         {
@@ -827,21 +827,21 @@
           "type": "Milestone",
           "id": "P3.M4",
           "title": "Decompose Orchestrator & Failure Handling",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Implement the top-level Decompose() orchestrator that ties together the planner→stager→message→arbiter pipeline, enforces the safety cap, handles the single-shortcut, and implements per-concept failure isolation (rescue for concept i only, prior commits stand).",
           "tasks": [
             {
               "type": "Task",
               "id": "P3.M4.T1",
               "title": "Decompose orchestrator + failure handling",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the Decompose() function that orchestrates the full pipeline: trigger detection, planner call, the stage→snapshot→generate→commit loop with overlap, arbiter, and all failure paths.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M4.T1.S1",
                   "title": "Implement Decompose() orchestrator — full pipeline + safety cap + planner failure",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M2.T4.S1",
@@ -865,7 +865,7 @@
                   "type": "Subtask",
                   "id": "P3.M4.T1.S2",
                   "title": "Implement per-concept failure isolation (FR-M12) + multi-commit rescue variant",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M4.T1.S1"
