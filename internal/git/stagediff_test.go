@@ -287,3 +287,157 @@ func TestStagedDiff_ContextCancelled(t *testing.T) {
 		t.Fatalf("expected empty output, got %q", out)
 	}
 }
+
+func TestStagedDiff_BinaryFilePlaceholderAndExcluded(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	// Real binary (PNG header) — git content-sniffs ⇒ numstat -/-
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "logo.png")
+	// Text companion
+	writeFile(t, repo, "a.go", "package main\n")
+	stageFile(t, repo, "a.go")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if !strings.Contains(out, "A\t[binary] logo.png") {
+		t.Fatalf("expected placeholder for logo.png, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary files") {
+		t.Fatalf("expected no 'Binary files' body for logo.png, got:\n%s", out)
+	}
+	if !strings.Contains(out, "a.go") {
+		t.Fatalf("expected text companion a.go present, got:\n%s", out)
+	}
+}
+
+func TestStagedDiff_BinaryKeepsTextCompanion(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "img.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "img.png")
+	writeFile(t, repo, "code.go", "package main\nfunc main() {}\n")
+	stageFile(t, repo, "code.go")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if !strings.Contains(out, "A\t[binary] img.png") {
+		t.Fatalf("expected binary placeholder, got:\n%s", out)
+	}
+	if !strings.Contains(out, "code.go") {
+		t.Fatalf("expected code.go hunk present, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary files") {
+		t.Fatalf("expected no binary hunk body, got:\n%s", out)
+	}
+}
+
+func TestStagedDiff_BinaryExtensionsUserOverride(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	// TEXT content in a .dat file (.dat is NOT in the 36-entry built-in denylist)
+	writeFile(t, repo, "data.dat", "hello\n")
+	stageFile(t, repo, "data.dat")
+
+	g := New(repo)
+
+	// Without the user override — .dat with text content is NOT binary
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if strings.Contains(out, "[binary] data.dat") {
+		t.Fatalf("expected NO binary placeholder without user override, got:\n%s", out)
+	}
+
+	// With the user override — caught via extension signal
+	out, err = g.StagedDiff(context.Background(), StagedDiffOptions{BinaryExtensions: []string{"dat"}})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if !strings.Contains(out, "A\t[binary] data.dat") {
+		t.Fatalf("expected binary placeholder with user override, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary files") {
+		t.Fatalf("expected no binary hunk body (text content), got:\n%s", out)
+	}
+}
+
+func TestStagedDiff_BinaryInSubdirectory(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	os.MkdirAll(filepath.Join(repo, "assets"), 0o755)
+	writeFile(t, repo, "assets/logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "assets/logo.png")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if !strings.Contains(out, "A\t[binary] assets/logo.png") {
+		t.Fatalf("expected subdirectory binary placeholder, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary files") {
+		t.Fatalf("expected no binary body, got:\n%s", out)
+	}
+}
+
+func TestStagedDiff_MixedMarkdownBinaryCode(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "a.md", "# Title\n\nbody\n")
+	stageFile(t, repo, "a.md")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "logo.png")
+	writeFile(t, repo, "b.go", "package main\n")
+	stageFile(t, repo, "b.go")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if !strings.Contains(out, "a.md") {
+		t.Fatalf("expected markdown a.md, got:\n%s", out)
+	}
+	if !strings.Contains(out, "A\t[binary] logo.png") {
+		t.Fatalf("expected binary placeholder, got:\n%s", out)
+	}
+	if !strings.Contains(out, "b.go") {
+		t.Fatalf("expected code b.go, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary files") {
+		t.Fatalf("expected no binary hunk body, got:\n%s", out)
+	}
+}
+
+func TestStagedDiff_NoBinaryWhenOnlyText(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "a.go", "package main\n")
+	stageFile(t, repo, "a.go")
+	writeFile(t, repo, "b.go", "package lib\n")
+	stageFile(t, repo, "b.go")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff err = %v, want nil", err)
+	}
+	if strings.Contains(out, "[binary]") {
+		t.Fatalf("expected no [binary] lines for text-only staging, got:\n%s", out)
+	}
+}

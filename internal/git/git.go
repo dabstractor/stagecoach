@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -23,9 +24,13 @@ type FileChange struct {
 // StagedDiffOptions configures staged-diff capture (commit-pi parity, PRD §9.1 / FINDING 7).
 // The T3.S1 (StagedDiff) implementation consumes these.
 type StagedDiffOptions struct {
-	MaxDiffBytes int      // byte cap on the non-markdown section (commit-pi default 300000); 0 = unlimited
-	MaxMDLines   int      // per-file line cap for markdown files (commit-pi default 100); 0 = unlimited
-	Excludes     []string // pathspec magic-prefix excludes, e.g. []string{":!*.lock", ":!vendor/*"}
+	MaxDiffBytes     int      // byte cap on the non-markdown section (commit-pi default 300000); 0 = unlimited
+	MaxMDLines       int      // per-file line cap for markdown files (commit-pi default 100); 0 = unlimited
+	Excludes         []string // pathspec magic-prefix excludes, e.g. []string{":!*.lock", ":!vendor/*"}
+	BinaryExtensions []string // extra non-text extensions to filter beyond the built-in denylist
+	// (png jpg … woff2 in internal/git/binary.go); nil ⇒ built-in denylist only.
+	// Entries are dot-tolerant + case-insensitive (PRD §9.1 FR3a).
+	// Sourced from config `binary_extensions`.
 }
 
 // Git is the shell-free boundary to the real git binary. Every method delegates to the private
@@ -447,6 +452,35 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 		}
 	}
 
+	// ---- Binary filtering (PRD §9.1 FR3a/b/c, staged path) ----
+	// detectBinaryFiles applies numstat + the BUILT-IN denylist (S1 hardcodes nil extraExts); supplement
+	// with the user's BinaryExtensions below. Key off fileStatuses (destination paths) to reconcile renames
+	// (numstat `old => new` vs name-status `new` — findings §4).
+	binSet, berr := g.detectBinaryFiles(ctx, "--cached")
+	if berr != nil {
+		return "", berr
+	}
+	statuses, serr := g.fileStatuses(ctx, "--cached")
+	if serr != nil {
+		return "", serr
+	}
+
+	// Collect binary paths (FR3a union: detected-by-numstat/denylist OR matched by user BinaryExtensions),
+	// SORT for deterministic output, emit FR3b placeholders, and gather pathspec excludes.
+	binPaths := make([]string, 0, len(statuses))
+	for path := range statuses {
+		if binSet[path] || isBinaryByExtension(path, opts.BinaryExtensions) {
+			binPaths = append(binPaths, path)
+		}
+	}
+	sort.Strings(binPaths)
+	var binExcludes []string // SEPARATE slice — never append to `excludes` (it may alias defaultExcludes)
+	for _, path := range binPaths {
+		b.WriteString(binaryPlaceholderLine(statuses[path], path)) // "<status>\t[binary] <path>"
+		b.WriteByte('\n')
+		binExcludes = append(binExcludes, ":!"+path)
+	}
+
 	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
 	// opts.Excludes REPLACES the noise-filter default if non-empty (G6); the markdown excludes are
 	// ALWAYS appended (structural — prevents the double-count trap, G1).
@@ -457,6 +491,7 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 	nmArgs := []string{"diff", "--cached", "--"}
 	nmArgs = append(nmArgs, excludes...)
 	nmArgs = append(nmArgs, ":!*.md", ":!*.markdown")
+	nmArgs = append(nmArgs, binExcludes...) // drop binary bodies from the aggregate
 	nmDiff, nmstderr, nmcode, nmerr := g.run(ctx, g.workDir, nmArgs...)
 	if nmerr != nil {
 		return "", nmerr

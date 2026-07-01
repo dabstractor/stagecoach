@@ -245,8 +245,9 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 
 	// Step 2: diff payload; empty → nothing to commit.
 	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
-		MaxDiffBytes: cfg.MaxDiffBytes,
-		MaxMDLines:   cfg.MaxMdLines,
+		MaxDiffBytes:     cfg.MaxDiffBytes,
+		MaxMDLines:       cfg.MaxMdLines,
+		BinaryExtensions: cfg.BinaryExtensions,
 	})
 	if err != nil {
 		return Result{}, err

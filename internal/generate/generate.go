@@ -141,8 +141,9 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 
 	// Step 2: diff payload; empty → nothing to commit (design §6).
 	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
-		MaxDiffBytes: cfg.MaxDiffBytes,
-		MaxMDLines:   cfg.MaxMdLines,
+		MaxDiffBytes:     cfg.MaxDiffBytes,
+		MaxMDLines:       cfg.MaxMdLines,
+		BinaryExtensions: cfg.BinaryExtensions,
 	})
 	if err != nil {
 		return Result{}, err
