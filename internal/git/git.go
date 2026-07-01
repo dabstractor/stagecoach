@@ -94,6 +94,29 @@ type Git interface {
 	// count of non-empty lines). Used for the FR18 "Nothing staged — staging all changes (N files)."
 	// notice. Read-only with respect to refs and the index.
 	StagedFileCount(ctx context.Context) (int, error)
+
+	// RevParseTree returns the tree SHA of a commit-ish: ref is "HEAD", a branch name, or a commit SHA.
+	// It runs `git rev-parse <ref>^{tree}`, where the `^{tree}` suffix peels the commit-ish to its tree
+	// object (the tree a commit points at). It is the producer of tree[-1] — the original-parent tree
+	// that anchors the multi-commit concept-diff loop (PRD §13.6.3: "`tree[-1]` is the original parent
+	// tree (`git rev-parse HEAD^{tree}`, or the empty tree for an unborn repo)", invariant 2 mandates
+	// tree-to-tree concept diffs, never index-vs-HEAD).
+	//
+	// On an unborn repo with ref="HEAD", or on any unresolvable ref, git exits 128; RevParseTree returns
+	// ("", nil) defensively (NOT an error) — callers gate on RevParseHEAD's isUnborn before calling, so an
+	// empty return is the correct non-error signal for the unborn/empty-tree base case. This 128-as-non-error
+	// convention is identical to RevParseHEAD / RecentMessages / RecentSubjects / CommitCount. Branch on the
+	// exit code, NOT on stdout emptiness: git prints the literal argument string to stdout on exit 128.
+	RevParseTree(ctx context.Context, ref string) (tree string, err error)
+
+	// ReadTree REPLACES the index with the contents of <tree> via `git read-tree <tree>` (the default,
+	// no -m/--merge form). It MUTATES THE INDEX (writes .git/index) but touches NEITHER HEAD NOR any ref
+	// (PRD §18.1: refs move ONLY at UpdateRefCAS). It is consumed ONLY by the arbiter's mid-chain chain
+	// rebuild (PRD §13.6.5: "for each j, read-tree the appropriate base, fold the leftovers in at j==i,
+	// write-tree, commit-tree against the rebuilt parent, update-ref"). Because it is a mutation, EVERY
+	// non-zero exit (128 = bad/unresolvable tree SHA, not-a-repo, corrupt object) is a real error — the
+	// SAME convention as AddAll / WriteTree / CommitTree (mutations never special-case 128 as "unborn").
+	ReadTree(ctx context.Context, tree string) error
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -727,4 +750,44 @@ func (g *gitRunner) StagedFileCount(ctx context.Context) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// RevParseTree returns the tree SHA of a commit-ish (ref = "HEAD", a branch, or a commit SHA) via
+// `git rev-parse <ref>^{tree}`. The `^{tree}` suffix is passed as ONE argv element (run() takes
+// args ...string and builds one exec.CommandContext argv; no shell — PRD §19). On an unborn repo with
+// ref="HEAD" (or an unresolvable ref) git exits 128; RevParseTree returns ("", nil) defensively
+// (callers gate on RevParseHEAD's isUnborn — the empty return is the unborn/empty-tree base case). This
+// mirrors RevParseHEAD's 128 convention exactly: branch on the exit CODE, NOT on stdout (git prints the
+// literal argument to stdout on exit 128). Producer of tree[-1] for the multi-commit concept-diff loop
+// (PRD §13.6.3).
+func (g *gitRunner) RevParseTree(ctx context.Context, ref string) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", ref+"^{tree}")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1) — UNWRAPPED
+	}
+	if code == 128 {
+		return "", nil // unborn repo / unresolvable ref — defensive (callers gate on isUnborn). Branch on CODE.
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git rev-parse %s^{tree}: failed (exit %d): %s", ref, code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// ReadTree REPLACES the index with <tree>'s contents via `git read-tree <tree>`. It MUTATES THE INDEX
+// (writes .git/index) but touches NEITHER HEAD NOR any ref — refs move ONLY at UpdateRefCAS (PRD §18.1).
+// Consumed ONLY by the arbiter's mid-chain chain rebuild (PRD §13.6.5). Because it is a mutation, EVERY
+// non-zero exit (128 = bad/unresolvable tree SHA, not-a-repo, corrupt) is a real error — the mutation
+// convention shared with AddAll / WriteTree / CommitTree (no 128-as-non-error special-case). read-tree
+// prints nothing to stdout on success, so stdout is discarded.
+func (g *gitRunner) ReadTree(ctx context.Context, tree string) error {
+	_, stderr, code, err := g.run(ctx, g.workDir, "read-tree", tree) // stdout unused (read-tree prints nothing)
+	if err != nil {
+		return err // git binary missing / context cancelled / start failure (run sets code=-1) — UNWRAPPED
+	}
+	if code != 0 {
+		// ALL non-zero exits are errors (mutation convention — like AddAll). NO 128 special-case.
+		return fmt.Errorf("git read-tree: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return nil
 }
