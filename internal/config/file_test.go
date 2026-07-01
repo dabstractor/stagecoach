@@ -481,6 +481,127 @@ timeout = "120"
 	}
 }
 
+// --- TestLoadTOML_V2Fields ---
+
+// TestLoadTOML_V2Fields proves the v2 file keys decode + materialize: config_version, [generation]
+// max_commits/binary_extensions, and [role.<role>] tables (incl. a PARTIAL role whose Provider is "" — the
+// field-level decode, not a whole-block). Mirrors TestLoadTOMLValid.
+func TestLoadTOML_V2Fields(t *testing.T) {
+	body := `
+config_version = 2
+
+[generation]
+max_commits = 5
+binary_extensions = ["foo", "bar"]
+
+[role.planner]
+provider = "agy"
+model = "gemini-2.5-pro"
+
+[role.stager]
+model = "gemini-2.5-flash"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if err != nil || cfg == nil {
+		t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+	}
+	if cfg.ConfigVersion != 2 {
+		t.Errorf("ConfigVersion=%d want 2", cfg.ConfigVersion)
+	}
+	if cfg.MaxCommits != 5 {
+		t.Errorf("MaxCommits=%d want 5", cfg.MaxCommits)
+	}
+	if len(cfg.BinaryExtensions) != 2 || cfg.BinaryExtensions[0] != "foo" || cfg.BinaryExtensions[1] != "bar" {
+		t.Errorf("BinaryExtensions=%v want [foo bar]", cfg.BinaryExtensions)
+	}
+	if len(cfg.Roles) != 2 {
+		t.Fatalf("Roles len=%d want 2", len(cfg.Roles))
+	}
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	}
+	// Partial role: only model set → Provider decodes "" (field-level, not whole-block).
+	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "gemini-2.5-flash" {
+		t.Errorf("Roles[stager]=%+v want {\"\" gemini-2.5-flash}", rc)
+	}
+}
+
+// --- TestOverlayRolesFieldMerge ---
+
+// TestOverlayRolesFieldMerge is the FR-R3 regression guard — MIRRORS TestOverlayProvidersFieldMerge. A
+// higher layer setting only [role.planner].model must NOT erase a lower layer's [role.planner].provider
+// (the per-role analog of the FR37a provider field-merge). Plus: a src-only role is added; an untouched
+// dst role survives.
+func TestOverlayRolesFieldMerge(t *testing.T) {
+	dst := &Config{
+		Roles: map[string]RoleConfig{
+			"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
+			"message": {Provider: "pi", Model: "gpt-5.4-nano"},
+		},
+	}
+	src := &Config{
+		Roles: map[string]RoleConfig{
+			"planner": {Model: "gemini-3.5-pro"},                        // higher layer sets MODEL only
+			"arbiter": {Provider: "codex", Model: "gpt-5.1-codex-mini"}, // new role
+		},
+	}
+	overlay(dst, src)
+
+	// planner.provider SURVIVES (lower-layer field not clobbered by a higher-layer partial):
+	if rc := dst.Roles["planner"]; rc.Provider != "agy" {
+		t.Errorf("planner.provider=%q want agy (field-merge must preserve lower-layer provider)", rc.Provider)
+	}
+	// planner.model OVERRIDDEN by the higher layer:
+	if rc := dst.Roles["planner"]; rc.Model != "gemini-3.5-pro" {
+		t.Errorf("planner.model=%q want gemini-3.5-pro (higher layer wins)", rc.Model)
+	}
+	// new role added:
+	if rc, ok := dst.Roles["arbiter"]; !ok {
+		t.Errorf("arbiter role missing (src-only role must be added)")
+	} else if rc.Provider != "codex" || rc.Model != "gpt-5.1-codex-mini" {
+		t.Errorf("arbiter=%+v want {codex gpt-5.1-codex-mini}", rc)
+	}
+	// untouched dst role survives:
+	if rc := dst.Roles["message"]; rc.Provider != "pi" || rc.Model != "gpt-5.4-nano" {
+		t.Errorf("message=%+v want {pi gpt-5.4-nano} (untouched role must survive)", rc)
+	}
+}
+
+// --- TestOverlay_V2Scalars ---
+
+// TestOverlay_V2Scalars proves non-zero-wins + partial-merge preservation for ConfigVersion/MaxCommits/
+// BinaryExtensions — mirrors TestOverlayPartial.
+func TestOverlay_V2Scalars(t *testing.T) {
+	// (a) src sets all three → overridden.
+	dst := Defaults() // ConfigVersion=2, MaxCommits=12, BinaryExtensions=nil
+	src := &Config{ConfigVersion: 3, MaxCommits: 7, BinaryExtensions: []string{"x", "y"}}
+	overlay(&dst, src)
+	if dst.ConfigVersion != 3 {
+		t.Errorf("ConfigVersion=%d want 3 (src non-zero wins)", dst.ConfigVersion)
+	}
+	if dst.MaxCommits != 7 {
+		t.Errorf("MaxCommits=%d want 7 (src non-zero wins)", dst.MaxCommits)
+	}
+	if len(dst.BinaryExtensions) != 2 {
+		t.Errorf("BinaryExtensions=%v want [x y] (src non-empty wins = REPLACE)", dst.BinaryExtensions)
+	}
+
+	// (b) src OMITS them (zero/nil) → Defaults() baseline preserved (partial merge, no clobber).
+	dst = Defaults()
+	src = &Config{Provider: "pi"} // none of the v2 scalars set
+	overlay(&dst, src)
+	if dst.ConfigVersion != CurrentConfigVersion {
+		t.Errorf("ConfigVersion=%d want CurrentConfigVersion (nil src must not clobber)", dst.ConfigVersion)
+	}
+	if dst.MaxCommits != 12 {
+		t.Errorf("MaxCommits=%d want 12 (zero src must not clobber)", dst.MaxCommits)
+	}
+	if dst.BinaryExtensions != nil {
+		t.Errorf("BinaryExtensions=%v want nil (empty src must not clobber)", dst.BinaryExtensions)
+	}
+}
+
 // --- TestOverlayNilSrc ---
 
 func TestOverlayNilSrc(t *testing.T) {

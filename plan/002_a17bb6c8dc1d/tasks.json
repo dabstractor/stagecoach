@@ -171,7 +171,7 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Add per-role config fields, file decode structs, and overlay logic",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Extend the Config struct with Roles map, ConfigVersion, MaxCommits, BinaryExtensions, Commits, and Single fields. Add [role.<role>] decode structs to file.go. Update materialize() and overlay() to handle these.",
               "subtasks": [
                 {
@@ -195,7 +195,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Add [role.<role>] decode structs + update materialize() + overlay()",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1"
@@ -224,7 +224,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Add per-role + decompose env vars to loadEnv() and flag handling to loadFlags()",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1"

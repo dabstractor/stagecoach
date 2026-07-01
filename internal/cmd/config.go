@@ -160,6 +160,8 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # subject_target_chars  = 50      # target subject-line length for truncation
 # output                = "raw"   # agent output mode: "raw" | "json" — applies to parsing across ALL providers
 # strip_code_fence      = true    # strip ` + "`" + ` fences from agent output (all providers)
+# max_commits           = 12      # safety cap on auto-decompose (PRD §9.14 FR-M4); default 12
+# binary_extensions     = []      # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
 # NOTE: [generation] output/strip_code_fence override any per-provider [provider.<name>] values.
 
 # ---------------------------------------------------------------------------
@@ -184,4 +186,28 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # default_provider   = "zai"
 # bare_flags         = ["--no-mcp", "--ephemeral"]
 # output             = "raw"            # raw | json
+
+# ---------------------------------------------------------------------------
+# [role.<role>] — per-role provider/model overrides (PRD §16.4, §9.15 FR-R1–R5)
+# ---------------------------------------------------------------------------
+# The four agent roles — planner, stager, message, arbiter — each resolve their provider/model
+# independently. A single [defaults] (above) covers ALL roles; a [role.*] table overrides it for the
+# roles you care about. Both fields "" -> inherit [defaults]. Precedence (highest wins):
+#   flag > STAGEHAND_<ROLE>_* env > [role.*] config > [defaults] > provider manifest default.
+#
+# [role.planner]
+# provider = "agy"
+# model    = "gemini-2.5-pro"
+#
+# [role.stager]            # tooled agent that runs git; needs tooled_flags in its provider manifest
+# provider = "agy"
+# model    = "gemini-2.5-flash"
+#
+# [role.message]           # bare commit-message agent — inherits [defaults] (omit to inherit)
+# provider = ""            # "" -> inherit [defaults].provider
+# model    = ""            # "" -> inherit [defaults].model
+#
+# [role.arbiter]           # bare leftover arbiter — inherits [defaults]
+# provider = ""
+# model    = ""
 `

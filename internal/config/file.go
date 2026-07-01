@@ -15,13 +15,23 @@ import (
 // [provider.X]).  UNEXPORTED: only file.go decodes into these.
 // ---------------------------------------------------------------------------
 
-// fileConfig is the §16.2 file decode target: NESTED (matches [defaults]/[generation]/[provider.X]),
+// fileRoleConfig is the FILE decode twin of config.RoleConfig (§16.4). A [role.planner] table decodes into
+// fc.Role["planner"] EXACTLY as a [provider.pi] table decodes into fc.Provider["pi"]. materialize converts
+// each to a typed RoleConfig. Both fields "" ⇒ the role inherits the global [defaults] (FR-R2).
+type fileRoleConfig struct {
+	Provider string `toml:"provider"`
+	Model    string `toml:"model"`
+}
+
+// fileConfig is the §16.2 file decode target: NESTED (matches [defaults]/[generation]/[role.X]/[provider.X]),
 // with Timeout as a STRING ("120s") because go-toml/v2 cannot decode "120s" into time.Duration and the
 // resolved Config is flat/plain (S1). loadTOML materializes this into a *Config. UNEXPORTED.
 type fileConfig struct {
-	Defaults   fileDefaults              `toml:"defaults"`
-	Generation fileGeneration            `toml:"generation"`
-	Provider   map[string]map[string]any `toml:"provider"` // nil if the file has no [provider] table
+	ConfigVersion int                       `toml:"config_version"` // V2 — top-level metadata key (§9.17 FR-B4)
+	Defaults      fileDefaults              `toml:"defaults"`
+	Generation    fileGeneration            `toml:"generation"`
+	Role          map[string]fileRoleConfig `toml:"role"`     // V2 — [role.<role>] per-role tables (§16.4)
+	Provider      map[string]map[string]any `toml:"provider"` // nil if the file has no [provider] table
 }
 
 type fileDefaults struct {
@@ -33,12 +43,14 @@ type fileDefaults struct {
 }
 
 type fileGeneration struct {
-	MaxDiffBytes        int    `toml:"max_diff_bytes"`
-	MaxMdLines          int    `toml:"max_md_lines"`
-	MaxDuplicateRetries int    `toml:"max_duplicate_retries"`
-	SubjectTargetChars  int    `toml:"subject_target_chars"`
-	Output              string `toml:"output"`
-	StripCodeFence      *bool  `toml:"strip_code_fence"`
+	MaxDiffBytes        int      `toml:"max_diff_bytes"`
+	MaxMdLines          int      `toml:"max_md_lines"`
+	MaxDuplicateRetries int      `toml:"max_duplicate_retries"`
+	SubjectTargetChars  int      `toml:"subject_target_chars"`
+	Output              string   `toml:"output"`
+	StripCodeFence      *bool    `toml:"strip_code_fence"`
+	MaxCommits          int      `toml:"max_commits"`       // V2 — safety cap on auto-decompose (§9.14 FR-M4)
+	BinaryExtensions    []string `toml:"binary_extensions"` // V2 — extra non-text exts to filter (§9.1 FR3a)
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +175,25 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if g.StripCodeFence != nil {
 		c.StripCodeFence = g.StripCodeFence
 	}
+	// V2 [generation] scalars — non-zero/non-empty copy (matches every existing materialize field).
+	if g.MaxCommits != 0 {
+		c.MaxCommits = g.MaxCommits
+	}
+	if len(g.BinaryExtensions) > 0 {
+		c.BinaryExtensions = g.BinaryExtensions
+	}
+	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
+	if fc.ConfigVersion != 0 {
+		c.ConfigVersion = fc.ConfigVersion
+	}
+	// V2 per-role table — convert map[string]fileRoleConfig → map[string]RoleConfig, copying every present
+	// role (an all-empty [role.X] ⇒ "inherit global", harmless — mirrors Providers' whole-map copy).
+	if len(fc.Role) > 0 {
+		c.Roles = make(map[string]RoleConfig, len(fc.Role))
+		for role, frc := range fc.Role {
+			c.Roles[role] = RoleConfig{Provider: frc.Provider, Model: frc.Model}
+		}
+	}
 	c.Providers = fc.Provider // nil-safe: nil if no [provider] table
 	return c
 }
@@ -232,6 +263,35 @@ func overlay(dst, src *Config) {
 				dst.Providers[name][k] = v // field-level override; lower-layer fields survive
 			}
 		}
+	}
+	// V2 [role.<role>] — per-role FIELD-MERGE across config layers (PRD §16.4 FR-R3). A field a higher layer
+	// sets overrides that one field only; fields the higher layer omits survive from lower layers. This is
+	// the typed (Provider/Model) analog of the [provider.X] field-merge above (PRD §9.8 FR37a): a repo
+	// [role.planner] model="X" must NOT erase a global [role.planner] provider="agy". Nil-safe.
+	if len(src.Roles) > 0 {
+		if dst.Roles == nil {
+			dst.Roles = make(map[string]RoleConfig, len(src.Roles))
+		}
+		for role, rc := range src.Roles {
+			existing := dst.Roles[role] // zero value if absent — fine (inherit-global sentinel)
+			if rc.Provider != "" {
+				existing.Provider = rc.Provider
+			}
+			if rc.Model != "" {
+				existing.Model = rc.Model
+			}
+			dst.Roles[role] = existing
+		}
+	}
+	// V2 scalars — non-zero/non-empty wins (matches every existing overlay field).
+	if src.ConfigVersion != 0 {
+		dst.ConfigVersion = src.ConfigVersion
+	}
+	if src.MaxCommits != 0 {
+		dst.MaxCommits = src.MaxCommits
+	}
+	if len(src.BinaryExtensions) > 0 {
+		dst.BinaryExtensions = src.BinaryExtensions // REPLACE, not append (runtime denylist merge is P2.M1)
 	}
 }
 
