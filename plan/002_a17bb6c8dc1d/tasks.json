@@ -622,7 +622,7 @@
           "type": "Milestone",
           "id": "P3.M2",
           "title": "Decompose Core Pipeline (plan → stage → generate → commit loop)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Implement the decompose core: per-role resolution, planner agent call with JSON parse and single-shortcut, tooled stager agent call with snapshot freezing and overlap scheduling, per-concept message generation via tree-to-tree diff, and the serialized publication loop (commit-tree + update-ref CAS chain).",
           "tasks": [
             {
@@ -723,14 +723,14 @@
               "type": "Task",
               "id": "P3.M2.T4",
               "title": "Per-concept message generation + serialized publication loop",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement per-concept message generation (tree-to-tree concept diff + bare message agent) and the serialized publication loop (commit-tree + update-ref CAS chain per concept, empty-concept skip, stager retry).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M2.T4.S1",
                   "title": "Implement per-concept message gen (tree-to-tree diff) + serialized publication loop",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M2.T3.S1",
@@ -764,14 +764,14 @@
               "type": "Task",
               "id": "P3.M3.T1",
               "title": "Arbiter agent call + JSON parse",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the arbiter agent invocation: build the system+user prompt with commits-made-this-run + leftover diff, call the bare arbiter agent, parse JSON output.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M3.T1.S1",
                   "title": "Implement arbiter agent call + JSON parse in decompose/arbiter.go",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M1.T1.S3",
