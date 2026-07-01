@@ -25,6 +25,26 @@ type CmdSpec struct {
 	Env     []string // os.Environ() + manifest Env entries as "KEY=VAL" (manifest wins on collision)
 }
 
+// RenderMode selects which flag-set Manifest.Render appends after the system-prompt block (PRD §11.5,
+// §12.2). It is the v2 "mode" dimension of the §12.2 rendering ternary
+// `args += (mode == "tooled") ? m.tooled_flags : m.bare_flags`.
+//
+// Render's `mode ...RenderMode` parameter is VARIADIC and defaults to RenderBare when omitted, so every
+// v1 caller (generate.CommitStaged, pkg/stagehand.runPipeline, all tests) is unchanged. The decompose
+// stager (P3.M2.T3) passes RenderTooled.
+type RenderMode string
+
+const (
+	// RenderBare appends BareFlags — tools off, session-less, chrome-less, ephemeral (PRD §12.1).
+	// The DEFAULT mode. Serves the planner / message / arbiter roles and the entire v1 single-commit path.
+	RenderBare RenderMode = "bare"
+
+	// RenderTooled appends TooledFlags — tools on, git-scoped, non-interactive (PRD §12.1 tooled_flags).
+	// Serves the stager role (the only role that mutates the index, §11.5). Errors at render time if
+	// TooledFlags is nil/empty — that provider cannot serve as a stager.
+	RenderTooled RenderMode = "tooled"
+)
+
 // Render turns a provider Manifest + a (model, provider, sysPrompt, userPayload) tuple into a CmdSpec
 // per PRD §12.2 "Command rendering algorithm". It is the bridge "logical intent → concrete argv".
 //
@@ -39,8 +59,8 @@ type CmdSpec struct {
 //	+ (provider_flag, provider)        if provider_flag != "" && provider != ""
 //	+ (model_flag,    model)           if model_flag    != "" && model    != ""
 //	+ (system_prompt_flag, sys)        if system_prompt_flag != "" && sys != ""
-//	+ bare_flags...
-//	+ print_flag                       if print_flag != ""        // ALWAYS LAST (after bare_flags)
+//	+ (mode==tooled ? tooled_flags : bare_flags)...    # §11.5/§12.2 mode ternary; default bare
+//	+ print_flag                       if print_flag != ""        // ALWAYS LAST (after flags)
 //	+ payload                          per prompt_delivery switch (positional/flag only)
 //
 // model/provider default to the resolved manifest's DefaultModel/DefaultProvider when the param is ""
@@ -52,7 +72,14 @@ type CmdSpec struct {
 // == "" the sys prompt is PREPENDED to the payload as a fallback (delimiter "\n\n", matching every
 // §12.5–§12.7 narrative). The unified payload is then routed by the delivery switch: stdin → spec.Stdin;
 // positional → trailing arg; flag → prompt_flag + payload.
-func (m Manifest) Render(model, provider, sysPrompt, userPayload string) (*CmdSpec, error) {
+//
+// `mode ...RenderMode` (variadic, default `RenderBare`) selects the flag-set appended after the
+// system-prompt block: `RenderBare` (the default) appends `BareFlags` (tools off — planner/message/
+// arbiter + the entire v1 single-commit path); `RenderTooled` appends `TooledFlags` (git tools on —
+// the stager role, §11.5). `RenderTooled` on a manifest with nil/empty `TooledFlags` returns an
+// error — that provider cannot serve as a stager (§12.1). The variadic default keeps every v1 caller
+// unchanged.
+func (m Manifest) Render(model, provider, sysPrompt, userPayload string, mode ...RenderMode) (*CmdSpec, error) {
 	if err := m.Validate(); err != nil {
 		return nil, fmt.Errorf("provider render %q: %w", m.Name, err)
 	}
@@ -80,7 +107,23 @@ func (m Manifest) Render(model, provider, sysPrompt, userPayload string) (*CmdSp
 	if *r.SystemPromptFlag != "" && sysPrompt != "" {
 		args = append(args, *r.SystemPromptFlag, sysPrompt)
 	}
-	args = append(args, r.BareFlags...)
+	// §11.5 / §12.2 mode: bare (tools off, planner/message/arbiter + all v1 callers) vs tooled
+	// (git tools on, stager). Defaults to bare when mode is omitted (variadic) — keeps every v1
+	// caller byte-for-byte unchanged. Tooled with empty tooled_flags is an error (§12.1: that
+	// provider cannot serve as a stager).
+	selectedMode := RenderBare
+	if len(mode) > 0 && mode[0] != "" {
+		selectedMode = mode[0]
+	}
+	switch selectedMode {
+	case RenderTooled:
+		if len(r.TooledFlags) == 0 {
+			return nil, fmt.Errorf("provider %q: tooled mode requires non-empty tooled_flags", m.Name)
+		}
+		args = append(args, r.TooledFlags...)
+	default: // RenderBare — also the fallback for "" / any unrecognized mode (PRD §12.2 ternary)
+		args = append(args, r.BareFlags...)
+	}
 	if *r.PrintFlag != "" {
 		args = append(args, *r.PrintFlag) // LAST per §12.2
 	}

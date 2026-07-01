@@ -3,8 +3,24 @@ package provider
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+// ---------------------------------------------------------------------------
+// Fixtures for mode tests
+// ---------------------------------------------------------------------------
+
+// dualModeManifest returns a minimal manifest with BOTH BareFlags and TooledFlags set,
+// used by the 5 new Render-mode tests.
+func dualModeManifest() Manifest {
+	return Manifest{
+		Name:        "dual",
+		Command:     strPtr("agent"),
+		BareFlags:   []string{"--no-tools"},
+		TooledFlags: []string{"--allowed-tools", "git:*", "approval-mode", "auto"},
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Test 1 (THE KEYSTONE): Golden Args + Stdin for ALL 6 built-in providers
@@ -235,6 +251,93 @@ func TestRender_CompatWithRenderArgs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Test 11: Default mode (no mode arg) is bare
+// ---------------------------------------------------------------------------
+
+func TestRender_DefaultModeIsBare(t *testing.T) {
+	m := dualModeManifest()
+	spec, err := m.Render("", "", "", "U")
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	// BareFlags present, TooledFlags absent
+	if !containsPair(spec.Args, "--no-tools", "") && !containsToken(spec.Args, "--no-tools") {
+		t.Errorf("bare flag --no-tools missing from args: %v", spec.Args)
+	}
+	if containsToken(spec.Args, "--allowed-tools") {
+		t.Errorf("tooled flag --allowed-tools should NOT appear in bare mode: %v", spec.Args)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: Explicit bare mode is identical to default (no mode arg)
+// ---------------------------------------------------------------------------
+
+func TestRender_ExplicitBareMode(t *testing.T) {
+	m := dualModeManifest()
+	specDefault, _ := m.Render("", "", "", "U")
+	specBare, _ := m.Render("", "", "", "U", RenderBare)
+	if !reflect.DeepEqual(specDefault.Args, specBare.Args) {
+		t.Errorf("explicit bare differs from default:\n default=%v\n bare   =%v", specDefault.Args, specBare.Args)
+	}
+	if specDefault.Stdin != specBare.Stdin {
+		t.Errorf("Stdin differs: default=%q bare=%q", specDefault.Stdin, specBare.Stdin)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: Tooled mode appends TooledFlags (not BareFlags)
+// ---------------------------------------------------------------------------
+
+func TestRender_TooledModeAppendsTooledFlags(t *testing.T) {
+	m := dualModeManifest()
+	spec, err := m.Render("", "", "", "U", RenderTooled)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	if !containsToken(spec.Args, "--allowed-tools") {
+		t.Errorf("tooled flag --allowed-tools missing: %v", spec.Args)
+	}
+	if containsToken(spec.Args, "--no-tools") {
+		t.Errorf("bare flag --no-tools should NOT appear in tooled mode: %v", spec.Args)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: Tooled mode with empty/nil TooledFlags returns an error
+// ---------------------------------------------------------------------------
+
+func TestRender_TooledModeEmptyFlagsErrors(t *testing.T) {
+	bareOnly := Manifest{Name: "stager", Command: strPtr("agent"), BareFlags: []string{"--no-tools"}} // TooledFlags nil
+	_, err := bareOnly.Render("", "", "", "U", RenderTooled)
+	if err == nil {
+		t.Fatal("expected error for tooled mode with nil TooledFlags, got nil")
+	}
+	if !strings.Contains(err.Error(), "tooled mode requires non-empty tooled_flags") {
+		t.Errorf("error message missing expected text: %v", err)
+	}
+	if !strings.Contains(err.Error(), "stager") {
+		t.Errorf("error message missing provider name: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: All golden providers still render in default bare mode (regression)
+// ---------------------------------------------------------------------------
+
+func TestRender_AllGoldenProvidersStillBareDefault(t *testing.T) {
+	for _, b := range []Manifest{builtinPi(), builtinClaude(), builtinGemini(), builtinOpenCode(), builtinCodex(), builtinCursor()} {
+		spec, err := b.Render("", "", "<sys>", "<user>") // no mode
+		if err != nil {
+			t.Errorf("provider %q: no-mode Render error: %v", b.Name, err)
+		}
+		if spec.Command == "" {
+			t.Errorf("provider %q: empty Command", b.Name)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
@@ -242,6 +345,16 @@ func TestRender_CompatWithRenderArgs(t *testing.T) {
 func containsPair(args []string, flag, val string) bool {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == flag && args[i+1] == val {
+			return true
+		}
+	}
+	return false
+}
+
+// containsToken checks whether a single token appears anywhere in args.
+func containsToken(args []string, token string) bool {
+	for _, a := range args {
+		if a == token {
 			return true
 		}
 	}

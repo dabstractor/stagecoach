@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Manifest Schema Extensions (tooled_flags, experimental, Render mode)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Extend the Manifest struct with TooledFlags and Experimental fields, update MergeManifest and Resolve accordingly, and update Render to accept a bare|tooled mode that selects BareFlags vs TooledFlags. This enables the stager role to run in tooled mode (git tools on, scoped) while all other roles stay bare.",
           "tasks": [
             {
@@ -58,14 +58,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Update Render to accept bare/tooled mode parameter",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add a RenderMode type and update Manifest.Render to accept an optional mode parameter. In bare mode (default), BareFlags are appended. In tooled mode, TooledFlags are appended (error if empty). All existing callers pass no mode → default bare → backward-compatible.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add RenderMode type + update Render signature with variadic mode parameter",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -93,14 +93,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Add agy built-in provider manifest",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the Antigravity CLI (agy) provider manifest per §12.5.1 and add it to BuiltinManifests(). Create the providers/agy.toml reference file.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Implement builtinAgy() manifest + add to BuiltinManifests() + create providers/agy.toml",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
