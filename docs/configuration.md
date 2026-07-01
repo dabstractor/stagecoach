@@ -28,38 +28,66 @@ When a `[provider.<name>]` section appears in a config file, its fields are **me
 | Global | `$XDG_CONFIG_HOME/stagehand/config.toml` (default `~/.config/stagehand/config.toml`) | Written by `stagehand config init`; read as Layer 3. |
 | Repo-local | `./.stagehand.toml` | Gitignored; read as Layer 4; overrides global. |
 
-Use `stagehand config path` to print the resolved global path. Use `stagehand config init` to write a fully-commented example to the global path.
+Use `stagehand config path` to print the resolved global path.
+
+#### Bootstrap (`config init`)
+
+`stagehand config init` writes a **populated, working config** to the global path by default. It:
+1. Runs cascading provider detection (highest-priority installed built-in, in order: pi, opencode, cursor, agy, gemini, codex, claude).
+2. Writes `[defaults] provider = "<detected>"` and that provider's per-role model defaults UNCOMMENTED (from the FR-D4 table).
+3. Writes other installed providers as commented-out `[role.*]` blocks (one-line uncomment to route a role to a different agent).
+4. If no agent is detected, defaults to `"pi"` with an annotation.
+
+The written path is always printed on success.
+
+| Flag | Description |
+|------|-------------|
+| `--provider <name>` | Target a specific built-in provider instead of auto-detecting. Unknown names exit 1. |
+| `--force` | Overwrite an existing config file. |
+| `--template` | Write the inert all-commented reference config (v1 behavior) instead of a populated bootstrap. |
+
+If a config file already exists, it is NOT overwritten unless `--force` is passed (exit code 1). Parent directories are created as needed.
 
 > [!NOTE]
 > Point discovery at a specific file with `--config <path>` (or the `STAGEHAND_CONFIG` env var). It overrides global and repo-local file discovery and is honored by every command — including the default commit action — so a provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` directly. A missing explicit path (typo'd `--config` or `STAGEHAND_CONFIG`) fails fast with exit 1; only the discovery default tolerates a missing global file.
 
 ## File format
 
-The config file uses TOML with three section groups. Every line in the `config init` template is commented out, so the file is inert until you uncomment lines you want to use:
+The config file uses TOML with several section groups. By default, `config init` writes a **populated config** with the detected provider and per-role models UNCOMMENTED so the tool works immediately. Use `config init --template` to get the inert all-commented reference (every line commented out).
+
+**Populated config** (default `config init` output):
 
 ```toml
-# [defaults] — top-level Stagehand behavior
+config_version = 2
+
 [defaults]
-# provider       = "pi"
+provider = "claude"
 # model          = ""
 # timeout        = "120s"
 # auto_stage_all = true
 # verbose        = false
 
-# [generation] — diff capture and output tuning
-[generation]
-# max_diff_bytes        = 300000
-# max_md_lines          = 100
-# max_duplicate_retries = 3
-# subject_target_chars  = 50
-# output                = "raw"    # uncomment to override the per-provider manifest value
-# strip_code_fence      = true     # uncomment to override the per-provider manifest value
+# --- per-role models for the default provider "claude" (PRD §16.4, §9.15) ---
 
-# [provider.<name>] — override a built-in or define a new provider
-# [provider.pi]
-# default_model    = "glm-5.2"
-# default_provider = "zai"
+[role.planner]
+model = "opus"
+
+[role.stager]
+model = "sonnet"
+
+[role.message]
+model = "haiku"
+
+[role.arbiter]
+model = "sonnet"
+
+# [generation] — diff capture and output tuning (commented defaults)
+# [generation]
+# max_diff_bytes        = 300000
+# ...
 ```
+
+**Inert template** (`config init --template`): all lines commented out, including `[defaults]`, `[generation]`, `[provider.*]`, and `[role.*]` sections — documents every available option without changing any defaults.
 
 ## Built-in defaults
 

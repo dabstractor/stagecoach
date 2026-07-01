@@ -321,14 +321,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Populated config init (FR-B1/B2)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Rewrite config init to write a populated, working config (not an inert commented template). Runs cascading detection, writes [defaults] provider + uncommented [role.*] per-role models for the detected provider. Add --provider, --force, --template flags.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Rewrite config init to populated bootstrap + add --provider/--force/--template flags",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T3.S1",
@@ -350,14 +350,14 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "Config upgrade command (FR-B5)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Implement `stagehand config upgrade` — rewrites an existing config to CurrentConfigVersion in place, preserving user values for keys that still exist and commenting out removed/renamed keys.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "Implement config upgrade command",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S1"
