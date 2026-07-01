@@ -69,19 +69,12 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 
 	cfg := Defaults() // Layer 1 (by value)
 
-	// Resolve the global-file path: --config > STAGEHAND_CONFIG > discovery.
+	// Resolve the global-file path: --config > STAGEHAND_CONFIG > discovery (via ResolveConfigPath).
 	// `explicit` records whether the path came from the user (--config / STAGEHAND_CONFIG) vs the
 	// discovery default — a missing EXPLICIT path is a hard error (PRD §15.2 "overrides discovery");
 	// a missing discovery file is the normal "layer absent" sentinel (tolerated below).
-	globalPath := opts.ConfigPathOverride
+	globalPath := ResolveConfigPath(opts.ConfigPathOverride)
 	explicit := opts.ConfigPathOverride != "" || os.Getenv("STAGEHAND_CONFIG") != ""
-	if globalPath == "" {
-		if env := os.Getenv("STAGEHAND_CONFIG"); env != "" {
-			globalPath = env
-		} else {
-			globalPath = globalConfigPath()
-		}
-	}
 
 	// Layer 2: global TOML (or --config/STAGEHAND_CONFIG override). A present file is overlaid; a
 	// read/parse error is wrapped. A MISSING file is "layer absent" (no error) for discovery, but a

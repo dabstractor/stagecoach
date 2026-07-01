@@ -93,6 +93,19 @@ func globalConfigPath() string {
 	return filepath.Join(home, ".config", "stagehand", "config.toml")
 }
 
+// ResolveConfigPath returns the config file path, honoring overrides in the SAME precedence as
+// config.Load: flagConfig (--config) > STAGEHAND_CONFIG env > GlobalConfigPath() discovery. It is the
+// shared resolver for config.Load and the config init/upgrade/path subcommands (bugfix-001 Issue 4).
+func ResolveConfigPath(flagConfig string) string {
+	if flagConfig != "" {
+		return flagConfig
+	}
+	if env := os.Getenv("STAGEHAND_CONFIG"); env != "" {
+		return env
+	}
+	return GlobalConfigPath()
+}
+
 // repoLocalConfigPath returns the REPO-LOCAL config path (PRD §16.1 layer 3):
 // the file ./.stagehand.toml.
 // (Contract + PRD §16.1; NOT arch §2.8's .stagehand/config.toml directory.)

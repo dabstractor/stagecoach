@@ -334,6 +334,63 @@ func TestGlobalConfigPath_Wrapper(t *testing.T) {
 	}
 }
 
+// --- TestResolveConfigPath ---
+
+func TestResolveConfigPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		flag      string
+		envVal    string // value for STAGEHAND_CONFIG (set via t.Setenv)
+		setupXDG  bool   // if true, set XDG_CONFIG_HOME to a temp dir before calling
+		wantPath  string // expected result; empty means "use GlobalConfigPath() with XDG temp dir"
+	}{
+		{
+			name:     "flag_only",
+			flag:     "/tmp/my-config.toml",
+			envVal:   "",
+			wantPath: "/tmp/my-config.toml",
+		},
+		{
+			name:     "env_only",
+			flag:     "",
+			envVal:   "/tmp/env-config.toml",
+			wantPath: "/tmp/env-config.toml",
+		},
+		{
+			name:     "flag_beats_env",
+			flag:     "/tmp/flag-config.toml",
+			envVal:   "/tmp/env-config.toml",
+			wantPath: "/tmp/flag-config.toml",
+		},
+		{
+			name:     "neither_global",
+			flag:     "",
+			envVal:   "",
+			setupXDG: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Always clear STAGEHAND_CONFIG to prevent ambient env leaking
+			t.Setenv("STAGEHAND_CONFIG", tc.envVal)
+
+			var want string
+			if tc.setupXDG {
+				xdg := t.TempDir()
+				t.Setenv("XDG_CONFIG_HOME", xdg)
+				want = filepath.Join(xdg, "stagehand", "config.toml")
+			} else {
+				want = tc.wantPath
+			}
+
+			got := ResolveConfigPath(tc.flag)
+			if got != want {
+				t.Errorf("ResolveConfigPath(%q) = %q, want %q", tc.flag, got, want)
+			}
+		})
+	}
+}
+
 // --- TestGlobalConfigPath_UserHomeDirFails ---
 
 func TestGlobalConfigPath_UserHomeDirFails(t *testing.T) {
