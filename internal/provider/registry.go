@@ -12,7 +12,7 @@ import (
 // DefaultProvider returns the first name in this list that the caller reports installed. It MUST stay
 // in sync with BuiltinManifests() keys — a test (TestPreferredBuiltins_MatchesBuiltinKeys) enforces this.
 // Only built-in names are candidates; user-defined §12.8 providers are never auto-selected.
-var preferredBuiltins = []string{"pi", "claude", "gemini", "opencode", "codex", "cursor"}
+var preferredBuiltins = []string{"pi", "claude", "gemini", "opencode", "codex", "cursor", "agy"}
 
 // Registry holds the fully-merged provider manifests: the built-in defaults (BuiltinManifests, P1.M2.T2)
 // overlaid field-by-field with user overrides via MergeManifest (S2) per PRD §16.1/§12.8. Brand-new §12.8

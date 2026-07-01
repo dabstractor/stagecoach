@@ -1,7 +1,7 @@
 package provider
 
 // BuiltinManifests returns the compiled-in default provider manifests (PRD §12.3 pi, §12.4 claude,
-// §12.5 gemini, §12.6 opencode, §12.7 codex + cursor), keyed by manifest name. These are the zero-config
+// §12.5 gemini, §12.6 opencode, §12.7 codex + cursor, §12.5.1 agy), keyed by manifest name. These are the zero-config
 // defaults a user override (config [provider.<name>]) merges onto via MergeManifest (S2) in the registry
 // (P1.M2.T3).
 //
@@ -11,8 +11,9 @@ package provider
 // registry path is safe either way — fresh-per-call additionally guards against any direct mutation.
 //
 // The full §12.7 set: pi + claude (the "explicit tool-disable switch" pair, S1), gemini + opencode
-// (read-only constraint, S2), and codex + cursor (read-only constraint, S3 — codex's two revisions
-// resolve the external_deps.md §codex discrepancy). All six providers are now present.
+// (read-only constraint, S2), codex + cursor (read-only constraint, S3 — codex's two revisions
+// resolve the external_deps.md §codex discrepancy), and §12.5.1 agy (experimental — the Gemini-CLI
+// successor). All seven providers are now present.
 func BuiltinManifests() map[string]Manifest {
 	return map[string]Manifest{
 		"pi":       builtinPi(),
@@ -21,6 +22,7 @@ func BuiltinManifests() map[string]Manifest {
 		"opencode": builtinOpenCode(),
 		"codex":    builtinCodex(),
 		"cursor":   builtinCursor(),
+		"agy":      builtinAgy(),
 	}
 }
 
@@ -114,6 +116,46 @@ func builtinGemini() Manifest {
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
 		// Subcommand, PromptFlag, DefaultProvider, JsonField, RetryInstruction, Env: nil (absent in §12.5).
+	}
+}
+
+// builtinAgy returns the agy (Google Antigravity CLI) manifest per PRD §12.5.1 (the Gemini-CLI successor,
+// superseded gemini on 2026-06-18). Flag surface assembled from Antigravity's docs + issue tracker (NOT
+// yet `--help`-verified) → ships Experimental=true (§12.7.2) until §12.5.1.1 items clear. agy has no
+// first-class system-prompt flag → sys is PREPENDED to the payload (§12.2), like gemini. `--approval-mode
+// default` is a read-only, never-ask profile (§12.7.1 "read-only constraint").
+//
+// BLOCKER (§12.5.1.1 item 1): agy -p/--print silently drops stdout when spawned from a non-TTY (issue #76)
+// — exactly how stagehand spawns agents. agy is unusable for any role until upstream fixes it or stagehand
+// PTY-shims the child. Shipping experimental keeps it discoverable/ready.
+//
+// STAGER: TooledFlags is intentionally nil — agy CANNOT serve as a stager until §12.5.1.1 item 4 (the
+// scoped, non-interactive, git-scoped tool combo) is verified. RenderTooled errors on nil tooled_flags.
+//
+// NOTE: (1) PrintFlag="-p" (NON-NIL). (2) SystemPromptFlag/ProviderFlag are strPtr("") — §12.5.1 WRITES
+// them "" (NON-NIL empty): no sys flag (sys prepended, §12.2), no sub-provider. (3) default_model is
+// "gemini-2.5-pro" (agy runs the Gemini family). (4) Experimental=boolPtr(true) (ships experimental).
+// (5) Subcommand/PromptFlag/DefaultProvider/JsonField/RetryInstruction/Env/TooledFlags are nil (absent,
+// like gemini). agy is the Gemini-lineage twin of gemini, differing in default_model + Experimental.
+func builtinAgy() Manifest {
+	return Manifest{
+		Name:             "agy",
+		Detect:           strPtr("agy"),
+		Command:          strPtr("agy"),
+		PromptDelivery:   strPtr("stdin"),
+		PrintFlag:        strPtr("-p"),
+		ModelFlag:        strPtr("-m"),
+		DefaultModel:     strPtr("gemini-2.5-pro"),
+		SystemPromptFlag: strPtr(""), // §12.5.1 NON-NIL empty — no sys flag; sys prepended to payload (§12.2)
+		ProviderFlag:     strPtr(""), // §12.5.1 NON-NIL empty — agy has no sub-provider
+		BareFlags: []string{
+			"--approval-mode", "default", // read-only, never-ask profile (don't auto-run tools)
+		},
+		Output:         strPtr("raw"),
+		StripCodeFence: boolPtr(true),
+		Experimental:   boolPtr(true), // §12.5.1.1 ships experimental (non-TTY stdout drop, issue #76)
+		// TooledFlags: nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
+		// Subcommand, PromptFlag, DefaultProvider, JsonField, RetryInstruction, Env: nil (absent, like gemini).
 	}
 }
 

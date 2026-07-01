@@ -32,7 +32,7 @@ func TestPreferredBuiltins_MatchesBuiltinKeys(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. NewRegistry with no overrides → exactly the 6 built-ins, each Get-able
+// 2. NewRegistry with no overrides → exactly the 7 built-ins, each Get-able
 // ---------------------------------------------------------------------------
 
 func TestNewRegistry_NoOverrides_HasAllBuiltins(t *testing.T) {

@@ -114,6 +114,23 @@ strip_code_fence = true
 // cursorTOML — PRD §12.7 cursor VERBATIM (no revision). Decoding it must match builtinCursor().
 // Note: detect/command = "agent" (≠ name "cursor"); subcommand = [] decodes to a NON-NIL empty slice
 // (FINDING D) — builtinCursor sets Subcommand: []string{}.
+const agyTOML = `name = "agy"
+detect = "agy"
+command = "agy"
+prompt_delivery = "stdin"
+print_flag = "-p"
+model_flag = "-m"
+default_model = "gemini-2.5-pro"
+system_prompt_flag = ""
+provider_flag = ""
+bare_flags = [
+  "--approval-mode", "default",
+]
+output = "raw"
+strip_code_fence = true
+experimental = true
+`
+
 const cursorTOML = `name = "cursor"
 detect = "agent"
 command = "agent"
@@ -159,15 +176,15 @@ func renderArgs(m Manifest, provider, model, sys string) []string {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: KeysAndCount — exactly 6 keys: pi, claude, gemini, opencode, codex, cursor
+// Test 1: KeysAndCount — exactly 7 keys: pi, claude, gemini, opencode, codex, cursor, agy
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_KeysAndCount(t *testing.T) {
 	m := BuiltinManifests()
-	if len(m) != 6 {
-		t.Fatalf("BuiltinManifests() returned %d keys, want 6", len(m))
+	if len(m) != 7 {
+		t.Fatalf("BuiltinManifests() returned %d keys, want 7", len(m))
 	}
-	for _, k := range []string{"pi", "claude", "gemini", "opencode", "codex", "cursor"} {
+	for _, k := range []string{"pi", "claude", "gemini", "opencode", "codex", "cursor", "agy"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing key %q", k)
 		}
@@ -320,6 +337,7 @@ func TestBuiltinManifests_DecodeParity(t *testing.T) {
 		{"opencode", builtinOpenCode(), opencodeTOML}, // opencodeTOML = verbatim §12.6
 		{"codex", builtinCodex(), codexTOML},          // codexTOML = §12.7 codex with BOTH revisions
 		{"cursor", builtinCursor(), cursorTOML},       // cursorTOML = verbatim §12.7 cursor
+		{"agy", builtinAgy(), agyTOML},                // agyTOML = §12.5.1 (experimental=true)
 	} {
 		var decoded Manifest
 		if err := toml.Unmarshal([]byte(tc.toml), &decoded); err != nil {
@@ -598,5 +616,66 @@ func TestBuiltinManifests_RenderedCommand_Cursor(t *testing.T) {
 	}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("cursor rendered argv:\n got %v\nwant %v", argv, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 17: AgyFields — every agy field asserted (experimental=true, nil tooled_flags)
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_AgyFields(t *testing.T) {
+	m := builtinAgy()
+	assertStr(t, "Detect", m.Detect, "agy")
+	assertStr(t, "Command", m.Command, "agy")
+	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
+	assertStr(t, "PrintFlag", m.PrintFlag, "-p") // NON-NIL (agy HAS a -p print flag per §12.5.1)
+	assertStr(t, "ModelFlag", m.ModelFlag, "-m")
+	assertStr(t, "DefaultModel", m.DefaultModel, "gemini-2.5-pro")
+	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "") // NON-NIL explicit empty (prepend)
+	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
+	assertNilStr(t, "DefaultProvider", m.DefaultProvider)    // ABSENT → nil
+	wantBare := []string{"--approval-mode", "default"}
+	if !reflect.DeepEqual(m.BareFlags, wantBare) {
+		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
+	}
+	assertStr(t, "Output", m.Output, "raw")
+	if m.StripCodeFence == nil || *m.StripCodeFence != true {
+		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+	// Experimental: NON-NIL true (ships experimental per §12.5.1.1)
+	if m.Experimental == nil || *m.Experimental != true {
+		t.Errorf("Experimental = %v, want non-nil true", m.Experimental)
+	}
+	// TooledFlags: nil — agy cannot stager until §12.5.1.1 item 4 is verified
+	if m.TooledFlags != nil {
+		t.Errorf("TooledFlags = %v, want nil", m.TooledFlags)
+	}
+	// Absent → nil
+	if m.Subcommand != nil {
+		t.Errorf("Subcommand = %v, want nil", m.Subcommand)
+	}
+	assertNilStr(t, "PromptFlag", m.PromptFlag)
+	assertNilStr(t, "JsonField", m.JsonField)
+	assertNilStr(t, "RetryInstruction", m.RetryInstruction)
+	if m.Env != nil {
+		t.Errorf("Env = %v, want nil", m.Env)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 18: RenderedCommand_Agy — stdin delivery: argv has NO payload (piped);
+//         sys prepended to stdin payload; print_flag "-p" last.
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Agy(t *testing.T) {
+	argv := renderArgs(builtinAgy(), "", "", "<sys>") // model="" → default gemini-2.5-pro
+	want := []string{
+		"agy", "-m", "gemini-2.5-pro",
+		"--approval-mode", "default",
+		"-p", // print_flag LAST per §12.2 (agy has -p unlike gemini)
+		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin (NOT in argv). No sys/provider flag.
+	}
+	if !reflect.DeepEqual(argv, want) {
+		t.Errorf("agy rendered argv:\n got %v\nwant %v", argv, want)
 	}
 }

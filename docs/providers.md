@@ -1,10 +1,10 @@
 # Provider manifests
 
-Full reference for Stagehand's provider manifest system: the 18-field schema, command-rendering algorithm, the 6 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
+Full reference for Stagehand's provider manifest system: the 18-field schema, command-rendering algorithm, the 7 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
 
 ## What a manifest is
 
-A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Six providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via `[provider.<name>]` sections in their config file.
+A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Seven providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via `[provider.<name>]` sections in their config file.
 
 See the [shipped `providers/*.toml` files](../providers/) for human-readable reference manifests — `providers/pi.toml` is the cleanest template.
 
@@ -52,9 +52,9 @@ args = [subcommand...]
 
 When `system_prompt_flag` is empty, the system prompt is **prepended** to the payload (delimited by `\n\n`) instead of being delivered via a flag.
 
-## The 6 built-in providers
+## The 7 built-in providers
 
-Auto-detection order (first installed = default): **pi**, claude, gemini, opencode, codex, cursor. User-defined providers are never auto-selected.
+Auto-detection order (first installed = default): **pi**, claude, gemini, opencode, codex, cursor, agy. User-defined providers are never auto-selected.
 
 | Provider | Delivery | Print flag | Model flag | Default model | System prompt flag | Tool-disable approach |
 |----------|----------|-----------|-----------|----------------|-------------------|----------------------|
@@ -64,12 +64,13 @@ Auto-detection order (first installed = default): **pi**, claude, gemini, openco
 | `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) |
 | `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) |
 | `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) |
+| `agy` | stdin | `-p` | `-m` | `gemini-2.5-pro` | (prepended) | Read-only constraint (`--approval-mode default`) |
 
-Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`.
+Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) due to a non-TTY stdout drop bug (issue #76) and cannot serve as a stager (empty `tooled_flags`).
 
 ## Tools-disable asymmetry
 
-The six providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
+The seven providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
 
 - **Explicit switch** (pi, claude): The manifest passes literal flags that **disable tools** (pi: `--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-session`; claude: `--tools "" --setting-sources "" --no-session-persistence`). This is the cleanest approach — the agent runs as a pure text-in/text-out process.
 

@@ -1,0 +1,76 @@
+# ============================================================================
+# agy — reference manifest for the `agy` built-in provider (PRD §12.5.1)
+# ============================================================================
+#
+# WHAT THIS FILE IS
+#   Human-readable REFERENCE DOCUMENTATION for the `agy` provider. It mirrors the
+#   compiled-in manifest `builtinAgy()` in internal/provider/builtin.go BYTE-FOR-BYTE
+#   (modulo comments). It is NOT loaded at runtime — built-ins are compiled into
+#   the Go binary. (The config loader reads .stagehand.toml, not this directory.)
+#
+# HOW TO USE IT AS A CONFIG OVERRIDE (PRD §12.8)
+#   To override the built-in agy (or define a variant), copy the FIELD lines below
+#   (NOT this header) into your config file and wrap them in a `[provider.agy]`
+#   table, then DELETE the `name = "agy"` line — the table key supplies the name.
+#   Change only the fields you want; fields you omit inherit the built-in's value.
+#       # ~/.config/stagehand/config.toml  (or a repo-local .stagehand.toml)
+#       [provider.agy]
+#       default_model = "gemini-2.5-flash"  # e.g. override only the model
+#
+# RENDERED COMMAND (PRD §12.5.1)
+#   agy -m gemini-2.5-pro --approval-mode default -p < "<sys>\n\n<user payload>"
+#   (stdin delivery; agy appends stdin to the prompt)
+#
+# EXPERIMENTAL (§12.5.1.1): agy ships experimental due to a non-TTY stdout drop
+#   bug (issue #76): `agy -p`/`--print` silently drops stdout when invoked from a
+#   non-TTY — exactly how stagehand spawns agents. agy is unusable for any role
+#   until upstream fixes it or stagehand PTY-shims the child.
+#
+# STAGER: agy cannot serve as a stager — TooledFlags is intentionally nil.
+#   RenderTooled errors on nil tooled_flags. This won't change until §12.5.1.1
+#   item 4 (the scoped, non-interactive, git-scoped tool combo) is verified.
+#
+# TOOLS-DISABLE CATEGORY (§12.7.1): READ-ONLY CONSTRAINT — agy has NO global
+#   tool-disable switch; `--approval-mode default` constrains it to a read-only,
+#   never-ask profile (don't auto-run tools, never prompt).
+# ============================================================================
+
+# --- identity / discovery ---
+name = "agy"                     # identity; the value you pass to --provider.
+detect = "agy"                   # command looked up on $PATH to decide "installed".
+command = "agy"                  # the executable to run (exec.LookPath; may be absolute).
+
+# --- prompt delivery ---
+prompt_delivery = "stdin"        # agy reads stdin; appended to the prompt.
+
+# --- non-interactive mode ---
+print_flag = "-p"                 # non-interactive print mode flag.
+
+# --- model ---
+model_flag = "-m"                # the model-selection flag.
+default_model = "gemini-2.5-pro" # model used if the user specifies none (agy runs the Gemini family).
+
+# --- system prompt ---
+system_prompt_flag = ""          # NON-NIL empty: agy has NO system-prompt flag — the system prompt
+                                 # is PREPENDED to the payload (§12.2 fallback).
+
+# --- sub-provider ---
+provider_flag = ""               # NON-NIL empty: agy has no sub-provider concept.
+# default_provider is ABSENT (nil) — agy has no sub-provider, so the key is omitted.
+
+# --- bare mode (§12.7.1: read-only constraint) ---
+bare_flags = [                   # appended VERBATIM to enforce a read-only, never-ask profile.
+  "--approval-mode", "default",  # don't auto-run tools, never ask (choices: default|auto_edit|yolo).
+]
+
+# --- output ---
+output = "raw"                   # cleaned stdout IS the commit message (DEFAULT).
+strip_code_fence = true          # strip one layer of ``` / ~~~ if the agent wraps the output.
+
+# --- experimental ---
+experimental = true              # ships experimental (non-TTY stdout drop, issue #76; §12.5.1.1).
+
+# --- absent fields (PRD §12.1) ---
+# tooled_flags, subcommand, prompt_flag, default_provider, json_field, retry_instruction,
+# and [env] are NOT set for agy and therefore omitted above. tooled_flags is intentionally
+# nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
