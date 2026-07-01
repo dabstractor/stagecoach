@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Add TooledFlags and Experimental fields to Manifest struct",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Add the two new manifest fields per §12.1, update Resolve() to fill Experimental to *false when nil, and update Validate() if needed. Follow the pointer-scalar convention for Experimental (*bool) and the slice convention for TooledFlags ([]string, same regime as BareFlags).",
               "subtasks": [
                 {
@@ -40,7 +40,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Update MergeManifest for TooledFlags + Experimental",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"

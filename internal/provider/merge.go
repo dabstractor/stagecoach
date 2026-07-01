@@ -10,7 +10,7 @@ package provider
 //     An EXPLICIT "" or false OVERRIDES (non-nil is the override signal — the whole reason S1 made the
 //     optional scalars pointers; a present zero value is a deliberate override, not an absence).
 //
-//  2. Slices (Subcommand, BareFlags): len(override.Slice) > 0 → result REPLACES base's slice
+//  2. Slices (Subcommand, BareFlags, TooledFlags): len(override.Slice) > 0 → result REPLACES base's slice
 //     wholesale (NO element-level merge). An empty/nil override slice is treated as "not overridden"
 //     (base preserved).
 //
@@ -68,6 +68,9 @@ func MergeManifest(base, override Manifest) Manifest {
 	if override.StripCodeFence != nil {
 		out.StripCodeFence = override.StripCodeFence
 	}
+	if override.Experimental != nil {
+		out.Experimental = override.Experimental
+	}
 	if override.RetryInstruction != nil {
 		out.RetryInstruction = override.RetryInstruction
 	}
@@ -78,6 +81,9 @@ func MergeManifest(base, override Manifest) Manifest {
 	}
 	if len(override.BareFlags) > 0 {
 		out.BareFlags = override.BareFlags
+	}
+	if len(override.TooledFlags) > 0 {
+		out.TooledFlags = override.TooledFlags
 	}
 
 	// --- regime 3: Env map — key-by-key merge into a FRESH map (override keys win; base keys survive) ---

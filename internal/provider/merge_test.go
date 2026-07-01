@@ -26,6 +26,8 @@ func sampleBase() Manifest {
 		RetryInstruction: strPtr(""),
 		Subcommand:       nil,
 		BareFlags:        []string{"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session"},
+		TooledFlags:      []string{"--allowed-tools", "git:*", "--approval-mode", "auto"},
+		Experimental:     boolPtr(true),
 		Env:              map[string]string{"A": "1", "B": "2"},
 	}
 }
@@ -80,8 +82,16 @@ func TestMergeManifest_PartialOverride_OnlyTouchedFieldChanges(t *testing.T) {
 	if !reflect.DeepEqual(merged.BareFlags, base.BareFlags) {
 		t.Errorf("BareFlags = %v, want %v", merged.BareFlags, base.BareFlags)
 	}
+	if !reflect.DeepEqual(merged.TooledFlags, base.TooledFlags) {
+		t.Errorf("TooledFlags = %v, want %v", merged.TooledFlags, base.TooledFlags)
+	}
 	if !reflect.DeepEqual(merged.Subcommand, base.Subcommand) {
 		t.Errorf("Subcommand = %v, want %v", merged.Subcommand, base.Subcommand)
+	}
+
+	// Experimental must match base.
+	if merged.Experimental == nil || base.Experimental == nil || *merged.Experimental != *base.Experimental {
+		t.Errorf("Experimental = %v, want %v", merged.Experimental, base.Experimental)
 	}
 
 	// Env must match base.
@@ -99,6 +109,7 @@ func TestMergeManifest_ExplicitZeroPointerWins(t *testing.T) {
 	merged := MergeManifest(base, Manifest{
 		StripCodeFence: boolPtr(false), // explicit false — must NOT inherit base's true
 		PrintFlag:      strPtr(""),     // explicit empty — must NOT inherit base's "-p"
+		Experimental:   boolPtr(false), // base has true → explicit false must win
 	})
 
 	if merged.StripCodeFence == nil || *merged.StripCodeFence != false {
@@ -106,6 +117,9 @@ func TestMergeManifest_ExplicitZeroPointerWins(t *testing.T) {
 	}
 	if merged.PrintFlag == nil || *merged.PrintFlag != "" {
 		t.Errorf("explicit print_flag=\"\" lost (got %v)", merged.PrintFlag)
+	}
+	if merged.Experimental == nil || *merged.Experimental != false {
+		t.Errorf("explicit experimental=false lost (got %v)", merged.Experimental)
 	}
 }
 
@@ -130,6 +144,24 @@ func TestMergeManifest_NonEmptySliceReplacesWholesale(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestMergeManifest_TooledFlagsReplacedWholesale
+// ---------------------------------------------------------------------------
+
+func TestMergeManifest_TooledFlagsReplacedWholesale(t *testing.T) {
+	base := sampleBase()
+	override := Manifest{TooledFlags: []string{"--yolo"}}
+	merged := MergeManifest(base, override)
+
+	if !reflect.DeepEqual(merged.TooledFlags, []string{"--yolo"}) {
+		t.Errorf("TooledFlags = %v, want [\"--yolo\"] (wholesale replace)", merged.TooledFlags)
+	}
+	// The OTHER flag slice must be untouched.
+	if !reflect.DeepEqual(merged.BareFlags, base.BareFlags) {
+		t.Errorf("BareFlags = %v, want %v (untouched)", merged.BareFlags, base.BareFlags)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestMergeManifest_EmptyOrNilSlicePreservesBase
 // ---------------------------------------------------------------------------
 
@@ -144,13 +176,20 @@ func TestMergeManifest_EmptyOrNilSlicePreservesBase(t *testing.T) {
 	if !reflect.DeepEqual(mergedNil.Subcommand, base.Subcommand) {
 		t.Errorf("nil override: Subcommand = %v, want %v", mergedNil.Subcommand, base.Subcommand)
 	}
+	if !reflect.DeepEqual(mergedNil.TooledFlags, base.TooledFlags) {
+		t.Errorf("nil override: TooledFlags = %v, want %v", mergedNil.TooledFlags, base.TooledFlags)
+	}
 
 	// (b) non-nil empty slice → treated as "not overridden" (keep base)
 	mergedEmpty := MergeManifest(base, Manifest{
-		Subcommand: []string{}, // non-nil but empty
+		Subcommand:  []string{}, // non-nil but empty
+		TooledFlags: []string{},
 	})
 	if !reflect.DeepEqual(mergedEmpty.Subcommand, base.Subcommand) {
 		t.Errorf("empty override: Subcommand = %v, want %v", mergedEmpty.Subcommand, base.Subcommand)
+	}
+	if !reflect.DeepEqual(mergedEmpty.TooledFlags, base.TooledFlags) {
+		t.Errorf("empty override: TooledFlags = %v, want %v", mergedEmpty.TooledFlags, base.TooledFlags)
 	}
 }
 
@@ -195,6 +234,7 @@ func TestMergeManifest_DoesNotMutateInputs(t *testing.T) {
 		envBefore[k] = v
 	}
 	bareBefore := append([]string(nil), base.BareFlags...)
+	tooledBefore := append([]string(nil), base.TooledFlags...)
 
 	override := Manifest{Env: map[string]string{"X": "9", "B": "overridden"}}
 	_ = MergeManifest(base, override) // discard result; we care about base's integrity
@@ -204,6 +244,9 @@ func TestMergeManifest_DoesNotMutateInputs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(base.BareFlags, bareBefore) {
 		t.Errorf("MergeManifest mutated base.BareFlags: got %v, want %v", base.BareFlags, bareBefore)
+	}
+	if !reflect.DeepEqual(base.TooledFlags, tooledBefore) {
+		t.Errorf("MergeManifest mutated base.TooledFlags: got %v, want %v", base.TooledFlags, tooledBefore)
 	}
 }
 
