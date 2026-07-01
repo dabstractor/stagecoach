@@ -987,3 +987,149 @@ func TestGenerateCommit_ManifestDefaultRaw_StillWorks(t *testing.T) {
 		t.Errorf("Message = %q, want %q (default raw path must be unchanged)", res.Message, "feat: default raw ok")
 	}
 }
+
+// --- Decompose tests (PRD §14.1 / P4.M2.T1.S1) ---
+
+// TestDecompose_SingleDelegates verifies that Decompose with Single:true delegates to GenerateCommit:
+// a staged change produces exactly one new commit, err==nil, DecomposeResult has 1 commit with
+// Provider populated. This is the NO-OP delegation path (PRD §14.1).
+func TestDecompose_SingleDelegates(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: decompose single"})
+	repoDir, _ := os.Getwd()
+
+	writeFile(t, repoDir, "a.txt", "change\n")
+	stageFile(t, repoDir, "a.txt")
+
+	before := headSHA(t, repoDir)
+	res, err := Decompose(context.Background(), DecomposeOptions{Options: Options{Provider: "stub"}, Single: true})
+	if err != nil {
+		t.Fatalf("Decompose(Single:true): %v", err)
+	}
+
+	after := headSHA(t, repoDir)
+	if after == before {
+		t.Error("HEAD did not advance — no commit was created")
+	}
+	if len(res.Commits) != 1 {
+		t.Errorf("len(res.Commits) = %d, want 1", len(res.Commits))
+	}
+	if res.Amended != 0 {
+		t.Errorf("Amended = %d, want 0", res.Amended)
+	}
+	if res.Provider == "" {
+		t.Error("Provider is empty, want non-empty (resolved from GenerateCommit)")
+	}
+	if len(res.Commits) > 0 {
+		c := res.Commits[0]
+		if c.Provider == "" {
+			t.Error("Commits[0].Provider is empty, want non-empty")
+		}
+		if !shaRe.MatchString(c.CommitSHA) {
+			t.Errorf("Commits[0].CommitSHA = %q, want hex SHA", c.CommitSHA)
+		}
+		if !strings.HasPrefix(c.Subject, "feat: decompose single") {
+			t.Errorf("Commits[0].Subject = %q, want prefix %q", c.Subject, "feat: decompose single")
+		}
+	}
+}
+
+// TestDecompose_Count1Delegates verifies that Decompose with Count:1 delegates to GenerateCommit
+// (same NO-OP path as Single:true). Proves the Count==1 short-circuit.
+func TestDecompose_Count1Delegates(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: decompose count1"})
+	repoDir, _ := os.Getwd()
+
+	writeFile(t, repoDir, "b.txt", "change\n")
+	stageFile(t, repoDir, "b.txt")
+
+	before := headSHA(t, repoDir)
+	res, err := Decompose(context.Background(), DecomposeOptions{Options: Options{Provider: "stub"}, Count: 1})
+	if err != nil {
+		t.Fatalf("Decompose(Count:1): %v", err)
+	}
+
+	after := headSHA(t, repoDir)
+	if after == before {
+		t.Error("HEAD did not advance — no commit was created")
+	}
+	if len(res.Commits) != 1 {
+		t.Errorf("len(res.Commits) = %d, want 1", len(res.Commits))
+	}
+	if res.Amended != 0 {
+		t.Errorf("Amended = %d, want 0", res.Amended)
+	}
+	if res.Provider == "" {
+		t.Error("Provider is empty, want non-empty")
+	}
+	if len(res.Commits) > 0 {
+		c := res.Commits[0]
+		if !shaRe.MatchString(c.CommitSHA) {
+			t.Errorf("Commits[0].CommitSHA = %q, want hex SHA", c.CommitSHA)
+		}
+		if !strings.HasPrefix(c.Subject, "feat: decompose count1") {
+			t.Errorf("Commits[0].Subject = %q, want prefix %q", c.Subject, "feat: decompose count1")
+		}
+	}
+}
+
+// TestDecompose_MultiEntry_RoleError verifies that the multi-commit path is entered (not the
+// Single/Count==1 short-circuit). On systems with a tooled-capable provider installed, the stager
+// fallback succeeds and the planner fails (stub can't produce a valid plan); on systems without
+// one, ResolveRoles fails at the stager. Either error proves the multi-commit path was entered.
+func TestDecompose_MultiEntry_RoleError(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: x"})
+	repoDir, _ := os.Getwd()
+
+	// Dirty, UN-STAGED working tree (nothing staged — precondition FR-M1).
+	writeFile(t, repoDir, "b.txt", "un-staged change\n")
+	// Do NOT stageFile — the multi-commit path requires nothing staged.
+
+	res, err := Decompose(context.Background(), DecomposeOptions{})
+	if err == nil {
+		t.Fatal("expected error (multi-commit path: ResolveRoles stager or planner failure), got nil")
+	}
+
+	// Prove the multi-commit path was entered: either ResolveRoles stager failed ("stager"+"tooled")
+	// or the planner failed ("planner" or "decompose"). Both prove the single-delegation short-circuit
+	// did NOT fire (which would have hit GenerateCommit and returned ErrNothingToCommit for unstaged).
+	errMsg := err.Error()
+	multiPath := strings.Contains(errMsg, "stager") || strings.Contains(errMsg, "planner") || strings.Contains(errMsg, "decompose")
+	if !multiPath {
+		t.Errorf("error %q does not look like a multi-commit path error (want \"stager\", \"planner\", or \"decompose\")", errMsg)
+	}
+	// Must NOT be ErrNothingToCommit (that would mean GenerateCommit ran = single path).
+	if errors.Is(err, ErrNothingToCommit) {
+		t.Error("error is ErrNothingToCommit — the single-delegation path was incorrectly entered")
+	}
+	if len(res.Commits) != 0 {
+		t.Errorf("res.Commits = %d entries, want 0 (ResolveRoles/planner failed pre-loop)", len(res.Commits))
+	}
+}
+
+// TestDecompose_StagerOverride verifies that a Stager RoleModel override flows into cfg.Roles["stager"]
+// and is consumed by ResolveRoles. Setting Stager.Provider="nonexistent" produces an "unknown provider"
+// error (distinct from the tooled_flags error), proving the override was applied.
+func TestDecompose_StagerOverride(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: x"})
+	repoDir, _ := os.Getwd()
+
+	// Dirty, UN-STAGED working tree.
+	writeFile(t, repoDir, "b.txt", "un-staged change\n")
+
+	res, err := Decompose(context.Background(), DecomposeOptions{
+		Stager: RoleModel{Provider: "nonexistent"},
+	})
+	if err == nil {
+		t.Fatal("expected error (ResolveRoles unknown provider), got nil")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "stager") {
+		t.Errorf("error %q does not contain \"stager\"", errMsg)
+	}
+	if !strings.Contains(errMsg, "unknown provider") {
+		t.Errorf("error %q does not contain \"unknown provider\" (override not applied?)", errMsg)
+	}
+	if len(res.Commits) != 0 {
+		t.Errorf("res.Commits = %d entries, want 0 (ResolveRoles failed pre-loop)", len(res.Commits))
+	}
+}

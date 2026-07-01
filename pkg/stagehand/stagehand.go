@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dustin/stagehand/internal/config"
+	"github.com/dustin/stagehand/internal/decompose"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
 	"github.com/dustin/stagehand/internal/prompt"
@@ -53,6 +54,45 @@ type Result struct {
 	Message   string // the full commit message (subject [+ body])
 	Provider  string // the resolved provider name
 	Model     string // the resolved model
+}
+
+// RoleModel is a per-role provider/model override for DecomposeOptions (PRD §14.1, §16.4, FR-R1–R5).
+// A zero value ⇒ the role inherits the global default (FR-R2); a non-empty field overrides just that
+// field (FR-R3 field-merge). Models are provider-specific (FR-R5).
+//
+// Stable as of v2.0.
+type RoleModel struct {
+	Provider string
+	Model    string
+}
+
+// DecomposeOptions configures the multi-commit pipeline (PRD §14.1, §13.6). The embedded Options
+// (Provider/Model/DryRun/Timeout/Verbose/VerboseOn/Config) apply to the MESSAGE role. Count 0 ⇒
+// auto-decompose (planner decides); >0 ⇒ force exactly Count commits. Single true ⇒ bypass the planner
+// (delegate to GenerateCommit, the v1 single-commit path). MaxCommits 0 ⇒ the config default (12);
+// >0 ⇒ override the safety cap. Planner/Stager/Arbiter are per-role overrides (zero ⇒ global default).
+//
+// Stable as of v2.0.
+type DecomposeOptions struct {
+	Options              // embedded: Provider/Model/DryRun/Timeout/… apply to the MESSAGE role
+	Count      int       // 0 ⇒ auto-decompose (planner decides); >0 ⇒ force exactly Count commits
+	Single     bool      // true ⇒ bypass planner, force one GenerateCommit (--single)
+	MaxCommits int       // 0 ⇒ config default (12); >0 ⇒ override the auto-decompose safety cap
+	Planner    RoleModel // planner role provider/model (zero ⇒ global default)
+	Stager     RoleModel // stager role provider/model (zero ⇒ global default)
+	Arbiter    RoleModel // arbiter role provider/model (zero ⇒ global default)
+}
+
+// DecomposeResult is the outcome of Decompose: the ordered commits created this run (PRD §14.1).
+// Commits is one Result per concept that produced a commit (empty concepts skipped). Amended is the
+// number of commits the arbiter folded leftovers into (0 if the arbiter did not run or made a new commit).
+// Provider is the resolved MESSAGE-role provider (for display).
+//
+// Stable as of v2.0.
+type DecomposeResult struct {
+	Commits  []Result // one per concept that produced a commit (empty concepts skipped)
+	Amended  int      // number of commits the arbiter folded leftovers into
+	Provider string   // resolved MESSAGE provider (for display)
 }
 
 // ---- Typed-error re-exports (so library consumers import only pkg/stagehand) ----
@@ -115,6 +155,52 @@ func GenerateCommit(ctx context.Context, opts Options) (Result, error) {
 	return runPipeline(ctx, deps, cfg, opts.SystemExtra, opts.DryRun)
 }
 
+// Decompose turns a dirty, un-staged working tree into N logically-coherent commits (PRD §14.1, §13.6).
+// It is a NO-OP that delegates to GenerateCommit when opts.Single is true or opts.Count == 1; otherwise it
+// activates the planner→stager→message→arbiter pipeline (via internal/decompose.Decompose).
+// PRECONDITION (FR-M1): the caller must ensure NOTHING is staged — Decompose does NOT re-check
+// HasStagedChanges (the CLI gates on it). Options.DryRun is honored ONLY on the single-delegation path
+// (the multi-commit pipeline always commits). On a per-concept failure (FR-M12) the already-landed commits
+// are returned alongside a *RescueError / *CASError (the same typed errors GenerateCommit returns).
+//
+// Stable as of v2.0.
+func Decompose(ctx context.Context, opts DecomposeOptions) (DecomposeResult, error) {
+	// (1) NO-OP delegation (PRD §14.1): Single or Count==1 → GenerateCommit.
+	// Honors opts.DryRun (the single path is dry-run aware).
+	if opts.Single || opts.Count == 1 {
+		r, err := GenerateCommit(ctx, opts.Options)
+		if err != nil {
+			return DecomposeResult{}, err
+		}
+		return DecomposeResult{Commits: []Result{r}, Amended: 0, Provider: r.Provider}, nil
+	}
+
+	// (2) Multi-commit path: resolve config → ResolveRoles → build Deps → internal Decompose → map.
+	cfg, repoDir, err := resolveDecomposeConfig(ctx, opts)
+	if err != nil {
+		return DecomposeResult{}, err
+	}
+	overrides, err := provider.DecodeUserOverrides(cfg.Providers)
+	if err != nil {
+		return DecomposeResult{}, fmt.Errorf("decompose: provider overrides: %w", err)
+	}
+	reg := provider.NewRegistry(overrides)
+	roleManifests, roleModels, err := decompose.ResolveRoles(cfg, reg)
+	if err != nil {
+		return DecomposeResult{}, fmt.Errorf("decompose: %w", err)
+	}
+	deps := decompose.Deps{
+		Git:      git.New(repoDir),
+		Registry: reg,
+		Config:   cfg,
+		Roles:    roleManifests,
+		Verbose:  ui.NewVerbose(opts.Verbose, cfg.Verbose),
+		Out:      opts.Verbose, // nil-safe rescue/CAS sink (G-DEPS-OUT-SINK)
+	}
+	ires, derr := decompose.Decompose(ctx, deps)
+	return mapDecomposeResult(ires, roleModels), derr // partial + error on FR-M12
+}
+
 // resolveConfig loads the full 7-layer config and applies Options overrides (highest precedence).
 func resolveConfig(ctx context.Context, opts Options) (config.Config, string, error) {
 	repoDir, err := os.Getwd()
@@ -148,6 +234,76 @@ func resolveConfig(ctx context.Context, opts Options) (config.Config, string, er
 	}
 
 	return cfg, repoDir, nil
+}
+
+// resolveDecomposeConfig loads the full 7-layer config (reusing resolveConfig) and layers the
+// decompose-specific overrides (Count/Single/MaxCommits/per-role) on top.
+func resolveDecomposeConfig(ctx context.Context, opts DecomposeOptions) (config.Config, string, error) {
+	cfg, repoDir, err := resolveConfig(ctx, opts.Options)
+	if err != nil {
+		return config.Config{}, "", err
+	}
+
+	// Decompose-specific overrides (highest precedence — explicit intent wins over file/env/git-config).
+	// G-COUNT-MAXCOMMITS-ZERO-IS-INHERIT: 0 means "inherit the config value" (don't clobber).
+	if opts.Count != 0 {
+		cfg.Commits = opts.Count
+	}
+	if opts.Single {
+		cfg.Single = true // already short-circuited above, but set for consistency
+	}
+	if opts.MaxCommits != 0 {
+		cfg.MaxCommits = opts.MaxCommits
+	}
+
+	// Per-role field-merge (G-ROLE-FIELD-MERGE): zero RoleModel ⇒ inherit global (FR-R2).
+	if opts.Planner.Provider != "" || opts.Planner.Model != "" ||
+		opts.Stager.Provider != "" || opts.Stager.Model != "" ||
+		opts.Arbiter.Provider != "" || opts.Arbiter.Model != "" {
+		if cfg.Roles == nil {
+			cfg.Roles = map[string]config.RoleConfig{}
+		}
+		applyRoleOverride(cfg.Roles, "planner", opts.Planner)
+		applyRoleOverride(cfg.Roles, "stager", opts.Stager)
+		applyRoleOverride(cfg.Roles, "arbiter", opts.Arbiter)
+	}
+
+	return cfg, repoDir, nil
+}
+
+// applyRoleOverride applies a non-zero RoleModel onto cfg.Roles[role] (FR-R3 field-merge).
+func applyRoleOverride(roles map[string]config.RoleConfig, role string, rm RoleModel) {
+	if rm.Provider == "" && rm.Model == "" {
+		return
+	}
+	rc := roles[role] // copy (zero value if absent)
+	if rm.Provider != "" {
+		rc.Provider = rm.Provider
+	}
+	if rm.Model != "" {
+		rc.Model = rm.Model
+	}
+	roles[role] = rc
+}
+
+// mapDecomposeResult converts the internal decompose.DecomposeResult to the public DecomposeResult,
+// injecting Provider from roleModels.Message (the internal result has no Provider field).
+func mapDecomposeResult(ires decompose.DecomposeResult, roleModels decompose.RoleModels) DecomposeResult {
+	commits := make([]Result, len(ires.Commits))
+	for i, c := range ires.Commits {
+		commits[i] = Result{
+			CommitSHA: c.SHA,
+			Subject:   c.Subject,
+			Message:   c.Message,
+			Provider:  roleModels.Message.Provider,
+			Model:     roleModels.Message.Model,
+		}
+	}
+	return DecomposeResult{
+		Commits:  commits,
+		Amended:  ires.Amended,
+		Provider: roleModels.Message.Provider,
+	}
 }
 
 // buildDeps resolves the provider manifest from the registry and constructs generate.Deps.
