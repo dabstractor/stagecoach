@@ -338,11 +338,11 @@ func TestGlobalConfigPath_Wrapper(t *testing.T) {
 
 func TestResolveConfigPath(t *testing.T) {
 	tests := []struct {
-		name      string
-		flag      string
-		envVal    string // value for STAGEHAND_CONFIG (set via t.Setenv)
-		setupXDG  bool   // if true, set XDG_CONFIG_HOME to a temp dir before calling
-		wantPath  string // expected result; empty means "use GlobalConfigPath() with XDG temp dir"
+		name     string
+		flag     string
+		envVal   string // value for STAGEHAND_CONFIG (set via t.Setenv)
+		setupXDG bool   // if true, set XDG_CONFIG_HOME to a temp dir before calling
+		wantPath string // expected result; empty means "use GlobalConfigPath() with XDG temp dir"
 	}{
 		{
 			name:     "flag_only",

@@ -111,7 +111,7 @@ func TestConfigPath_ConfigFlag_PrintsOverride(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupNoRepo(t)
-	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG, not the env
+	t.Setenv("STAGEHAND_CONFIG", "")                   // isolate: this test exercises the FLAG, not the env
 	override := filepath.Join(t.TempDir(), "foo.toml") // parent (TempDir) exists
 
 	var out bytes.Buffer

@@ -87,6 +87,7 @@ func setupStubRepo(t *testing.T, stubOut string) string {
 	repo := t.TempDir()
 	initRepo(t, repo)
 	chdir(t, repo)
+	isolateHome(t) // prevent bootstrap from writing to real XDG
 
 	// Write .stagehand.toml with the stub provider (read by BOTH CLI PersistentPreRunE
 	// and GenerateCommit via DISCOVERY — design §2/§7).
@@ -115,6 +116,7 @@ func setupStubRepoWithTimeout(t *testing.T, stubOut string, sleepMs int, timeout
 	repo := t.TempDir()
 	initRepo(t, repo)
 	chdir(t, repo)
+	isolateHome(t) // prevent bootstrap from writing to real XDG
 
 	toml := fmt.Sprintf(`[provider.stub]
 command = %q
@@ -136,6 +138,15 @@ timeout = "%s"
 	return repo
 }
 
+// isolateHome sets HOME and XDG_CONFIG_HOME to a temp dir so config.Load bootstrap does not
+// write to the real XDG path (O1: test-suite global-config pollution).
+func isolateHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+}
+
 // setupStubRepoRaw creates a temp git repo with a raw .stagehand.toml (not committed).
 // Used by tests that need precise control over what's tracked.
 func setupStubRepoRaw(t *testing.T, tomlBody string) string {
@@ -143,6 +154,7 @@ func setupStubRepoRaw(t *testing.T, tomlBody string) string {
 	repo := t.TempDir()
 	initRepo(t, repo)
 	chdir(t, repo)
+	isolateHome(t) // prevent bootstrap from writing to real XDG
 	writeConfigFile(t, repo, ".stagehand.toml", tomlBody)
 	return repo
 }
@@ -221,6 +233,7 @@ func TestRunDefault_RootCommit(t *testing.T) {
 	repo := t.TempDir()
 	initRepo(t, repo)
 	chdir(t, repo)
+	isolateHome(t) // prevent bootstrap from writing to real XDG
 
 	// Write .stagehand.toml BUT don't commit it — repo is unborn, we test root commit.
 	// The config file will be part of the root commit's tree.
@@ -1135,6 +1148,7 @@ func TestRunDefault_RepoLocalNoticeOnce_Issue5(t *testing.T) {
 	repo := t.TempDir()
 	initRepo(t, repo)
 	chdir(t, repo)
+	isolateHome(t) // prevent bootstrap from writing to real XDG
 
 	// Repo-local config: top-level provider= (fires the §19 notice) + [provider.stub] (resolves it).
 	toml := fmt.Sprintf("[defaults]\nprovider = \"stub\"\n\n[provider.stub]\ncommand = %q\nprompt_delivery = \"stdin\"\noutput = \"raw\"\nstrip_code_fence = true\n", bin)
