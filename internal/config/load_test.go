@@ -972,3 +972,178 @@ func TestLoad_TimeoutViaEnvInteger(t *testing.T) {
 		t.Errorf("Timeout=%v want 45s (from STAGEHAND_TIMEOUT=45)", cfg.Timeout)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// configVersionNotice — pure helper unit tests (all 5+ branches)
+// ---------------------------------------------------------------------------
+
+func TestConfigVersionNotice(t *testing.T) {
+	tests := []struct {
+		name       string
+		fileLoaded bool
+		version    int
+		wantEmpty  bool
+		contains   []string // if wantEmpty==false, these substrings must appear
+	}{
+		{"no file, version 0", false, 0, true, nil},
+		{"no file, version current", false, CurrentConfigVersion, true, nil},
+		{"file loaded, current version", true, CurrentConfigVersion, true, nil},
+		{"file loaded, missing (0)", true, 0, false, []string{"has no config_version", "config upgrade", "config init --force"}},
+		{"file loaded, older (1)", true, 1, false, []string{"schema version 1", "current is 2", "config upgrade", "config init --force"}},
+		{"file loaded, ahead (3)", true, 3, false, []string{"schema version 3", "supports up to 2", "config init --force"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := configVersionNotice(tc.fileLoaded, tc.version)
+			if tc.wantEmpty {
+				if got != "" {
+					t.Errorf("configVersionNotice(%v, %d) = %q, want empty", tc.fileLoaded, tc.version, got)
+				}
+				return
+			}
+			if got == "" {
+				t.Fatalf("configVersionNotice(%v, %d) = empty, want non-empty", tc.fileLoaded, tc.version)
+			}
+			for _, sub := range tc.contains {
+				if !strings.Contains(got, sub) {
+					t.Errorf("configVersionNotice(%v, %d) = %q, want to contain %q", tc.fileLoaded, tc.version, got, sub)
+				}
+			}
+			// All non-empty notices must end with \n
+			if !strings.HasSuffix(got, "\n") {
+				t.Errorf("configVersionNotice(%v, %d) = %q, want \\n-terminated", tc.fileLoaded, tc.version, got)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — config_version advisory integration tests (capture noticeOut)
+// ---------------------------------------------------------------------------
+
+func TestLoad_ConfigVersionAdvisory_Older(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "config_version = 1\n")
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.ConfigVersion != 1 {
+		t.Errorf("ConfigVersion=%d want 1", cfg.ConfigVersion)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "schema version 1") {
+		t.Errorf("advisory = %q, want to contain 'schema version 1'", got)
+	}
+	if !strings.Contains(got, "current is 2") {
+		t.Errorf("advisory = %q, want to contain 'current is 2'", got)
+	}
+	if !strings.Contains(got, "config upgrade") {
+		t.Errorf("advisory = %q, want to contain 'config upgrade'", got)
+	}
+}
+
+func TestLoad_ConfigVersionAdvisory_Missing(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"pi\"\n")
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.ConfigVersion != 0 {
+		t.Errorf("ConfigVersion=%d want 0", cfg.ConfigVersion)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "has no config_version") {
+		t.Errorf("advisory = %q, want to contain 'has no config_version'", got)
+	}
+	if !strings.Contains(got, "config upgrade") {
+		t.Errorf("advisory = %q, want to contain 'config upgrade'", got)
+	}
+}
+
+func TestLoad_ConfigVersionAdvisory_Current(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "config_version = 2\n")
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.ConfigVersion != 2 {
+		t.Errorf("ConfigVersion=%d want 2", cfg.ConfigVersion)
+	}
+	got := buf.String()
+	if got != "" {
+		t.Errorf("advisory = %q, want empty (current version)", got)
+	}
+}
+
+func TestLoad_ConfigVersionAdvisory_Newer(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "config_version = 3\n")
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.ConfigVersion != 3 {
+		t.Errorf("ConfigVersion=%d want 3", cfg.ConfigVersion)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "schema version 3") {
+		t.Errorf("advisory = %q, want to contain 'schema version 3'", got)
+	}
+	if !strings.Contains(got, "supports up to 2") {
+		t.Errorf("advisory = %q, want to contain 'supports up to 2'", got)
+	}
+}
+
+func TestLoad_ConfigVersionAdvisory_NoFile(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	// No config file written — globalDir is empty, no repo-local file.
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.ConfigVersion != 0 {
+		t.Errorf("ConfigVersion=%d want 0", cfg.ConfigVersion)
+	}
+	got := buf.String()
+	if got != "" {
+		t.Errorf("advisory = %q, want empty (fileLoaded guard — no file loaded)", got)
+	}
+}

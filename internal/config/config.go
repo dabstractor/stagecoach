@@ -97,8 +97,9 @@ type Config struct {
 
 	// V2 schema version (PRD §9.17 FR-B4). Metadata, NOT a precedence layer (§16.1): on load it is
 	// compared to CurrentConfigVersion for an advisory warning; it does not participate in value
-	// resolution. Decoded from the top-level config_version key in S2; Defaults() pins it to
-	// CurrentConfigVersion.
+	// resolution. Decoded from the top-level config_version key in S2; Defaults() leaves it 0 (unset;
+	// the load-time advisory (P1.M4.T1.S1) compares the resolved value to CurrentConfigVersion. 0 ⇒
+	// no source declared a schema version).
 	ConfigVersion int `toml:"config_version"`
 }
 
@@ -108,8 +109,8 @@ type Config struct {
 // Provider and Model are "" (Layer 1 does not pin them): empty Provider => auto-detect (PRD §15.2);
 // empty Model => the manifest default_model (§16.2). Verbose/NoColor/Single are false; Commits is 0
 // (auto-decompose). Roles and BinaryExtensions are nil (no per-role overrides → all roles use the
-// global; binary filtering uses the built-in denylist only). ConfigVersion is pinned to
-// CurrentConfigVersion (a Defaults() Config is always current-schema). NoColor is ultimately
+// global; binary filtering uses the built-in denylist only). ConfigVersion is 0 (unset; a
+// Defaults() Config has no schema version until a file declares one). NoColor is ultimately
 // TTY-aware in the UI layer.
 //
 // Returned BY VALUE: Config is an immutable resolved snapshot after Load(); a value return avoids
@@ -134,6 +135,7 @@ func Defaults() Config {
 		BinaryExtensions:    nil, // nil ⇒ built-in denylist only (§9.1 FR3a)
 		Providers:           nil,
 		Roles:               nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
-		ConfigVersion:       CurrentConfigVersion,
+		ConfigVersion:       0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved
+		//                              value to CurrentConfigVersion; 0 ⇒ no source declared a schema version.
 	}
 }

@@ -297,14 +297,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Config schema versioning + advisory warnings",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add config_version to the config file decode and emit an advisory staleness warning when the file's version doesn't match CurrentConfigVersion.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Add config_version advisory warning on load",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S2"
@@ -321,14 +321,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Populated config init (FR-B1/B2)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Rewrite config init to write a populated, working config (not an inert commented template). Runs cascading detection, writes [defaults] provider + uncommented [role.*] per-role models for the detected provider. Add --provider, --force, --template flags.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Rewrite config init to populated bootstrap + add --provider/--force/--template flags",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T3.S1",

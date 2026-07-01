@@ -86,9 +86,11 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	// read/parse error is wrapped. A MISSING file is "layer absent" (no error) for discovery, but a
 	// HARD ERROR when the path was explicit (a typo'd --config must not silently fall back to
 	// auto-detection and invoke an unintended agent). loadTOML's (nil,nil) contract is preserved.
+	var fileLoaded bool // true when ANY config file (global or repo-local) was loaded — used by the advisory
 	if g, err := loadTOML(globalPath); err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
 	} else if g != nil {
+		fileLoaded = true
 		overlay(&cfg, g)
 	} else if explicit {
 		return nil, fmt.Errorf("config file not found: %s", globalPath)
@@ -98,6 +100,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	if r, err := loadRepoLocalConfig(); err != nil {
 		return nil, fmt.Errorf("repo config: %w", err)
 	} else if r != nil {
+		fileLoaded = true
 		overlay(&cfg, r)
 	}
 
@@ -124,6 +127,11 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	// sources (applied after both layers). Only sets TRUE (never clears Single).
 	if cfg.Commits == 1 {
 		cfg.Single = true
+	}
+
+	// Emit config_version advisory (PRD §9.17 FR-B4) — after all overlays, happy path only.
+	if msg := configVersionNotice(fileLoaded, cfg.ConfigVersion); msg != "" {
+		fmt.Fprint(noticeOut, msg)
 	}
 
 	return &cfg, nil
@@ -249,6 +257,29 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 		if v, err := fs.GetInt("max-commits"); err == nil {
 			cfg.MaxCommits = v
 		}
+	}
+}
+
+// configVersionNotice returns the PRD §9.17 FR-B4 advisory text when a loaded config file's schema version
+// is missing (0), older, or newer than CurrentConfigVersion; "" when no file was loaded (fileLoaded=false)
+// or the version is current. PURE (no I/O) so it is unit-testable; the caller (Load) writes the result to
+// noticeOut. config_version is metadata, not a precedence layer (PRD §16.1) — this is its only consumer.
+func configVersionNotice(fileLoaded bool, version int) string {
+	if !fileLoaded {
+		return "" // no file → nothing to be stale
+	}
+	switch {
+	case version == CurrentConfigVersion:
+		return ""
+	case version == 0:
+		return fmt.Sprintf("stagehand: config file has no config_version; current is %d. "+
+			"Run 'stagehand config upgrade' or 'stagehand config init --force'.\n", CurrentConfigVersion)
+	case version < CurrentConfigVersion:
+		return fmt.Sprintf("stagehand: config file uses schema version %d; current is %d. "+
+			"Run 'stagehand config upgrade' or 'stagehand config init --force'.\n", version, CurrentConfigVersion)
+	default: // version > CurrentConfigVersion
+		return fmt.Sprintf("stagehand: config file uses schema version %d; this binary supports up to %d. "+
+			"Upgrade stagehand, or run 'stagehand config init --force' to regenerate.\n", version, CurrentConfigVersion)
 	}
 }
 

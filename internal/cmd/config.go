@@ -138,6 +138,19 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 #   STAGEHAND_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
 #   STAGEHAND_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
 #
+# ---------------------------------------------------------------------------
+# config_version — schema version (PRD §9.17 FR-B4). Top-level metadata, NOT a [defaults] key and
+# NOT a precedence layer (§16.1): it never overrides another field; it only tells stagehand which
+# schema the file was written for. This binary supports config_version = 2.
+# ---------------------------------------------------------------------------
+# config_version = 2
+#
+# On load, if this is missing/older than the binary's version, stagehand prints an advisory and
+# points you at the remediation; it NEVER auto-migrates your file (no behavior change, just a
+# warning on stderr):
+#   stagehand config upgrade      # rewrite this file in place to the current schema (P1.M4.T3)
+#   stagehand config init --force # regenerate the bootstrap config, overwriting this file
+
 # Git config keys (PRD §9.8 FR36 / §16.3) — alternative to this file, scoped to one repo:
 #   git config stagehand.provider pi
 #   git config stagehand.model ""

@@ -591,8 +591,8 @@ func TestOverlay_V2Scalars(t *testing.T) {
 	dst = Defaults()
 	src = &Config{Provider: "pi"} // none of the v2 scalars set
 	overlay(&dst, src)
-	if dst.ConfigVersion != CurrentConfigVersion {
-		t.Errorf("ConfigVersion=%d want CurrentConfigVersion (nil src must not clobber)", dst.ConfigVersion)
+	if dst.ConfigVersion != 0 {
+		t.Errorf("ConfigVersion=%d want 0 (Defaults pins 0; nil src must not clobber)", dst.ConfigVersion)
 	}
 	if dst.MaxCommits != 12 {
 		t.Errorf("MaxCommits=%d want 12 (zero src must not clobber)", dst.MaxCommits)

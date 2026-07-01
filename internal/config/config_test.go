@@ -65,8 +65,8 @@ func TestDefaults(t *testing.T) {
 	if c.Roles != nil {
 		t.Errorf("Roles = %v, want nil (no per-role overrides)", c.Roles)
 	}
-	if c.ConfigVersion != CurrentConfigVersion {
-		t.Errorf("ConfigVersion = %d, want CurrentConfigVersion (%d)", c.ConfigVersion, CurrentConfigVersion)
+	if c.ConfigVersion != 0 {
+		t.Errorf("ConfigVersion = %d, want 0 (Defaults leaves it unset; the advisory compares it)", c.ConfigVersion)
 	}
 	if CurrentConfigVersion != 2 {
 		t.Errorf("CurrentConfigVersion = %d, want 2", CurrentConfigVersion)
