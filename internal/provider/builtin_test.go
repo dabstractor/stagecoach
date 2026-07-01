@@ -31,6 +31,13 @@ bare_flags = [
   "--no-context-files",
   "--no-session",
 ]
+tooled_flags = [
+  "--no-extensions",
+  "--no-skills",
+  "--no-prompt-templates",
+  "--no-context-files",
+  "--no-session",
+]
 output = "raw"
 strip_code_fence = true
 `
@@ -46,6 +53,11 @@ system_prompt_flag = "--system-prompt"
 provider_flag = ""
 bare_flags = [
   "--tools", "",
+  "--setting-sources", "",
+  "--no-session-persistence",
+]
+tooled_flags = [
+  "--allowed-tools", "Bash(git:*),Read,Edit",
   "--setting-sources", "",
   "--no-session-persistence",
 ]
@@ -237,6 +249,15 @@ func TestBuiltinManifests_PiFields(t *testing.T) {
 		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
 	}
 
+	// TooledFlags: 5 tokens (bare minus --no-tools — pi has no git allowlist flag)
+	wantTooled := []string{
+		"--no-extensions", "--no-skills",
+		"--no-prompt-templates", "--no-context-files", "--no-session",
+	}
+	if !reflect.DeepEqual(m.TooledFlags, wantTooled) {
+		t.Errorf("TooledFlags = %v, want %v", m.TooledFlags, wantTooled)
+	}
+
 	assertStr(t, "Output", m.Output, "raw")
 	if m.StripCodeFence == nil || *m.StripCodeFence != true {
 		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
@@ -288,6 +309,15 @@ func TestBuiltinManifests_ClaudeFields(t *testing.T) {
 	}
 	if !reflect.DeepEqual(m.BareFlags, wantBare) {
 		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
+	}
+
+	// TooledFlags: 5 tokens (tools ENABLED + git/read/edit allowlist; --allowed-tools TO CONFIRM at integration)
+	wantTooled := []string{
+		"--allowed-tools", "Bash(git:*),Read,Edit",
+		"--setting-sources", "", "--no-session-persistence",
+	}
+	if !reflect.DeepEqual(m.TooledFlags, wantTooled) {
+		t.Errorf("TooledFlags = %v, want %v", m.TooledFlags, wantTooled)
 	}
 
 	assertStr(t, "Output", m.Output, "raw")
@@ -696,5 +726,59 @@ func TestBuiltinManifests_RenderedCommand_Agy(t *testing.T) {
 	}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("agy rendered argv:\n got %v\nwant %v", argv, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 19: RenderedCommand_Pi_Tooled — pi rendered in RenderTooled mode (stager role).
+//         Uses the REAL Render (not the bare-only renderArgs helper). Proves pi's
+//         TooledFlags are non-empty (no error) and the tooled argv is bare MINUS --no-tools.
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Pi_Tooled(t *testing.T) {
+	spec, err := builtinPi().Render("glm-5-turbo", "zai", "<sys>", "<user>", RenderTooled)
+	if err != nil {
+		t.Fatalf("pi tooled render error: %v", err)
+	}
+	want := []string{
+		"--provider", "zai",
+		"--model", "glm-5-turbo",
+		"--system-prompt", "<sys>",
+		"--no-extensions", "--no-skills",
+		"--no-prompt-templates", "--no-context-files", "--no-session",
+		"-p", // print_flag LAST; NO --no-tools (tools on)
+	}
+	if !reflect.DeepEqual(spec.Args, want) {
+		t.Errorf("pi tooled Args:\n got %v\nwant %v", spec.Args, want)
+	}
+	if spec.Stdin != "<user>" { // sys via --system-prompt flag → only user payload on stdin
+		t.Errorf("pi tooled Stdin = %q, want %q", spec.Stdin, "<user>")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 20: RenderedCommand_Claude_Tooled — claude rendered in RenderTooled mode (stager role).
+//         Uses the REAL Render. Proves claude's TooledFlags are non-empty and the tooled
+//         argv uses --allowed-tools (NOT --tools "").
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Claude_Tooled(t *testing.T) {
+	spec, err := builtinClaude().Render("sonnet", "", "<sys>", "<user>", RenderTooled)
+	if err != nil {
+		t.Fatalf("claude tooled render error: %v", err)
+	}
+	want := []string{
+		"--model", "sonnet",
+		"--system-prompt", "<sys>",
+		"--allowed-tools", "Bash(git:*),Read,Edit", // tools ENABLED + git/read/edit allowlist (NOT --tools "")
+		"--setting-sources", "",
+		"--no-session-persistence",
+		"-p",
+	}
+	if !reflect.DeepEqual(spec.Args, want) {
+		t.Errorf("claude tooled Args:\n got %v\nwant %v", spec.Args, want)
+	}
+	if spec.Stdin != "<user>" {
+		t.Errorf("claude tooled Stdin = %q, want %q", spec.Stdin, "<user>")
 	}
 }

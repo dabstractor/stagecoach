@@ -62,6 +62,22 @@ bare_flags = [                      # appended VERBATIM to make the call bare + 
   "--no-session",                   # don't save the session (ephemeral).
 ]
 
+# --- tooled mode (v2; §11.5: the stager role) ---
+# pi's tooled profile = bare MINUS --no-tools: pi's native tool system ON,
+# everything else still off (chrome-less + ephemeral). pi has NO git-scoped allowlist flag;
+# stager safety is via the stager task prompt + stagehand's ref-mutation monopoly, not flag-scoping.
+tooled_flags = [
+  "--no-extensions",                # disable extension discovery.
+  "--no-skills",                    # disable skill discovery/loading.
+  "--no-prompt-templates",          # disable prompt-template discovery.
+  "--no-context-files",             # disable AGENTS.md / CLAUDE.md discovery.
+  "--no-session",                   # don't save the session (ephemeral).
+]
+# RENDERED TOOLED COMMAND
+#   pi --provider <backend> --model <m> --system-prompt "<sys>" \
+#      --no-extensions --no-skills --no-prompt-templates \
+#      --no-context-files --no-session -p   < <user payload via stdin>
+
 # --- output ---
 output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
 strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent wraps the output.

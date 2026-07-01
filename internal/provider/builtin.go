@@ -56,6 +56,18 @@ func builtinPi() Manifest {
 			"--no-context-files",
 			"--no-session",
 		},
+		// TOOLED MODE (v2 §11.5 — the stager role). pi has no git-scoped allowlist (--help shows only the
+		// all-or-nothing --no-tools), so pi's tooled profile = the bare invocation MINUS --no-tools: pi's
+		// native tool system ON, everything else still off (chrome-less + ephemeral). The stager's safety
+		// (git-only, never commit/update-ref/push) is enforced by the stager task prompt (§17.6) + stagehand's
+		// monopoly on ref mutations (§13.6.2/§19), not by flag-scoping.
+		TooledFlags: []string{
+			"--no-extensions",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-context-files",
+			"--no-session",
+		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
 		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env: nil (absent in §12.3).
@@ -85,6 +97,18 @@ func builtinClaude() Manifest {
 			"--tools", "", // disable ALL built-in tools (value arg = "")
 			"--setting-sources", "", // load no settings sources (value arg = "")
 			"--no-session-persistence", // ephemeral (only valid with -p)
+		},
+		// TOOLED MODE (v2 §11.5 — the stager role). INVERTS claude's bare mode: instead of --tools "" (disable
+		// ALL tools), ENABLE tools RESTRICTED via an allowlist to Bash(git:*) (git only) + Read + Edit — the
+		// staging-relevant toolset. --setting-sources "" (clean slate) + --no-session-persistence (ephemeral)
+		// carry over from bare.
+		// # TO CONFIRM (integration, P3.M2.T3): external_deps.md §claude records --tools;
+		// the item contract + codebase use --allowed-tools (the explicit-enable allow-list flag). Verify against
+		// a real claude --help at the first stager run; if wrong, swap the flag token (the value is the allowlist).
+		TooledFlags: []string{
+			"--allowed-tools", "Bash(git:*),Read,Edit",
+			"--setting-sources", "",
+			"--no-session-persistence",
 		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),

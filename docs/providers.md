@@ -26,7 +26,8 @@ Each manifest has 18 fields (matching the TOML tags in `internal/provider/manife
 | `system_prompt_flag` | string | `""` | Flag for the system prompt. When `""`, the system prompt is prepended to the payload instead. |
 | `provider_flag` | string | `""` | Flag for sub-provider selection (e.g. `"--provider"`). |
 | `default_provider` | string | `""` | Default sub-provider when the user specifies none. |
-| `bare_flags` | list of string | `[]` (none) | Extra flags appended verbatim before `print_flag`. |
+| `bare_flags` | list of string | `[]` (none) | Extra flags appended verbatim before `print_flag` in bare mode. |
+| `tooled_flags` | list of string | `nil` (none) | Flags for tooled/stager mode — tools ON, git-scoped, non-interactive. `nil`/empty ⇒ not stager-capable. |
 | `output` | string | `"raw"` | Agent output mode: `"raw"` or `"json"`. |
 | `json_field` | string | `""` | Field to extract when `output` is `"json"`. |
 | `strip_code_fence` | bool | `true` | Strip one layer of `` ``` `` / `~~~` fences from agent output. |
@@ -52,19 +53,21 @@ args = [subcommand...]
 
 When `system_prompt_flag` is empty, the system prompt is **prepended** to the payload (delimited by `\n\n`) instead of being delivered via a flag.
 
+In **tooled mode** (the stager role), `tooled_flags` replaces `bare_flags`; tooled mode with empty `tooled_flags` errors — that provider cannot serve as a stager.
+
 ## The 7 built-in providers
 
 Auto-detection order (first installed = default): **pi**, claude, gemini, opencode, codex, cursor, agy. User-defined providers are never auto-selected.
 
-| Provider | Delivery | Print flag | Model flag | Default model | System prompt flag | Tool-disable approach |
-|----------|----------|-----------|-----------|----------------|-------------------|----------------------|
-| `pi` | stdin | `-p` | `--model` | `glm-5-turbo` | `--system-prompt` | Explicit `--no-*` flags |
-| `claude` | stdin | `-p` | `--model` | `sonnet` | `--system-prompt` | Explicit `--tools ""` + settings flags |
-| `gemini` | stdin | (none) | `-m` | `gemini-2.5-pro` | (prepended) | Read-only constraint (`--approval-mode default`) |
-| `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) |
-| `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) |
-| `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) |
-| `agy` | stdin | `-p` | `-m` | `gemini-2.5-pro` | (prepended) | Read-only constraint (`--approval-mode default`) |
+| Provider | Delivery | Print flag | Model flag | Default model | System prompt flag | Tool-disable approach | Stager? |
+|----------|----------|-----------|-----------|----------------|-------------------|----------------------|--------|
+| `pi` | stdin | `-p` | `--model` | `glm-5-turbo` | `--system-prompt` | Explicit `--no-*` flags | ✓ yes |
+| `claude` | stdin | `-p` | `--model` | `sonnet` | `--system-prompt` | Explicit `--tools ""` + settings flags | ✓ yes |
+| `gemini` | stdin | (none) | `-m` | `gemini-2.5-pro` | (prepended) | Read-only constraint (`--approval-mode default`) | — no |
+| `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | — no |
+| `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | — no |
+| `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | — no |
+| `agy` | stdin | `-p` | `-m` | `gemini-2.5-pro` | (prepended) | Read-only constraint (`--approval-mode default`) | — no |
 
 Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) due to a non-TTY stdout drop bug (issue #76) and cannot serve as a stager (empty `tooled_flags`).
 
@@ -77,6 +80,19 @@ The seven providers achieve tool-safety via two distinct mechanisms (PRD §12.7.
 - **Read-only constraint** (codex, cursor, gemini): The manifest passes flags that **constrain the agent to a read-only, never-ask profile** (codex: `--sandbox read-only --ephemeral`; cursor: `--mode ask --trust`; gemini: `--approval-mode default`). opencode's `run` subcommand is inherently non-interactive and read-only.
 
 Both approaches satisfy the §18.1 safety invariant: no provider can mutate the repository.
+
+## Tooled mode and the stager role
+
+The v2 manifest system has two invocation modes (PRD §11.5):
+
+- **Bare mode** (default): tools off, session-less, chrome-less, ephemeral. Serves the planner, message, and arbiter roles, and the entire v1 single-commit path. Uses `bare_flags`.
+
+- **Tooled mode** (stager only): tools on, git-scoped, non-interactive. Serves **only** the stager role — the per-concept agent that runs `git add` and applies hunks. Uses `tooled_flags`. A provider with nil/empty `tooled_flags` **cannot** serve as a stager (render errors at invocation time); FR-D4 falls back to the next stager-capable provider.
+
+The stager's safety is enforced by three layers (PRD §12.7.1):
+1. **`tooled_flags`** — scopes tools to staging (claude: git/read/edit allowlist via `--allowed-tools`; pi: all tools on, chrome stripped).
+2. **Stagehand's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (§13.6.2/§19).
+3. **The stager task prompt** (§17.6) — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.
 
 ## Adding a new agent
 
