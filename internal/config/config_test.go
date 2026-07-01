@@ -49,6 +49,28 @@ func TestDefaults(t *testing.T) {
 	if c.StripCodeFence != nil {
 		t.Errorf("StripCodeFence = %v, want nil", c.StripCodeFence)
 	}
+	// V2 fields (P1.M3.T1.S1)
+	if c.Commits != 0 {
+		t.Errorf("Commits = %d, want 0 (auto-decompose)", c.Commits)
+	}
+	if c.Single {
+		t.Errorf("Single = true, want false")
+	}
+	if c.MaxCommits != 12 {
+		t.Errorf("MaxCommits = %d, want 12 (FR-M4 default)", c.MaxCommits)
+	}
+	if c.BinaryExtensions != nil {
+		t.Errorf("BinaryExtensions = %v, want nil (built-in denylist only)", c.BinaryExtensions)
+	}
+	if c.Roles != nil {
+		t.Errorf("Roles = %v, want nil (no per-role overrides)", c.Roles)
+	}
+	if c.ConfigVersion != CurrentConfigVersion {
+		t.Errorf("ConfigVersion = %d, want CurrentConfigVersion (%d)", c.ConfigVersion, CurrentConfigVersion)
+	}
+	if CurrentConfigVersion != 2 {
+		t.Errorf("CurrentConfigVersion = %d, want 2", CurrentConfigVersion)
+	}
 }
 
 func TestTOMLMarshalKeysAndNoColorExclusion(t *testing.T) {
@@ -78,5 +100,46 @@ func TestTOMLMarshalKeysAndNoColorExclusion(t *testing.T) {
 	}
 	if strings.Contains(string(data2), "no_color") || strings.Contains(string(data2), "NoColor") {
 		t.Errorf("NoColor leaked into TOML (toml:\"-\" not honored):\n%s", data2)
+	}
+}
+
+func TestConfig_V2TOMLTags(t *testing.T) {
+	// (a) file-backed keys appear when set.
+	c := Defaults()
+	c.MaxCommits = 9
+	c.BinaryExtensions = []string{"foo", "bar"}
+	data, err := toml.Marshal(c)
+	if err != nil {
+		t.Fatalf("toml.Marshal err = %v", err)
+	}
+	s := string(data)
+	for _, key := range []string{"config_version", "max_commits", "binary_extensions"} {
+		if !strings.Contains(s, key+" =") {
+			t.Errorf("marshaled TOML missing v2 key %q:\n%s", key, s)
+		}
+	}
+
+	// (b) toml:"-" fields NEVER leak, even when populated (mirrors the NoColor leak check).
+	// Check `key+" ="` (an actual key line), NOT bare key — "commits" is a substring of
+	// "max_commits", so a bare strings.Contains would false-positive on the legit max_commits line.
+	leaky := Defaults()
+	leaky.Commits = 5
+	leaky.Single = true
+	leaky.Roles = map[string]RoleConfig{
+		"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
+	}
+	data2, err := toml.Marshal(leaky)
+	if err != nil {
+		t.Fatalf("toml.Marshal(leaky) err = %v", err)
+	}
+	s2 := string(data2)
+	for _, key := range []string{"commits", "single", "roles"} {
+		// Check for the key at the START of a TOML line (preceded by \n or at position 0).
+		// This avoids false positives: "commits =" is a substring of "max_commits =",
+		// so a bare strings.Contains would false-positive on the legit max_commits key.
+		probe := "\n" + key + " ="
+		if strings.Contains(s2, probe) || strings.HasPrefix(s2, key+" =") {
+			t.Errorf("toml:\"-\" field leaked into TOML as %q:\n%s", key, s2)
+		}
 	}
 }
