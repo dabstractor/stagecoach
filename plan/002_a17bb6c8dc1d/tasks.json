@@ -164,7 +164,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Per-Role Config Schema & Model Resolution",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add per-role provider/model configuration to the Config struct, file decode, overlay, env, and flag layers. Implement the ResolveRoleModel function with 5-layer precedence (flag > env > per-role config > global config > manifest default). Define the tier-based per-provider×per-role default model table (FR-D4).",
           "tasks": [
             {
@@ -217,7 +217,7 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Per-role env/flag resolution + per-role resolution function",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add STAGEHAND_<ROLE>_PROVIDER/_MODEL env vars, --<role>-provider/--<role>-model CLI flags, --commits/--single/--max-commits flags, and implement ResolveRoleModel() with the 5-layer precedence.",
               "subtasks": [
                 {
@@ -243,7 +243,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T2.S2",
                   "title": "Implement ResolveRoleModel() function with 5-layer precedence",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
@@ -262,14 +262,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Define tier-based per-provider × per-role default model table (FR-D4)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the FR-D4 default model table as a Go constant set / function, mapping each provider to its planner (smart) / stager (mid) / message (fast) / arbiter (mid) default model. The bootstrap config (P1.M4.T2) materializes one provider's column.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Implement RoleModelDefaults table + per-provider default models",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1",
