@@ -18,7 +18,7 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent.
 
 ## Why not opencommit/aicommits?
 
-The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API.
+The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones gate their quota to the official harness (Anthropic, Google Antigravity, Cursor, gemini-cli), and Z.ai even subsidizes harness use with free tokens. The quota lives behind your agent's CLI either way, which is exactly why stagehand shells out to that CLI instead of opening its own connection.
 
 Stagehand inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse — the agent brings its own auth and billing. That trade-off — give up control of the model call in exchange for access to the user's existing quota — is the entire product.
 
@@ -29,25 +29,62 @@ Stagehand inverts the architecture: it shells out to your installed CLI agent, t
 | Billing | Per-token | Your existing coding-plan quota |
 | Stage while generating | No | Yes (snapshot-based) |
 
+<details>
+<summary><em>Which coding plans actually gate their quota?</em></summary>
+
+How strictly a coding plan's quota is tied to its official harness varies by provider. A few are
+permissive; the popular ones are not — and that distinction is the whole reason stagehand shells
+out to your agent rather than calling an API.
+
+- **Anthropic (Claude Code)** — strict. Plan quota is gated to the Claude Code harness and isn't
+  reachable over the public API.
+- **Google Antigravity** — strict (and newly arriving). Quota is reserved for the harness.
+- **Cursor** — has explicit policies against use outside its own harness.
+- **gemini-cli** — has explicit policies against this kind of outside/automated use.
+- **Z.ai** — permissive in principle, but actively pro-harness: it hands subscribers free tokens
+  for using the Z.ai harness, steering (rewarding) harness use rather than locking it.
+- **Opencode (Opencode Go plan)** — permissive; the notable exception that doesn't gate quota to
+  a harness.
+
+Net: almost every provider cares about keeping you on their harness, whether by lock (Anthropic,
+Antigravity, Cursor, gemini-cli) or by incentive (Z.ai). Opencode is the outlier.
+
+</details>
+
 ## Install
 
 **Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, Gemini CLI, opencode, Codex, or Cursor).
 
+> [!NOTE]
+> Stagehand is pre-release and still being tested locally — **build from source** is the only working install method today. The package-managed channels below are coming with the first public release.
+
+### Build from source (works today)
+
+Requires [Go](https://go.dev) 1.22+:
+
 ```bash
-# Homebrew (macOS / Linuxbrew)
-brew install dustin/tap/stagehand
-
-# Go install (anywhere with Go)
-go install github.com/dustin/stagehand/cmd/stagehand@latest
-
-# Direct binary (curl|sh one-liner from GitHub Releases)
-curl -fsSL https://github.com/dustin/stagehand/raw/main/install.sh | bash
-
-# Windows (Scoop)
-scoop install dustin/stagehand
+git clone https://github.com/dustin/stagehand.git
+cd stagehand
+make install          # installs the binary to $GOPATH/bin
 ```
 
-> [!NOTE] The install.sh script is published with the first release. Until then, use Homebrew, go install, or Scoop.
+Ensure `$GOPATH/bin` (usually `~/go/bin`) is on your `$PATH`, then verify:
+
+```bash
+stagehand --version   # stagehand version dev
+```
+
+> [!TIP]
+> If you keep your user binaries elsewhere (e.g. `~/.local/bin`), symlink it instead of editing `$PATH`: `ln -s "$(go env GOPATH)/bin/stagehand" ~/.local/bin/stagehand`. `make install` overwrites the target in place, so the link stays valid across rebuilds.
+
+### Coming soon
+
+These will land with the first release, once the tap/bucket repos are published:
+
+- **Homebrew** (macOS / Linuxbrew) — `brew install dustin/tap/stagehand`
+- **Scoop** (Windows) — `scoop install dustin/stagehand`
+- **`go install`** — `go install github.com/dustin/stagehand/cmd/stagehand@latest`
+- **Direct binary** (curl​|​sh one-liner) — `curl -fsSL https://github.com/dustin/stagehand/raw/main/install.sh | bash`
 
 ## Quick start
 
