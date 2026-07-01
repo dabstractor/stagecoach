@@ -217,14 +217,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Per-role env/flag resolution + per-role resolution function",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Add STAGEHAND_<ROLE>_PROVIDER/_MODEL env vars, --<role>-provider/--<role>-model CLI flags, --commits/--single/--max-commits flags, and implement ResolveRoleModel() with the 5-layer precedence.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Add per-role + decompose env vars to loadEnv() and flag handling to loadFlags()",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1"
@@ -243,7 +243,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T2.S2",
                   "title": "Implement ResolveRoleModel() function with 5-layer precedence",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"

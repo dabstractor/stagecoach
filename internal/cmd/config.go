@@ -132,6 +132,11 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 #   STAGEHAND_CONFIG     path to a config file, overrides discovery
 #   STAGEHAND_VERBOSE    "true"/"false" — print resolved command, raw output, retries
 #   STAGEHAND_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
+#   STAGEHAND_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
+#   STAGEHAND_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
+#   STAGEHAND_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
+#   STAGEHAND_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
+#   STAGEHAND_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
 #
 # Git config keys (PRD §9.8 FR36 / §16.3) — alternative to this file, scoped to one repo:
 #   git config stagehand.provider pi
@@ -139,6 +144,15 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 #   git config stagehand.timeout 120s
 #   git config stagehand.auto_stage_all true
 #   (read via ` + "`git config --get stagehand.<key>`" + `)
+
+# ---------------------------------------------------------------------------
+# CLI flags (PRD §15.2) — highest precedence; only an EXPLICITLY-passed flag overrides lower layers
+# ---------------------------------------------------------------------------
+# --provider / --model                       global default for ALL roles (§16.4)
+# --<role>-provider / --<role>-model         per-role override (role = planner|stager|message|arbiter)
+# --commits <N>                              force exactly N commits (N>=2); --commits 1 == --single (§9.14)
+# --single / --no-decompose                  bypass decomposition; force the single-commit path (§9.14)
+# --max-commits <N>                          safety cap on auto-decompose (default 12; §9.14 FR-M4)
 
 # ---------------------------------------------------------------------------
 # [defaults] — top-level Stagehand behavior (PRD §16.2)

@@ -45,8 +45,10 @@ func chdir(t *testing.T, dir string) {
 	})
 }
 
-// newFlagSet returns a fresh *pflag.FlagSet with the 5 Config-backed flags pre-registered:
-// provider/model as String "", timeout as String "", verbose as Bool false, no-color as Bool false.
+// newFlagSet returns a fresh *pflag.FlagSet with the Config-backed flags pre-registered:
+// provider/model as String "", timeout as String "", verbose as Bool false, no-color as Bool false,
+// plus the V2 per-role flags (4 role×2 = 8 String flags) and decompose flags (commits/single/
+// no-decompose/max-commits). Extending is behavior-neutral for existing tests that don't Set them.
 func newFlagSet(t *testing.T) *pflag.FlagSet {
 	t.Helper()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -55,6 +57,16 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 	fs.String("timeout", "", "")
 	fs.Bool("verbose", false, "")
 	fs.Bool("no-color", false, "")
+	// V2 per-role flags (PRD §9.15 FR-R3, §15.2)
+	for _, role := range roleNames {
+		fs.String(role+"-provider", "", "")
+		fs.String(role+"-model", "", "")
+	}
+	// V2 decompose flags (PRD §9.14 FR-M2, §15.2)
+	fs.Int("commits", 0, "")
+	fs.Bool("single", false, "")
+	fs.Bool("no-decompose", false, "")
+	fs.Int("max-commits", 0, "")
 	return fs
 }
 
@@ -230,6 +242,78 @@ func TestLoadEnv_EmptyStringsSkipped(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// setRole helpers — lazy allocation + field-merge (map-value-copy correctness)
+// ---------------------------------------------------------------------------
+
+func TestSetRole_LazyAllocAndFieldMerge(t *testing.T) {
+	cfg := Config{} // Roles == nil
+	cfg.setRoleProvider("planner", "agy")
+	if cfg.Roles == nil || cfg.Roles["planner"].Provider != "agy" {
+		t.Fatalf("setRoleProvider did not lazily alloc + set: %+v", cfg.Roles)
+	}
+	cfg.setRoleModel("planner", "gemini-2.5-pro") // must NOT erase Provider
+	rc := cfg.Roles["planner"]
+	if rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro} (field-merge: Model must not erase Provider)", rc)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// loadEnv — per-role + decompose tests
+// ---------------------------------------------------------------------------
+
+func TestLoadEnv_PerRole(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_PLANNER_PROVIDER", "agy")
+	t.Setenv("STAGEHAND_PLANNER_MODEL", "gemini-2.5-pro")
+	t.Setenv("STAGEHAND_STAGER_MODEL", "gemini-2.5-flash")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	}
+	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "gemini-2.5-flash" {
+		t.Errorf("Roles[stager]=%+v want {\"\" gemini-2.5-flash} (partial — field-level)", rc)
+	}
+}
+
+func TestLoadEnv_PerRolePartial(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_PLANNER_MODEL", "gemini-2.5-pro")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	rc := cfg.Roles["planner"]
+	if rc.Provider != "" || rc.Model != "gemini-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {\"\" gemini-2.5-pro} (model-only — field-level)", rc)
+	}
+}
+
+func TestLoadEnv_Commits(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_COMMITS", "3")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	if cfg.Commits != 3 {
+		t.Errorf("Commits=%d want 3", cfg.Commits)
+	}
+}
+
+func TestLoadEnv_CommitsBadIntErrors(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_COMMITS", "abc")
+	err := loadEnv(&cfg)
+	if err == nil {
+		t.Fatal("loadEnv err=nil, want error for bad STAGEHAND_COMMITS")
+	}
+	if !strings.Contains(err.Error(), "STAGEHAND_COMMITS") {
+		t.Errorf("err=%v, want it to contain 'STAGEHAND_COMMITS'", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // loadFlags tests
 // ---------------------------------------------------------------------------
 
@@ -290,6 +374,47 @@ func TestLoadFlags_TimeoutString(t *testing.T) {
 
 	if cfg.Timeout != 60*time.Second {
 		t.Errorf("Timeout=%v want 60s", cfg.Timeout)
+	}
+}
+
+func TestLoadFlags_PerRole(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	if err := fs.Set("planner-provider", "agy"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Set("planner-model", "gemini-2.5-pro"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	}
+}
+
+func TestLoadFlags_Decompose(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	fs.Set("commits", "3")
+	fs.Set("max-commits", "8")
+	loadFlags(&cfg, fs)
+	if cfg.Commits != 3 {
+		t.Errorf("Commits=%d want 3", cfg.Commits)
+	}
+	if cfg.MaxCommits != 8 {
+		t.Errorf("MaxCommits=%d want 8", cfg.MaxCommits)
+	}
+	if cfg.Single {
+		t.Errorf("Single=true want false (no single/no-decompose set)")
+	}
+
+	// --no-decompose alias → Single=true
+	cfg2 := Defaults()
+	fs2 := newFlagSet(t)
+	fs2.Set("no-decompose", "true")
+	loadFlags(&cfg2, fs2)
+	if !cfg2.Single {
+		t.Errorf("Single=false want true (--no-decompose alias)")
 	}
 }
 
@@ -500,6 +625,55 @@ func TestLoad_CLIBoolFalseEscape(t *testing.T) {
 	}
 	if cfg.Verbose {
 		t.Errorf("Verbose=true want false (CLI DIRECT set overrides file true)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — V2 decompose + per-role tests
+// ---------------------------------------------------------------------------
+
+func TestLoad_CommitsOneNormalizesSingle(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+
+	// env path: STAGEHAND_COMMITS=1 → Single=true
+	t.Setenv("STAGEHAND_COMMITS", "1")
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Commits != 1 {
+		t.Errorf("Commits=%d want 1", cfg.Commits)
+	}
+	if !cfg.Single {
+		t.Errorf("Single=false want true (STAGEHAND_COMMITS=1 must normalize to Single)")
+	}
+
+	// flag path: --commits 1 → Single=true
+	os.Unsetenv("STAGEHAND_COMMITS")
+	fs := newFlagSet(t)
+	fs.Set("commits", "1")
+	cfg2, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg2.Single {
+		t.Errorf("Single=false want true (--commits 1 must normalize to Single)")
+	}
+}
+
+func TestLoad_PerRoleFlagBeatsEnv(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGEHAND_PLANNER_MODEL", "env-model")
+	fs := newFlagSet(t)
+	fs.Set("planner-model", "flag-model")
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if rc := cfg.Roles["planner"]; rc.Model != "flag-model" {
+		t.Errorf("Roles[planner].Model=%q want flag-model (flag > env)", rc.Model)
 	}
 }
 

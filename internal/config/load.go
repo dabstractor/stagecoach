@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 )
+
+// roleNames is the canonical list of agent roles (PRD §13.6.2 / §9.15 FR-R1).
+// One source for loadEnv, loadFlags, and tests — loop all four so a --message-* flag/env
+// is honored if set (registration in P4.M1.T1 may omit it; Changed==false → skipped).
+var roleNames = []string{"planner", "stager", "message", "arbiter"}
 
 // LoadOpts configures the Load() resolver. Populated by the caller (cobra PersistentPreRunE in
 // P1.M4.T1.S1): ConfigPathOverride from the --config flag ("" if not passed); RepoDir = resolved repo
@@ -17,6 +23,31 @@ type LoadOpts struct {
 	ConfigPathOverride string         // from --config (CLI); "" => fall back to STAGEHAND_CONFIG, then discovery
 	RepoDir            string         // repo root for git config (passed to loadGitConfig); "" is valid for tests
 	Flags              *pflag.FlagSet // cobra/pflag set; nil => skip the CLI-flag layer
+}
+
+// setRoleProvider sets the Provider field for a role in cfg.Roles, lazily allocating the map.
+// Map-value-copy write-back is REQUIRED: Go maps return value copies, so `rc.Provider = v`
+// alone mutates a local copy. The write-back (`c.Roles[role] = rc`) is the load-bearing line.
+// Setting one field (Provider) does NOT clobber the sibling (Model) — FR-R3 field-merge.
+func (c *Config) setRoleProvider(role, provider string) {
+	if c.Roles == nil {
+		c.Roles = make(map[string]RoleConfig)
+	}
+	rc := c.Roles[role]
+	rc.Provider = provider
+	c.Roles[role] = rc
+}
+
+// setRoleModel sets the Model field for a role in cfg.Roles, lazily allocating the map.
+// Map-value-copy write-back is REQUIRED (same idiom as setRoleProvider).
+// Setting Model does NOT clobber an existing Provider — FR-R3 field-merge.
+func (c *Config) setRoleModel(role, model string) {
+	if c.Roles == nil {
+		c.Roles = make(map[string]RoleConfig)
+	}
+	rc := c.Roles[role]
+	rc.Model = model
+	c.Roles[role] = rc
 }
 
 // Load resolves the full Stagehand configuration by applying PRD §16.1 layers in precedence order
@@ -89,6 +120,12 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		loadFlags(&cfg, opts.Flags)
 	}
 
+	// Normalize: Commits==1 ≡ Single (PRD §9.14 FR-M2c / §15.2). Covers BOTH env and flag
+	// sources (applied after both layers). Only sets TRUE (never clears Single).
+	if cfg.Commits == 1 {
+		cfg.Single = true
+	}
+
 	return &cfg, nil
 }
 
@@ -125,6 +162,28 @@ func loadEnv(cfg *Config) error {
 		}
 		cfg.NoColor = b // DIRECT set — NoColor (toml:"-") becomes resolvable here for the first time
 	}
+
+	// Per-role provider/model overrides (PRD §9.15 FR-R3, §16.4, §9.8 FR35).
+	for _, role := range roleNames {
+		prefix := "STAGEHAND_" + strings.ToUpper(role)
+		if v, ok := os.LookupEnv(prefix + "_PROVIDER"); ok && v != "" {
+			cfg.setRoleProvider(role, v)
+		}
+		if v, ok := os.LookupEnv(prefix + "_MODEL"); ok && v != "" {
+			cfg.setRoleModel(role, v)
+		}
+	}
+
+	// STAGEHAND_COMMITS — forced commit count (PRD §9.14 FR-M2). Errors on non-integer
+	// (consistent with STAGEHAND_TIMEOUT/VERBOSE/NO_COLOR error discipline).
+	if v, ok := os.LookupEnv("STAGEHAND_COMMITS"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("STAGEHAND_COMMITS: %w", err)
+		}
+		cfg.Commits = n
+	}
+
 	return nil
 }
 
@@ -160,6 +219,35 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	if fs.Changed("no-color") {
 		if v, err := fs.GetBool("no-color"); err == nil {
 			cfg.NoColor = v // DIRECT set
+		}
+	}
+
+	// Per-role provider/model overrides (PRD §9.15 FR-R3, §15.2).
+	for _, role := range roleNames {
+		if fs.Changed(role + "-provider") {
+			if v, err := fs.GetString(role + "-provider"); err == nil {
+				cfg.setRoleProvider(role, v)
+			}
+		}
+		if fs.Changed(role + "-model") {
+			if v, err := fs.GetString(role + "-model"); err == nil {
+				cfg.setRoleModel(role, v)
+			}
+		}
+	}
+
+	// Decompose flags (PRD §9.14 FR-M2, §15.2).
+	if fs.Changed("commits") {
+		if v, err := fs.GetInt("commits"); err == nil {
+			cfg.Commits = v
+		}
+	}
+	if fs.Changed("single") || fs.Changed("no-decompose") {
+		cfg.Single = true // --single and --no-decompose are aliases (FR-M2c)
+	}
+	if fs.Changed("max-commits") {
+		if v, err := fs.GetInt("max-commits"); err == nil {
+			cfg.MaxCommits = v
 		}
 	}
 }
