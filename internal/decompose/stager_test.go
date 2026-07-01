@@ -1,6 +1,7 @@
 package decompose
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // --- Fixture helpers (stg*-prefixed to avoid colliding with planner_test.go's un-prefixed copies) ---
@@ -298,5 +300,34 @@ func TestFreezeSnapshot_MergeConflict(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "merge conflict") {
 		t.Errorf("error does not mention 'merge conflict': %v", err)
+	}
+}
+
+func TestStageConcept_ResolvesSubProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+
+	m := tooledStubManifest(t, bin, stubtest.Options{Out: ""}) // stager ignores stdout; exit 0
+	pflag, dp := "--provider", "openrouter"
+	m.ProviderFlag, m.DefaultProvider = &pflag, &dp // pi-shaped: merged DefaultProvider MUST be honored
+
+	deps := stagerDeps(t, repo, m)
+	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+
+	var buf bytes.Buffer
+	deps.Verbose = ui.NewVerbose(&buf, true)
+
+	concept := prompt.PlannerCommit{Title: "feat: x", Description: "stage a.txt"}
+	if err := stageConcept(context.Background(), deps, concept); err != nil {
+		t.Fatalf("stageConcept: %v", err)
+	}
+
+	cmd := buf.String()
+	if !strings.Contains(cmd, "--provider openrouter") {
+		t.Errorf("stager command missing --provider openrouter\ngot: %s", cmd)
+	}
+	if strings.Contains(cmd, "--provider pi") {
+		t.Errorf("stager command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
 	}
 }

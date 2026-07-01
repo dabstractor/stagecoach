@@ -98,8 +98,9 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		return "", fmt.Errorf("%w: recent subjects: %w", ErrMessageFailed, err)
 	}
 
-	// 4. Derive the message (provider, model) — Deps has no Models field.
-	prov, mdl := config.ResolveRoleModel("message", deps.Config)
+	// 4. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
+	// passed to Render — Render resolves the sub-provider from the manifest's DefaultProvider.)
+	_, mdl := config.ResolveRoleModel("message", deps.Config)
 	resolved := deps.Roles.Message.Resolve()
 	retryInstr := *resolved.RetryInstruction
 
@@ -119,7 +120,13 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}
 
-		spec, rerr := deps.Roles.Message.Render(mdl, prov, sysPrompt, payload, provider.RenderBare)
+		// Pass "" for the sub-provider: ResolveRoleModel returns the manifest/agent NAME (the registry
+		// key, e.g. "pi"), NOT the upstream backend. Render resolves the real sub-provider from the
+		// manifest's merged DefaultProvider (FR37a) — emitting "--provider <DefaultProvider>", or
+		// omitting --provider when DefaultProvider is unset (pi's shipped default, §12.3). Same fix as
+		// generate.go (P1.M1.T1.S1). The prov return of ResolveRoleModel is still used correctly by
+		// ResolveRoles (reg.Get) — only this Render call stops using it.
+		spec, rerr := deps.Roles.Message.Render(mdl, "", sysPrompt, payload, provider.RenderBare)
 		if rerr != nil {
 			return "", fmt.Errorf("%w: render: %w", ErrMessageFailed, rerr)
 		}

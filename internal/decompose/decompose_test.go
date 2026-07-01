@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // --- Fixture helpers (dcm*-prefixed to avoid colliding with arb*/chn*/msg*/stg*/planner) ---
@@ -1420,3 +1422,78 @@ func TestBuildCommitResult(t *testing.T) {
 
 // strPtrForTest is a test helper to create a string pointer.
 func strPtrForTest(s string) *string { return &s }
+
+// lockedBuffer is a thread-safe bytes.Buffer for -race-clean concurrent Verbose writes.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+// piShape sets ProviderFlag and DefaultProvider on a manifest to simulate a pi-shaped agent
+// whose merged DefaultProvider should be honored by Render.
+func piShape(m *provider.Manifest, providerFlag, defaultProvider string) {
+	m.ProviderFlag = &providerFlag
+	m.DefaultProvider = &defaultProvider
+}
+
+func TestDecompose_RoleResolvesSubProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// Create files for 2 concepts.
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerM := stubtest.Manifest(bin, stubtest.Options{Out: plannerJSON})
+	piShape(&plannerM, "--provider", "openrouter")
+
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
+	piShape(&stagerM, "--provider", "openrouter")
+
+	messageM := stubtest.NewScript(t, bin, []string{"feat: add a", "feat: add b"})
+	piShape(&messageM, "--provider", "openrouter")
+
+	arbiterM := stubtest.Manifest(bin, stubtest.Options{Out: `{"target": null}`})
+	piShape(&arbiterM, "--provider", "openrouter")
+
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
+		"c1": {"a.txt"},
+		"c2": {"b.txt"},
+	})
+
+	var lb lockedBuffer
+	deps.Verbose = ui.NewVerbose(&lb, true)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("Commits len = %d, want 2", len(result.Commits))
+	}
+
+	cmd := lb.String()
+	if !strings.Contains(cmd, "--provider openrouter") {
+		t.Errorf("Decompose command missing --provider openrouter\ngot: %s", cmd)
+	}
+	if strings.Contains(cmd, "--provider pi") {
+		t.Errorf("Decompose command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
+	}
+}

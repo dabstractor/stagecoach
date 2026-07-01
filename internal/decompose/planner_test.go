@@ -1,6 +1,7 @@
 package decompose
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dustin/stagehand/internal/ui"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
@@ -351,5 +354,37 @@ func TestCallPlanner_UnbornNilExamples(t *testing.T) {
 	}
 	if out.Message != "feat: all in one" {
 		t.Errorf("Message = %q, want %q", out.Message, "feat: all in one")
+	}
+}
+
+func TestCallPlanner_ResolvesSubProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "a.txt", "new content") // UNSTAGED (callPlanner reads WorkingTreeDiff)
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: validMultiJSON})
+	pflag, dp := "--provider", "openrouter"
+	m.ProviderFlag, m.DefaultProvider = &pflag, &dp // pi-shaped: merged DefaultProvider MUST be honored
+
+	deps := plannerDeps(t, repo, m)
+	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+
+	var buf bytes.Buffer
+	deps.Verbose = ui.NewVerbose(&buf, true)
+
+	out, err := callPlanner(context.Background(), deps, 0, false)
+	if err != nil {
+		t.Fatalf("callPlanner: %v", err)
+	}
+	_ = out
+
+	cmd := buf.String()
+	if !strings.Contains(cmd, "--provider openrouter") {
+		t.Errorf("planner command missing --provider openrouter\ngot: %s", cmd)
+	}
+	if strings.Contains(cmd, "--provider pi") {
+		t.Errorf("planner command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
 	}
 }

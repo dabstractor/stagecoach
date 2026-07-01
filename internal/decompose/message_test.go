@@ -1,6 +1,7 @@
 package decompose
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/dustin/stagehand/internal/git"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // --- Fixture helpers (msg*-prefixed to avoid colliding with planner_test.go's un-prefixed
@@ -333,5 +335,45 @@ func TestPublishCommit_CASFailure(t *testing.T) {
 	}
 	if !strings.Contains(ce.Error(), "HEAD moved") {
 		t.Errorf("CASError.Error() does not contain 'HEAD moved': %s", ce.Error())
+	}
+}
+
+func TestGenerateMessage_ResolvesSubProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	msgInitRepo(t, repo)
+	msgCommitRaw(t, repo, "initial")
+
+	// Build two trees via git add + write-tree (non-empty diff so generateMessage doesn't short-circuit).
+	msgWriteFile(t, repo, "a.txt", "a\n")
+	msgStageFile(t, repo, "a.txt")
+	treeA := msgGitOut(t, repo, "write-tree")
+
+	msgWriteFile(t, repo, "b.txt", "b\n")
+	msgStageFile(t, repo, "b.txt")
+	treeB := msgGitOut(t, repo, "write-tree")
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add b"})
+	pflag, dp := "--provider", "openrouter"
+	m.ProviderFlag, m.DefaultProvider = &pflag, &dp // pi-shaped: merged DefaultProvider MUST be honored
+
+	deps := messageDeps(t, repo, m)
+	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+
+	var buf bytes.Buffer
+	deps.Verbose = ui.NewVerbose(&buf, true)
+
+	msg, err := generateMessage(context.Background(), deps, treeA, treeB)
+	if err != nil {
+		t.Fatalf("generateMessage: %v", err)
+	}
+	_ = msg
+
+	cmd := buf.String()
+	if !strings.Contains(cmd, "--provider openrouter") {
+		t.Errorf("message command missing --provider openrouter\ngot: %s", cmd)
+	}
+	if strings.Contains(cmd, "--provider pi") {
+		t.Errorf("message command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
 	}
 }

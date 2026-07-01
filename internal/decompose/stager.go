@@ -56,14 +56,17 @@ var ErrStagerFailed = errors.New("decompose: stager failed")
 // NO retry loop: the orchestrator retries once then treats the concept as empty (FR-M8/M12).
 // NO output parse: the stager has no JSON contract; the exit code is the signal.
 func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) error {
-	// 1. Derive the stager (provider, model) — Deps has no Models field.
-	prov, mdl := config.ResolveRoleModel("stager", deps.Config)
+	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
+	// passed to Render — Render resolves the sub-provider from the manifest's DefaultProvider.)
+	_, mdl := config.ResolveRoleModel("stager", deps.Config)
 
 	// 2. Build the §17.6 stager task from the concept's title + description.
 	task := prompt.BuildStagerTask(concept.Title, concept.Description)
 
-	// 3. Render the stager manifest in TOOLED mode (system prompt empty — the task IS the payload).
-	spec, rerr := deps.Roles.Stager.Render(mdl, prov, "", task, provider.RenderTooled)
+	// Pass "" for the sub-provider (see note above); ResolveRoleModel's prov is the manifest name,
+	// not the backend. The SECOND "" is the empty system prompt (pre-existing — the task IS the
+	// payload). Same fix as generate.go (P1.M1.T1.S1).
+	spec, rerr := deps.Roles.Stager.Render(mdl, "", "", task, provider.RenderTooled)
 	if rerr != nil {
 		return fmt.Errorf("%w: render: %v", ErrStagerFailed, rerr)
 	}

@@ -1,6 +1,7 @@
 package decompose
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
+	"github.com/dustin/stagehand/internal/ui"
 )
 
 // arbStrPtr / arbBoolPtr are local pointer helpers (provider.strPtr/boolPtr are unexported).
@@ -478,5 +480,36 @@ func TestBuildArbiterUserPayload_ContainsFields(t *testing.T) {
 	}
 	if strings.Contains(payload, "old.go") && !strings.Contains(diff, "old.go") {
 		t.Error("payload should not contain FileChange.SrcPath 'old.go' in commit block")
+	}
+}
+
+func TestRunArbiter_ResolvesSubProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	arbInitRepo(t, repo)
+	commits := arbCommits(t, repo, context.Background())
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: `{"target": null}`})
+	pflag, dp := "--provider", "openrouter"
+	m.ProviderFlag, m.DefaultProvider = &pflag, &dp // pi-shaped: merged DefaultProvider MUST be honored
+
+	deps := arbDeps(t, repo, m)
+	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+
+	var buf bytes.Buffer
+	deps.Verbose = ui.NewVerbose(&buf, true)
+
+	out, err := runArbiter(context.Background(), deps, commits, "diff --git leftover")
+	if err != nil {
+		t.Fatalf("runArbiter: %v", err)
+	}
+	_ = out
+
+	cmd := buf.String()
+	if !strings.Contains(cmd, "--provider openrouter") {
+		t.Errorf("arbiter command missing --provider openrouter\ngot: %s", cmd)
+	}
+	if strings.Contains(cmd, "--provider pi") {
+		t.Errorf("arbiter command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
 	}
 }
