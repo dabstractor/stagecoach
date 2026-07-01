@@ -629,14 +629,14 @@
               "type": "Task",
               "id": "P3.M2.T1",
               "title": "Role resolution for decompose + DecomposeDeps structure",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the role resolution that builds four resolved manifests (planner/stager/message/arbiter) from config, and the DecomposeDeps structure that carries them for dependency injection.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M2.T1.S1",
                   "title": "Implement decompose/roles.go — resolve four role manifests from config",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T2.S2"
@@ -659,14 +659,14 @@
               "type": "Task",
               "id": "P3.M2.T2",
               "title": "Planner agent call + JSON parse/retry + single-call shortcut",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the planner agent invocation: build the system+user prompt with style examples and working-tree diff, call the bare planner agent, parse JSON output with retry, and handle the single-call shortcut (FR-M11).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M2.T2.S1",
                   "title": "Implement planner agent call + JSON parse + single-shortcut in decompose/planner.go",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M2.T1.S1",

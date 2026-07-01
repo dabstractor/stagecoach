@@ -294,3 +294,29 @@ func TestDecodeUserOverrides(t *testing.T) {
 		t.Errorf("nil input: got=%v err=%v", got0, err0)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FirstTooledProvider (FR-D4)
+// ---------------------------------------------------------------------------
+
+func TestFirstTooledProvider(t *testing.T) {
+	r := NewRegistry(nil)
+	cases := []struct {
+		installed []string
+		want      string
+	}{
+		{[]string{"pi", "claude"}, "pi"},         // pi is first capable (priority order)
+		{[]string{"claude", "pi"}, "pi"},         // pi still wins regardless of input order
+		{[]string{"claude", "gemini"}, "claude"}, // only claude capable; gemini is not
+		{[]string{"gemini", "agy"}, ""},          // neither gemini nor agy is stager-capable
+		{[]string{"claude"}, "claude"},           // claude alone is capable
+		{[]string{"gemini"}, ""},                 // gemini is NOT stager-capable (nil TooledFlags)
+		{[]string{"myagent"}, ""},                // user-defined never auto-selected
+		{nil, ""},                                // nothing installed
+	}
+	for _, c := range cases {
+		if got := r.FirstTooledProvider(c.installed); got != c.want {
+			t.Errorf("FirstTooledProvider(%v) = %q, want %q", c.installed, got, c.want)
+		}
+	}
+}

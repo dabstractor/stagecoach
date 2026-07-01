@@ -117,6 +117,33 @@ func (r *Registry) DefaultProvider(installed []string) string {
 	return ""
 }
 
+// FirstTooledProvider returns the first built-in (in preference order, pi first) that the caller
+// reports installed AND whose manifest has non-empty TooledFlags (i.e. can serve as the stager),
+// or "" if none of the preferred built-ins are installed and stager-capable (FR-D4 — PRD §9.16).
+// It mirrors DefaultProvider's structure but adds the TooledFlags filter: only pi and claude are
+// stager-capable today (builtin.go). installed is the caller's list of installed provider NAMES
+// (computed via IsInstalled over List()). Taking it as a param keeps this pure/testable (no exec inside).
+// Only built-in names are candidates; user-defined §12.8 providers are never auto-selected.
+func (r *Registry) FirstTooledProvider(installed []string) string {
+	present := make(map[string]struct{}, len(installed))
+	for _, name := range installed {
+		present[name] = struct{}{}
+	}
+	for _, name := range preferredBuiltins {
+		if _, ok := present[name]; !ok {
+			continue
+		}
+		m, ok := r.Get(name)
+		if !ok {
+			continue
+		}
+		if len(m.TooledFlags) > 0 {
+			return name
+		}
+	}
+	return ""
+}
+
 // DecodeUserOverrides bridges config.Providers (raw map[string]map[string]any, P1.M1.T4) to the
 // map[string]Manifest NewRegistry consumes. For each [provider.<name>] entry it re-encodes the raw map
 // to TOML and unmarshals into a Manifest (the pattern the frozen config.go comment specifies for "the
