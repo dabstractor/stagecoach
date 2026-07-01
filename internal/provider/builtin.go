@@ -27,8 +27,11 @@ func BuiltinManifests() map[string]Manifest {
 }
 
 // builtinPi returns the pi manifest per PRD §12.3 (FULLY VERIFIED vs `pi --help`, external_deps.md §pi).
-// Rendered with provider="zai", model=default, sys set, it reproduces the commit-pi invocation
-// byte-for-byte (see TestBuiltinManifests_RenderedCommand_Pi_MatchesCommitPi).
+// Per FR-D2 (PRD §9.16/§12.3), the shipped pi default is DECOUPLED from any one subscription:
+// default_model AND default_provider are both "" (NON-NIL empty). config init fills per-role models
+// from the FR-D4 table; the user/config picks the backend. The original commit-pi setup
+// (provider=zai, model=glm-5-turbo) is a documented PERSONAL OVERRIDE, not the shipped default —
+// see TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride.
 //
 // NOTE the explicit-empty DefaultProvider: §12.3 WRITES `default_provider = ""` (non-nil *""), meaning
 // "do not add --provider unless the user configures one." This is NOT the same as a nil DefaultProvider
@@ -41,7 +44,7 @@ func builtinPi() Manifest {
 		PromptDelivery:   strPtr("stdin"),
 		PrintFlag:        strPtr("-p"),
 		ModelFlag:        strPtr("--model"),
-		DefaultModel:     strPtr("glm-5-turbo"),
+		DefaultModel:     strPtr(""), // FR-D2: was glm-5-turbo; decoupled from any one subscription
 		SystemPromptFlag: strPtr("--system-prompt"),
 		ProviderFlag:     strPtr("--provider"),
 		DefaultProvider:  strPtr(""), // §12.3 explicit empty (NON-NIL) — user sets e.g. "zai"

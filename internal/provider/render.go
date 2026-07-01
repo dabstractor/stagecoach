@@ -64,8 +64,9 @@ const (
 //	+ payload                          per prompt_delivery switch (positional/flag only)
 //
 // model/provider default to the resolved manifest's DefaultModel/DefaultProvider when the param is ""
-// (mirrors the renderArgs test scaffolding; lets the pi golden test pass with model="" → glm-5-turbo,
-// and honors a §12.8 user manifest's default_provider). An explicit non-empty param always wins.
+// (mirrors the renderArgs test scaffolding; honors a §12.8 user manifest's default_provider;
+// pi's default is now "" per FR-D2, so a bare pi render emits no --model until config supplies one).
+// An explicit non-empty param always wins.
 //
 // System-prompt + payload (§12.2 "Note on system prompt + stdin"): when system_prompt_flag != "" the
 // sys prompt is emitted via the flag and the payload is just the user payload; when system_prompt_flag

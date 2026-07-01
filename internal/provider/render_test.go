@@ -43,8 +43,8 @@ func TestRender_GoldenPerProvider(t *testing.T) {
 		wantArgs  []string
 		wantStdin string
 	}{
-		{"pi", pi, "", "zai", "pi",
-			[]string{"--provider", "zai", "--model", "glm-5-turbo", "--system-prompt", "<sys>",
+		{"pi", pi, "", "", "pi", // FR-D2: shipped default — no --model/--provider
+			[]string{"--system-prompt", "<sys>",
 				"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session", "-p"},
 			"<user>"}, // stdin; sys via flag → only user via stdin
 		{"claude", claude, "sonnet", "", "claude",
@@ -85,10 +85,11 @@ func TestRender_GoldenPerProvider(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // Test 2 (THE headline): pi is byte-for-byte the commit-pi invocation
+// (FR-D2: this is now the PERSONAL OVERRIDE path — explicit model+provider).
 // ---------------------------------------------------------------------------
 
 func TestRender_Pi_ByteForByteCommitPi(t *testing.T) {
-	spec, err := builtinPi().Render("", "zai", "<sys>", "<user>")
+	spec, err := builtinPi().Render("glm-5-turbo", "zai", "<sys>", "<user>") // explicit personal override
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -125,18 +126,25 @@ func TestRender_SystemPromptPrependFallback(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 4: model default fallback: model="" → DefaultModel (pi→glm-5-turbo);
-// explicit wins.
+// Test 4: model default fallback: claude→sonnet (default model honored);
+// explicit wins. Pi (FR-D2: empty default) emits NO --model.
 // ---------------------------------------------------------------------------
 
 func TestRender_ModelDefaultFallback(t *testing.T) {
-	byDefault, _ := builtinPi().Render("", "zai", "", "") // model="" → glm-5-turbo
-	if !containsPair(byDefault.Args, "--model", "glm-5-turbo") {
-		t.Errorf("model default not applied: %v", byDefault.Args)
+	// claude: model="" → DefaultModel="sonnet"
+	byDefault, _ := builtinClaude().Render("", "", "", "")
+	if !containsPair(byDefault.Args, "--model", "sonnet") {
+		t.Errorf("claude model default not applied: %v", byDefault.Args)
 	}
-	explicit, _ := builtinPi().Render("custom-model", "zai", "", "") // explicit wins
+	// claude: explicit model wins over default
+	explicit, _ := builtinClaude().Render("custom-model", "", "", "")
 	if !containsPair(explicit.Args, "--model", "custom-model") {
-		t.Errorf("explicit model lost: %v", explicit.Args)
+		t.Errorf("claude explicit model lost: %v", explicit.Args)
+	}
+	// pi (FR-D2: empty default) emits NO --model
+	piNoModel, _ := builtinPi().Render("", "", "", "")
+	if containsToken(piNoModel.Args, "--model") {
+		t.Errorf("pi should emit no --model by default (FR-D2): %v", piNoModel.Args)
 	}
 }
 

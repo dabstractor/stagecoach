@@ -19,7 +19,7 @@ command = "pi"
 prompt_delivery = "stdin"
 print_flag = "-p"
 model_flag = "--model"
-default_model = "glm-5-turbo"
+default_model = ""                          # FR-D2: empty in the shipped default; config init fills per-role (§9.16 FR-D4)
 system_prompt_flag = "--system-prompt"
 provider_flag = "--provider"
 default_provider = ""
@@ -216,7 +216,7 @@ func TestBuiltinManifests_PiFields(t *testing.T) {
 	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
 	assertStr(t, "PrintFlag", m.PrintFlag, "-p")
 	assertStr(t, "ModelFlag", m.ModelFlag, "--model")
-	assertStr(t, "DefaultModel", m.DefaultModel, "glm-5-turbo")
+	assertStr(t, "DefaultModel", m.DefaultModel, "") // FR-D2: decoupled from any one subscription
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "--system-prompt")
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "--provider")
 
@@ -350,22 +350,41 @@ func TestBuiltinManifests_DecodeParity(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 7: RenderedCommand_Pi_MatchesCommitPi — byte-for-byte commit-pi check
-//         (THE work-item headline requirement)
+// Test 7a: RenderedCommand_Pi_ShippedDefault — FR-D2: no --model/--provider emitted
+//         when both model and provider are empty (the shipped default).
 // ---------------------------------------------------------------------------
 
-func TestBuiltinManifests_RenderedCommand_Pi_MatchesCommitPi(t *testing.T) {
-	argv := renderArgs(builtinPi(), "zai", "", "<sys>") // model="" → default glm-5-turbo
+func TestBuiltinManifests_RenderedCommand_Pi_ShippedDefault(t *testing.T) {
+	argv := renderArgs(builtinPi(), "", "", "<sys>") // model="" → default "" (FR-D2), provider="" → no flag
+	want := []string{
+		"pi",
+		"--system-prompt", "<sys>",
+		"--no-tools", "--no-extensions", "--no-skills",
+		"--no-prompt-templates", "--no-context-files", "--no-session",
+		"-p", // §12.2: print_flag LAST
+	}
+	if !reflect.DeepEqual(argv, want) {
+		t.Errorf("pi shipped-default argv:\n got %v\nwant %v", argv, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 7b: RenderedCommand_Pi_PersonalOverride — byte-for-byte commit-pi check
+//         with EXPLICIT model+provider (FR-D2: the old default is now an override).
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride(t *testing.T) {
+	argv := renderArgs(builtinPi(), "zai", "glm-5-turbo", "<sys>") // explicit personal override
 	want := []string{
 		"pi", "--provider", "zai",
 		"--model", "glm-5-turbo",
 		"--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",
-		"-p", // §12.2: print_flag LAST (matches §12.3 + commit-pi)
+		"-p", // §12.2: print_flag LAST (matches commit-pi)
 	}
 	if !reflect.DeepEqual(argv, want) {
-		t.Errorf("pi rendered argv:\n got %v\nwant %v", argv, want)
+		t.Errorf("pi personal-override argv:\n got %v\nwant %v", argv, want)
 	}
 }
 

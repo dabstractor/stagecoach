@@ -33,7 +33,7 @@ type realDefault struct {
 // manifest DefaultModel / emit no flag. Sourced from architecture/external_deps.md.
 // Override per-run via STAGEHAND_REAL_MODEL_<NAME> / STAGEHAND_REAL_PROVIDER_<NAME>.
 var realDefaults = map[string]realDefault{
-	"pi":       {"", "zai"},                       // glm-5-turbo from manifest default; provider=zai (commit-pi)
+	"pi":       {"glm-5-turbo", "zai"},            // explicit personal override (commit-pi); manifest default empty (FR-D2)
 	"claude":   {"", ""},                          // sonnet from manifest default
 	"gemini":   {"", ""},                          // gemini-2.5-pro from manifest default
 	"opencode": {"anthropic/claude-sonnet-4", ""}, // manifest default is "" → MUST supply a model
@@ -42,7 +42,7 @@ var realDefaults = map[string]realDefault{
 }
 
 // providerNames — registry preference order (registry.go preferredBuiltins); deterministic subtest order.
-var providerNames = []string{"pi", "claude", "gemini", "opencode", "codex", "cursor"}
+var providerNames = []string{"pi", "opencode", "cursor", "gemini", "codex", "claude"} // FR-D1 preference order (registry.go preferredBuiltins) minus agy (experimental — non-TTY stdout drop, issue #76; not real-tested). Subtest display order only.
 
 // envOr returns the value of the environment variable key, or def if unset or empty.
 func envOr(key, def string) string {

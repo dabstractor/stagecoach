@@ -205,7 +205,7 @@ func TestProvidersShow_BuiltInTOML(t *testing.T) {
 	substrings := []string{
 		"name = 'pi'",
 		"command = 'pi'",
-		"default_model = 'glm-5-turbo'",
+		"default_model = ''",
 		"output = 'raw'",
 		"strip_code_fence = true",
 	}

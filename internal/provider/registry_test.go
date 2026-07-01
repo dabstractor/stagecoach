@@ -29,6 +29,11 @@ func TestPreferredBuiltins_MatchesBuiltinKeys(t *testing.T) {
 	if len(preferredBuiltins) == 0 || preferredBuiltins[0] != "pi" {
 		t.Errorf("pi must be first; got %v", preferredBuiltins)
 	}
+	// Exact FR-D1 order assertion (§9.16 FR-D1: open/self-hostable first, closed last).
+	wantOrder := []string{"pi", "opencode", "cursor", "agy", "gemini", "codex", "claude"}
+	if !reflect.DeepEqual(preferredBuiltins, wantOrder) {
+		t.Errorf("preferredBuiltins order = %v, want FR-D1 %v", preferredBuiltins, wantOrder)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -225,20 +230,22 @@ func TestMarshalTOML_ReflectsMerge(t *testing.T) {
 
 func TestDefaultProvider(t *testing.T) {
 	r := NewRegistry(nil)
-	if got := r.DefaultProvider([]string{"pi", "claude"}); got != "pi" {
-		t.Errorf("got %q, want pi", got)
+	cases := []struct {
+		installed []string
+		want      string
+	}{
+		{[]string{"pi", "claude"}, "pi"},                // pi always wins (rank 1)
+		{[]string{"claude", "gemini"}, "gemini"},        // gemini(5) before claude(7) under FR-D1
+		{[]string{"codex", "claude"}, "codex"},          // codex(6) before claude(7)
+		{[]string{"cursor", "agy", "gemini"}, "cursor"}, // cursor(3) before agy(4)/gemini(5)
+		{[]string{"opencode", "pi"}, "pi"},              // pi still tops opencode(2)
+		{[]string{"myagent"}, ""},                       // user-defined never auto-selected
+		{nil, ""},                                       // nothing installed
 	}
-	if got := r.DefaultProvider([]string{"claude", "gemini"}); got != "claude" {
-		t.Errorf("got %q, want claude", got)
-	}
-	if got := r.DefaultProvider([]string{"cursor", "pi"}); got != "pi" {
-		t.Errorf("got %q, want pi (preferred)", got)
-	}
-	if got := r.DefaultProvider([]string{"myagent"}); got != "" {
-		t.Errorf("user-defined-only: got %q, want \"\"", got)
-	}
-	if got := r.DefaultProvider(nil); got != "" {
-		t.Errorf("nil: got %q, want \"\"", got)
+	for _, c := range cases {
+		if got := r.DefaultProvider(c.installed); got != c.want {
+			t.Errorf("DefaultProvider(%v) = %q, want %q", c.installed, got, c.want)
+		}
 	}
 }
 

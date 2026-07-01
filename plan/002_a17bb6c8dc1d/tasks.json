@@ -86,7 +86,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Provider Extensions (agy, priority reordering, pi defaults)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add the Antigravity CLI (agy) built-in provider manifest per §12.5.1, update the cascading provider priority order per FR-D1 (pi, opencode, cursor, agy, gemini, codex, claude), and decouple pi's default model from the author's personal z.ai subscription per FR-D2.",
           "tasks": [
             {
@@ -119,14 +119,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Update provider priority, pi defaults, and tooled_flags for existing providers",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Reorder preferredBuiltins per FR-D1 (open/self-hostable first), decouple pi's default_model from glm-5-turbo per FR-D2, and add tooled_flags to providers that support a safe tooled profile for the stager role.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Reorder preferredBuiltins + update pi default_model to empty",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -142,7 +142,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S2",
                   "title": "Add tooled_flags to pi and claude manifests (stager-capable providers)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
