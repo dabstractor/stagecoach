@@ -146,6 +146,27 @@ type Git interface {
 	// here — branch on code != 0, never on code == 128). Each line is "XY <path>"; the raw string is
 	// returned trimmed (caller compares to "").
 	StatusPorcelain(ctx context.Context) (output string, err error)
+
+	// WorkingTreeDiff returns the unstaged working-tree diff payload for multi-commit decomposition's
+	// planner input (PRD §13.6.2 / FR-M3: the planner "Receives the full working-tree diff snapshot
+	// (with binary placeholders per FR3c) plus the style examples from §9.3"). It is the working-tree
+	// analogue of StagedDiff (which is index-vs-HEAD) and the no-tree analogue of TreeDiff (which is
+	// tree-to-tree): the SAME three-part payload (markdown per-file + line-capped; FR3c binary
+	// placeholders; non-markdown aggregate + byte-capped) with the SAME pathspec excludes — the ONLY
+	// difference is the diff domain: it runs `git diff` WITHOUT --cached (working-tree-vs-INDEX), never
+	// `git diff --cached` and never `git diff HEAD`.
+	//
+	// IMPORTANT — the `git diff` domain omits untracked files: `git diff` (no --cached) compares the
+	// working tree to the INDEX, and git never lists untracked files in a diff (untracked = not in the
+	// index = nothing to diff against). Only tracked-but-modified and tracked-but-deleted files appear.
+	// This is the explicit contract (the work item names `git diff` WITHOUT --cached); the tooled stager
+	// (FR-M5) discovers untracked files itself. Callers must not expect untracked files in this payload.
+	//
+	// `git diff` (without --quiet) exits 0 whether or not there are changes (empty working tree → exit 0,
+	// empty stdout; dirty → exit 0, non-empty stdout); exit 128 means a bad pathspec or corrupt repo — a
+	// REAL error (NOT an unborn signal: branch on code != 0, never on code == 128; never use --quiet).
+	// Read-only with respect to refs and the index (PRD §18.1). A no-change working tree returns ("", nil).
+	WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions) (diff string, err error)
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -941,4 +962,103 @@ func (g *gitRunner) StatusPorcelain(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("git status --porcelain: failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return strings.TrimSpace(stdout), nil
+}
+
+// WorkingTreeDiff returns the unstaged working-tree diff payload (PRD §13.6.2 / FR-M3 — the
+// planner input). It is a port of TreeDiff: the same three-part structure (markdown per-file
+// line-capped; FR3c binary placeholders; non-markdown aggregate byte-capped) with the SAME
+// pathspec excludes — the ONLY difference is the diff domain: it runs `git diff` WITHOUT --cached
+// (working-tree-vs-index), never `git diff --cached` and never `git diff HEAD`. Every `git diff`
+// invocation uses the simple exit-code branch (code != 0 → error); exit 128 = a bad pathspec or
+// corrupt repo = a real error (NOT an unborn signal). Empty diffArgs (no tree positionals).
+func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions) (string, error) {
+	maxMDLines := opts.MaxMDLines
+	if maxMDLines <= 0 {
+		maxMDLines = defaultMaxMDLines
+	}
+	maxDiffBytes := opts.MaxDiffBytes
+	if maxDiffBytes <= 0 {
+		maxDiffBytes = defaultMaxDiffBytes
+	}
+
+	var b strings.Builder
+
+	// ---- Part 1: markdown, per-file, line-capped ---- (working-tree domain: no --cached, no tree args)
+	mdList, stderr, code, err := g.run(ctx, g.workDir,
+		"diff", "--name-only", "--", "*.md", "*.markdown")
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
+		if file == "" {
+			continue
+		}
+		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, "diff", "--", file)
+		if ferr != nil {
+			return "", ferr
+		}
+		if fcode != 0 {
+			return "", fmt.Errorf("git diff -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
+		}
+		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
+			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
+				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
+		}
+		b.WriteString(fileDiff)
+		if !strings.HasSuffix(fileDiff, "\n") {
+			b.WriteByte('\n')
+		}
+	}
+
+	// ---- Binary filtering (PRD §9.1 FR3a/b/c, working-tree path) ----
+	// Empty diffArgs ⇒ `git diff --numstat` / `git diff --name-status` (working-tree-vs-index).
+	binSet, berr := g.detectBinaryFiles(ctx)
+	if berr != nil {
+		return "", berr
+	}
+	statuses, serr := g.fileStatuses(ctx)
+	if serr != nil {
+		return "", serr
+	}
+
+	binPaths := make([]string, 0, len(statuses))
+	for path := range statuses {
+		if binSet[path] || isBinaryByExtension(path, opts.BinaryExtensions) {
+			binPaths = append(binPaths, path)
+		}
+	}
+	sort.Strings(binPaths)
+	var binExcludes []string // SEPARATE slice — never append to `excludes` (it may alias defaultExcludes)
+	for _, path := range binPaths {
+		b.WriteString(binaryPlaceholderLine(statuses[path], path)) // "<status>\t[binary] <path>"
+		b.WriteByte('\n')
+		binExcludes = append(binExcludes, ":!"+path)
+	}
+
+	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
+	excludes := opts.Excludes
+	if len(excludes) == 0 {
+		excludes = defaultExcludes
+	}
+	nmArgs := []string{"diff", "--"}
+	nmArgs = append(nmArgs, excludes...)
+	nmArgs = append(nmArgs, ":!*.md", ":!*.markdown")
+	nmArgs = append(nmArgs, binExcludes...) // drop binary bodies from the aggregate
+	nmDiff, nmstderr, nmcode, nmerr := g.run(ctx, g.workDir, nmArgs...)
+	if nmerr != nil {
+		return "", nmerr
+	}
+	if nmcode != 0 {
+		return "", fmt.Errorf("git diff (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
+	}
+	if len(nmDiff) > maxDiffBytes {
+		nmDiff = nmDiff[:maxDiffBytes] +
+			fmt.Sprintf("\n... [diff truncated at %d bytes]", maxDiffBytes)
+	}
+	b.WriteString(nmDiff)
+
+	return b.String(), nil
 }

@@ -404,7 +404,7 @@
       "type": "Phase",
       "id": "P2",
       "title": "Data Layer V2 — Binary Filtering & Git Plumbing",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Add binary/non-text file filtering to all diff paths (FR3a-c) and implement the new git plumbing methods required by the decompose pipeline (tree operations, status porcelain, working-tree diff). These are independent of P1 and can proceed in parallel.",
       "milestones": [
         {
@@ -457,7 +457,7 @@
           "type": "Milestone",
           "id": "P2.M2",
           "title": "V2 Git Plumbing Methods",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Add the new git plumbing methods required by the decompose pipeline: RevParseTree (base tree for concept diffs), TreeDiff (tree-to-tree concept diff with binary filtering), ReadTree (for chain rebuild), StatusPorcelain (arbiter trigger), and WorkingTreeDiff (planner input).",
           "tasks": [
             {
@@ -508,7 +508,7 @@
               "type": "Task",
               "id": "P2.M2.T2",
               "title": "StatusPorcelain + WorkingTreeDiff",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add StatusPorcelain (arbiter trigger — detect leftovers after the decompose loop) and WorkingTreeDiff (planner input — full unstaged diff of the dirty working tree).",
               "subtasks": [
                 {
@@ -529,7 +529,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T2.S2",
                   "title": "Implement WorkingTreeDiff (unstaged diff with binary filtering) for planner input",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -573,7 +573,7 @@
                   "type": "Subtask",
                   "id": "P3.M1.T1.S1",
                   "title": "Implement planner system prompt + JSON contract + assembly in prompt/planner.go",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: §17.5 specifies the planner prompt verbatim. The planner is bare and receives the full working-tree diff + style examples. Its JSON output contract: `{\"count\": N, \"single\": bool, \"commits\": [{\"title\": \"...\", \"description\": \"...\"}], \"message\": \"...\"}`. message present iff single==true. Forced-count mode prepends 'Produce EXACTLY N commits...'. Retry instruction: 'Respond with ONLY the JSON object described, no other text.' The style examples are the same RecentMessages-based examples from prompt/system.go.\n2. INPUT: The existing prompt package patterns (prompt/system.go, prompt/payload.go — string constants without trailing newlines, assembly functions own inter-block newlines).\n3. LOGIC: Create internal/prompt/planner.go. Define plannerSystemPrompt constant (verbatim from §17.5 — role, rules, JSON contract). Define plannerUserPayload(diff string, forcedCount int) string — assembles the user instruction + diff (prepends forced-count directive if forcedCount>0). Define PlannerOutput struct with json tags: Count int, Single bool, Commits []PlannerCommit (Title, Description), Message string. Define ParsePlannerOutput(raw string) (PlannerOutput, error) — json.Unmarshal with brace-balanced fallback (reuse provider.parseJSON pattern or provider.extractJSONObject).\n4. OUTPUT: prompt/planner.go exports BuildPlannerSystemPrompt(), BuildPlannerUserPayload(), and ParsePlannerOutput(). Consumed by decompose/planner.go (P3.M2.T2.S1).\n5. DOCS: none — prompt constants are self-documenting via PRD §17.5 reference.",
