@@ -171,10 +171,13 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 // overlay — field-by-field non-zero merge
 // ---------------------------------------------------------------------------
 
-// overlay merges src into dst field-by-field (arch §2.4): each NON-ZERO scalar in src overrides dst;
-// the Providers map is merged KEY-BY-KEY (a key in src replaces dst's whole entry for that key — no
-// sub-field merge within a provider at the file↔file boundary; field-merge with BUILT-IN manifests is
-// the registry's job, P1.M2.T3). Nil-safe: a nil src (or nil src.Providers) is a no-op for that part.
+// overlay merges src into dst field-by-field (arch §2.4): each NON-ZERO scalar in src overrides dst.
+// The Providers map is field-merged PER PROVIDER: a field in src's [provider.X] overrides that one
+// field of dst's [provider.X]; fields src omits are inherited from dst. This corrects the v1
+// "key-level whole-block replace" (plan/.../P1M1T4S2 design-decisions), which silently dropped
+// cross-layer provider pins — e.g. a repo [provider.pi] setting only default_model erased a global
+// default_provider, leaving a bare --model that misrouted (PRD §9.8 FR37a). Field-merge with the
+// BUILT-IN manifest remains the registry's job (P1.M2.T3). Nil-safe: nil src / nil src.Providers = no-op.
 func overlay(dst, src *Config) {
 	if src == nil {
 		return
@@ -214,13 +217,20 @@ func overlay(dst, src *Config) {
 	if src.StripCodeFence != nil {
 		dst.StripCodeFence = src.StripCodeFence
 	}
-	// [provider.X]
+	// [provider.X] — field-level merge across config layers (PRD §9.8 FR37a). A field src sets overrides
+	// that one field only; fields src omits survive from lower layers. Reverses the v1 key-level
+	// "whole-block replace", which dropped cross-layer provider pins and caused bare-model misroutes.
 	if len(src.Providers) > 0 {
 		if dst.Providers == nil {
 			dst.Providers = make(map[string]map[string]any, len(src.Providers))
 		}
 		for name, entry := range src.Providers {
-			dst.Providers[name] = entry // key-level replace (arch §2.4)
+			if dst.Providers[name] == nil {
+				dst.Providers[name] = make(map[string]any, len(entry))
+			}
+			for k, v := range entry {
+				dst.Providers[name][k] = v // field-level override; lower-layer fields survive
+			}
 		}
 	}
 }

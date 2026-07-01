@@ -179,31 +179,34 @@ func TestGlobalConfigPath(t *testing.T) {
 	}
 }
 
-// --- Test E: TestOverlayProvidersKeyReplace ---
+// --- Test E: TestOverlayProvidersFieldMerge ---
 
-func TestOverlayProvidersKeyReplace(t *testing.T) {
+func TestOverlayProvidersFieldMerge(t *testing.T) {
 	dst := Defaults()
 	dst.Providers = map[string]map[string]any{
-		"pi":     {"default_model": "A"},
+		"pi":     {"default_model": "A", "default_provider": "zai"},
 		"claude": {"api_key": "key1"},
 	}
 	src := &Config{
 		Providers: map[string]map[string]any{
-			"pi": {"default_model": "B"},
+			"pi": {"default_model": "B"}, // higher layer sets model only
 		},
 	}
 	overlay(&dst, src)
 
-	// pi replaced entirely
-	if dst.Providers["pi"]["default_model"] != "B" {
-		t.Errorf("pi not replaced: default_model=%v, want B", dst.Providers["pi"]["default_model"])
+	// pi.default_model overridden by src (higher layer wins, per-field)
+	if got := dst.Providers["pi"]["default_model"]; got != "B" {
+		t.Errorf("pi.default_model=%v, want B", got)
 	}
-	// claude still present
-	if dst.Providers["claude"] == nil {
-		t.Errorf("claude missing after overlay")
+	// pi.default_provider SURVIVES — the v1 key-level replace would have dropped it (PRD §9.8 FR37a).
+	// This is the regression that let a repo [provider.pi] default_model erase a global default_provider,
+	// leaving a bare --model that misrouted to the wrong upstream.
+	if got := dst.Providers["pi"]["default_provider"]; got != "zai" {
+		t.Errorf("pi.default_provider=%v, want zai (field-merge must preserve lower-layer fields)", got)
 	}
-	if dst.Providers["claude"]["api_key"] != "key1" {
-		t.Errorf("claude mutated: %v", dst.Providers["claude"]["api_key"])
+	// a different provider key is untouched
+	if dst.Providers["claude"] == nil || dst.Providers["claude"]["api_key"] != "key1" {
+		t.Errorf("claude mutated: %v", dst.Providers["claude"])
 	}
 }
 
