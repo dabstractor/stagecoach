@@ -757,21 +757,21 @@
           "type": "Milestone",
           "id": "P3.M3",
           "title": "Arbiter & Leftover Reconciliation",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Implement the arbiter agent call and the three resolution paths: new commit (null), tip amend (target==HEAD), and mid-chain rebuild (target==earlier commit). Stagehand performs ALL git; the arbiter only decides.",
           "tasks": [
             {
               "type": "Task",
               "id": "P3.M3.T1",
               "title": "Arbiter agent call + JSON parse",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the arbiter agent invocation: build the system+user prompt with commits-made-this-run + leftover diff, call the bare arbiter agent, parse JSON output.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M3.T1.S1",
                   "title": "Implement arbiter agent call + JSON parse in decompose/arbiter.go",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M1.T1.S3",
@@ -795,14 +795,14 @@
               "type": "Task",
               "id": "P3.M3.T2",
               "title": "Arbiter resolution (new commit, tip amend, mid-chain rebuild)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the three arbiter resolution paths that stagehand executes based on the arbiter's target. All use git plumbing; stagehand owns every ref mutation.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M3.T2.S1",
                   "title": "Implement arbiter resolution: new commit + tip amend + mid-chain chain rebuild",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M3.T1.S1",
