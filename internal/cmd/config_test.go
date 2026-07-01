@@ -346,11 +346,14 @@ func TestConfigInit_ProviderPin_ExactOutput(t *testing.T) {
 		t.Error("missing provider = \"pi\" in [defaults]")
 	}
 
-	// pi's role models (exact)
-	assertContains(t, content, "[role.planner]", `model = "gpt-5.4"`)
-	assertContains(t, content, "[role.message]", `model = "gpt-5.4-nano"`)
-	assertContains(t, content, "[role.stager]", `model = "gpt-5.4-mini"`)
-	assertContains(t, content, "[role.arbiter]", `model = "gpt-5.4-mini"`)
+	// pi's role models (blanked — no sub-provider in bootstrap)
+	assertContains(t, content, "[role.planner]", `model = ""`)
+	assertContains(t, content, "[role.message]", `model = ""`)
+	assertContains(t, content, "[role.stager]", `model = ""`)
+	assertContains(t, content, "[role.arbiter]", `model = ""`)
+	// NOTE: the negative gpt-5.4 check is intentionally omitted here because the real CLI
+	// path may detect other installed providers whose commented blocks legitimately contain gpt-5.4.
+	// The uncommented model="" assertions above are sufficient.
 
 	// pi IS stager-capable — no fallback annotation
 	if strings.Contains(content, "cannot serve as the stager") {

@@ -25,11 +25,21 @@ func TestBuildBootstrapConfig_Pi(t *testing.T) {
 		t.Error("missing provider = \"pi\"")
 	}
 
-	// pi's four role models uncommented
-	assertContains(t, content, "[role.planner]", `model = "gpt-5.4"`)
-	assertContains(t, content, "[role.stager]", `model = "gpt-5.4-mini"`)
-	assertContains(t, content, "[role.message]", `model = "gpt-5.4-nano"`)
-	assertContains(t, content, "[role.arbiter]", `model = "gpt-5.4-mini"`)
+	// pi's four role models blanked (no sub-provider in bootstrap — pi picks its own backend default)
+	assertContains(t, content, "[role.planner]", `model = ""`)
+	assertContains(t, content, "[role.stager]", `model = ""`)
+	assertContains(t, content, "[role.message]", `model = ""`)
+	assertContains(t, content, "[role.arbiter]", `model = ""`)
+
+	// Negative: a pi-only config must contain NO gpt-5.4 anywhere (catches the stager re-pull bug)
+	if strings.Contains(content, "gpt-5.4") {
+		t.Errorf("pi bootstrap must not ship un-routable gpt-5.4* models; got:\n%s", content)
+	}
+
+	// Sub-provider annotation present
+	if !strings.Contains(content, "requires a default_provider (sub-provider)") {
+		t.Error("pi bootstrap missing the sub-provider annotation")
+	}
 
 	// pi IS stager-capable — no fallback annotation
 	if strings.Contains(content, "cannot serve as the stager") {
@@ -73,9 +83,9 @@ func TestBuildBootstrapConfig_GeminiStagerFallback(t *testing.T) {
 func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
 	content := buildBootstrapConfig("pi", []string{"pi", "claude"})
 
-	// UNCOMMENTED role blocks are pi's
-	assertContains(t, content, "[role.planner]", `model = "gpt-5.4"`)
-	assertContains(t, content, "[role.message]", `model = "gpt-5.4-nano"`)
+	// UNCOMMENTED role blocks are pi's (blanked — no sub-provider in bootstrap)
+	assertContains(t, content, "[role.planner]", `model = ""`)
+	assertContains(t, content, "[role.message]", `model = ""`)
 
 	// claude appears as commented block
 	if !strings.Contains(content, "=== claude (installed)") {

@@ -252,21 +252,21 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Fix bootstrap config for pi (Issue 5, Minor)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "The bootstrap config written by `config init` sets pi per-role models (gpt-5.4*) but no default_provider (sub-provider). Once Issue 1 is fixed, pi receives no --provider flag and routes gpt-5.4* models to its default backend (google) where they don't exist. Fix by blanking pi's per-role models in the bootstrap so pi picks its own backend default until the user configures a verified routing sub-provider.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M5.T1",
               "title": "Blank pi per-role models in bootstrap when no default_provider is configured",
-              "status": "Planned",
+              "status": "Complete",
               "description": "In buildBootstrapConfig (internal/config/bootstrap.go), when the target provider is pi, write model='' for all [role.*] blocks instead of gpt-5.4* models. Add an explanatory comment in the bootstrap output noting the user must configure default_provider + compatible models. This prevents the out-of-box model-not-found error and satisfies FR-B1's 'works immediately' promise conservatively.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T1.S1",
                   "title": "Blank pi models in bootstrap and add explanatory annotation",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
