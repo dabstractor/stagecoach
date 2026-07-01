@@ -937,7 +937,7 @@
           "type": "Milestone",
           "id": "P4.M2",
           "title": "Public API & Config CLI",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Add the public Decompose API surface (types + function) and update the config CLI to reflect the populated bootstrap and upgrade command.",
           "tasks": [
             {
@@ -970,14 +970,14 @@
               "type": "Task",
               "id": "P4.M2.T2",
               "title": "Config CLI updates (populated init, upgrade registration, help dedup)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Register the config upgrade subcommand, ensure config init uses the populated bootstrap, and apply help de-duplication (FR-B6) to the config and providers command groups.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P4.M2.T2.S1",
                   "title": "Register config upgrade + apply help de-duplication (FR-B6) + verify populated init wiring",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T2.S1",

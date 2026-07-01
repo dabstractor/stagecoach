@@ -573,6 +573,66 @@ func TestConfigGroup_NoSubcommandPrintsHelp(t *testing.T) {
 	if !strings.Contains(got, "path") {
 		t.Error(`help output missing "path" subcommand`)
 	}
+	if !strings.Contains(got, "upgrade") {
+		t.Error(`help output missing "upgrade" subcommand (registration — configCmd.AddCommand(configUpgradeCmd))`)
+	}
+	if strings.Contains(got, "Subcommands:") {
+		t.Error(`help output must NOT contain a manual "Subcommands:" block (FR-B6: cobra "Available Commands" is the single source)`)
+	}
+	if !strings.Contains(got, "Available Commands:") {
+		t.Error(`help output missing cobra "Available Commands:" (FR-B6 single source)`)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// config lifecycle test — init → upgrade end-to-end
+// ---------------------------------------------------------------------------
+
+func TestConfigLifecycle_InitThenUpgrade(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	setupNoRepo(t)
+
+	// (1) config init — populated bootstrap (no --template, no --provider → auto-detect/default "pi")
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init"})
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("config init err=%v, want nil", err)
+	}
+
+	// (2) the written config is POPULATED and carries the current schema version
+	path := config.GlobalConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read written config: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "config_version = 2") {
+		t.Errorf("populated config missing 'config_version = 2' (GenerateBootstrapConfig must write CurrentConfigVersion);\ngot:\n%s", content)
+	}
+	// populated (NOT inert): it has at least one uncommented [defaults] or [role. block
+	if !strings.Contains(content, "[defaults]") && !strings.Contains(content, "[role.") {
+		t.Errorf("populated config appears inert (no uncommented [defaults]/[role.*]);\ngot:\n%s", content)
+	}
+
+	// (3) config upgrade on the fresh-init'd config → already current, byte-identical
+	preContent := content
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "upgrade"})
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("config upgrade err=%v, want nil (already-current is success)", err)
+	}
+	if !strings.Contains(out.String(), "no changes") && !strings.Contains(out.String(), "already") {
+		t.Errorf("upgrade stdout=%q, want 'already up to date'/'no changes'", out.String())
+	}
+	afterContent, _ := os.ReadFile(path)
+	if string(afterContent) != preContent {
+		t.Errorf("config file changed after an already-current upgrade (must be byte-identical)")
+	}
 }
 
 // ---------------------------------------------------------------------------

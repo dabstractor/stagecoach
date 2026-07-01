@@ -363,4 +363,10 @@ func TestProvidersGroup_NoSubcommandPrintsHelp(t *testing.T) {
 	if !strings.Contains(got, "show") {
 		t.Error(`help output missing "show" subcommand`)
 	}
+	if strings.Contains(got, "Subcommands:") {
+		t.Error(`help output must NOT contain a manual "Subcommands:" block (FR-B6)`)
+	}
+	if !strings.Contains(got, "Available Commands:") {
+		t.Error(`help output missing cobra "Available Commands:" (FR-B6 single source)`)
+	}
 }
