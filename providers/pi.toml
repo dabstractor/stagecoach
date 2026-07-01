@@ -63,9 +63,21 @@ bare_flags = [                      # appended VERBATIM to make the call bare + 
 ]
 
 # --- tooled mode (v2; §11.5: the stager role) ---
-# pi's tooled profile = bare MINUS --no-tools: pi's native tool system ON,
-# everything else still off (chrome-less + ephemeral). pi has NO git-scoped allowlist flag;
-# stager safety is via the stager task prompt + stagehand's ref-mutation monopoly, not flag-scoping.
+# pi's tooled profile = bare MINUS --no-tools: pi's native tool system ON, everything else still off
+# (chrome-less + ephemeral). pi has NO git-scoped allowlist flag (--help shows only all-or-nothing
+# --no-tools), so its tools cannot be scoped to staging-only git subcommands without disabling tools
+# entirely (which would bar the stager from running git at all).
+#
+# SAFETY MODEL — HONEST (contrast with claude): claude's stager IS structurally constrained by a
+# staging-only git allowlist (Bash(git add:*,git apply:*,git status:*,git diff:*); see claude.toml).
+# pi's stager is NOT structurally/flag-scoped — a misbehaving pi stager CAN run arbitrary Bash,
+# including `git commit`, `git push`, `git update-ref`, `git reset`, and `rm -rf`. PRD §19's
+# "structurally constrained … cannot commit/amend/push" claim therefore does NOT hold for pi. pi's
+# stager is instead:
+#   (1) INSTRUCTIONALLY constrained — by the §17.6 stager task prompt (it is told to stage only), and
+#   (2) BEST-EFFORT guarded — by the HEAD-movement defense-in-depth check (P1.M2.T1.S3): HEAD is
+#       snapshotted before each stager call and the run aborts (safety violation) if HEAD moved when the
+#       stager returns. THE SAFETY NET IS THIS GUARD, NOT FLAG-SCOPING.
 tooled_flags = [
   "--no-extensions",                # disable extension discovery.
   "--no-skills",                    # disable skill discovery/loading.

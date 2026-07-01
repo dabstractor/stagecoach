@@ -56,11 +56,24 @@ func builtinPi() Manifest {
 			"--no-context-files",
 			"--no-session",
 		},
-		// TOOLED MODE (v2 §11.5 — the stager role). pi has no git-scoped allowlist (--help shows only the
-		// all-or-nothing --no-tools), so pi's tooled profile = the bare invocation MINUS --no-tools: pi's
-		// native tool system ON, everything else still off (chrome-less + ephemeral). The stager's safety
-		// (git-only, never commit/update-ref/push) is enforced by the stager task prompt (§17.6) + stagehand's
-		// monopoly on ref mutations (§13.6.2/§19), not by flag-scoping.
+		// TOOLED MODE (v2 §11.5 — the stager role). pi has NO git-scoped allowlist flag (--help shows only
+		// the all-or-nothing --no-tools), so pi's tooled profile = bare MINUS --no-tools: pi's native tool
+		// system ON, everything else still off (chrome-less + ephemeral). There is no way to scope pi's tools
+		// to staging-only git subcommands without disabling tools entirely (--no-tools would bar the stager
+		// from running git at all).
+		//
+		// SAFETY MODEL — HONEST: unlike claude (whose stager IS structurally constrained by a staging-only
+		// git allowlist — Bash(git add:*,git apply:*,git status:*,git diff:*), see builtinClaude), pi's
+		// stager is NOT structurally/flag-scoped. A misbehaving pi stager CAN run arbitrary Bash, including
+		// `git commit`, `git push`, `git update-ref`, `git reset`, and `rm -rf`. PRD §19's "structurally
+		// constrained … cannot commit/amend/push" claim therefore does NOT hold for pi. pi's stager is
+		// instead:
+		//   1. INSTRUCTIONALLY constrained — by the §17.6 stager task prompt (it is instructed to stage only).
+		//   2. BEST-EFFORT guarded — by the HEAD-movement defense-in-depth check (P1.M2.T1.S3): HEAD is
+		//      snapshotted before each stager call and the run aborts (treated as a safety violation) if HEAD
+		//      has moved when the stager returns. THE SAFETY NET IS THIS GUARD, NOT FLAG-SCOPING.
+		// (stagehand's ref-mutation monopoly, §13.6.2/§19, holds only insofar as the stager cannot itself
+		// move a ref — for pi that relies on the §17.6 prompt + the S3 guard, not on TooledFlags.)
 		TooledFlags: []string{
 			"--no-extensions",
 			"--no-skills",
