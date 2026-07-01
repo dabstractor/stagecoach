@@ -178,7 +178,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Add RoleConfig type + new Config fields + Defaults() updates",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Config in internal/config/config.go is flat+plain-typed+RESOLVED. It is NOT decoded directly from TOML — file.go's fileConfig intermediate structs decode and materialize() copies non-zero fields. New fields must follow this pattern. See architecture/config_v2_delta.md §1 for exact field definitions.\n2. INPUT: The existing Config struct and Defaults() function.\n3. LOGIC: Add to Config: `Roles map[string]RoleConfig` (toml:\"-\"), `ConfigVersion int`, `MaxCommits int`, `BinaryExtensions []string`, `Commits int` (toml:\"-\"), `Single bool` (toml:\"-\"). Define `type RoleConfig struct { Provider string; Model string }`. Update Defaults() to set ConfigVersion=CurrentConfigVersion (new const=2), MaxCommits=12, Commits=0, Single=false, BinaryExtensions=nil, Roles=nil. Define `const CurrentConfigVersion = 2`.\n4. OUTPUT: The Config struct has all v2 fields. Defaults() returns a v2-compatible Config. Existing code compiles (new fields are zero-valued).\n5. DOCS: [Mode A] Update the Config struct doc comment to document the new fields and CurrentConfigVersion constant.",
