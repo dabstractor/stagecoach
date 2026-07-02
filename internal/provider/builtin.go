@@ -154,9 +154,9 @@ func builtinGemini() Manifest {
 		PromptDelivery:   strPtr("stdin"), // REVISED from §12.5 "positional" (work-item + external_deps.md + Appx E #1)
 		PrintFlag:        strPtr(""),      // §12.5 explicit empty (NON-NIL) — positional/stdin implies one-shot
 		ModelFlag:        strPtr("-m"),
-		DefaultModel:     strPtr("gemini-2.5-pro"),
-		SystemPromptFlag: strPtr(""), // §12.5 explicit empty (NON-NIL) — no sys flag; sys prepended to payload (§12.2)
-		ProviderFlag:     strPtr(""), // §12.5 explicit empty (NON-NIL) — gemini has no sub-provider
+		DefaultModel:     strPtr("gemini-3.1-pro"), // WAS gemini-2.5-pro — refreshed per FR-D5 (verified 2026-07-02)
+		SystemPromptFlag: strPtr(""),               // §12.5 explicit empty (NON-NIL) — no sys flag; sys prepended to payload (§12.2)
+		ProviderFlag:     strPtr(""),               // §12.5 explicit empty (NON-NIL) — gemini has no sub-provider
 		BareFlags: []string{
 			"--approval-mode", "default", // read-only, never-ask profile (don't auto-run tools)
 		},
@@ -181,7 +181,7 @@ func builtinGemini() Manifest {
 //
 // NOTE: (1) PrintFlag="-p" (NON-NIL). (2) SystemPromptFlag/ProviderFlag are strPtr("") — §12.5.1 WRITES
 // them "" (NON-NIL empty): no sys flag (sys prepended, §12.2), no sub-provider. (3) default_model is
-// "gemini-2.5-pro" (agy runs the Gemini family). (4) Experimental=boolPtr(true) (ships experimental).
+// "gemini-3.1-pro" (agy runs the Gemini family; refreshed from gemini-2.5-pro per FR-D5, verified 2026-07-02). (4) Experimental=boolPtr(true) (ships experimental).
 // (5) Subcommand/PromptFlag/JsonField/RetryInstruction/Env/TooledFlags/ReasoningLevels are nil (absent,
 // like gemini). agy is the Gemini-lineage twin of gemini, differing in default_model + Experimental.
 func builtinAgy() Manifest {
@@ -192,9 +192,9 @@ func builtinAgy() Manifest {
 		PromptDelivery:   strPtr("stdin"),
 		PrintFlag:        strPtr("-p"),
 		ModelFlag:        strPtr("-m"),
-		DefaultModel:     strPtr("gemini-2.5-pro"),
-		SystemPromptFlag: strPtr(""), // §12.5.1 NON-NIL empty — no sys flag; sys prepended to payload (§12.2)
-		ProviderFlag:     strPtr(""), // §12.5.1 NON-NIL empty — agy has no sub-provider
+		DefaultModel:     strPtr("gemini-3.1-pro"), // WAS gemini-2.5-pro — refreshed per FR-D5 (verified 2026-07-02)
+		SystemPromptFlag: strPtr(""),               // §12.5.1 NON-NIL empty — no sys flag; sys prepended to payload (§12.2)
+		ProviderFlag:     strPtr(""),               // §12.5.1 NON-NIL empty — agy has no sub-provider
 		BareFlags: []string{
 			"--approval-mode", "default", // read-only, never-ask profile (don't auto-run tools)
 		},

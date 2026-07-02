@@ -51,7 +51,7 @@ func TestRender_GoldenPerProvider(t *testing.T) {
 				"--tools", "", "--setting-sources", "", "--no-session-persistence", "-p"}, // -p LAST
 			"<user>"},
 		{"gemini", gemini, "", "gemini",
-			[]string{"-m", "gemini-2.5-pro", "--approval-mode", "default"},
+			[]string{"-m", "gemini-3.1-pro", "--approval-mode", "default"},
 			"<sys>\n\n<user>"}, // stdin; no sys flag → sys PREPENDED
 		{"opencode", opencode, "anthropic/claude-sonnet-4", "opencode",
 			[]string{"run", "-m", "anthropic/claude-sonnet-4", "<sys>\n\n<user>"}, // positional → payload trailing

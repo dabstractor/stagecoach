@@ -74,7 +74,7 @@ command = "gemini"
 prompt_delivery = "stdin"   # REVISED from §12.5 "positional" (work-item + external_deps.md + Appx E #1)
 print_flag = ""
 model_flag = "-m"
-default_model = "gemini-2.5-pro"
+default_model = "gemini-3.1-pro"
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = [
@@ -151,7 +151,7 @@ command = "agy"
 prompt_delivery = "stdin"
 print_flag = "-p"
 model_flag = "-m"
-default_model = "gemini-2.5-pro"
+default_model = "gemini-3.1-pro"
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = [
@@ -461,7 +461,7 @@ func TestBuiltinManifests_GeminiFields(t *testing.T) {
 	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin") // REVISED from §12.5 "positional"
 	assertStr(t, "PrintFlag", m.PrintFlag, "")                // NON-NIL explicit empty
 	assertStr(t, "ModelFlag", m.ModelFlag, "-m")
-	assertStr(t, "DefaultModel", m.DefaultModel, "gemini-2.5-pro")
+	assertStr(t, "DefaultModel", m.DefaultModel, "gemini-3.1-pro")
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "") // NON-NIL explicit empty (prepend)
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
 	wantBare := []string{"--approval-mode", "default"}
@@ -527,9 +527,9 @@ func TestBuiltinManifests_OpenCodeFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_RenderedCommand_Gemini(t *testing.T) {
-	argv := renderArgs(builtinGemini(), "", "", "<sys>") // model="" → default gemini-2.5-pro
+	argv := renderArgs(builtinGemini(), "", "", "<sys>") // model="" → default gemini-3.1-pro
 	want := []string{
-		"gemini", "-m", "gemini-2.5-pro",
+		"gemini", "-m", "gemini-3.1-pro",
 		"--approval-mode", "default",
 		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin (NOT in argv). No print/sys/provider flag.
 	}
@@ -686,7 +686,7 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
 	assertStr(t, "PrintFlag", m.PrintFlag, "-p") // NON-NIL (agy HAS a -p print flag per §12.5.1)
 	assertStr(t, "ModelFlag", m.ModelFlag, "-m")
-	assertStr(t, "DefaultModel", m.DefaultModel, "gemini-2.5-pro")
+	assertStr(t, "DefaultModel", m.DefaultModel, "gemini-3.1-pro")
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "") // NON-NIL explicit empty (prepend)
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
@@ -724,9 +724,9 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_RenderedCommand_Agy(t *testing.T) {
-	argv := renderArgs(builtinAgy(), "", "", "<sys>") // model="" → default gemini-2.5-pro
+	argv := renderArgs(builtinAgy(), "", "", "<sys>") // model="" → default gemini-3.1-pro
 	want := []string{
-		"agy", "-m", "gemini-2.5-pro",
+		"agy", "-m", "gemini-3.1-pro",
 		"--approval-mode", "default",
 		"-p", // print_flag LAST per §12.2 (agy has -p unlike gemini)
 		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin (NOT in argv). No sys/provider flag.

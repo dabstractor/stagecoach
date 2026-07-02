@@ -18,7 +18,7 @@
 #       default_model = "gemini-2.5-flash"  # e.g. override only the model
 #
 # RENDERED COMMAND (external_deps.md §gemini)
-#   gemini -m gemini-2.5-pro --approval-mode default < "<sys>\n\n<user payload>"
+#   gemini -m gemini-3.1-pro --approval-mode default < "<sys>\n\n<user payload>"
 #   (stdin delivery; gemini appends stdin to the prompt)
 #
 # TOOLS-DISABLE CATEGORY (§12.7.1): READ-ONLY CONSTRAINT — gemini has NO global
@@ -41,7 +41,7 @@ print_flag = ""                     # NON-NIL empty: positional/stdin implies on
 
 # --- model ---
 model_flag = "-m"                   # the model-selection flag.
-default_model = "gemini-2.5-pro"    # model used if the user specifies none.
+default_model = "gemini-3.1-pro"    # model used if the user specifies none.
 
 # --- system prompt ---
 system_prompt_flag = ""             # NON-NIL empty: gemini-cli has NO system-prompt flag — the system prompt

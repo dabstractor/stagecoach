@@ -18,7 +18,7 @@
 #       default_model = "gemini-2.5-flash"  # e.g. override only the model
 #
 # RENDERED COMMAND (PRD §12.5.1)
-#   agy -m gemini-2.5-pro --approval-mode default -p < "<sys>\n\n<user payload>"
+#   agy -m gemini-3.1-pro --approval-mode default -p < "<sys>\n\n<user payload>"
 #   (stdin delivery; agy appends stdin to the prompt)
 #
 # EXPERIMENTAL (§12.5.1.1): agy ships experimental due to a non-TTY stdout drop
@@ -48,7 +48,7 @@ print_flag = "-p"                 # non-interactive print mode flag.
 
 # --- model ---
 model_flag = "-m"                # the model-selection flag.
-default_model = "gemini-2.5-pro" # model used if the user specifies none (agy runs the Gemini family).
+default_model = "gemini-3.1-pro" # model used if the user specifies none (agy runs the Gemini family).
 
 # --- system prompt ---
 system_prompt_flag = ""          # NON-NIL empty: agy has NO system-prompt flag — the system prompt

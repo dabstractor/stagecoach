@@ -387,7 +387,7 @@ func TestConfigInit_ProviderStagerFallback(t *testing.T) {
 	}
 
 	// planner uses gemini's model
-	assertContains(t, content, "[role.planner]", `model = "gemini-3.5-pro"`)
+	assertContains(t, content, "[role.planner]", `model = "gemini-3.1-pro"`)
 
 	// stager is routed to pi (fallback)
 	assertContains(t, content, "[role.stager]", `provider = "pi"`)

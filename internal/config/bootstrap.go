@@ -12,7 +12,7 @@ import (
 // preferredBuiltins is the FR-D1 cascading provider priority order (local copy — mirrors
 // internal/provider/registry.go's unexported preferredBuiltins). Used by stagerFallback + commented-block
 // ordering. (Moved from internal/cmd/config.go; P1.M4.T4.S1.)
-var preferredBuiltins = []string{"pi", "opencode", "cursor", "agy", "gemini", "codex", "claude"}
+var preferredBuiltins = []string{"pi", "opencode", "cursor", "agy", "gemini", "qwen-code", "codex", "claude"}
 
 // GenerateBootstrapConfig returns the populated bootstrap TOML (PRD §9.17 FR-B1/B3). provider != "" is
 // used directly (caller validates); "" ⇒ cascading auto-detect (FR-D1) ⇒ "pi" fallback. NO I/O; $PATH

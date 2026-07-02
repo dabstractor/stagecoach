@@ -62,7 +62,7 @@ func TestBuildBootstrapConfig_GeminiStagerFallback(t *testing.T) {
 	}
 
 	// gemini's planner model
-	assertContains(t, content, "[role.planner]", `model = "gemini-3.5-pro"`)
+	assertContains(t, content, "[role.planner]", `model = "gemini-3.1-pro"`)
 
 	// stager routed to pi
 	assertContains(t, content, "[role.stager]", `provider = "pi"`)

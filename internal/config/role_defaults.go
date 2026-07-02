@@ -2,30 +2,37 @@ package config
 
 // FR-D4 / FR-D5 verification block (PRD §9.16).
 //
-// Verification date: 2026-07
+// Verification date: 2026-07-02
 // Primary source:   PRD §9.16 FR-D4 table + work-item exemplars (P1.M3.T3.S1 item_description §1).
 // FR-D5 mandate:    Model lineups change fast. The implementing agent MUST re-verify each provider's
 //                   current flagship/mid/fast model names against that provider's live docs / --help
 //                   and record verified names + date here. Defaults are authored trivially-refreshable
 //                   (one cell per provider×role).
 //
+// FR-D3 rationale: the message tier is the cheapest / free-tier-eligible model (highest-volume role;
+// many users on free tiers).
+//
 // Per-provider status (update on re-verification):
-//   pi      — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — PRD baseline 2026-07 (bare; sub-provider set
-//             separately via --provider; verify pi's OpenAI-routing sub-provider, FR-D4 note).
-//   opencode— openai/gpt-5.4 / -mini / -nano — PRD baseline 2026-07 (provider-prefixed; verify upstream).
-//   cursor  — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — UNVERIFIED: PRD gives tier names (flagship/mid/
-//             nano); resolved to best-guess OpenAI tokens (cursor is OpenAI-backed). VERIFY `agent --help`.
-//   agy     — gemini-3.5-pro / gemini-3.5-flash / gemini-3.1-flash-lite — PRD baseline 2026-07.
-//   gemini  — same as agy — PRD baseline 2026-07.
-//   codex   — gpt-5.1-codex-max / gpt-5.1-codex-mini / gpt-5.4-nano — PRD baseline 2026-07.
-//   claude  — opus / sonnet / haiku — PRD baseline 2026-07 (bare aliases; opus=4.8, sonnet=5 per FR-D4).
+//   pi       — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — PRD baseline 2026-07 (bare; sub-provider set
+//              separately via --provider; verify pi's OpenAI-routing sub-provider, FR-D4 note).
+//   opencode — openai/gpt-5.4 / -mini / -nano — PRD baseline 2026-07 (provider-prefixed; verify upstream).
+//   cursor   — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — UNVERIFIED: PRD gives tier names (flagship/mid/
+//              nano); resolved to best-guess OpenAI tokens (cursor is OpenAI-backed). VERIFY `agent --help`.
+//   agy      — gemini-3.1-pro / gemini-3.5-flash / gemini-3.1-flash-lite — refreshed 2026-07-02 per FR-D5
+//              (was gemini-3.5-pro planner).
+//   gemini   — gemini-3.1-pro / gemini-3.5-flash / gemini-3.1-flash-lite — refreshed 2026-07-02 per FR-D5
+//              (was gemini-3.5-pro planner).
+//   qwen-code — qwen3-coder-plus / "" (cannot stager) / qwen3-coder-flash / qwen3-coder-plus — # TO CONFIRM
+//               per FR-D5 (Alibaba Qwen3-Coder via DashScope; no live CLI lookup this pass).
+//   codex    — gpt-5.1-codex-max / gpt-5.1-codex-mini / gpt-5.4-nano — PRD baseline 2026-07.
+//   claude   — opus / sonnet / haiku — PRD baseline 2026-07 (bare aliases; opus=4.8, sonnet=5 per FR-D4).
 //
 // Stager-capability basis: a provider's stager cell is non-empty IFF its built-in manifest
-// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07 that is ONLY pi + claude.
-// gemini/agy/opencode/codex/cursor have stager="" (nil TooledFlags ⇒ RenderTooled errors ⇒ cannot be
-// stager). The bootstrap (P1.M4.T2) applies the FR-D4 fallback (next TooledFlags-capable provider) on
-// stager=="". VERIFY the TooledFlags state in builtin.go at implementation — if a provider has since
-// gained TooledFlags, give it the mid-tier stager model.
+// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07-02 that is ONLY pi + claude.
+// gemini/agy/opencode/codex/cursor/qwen-code have stager="" (nil TooledFlags ⇒ RenderTooled errors
+// ⇒ cannot be stager). The bootstrap (P1.M4.T2) applies the FR-D4 fallback (next TooledFlags-capable
+// provider) on stager=="". VERIFY the TooledFlags state in builtin.go at implementation — if a provider
+// has since gained TooledFlags, give it the mid-tier stager model.
 
 // RoleModelDefaults is the PRD §9.16 FR-D4 per-provider × per-role default-model table, keyed
 // provider → role → model. The four roles are planner/stager/message/arbiter (FR-R1). A stager value
@@ -36,7 +43,7 @@ type RoleModelDefaults map[string]map[string]string
 
 // roleDefaults is the compiled-in FR-D4 table (unexported; access via DefaultModelsForProvider, which
 // returns copies). Stager cells: non-empty IFF the provider's manifest has non-empty TooledFlags
-// (pi, claude); "" otherwise (gemini, agy, opencode, codex, cursor) — the bootstrap applies the fallback.
+// (pi, claude); "" otherwise (gemini, agy, opencode, codex, cursor, qwen-code) — the bootstrap applies the fallback.
 var roleDefaults = RoleModelDefaults{
 	"pi": {
 		"planner": "gpt-5.4",      // flagship/smart tier (FR-D3)
@@ -51,16 +58,22 @@ var roleDefaults = RoleModelDefaults{
 		"arbiter": "sonnet", // mid tier
 	},
 	"gemini": {
-		"planner": "gemini-3.5-pro",
-		"stager":  "", // NOT stager-capable (TooledFlags nil) — bootstrap applies FR-D4 fallback
+		"planner": "gemini-3.1-pro", // refreshed 2026-07-02 per FR-D5 (was gemini-3.5-pro)
+		"stager":  "",               // NOT stager-capable (TooledFlags nil) — bootstrap applies FR-D4 fallback
 		"message": "gemini-3.1-flash-lite",
 		"arbiter": "gemini-3.5-flash",
 	},
 	"agy": {
-		"planner": "gemini-3.5-pro",
-		"stager":  "", // NOT stager-capable (TooledFlags nil)
+		"planner": "gemini-3.1-pro", // refreshed 2026-07-02 per FR-D5 (was gemini-3.5-pro)
+		"stager":  "",               // NOT stager-capable (TooledFlags nil)
 		"message": "gemini-3.1-flash-lite",
 		"arbiter": "gemini-3.5-flash",
+	},
+	"qwen-code": {
+		"planner": "qwen3-coder-plus",  // flagship/smart (FR-D3). # TO CONFIRM per FR-D5
+		"stager":  "",                  // NOT stager-capable (TooledFlags nil in builtinQwenCode) — bootstrap applies FR-D4 fallback
+		"message": "qwen3-coder-flash", // fast/cheapest tier (FR-D3). # TO CONFIRM per FR-D5
+		"arbiter": "qwen3-coder-plus",  // mid tier. # TO CONFIRM per FR-D5
 	},
 	"opencode": {
 		"planner": "openai/gpt-5.4", // provider-prefixed (opencode ProviderFlag empty)
