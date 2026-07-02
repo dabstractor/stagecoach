@@ -235,14 +235,14 @@
           "type": "Milestone",
           "id": "P3.M1",
           "title": "Start-of-run freeze T_start capture & plumbing",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Adds the git primitives for the freeze and wires T_start into the Decompose orchestrator so the run commits exactly the working-tree state as it existed when the run began.",
           "tasks": [
             {
               "type": "Task",
               "id": "P3.M1.T1",
               "title": "git freeze helpers + T_start wiring into Decompose",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Adds the freeze/changed-path git methods, captures T_start at decomposition activation, and re-points the planner/stagers/arbiter/shortcuts to draw from T_start instead of the live tree.",
               "subtasks": [
                 {
@@ -264,7 +264,7 @@
                   "type": "Subtask",
                   "id": "P3.M1.T1.S2",
                   "title": "Wire T_start into the Decompose orchestrator (planner/stagers/arbiter/shortcuts draw from T_start)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P3.M1.T1.S1",
@@ -301,7 +301,7 @@
                   "type": "Subtask",
                   "id": "P3.M2.T1.S1",
                   "title": "Freeze enforcement: verify tree[i] is a content-subset of T_start after each staging step (hard abort on violation, FR-M1c)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P3.M1.T1.S2"

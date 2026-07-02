@@ -41,10 +41,13 @@ import (
 var ErrPlannerFailed = errors.New("decompose: planner failed")
 
 // callPlanner invokes the planner agent once (with one corrective retry) over the
-// full working-tree diff + style examples, parses the structured-JSON partition, and
-// returns the PlannerOutput (concepts list or single-shortcut message).
+// frozen T_start diff (baseTree → tStart) + style examples, parses the structured-JSON
+// partition, and returns the PlannerOutput (concepts list or single-shortcut message).
 //
-// Pipeline: derive planner model → WorkingTreeDiff → system prompt + payload →
+// FR-M1b: the planner diffs the FROZEN T_start (TreeDiff(baseTree, tStart)), NOT a live
+// WorkingTreeDiff. A concurrent working-tree change after the freeze is invisible to the planner.
+//
+// Pipeline: derive planner model → TreeDiff(baseTree, tStart) → system prompt + payload →
 // Render(bare) → Execute → ParsePlannerOutput + validate → retry once on
 // parse/contract failure → safety cap (auto mode only) → return.
 //
@@ -56,19 +59,20 @@ var ErrPlannerFailed = errors.New("decompose: planner failed")
 // by ParsePlannerOutput error OR validatePlannerOutput error (shared budget).
 // Timeout/cancel return ErrPlannerFailed immediately (no retry — the agent was
 // killed). On the retry, PlannerRetryInstruction is prepended to the payload.
-func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool) (prompt.PlannerOutput, error) {
+func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool, baseTree, tStart string) (prompt.PlannerOutput, error) {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("planner", deps.Config)
 
-	// 2. Capture the working-tree diff (caps from cfg).
-	diff, err := deps.Git.WorkingTreeDiff(ctx, git.StagedDiffOptions{
+	// 2. FR-M1b: the FROZEN concept diff — TreeDiff(baseTree, tStart), with binary placeholders per FR3c.
+	// NOT a live WorkingTreeDiff (a concurrent change after the freeze must be invisible to the planner).
+	diff, err := deps.Git.TreeDiff(ctx, baseTree, tStart, git.StagedDiffOptions{
 		MaxDiffBytes:     deps.Config.MaxDiffBytes,
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
 	})
 	if err != nil {
-		return prompt.PlannerOutput{}, fmt.Errorf("%w: working-tree diff: %w", ErrPlannerFailed, err)
+		return prompt.PlannerOutput{}, fmt.Errorf("%w: tree diff: %w", ErrPlannerFailed, err)
 	}
 
 	// 3. Build the system prompt (style examples) + the base user payload.

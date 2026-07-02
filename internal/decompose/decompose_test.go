@@ -1752,3 +1752,68 @@ func TestDecompose_RoleResolvesSubProvider(t *testing.T) {
 		t.Errorf("Decompose command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
 	}
 }
+
+// TestDecompose_SentinelAfterFreezeExcluded (§20.2 "Start-of-run freeze (v2)") verifies that a file
+// written to the working tree AFTER the freeze is invisible to every commit. The stager seam stages only
+// the concept's path (well-behaved); the planner diffs tStart (frozen), so the sentinel is not even a
+// concept. The arbiter's leftover diff is also frozen (TreeDiff(tipTree, tStart)) so the sentinel is
+// absent from the arbiter's diff payload. NOTE: the arbiter's STAGING (resolveArbiter's AddAll) is NOT
+// yet frozen — enforcement is P3.M2.T1.S1 (FR-M1c). So we verify only the loop commits.
+func TestDecompose_SentinelAfterFreezeExcluded(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// Pre-freeze state: unstaged changes (a.txt + c.txt). No b.txt — no leftovers after the loop.
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"c.txt"}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c", "feat: add leftover", "feat: add sentinel", "feat: add sentinel"})
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
+	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // null → new commit for any leftovers
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+
+	// Stager seam: stages only the concept's path (well-behaved). On first invocation, writes a sentinel
+	// file simulating a concurrent change mid-run (AFTER the freeze). The sentinel is NOT staged.
+	stagerCallCount := 0
+	deps := dcmDeps(t, repo, roles)
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		stagerCallCount++
+		if stagerCallCount == 1 {
+			// Simulate a concurrent change: write a sentinel AFTER the freeze.
+			dcmWriteFile(t, repo, "sentinel.txt", "concurrent")
+		}
+		// Stage only the concept's path (well-behaved — never stages the sentinel).
+		files := map[string][]string{"c1": {"a.txt"}, "c2": {"c.txt"}}
+		fl, ok := files[concept.Title]
+		if ok && len(fl) > 0 {
+			for _, f := range fl {
+				dcmRunGit(t, repo, "add", f)
+			}
+		}
+		return nil
+	}
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(sentinel): %v", err)
+	}
+
+	// Verify sentinel.txt appears in NO LOOP commit's file list (first 2 commits).
+	// The planner diffed T_start (frozen), so sentinel.txt was never a concept.
+	// NOTE: the arbiter's STAGING (resolveArbiter's AddAll) picks up sentinel.txt from the working
+	// tree — that is expected; enforcement of the arbiter staging is P3.M2.T1.S1 (FR-M1c).
+	loopCount := len(result.Commits)
+	if loopCount > 2 {
+		loopCount = 2 // arbiter may add a commit for sentinel.txt (AddAll staging — not yet frozen)
+	}
+	for i := 0; i < loopCount; i++ {
+		for _, fc := range result.Commits[i].Files {
+			if fc.Path == "sentinel.txt" {
+				t.Errorf("Loop commits[%d] contains sentinel.txt — the freeze should exclude post-freeze changes", i)
+			}
+		}
+	}
+}

@@ -65,6 +65,23 @@ func plannerDeps(t *testing.T, repo string, m provider.Manifest) Deps {
 	}
 }
 
+// freezeForPlanner captures baseTree + tStart for a callPlanner test (matures: rev-parse HEAD^{tree};
+// unborn: EmptyTreeSHA). Mirrors what Decompose() does after baseTree derivation.
+func freezeForPlanner(t *testing.T, repo string, isUnborn bool) (baseTree, tStart string) {
+	t.Helper()
+	if isUnborn {
+		baseTree = git.EmptyTreeSHA
+	} else {
+		baseTree = runGit(t, repo, "rev-parse", "HEAD^{tree}")
+	}
+	g := git.New(repo)
+	ts, err := g.FreezeWorkingTree(context.Background(), baseTree)
+	if err != nil {
+		t.Fatalf("freeze working tree: %v", err)
+	}
+	return baseTree, ts
+}
+
 // --- Tests ---
 
 const validMultiJSON = `{"count":3,"single":false,"commits":[{"title":"feat: auth","description":"auth.go, auth_test.go"},{"title":"feat: api","description":"api.go"},{"title":"fix: typo","description":"README.md"}]}`
@@ -80,8 +97,9 @@ func TestCallPlanner_HappyMultiCommit(t *testing.T) {
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: validMultiJSON})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	out, err := callPlanner(context.Background(), deps, 0, false)
+	out, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner: %v", err)
 	}
@@ -108,8 +126,9 @@ func TestCallPlanner_SingleShortcut(t *testing.T) {
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: validSingleJSON})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	out, err := callPlanner(context.Background(), deps, 0, false)
+	out, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner: %v", err)
 	}
@@ -133,9 +152,10 @@ func TestCallPlanner_ForcedCount(t *testing.T) {
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: validMultiJSON})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
 	// forcedCount=3 should still parse normally (BuildPlannerUserPayload handles the directive)
-	out, err := callPlanner(context.Background(), deps, 3, false)
+	out, err := callPlanner(context.Background(), deps, 3, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner with forcedCount=3: %v", err)
 	}
@@ -154,8 +174,9 @@ func TestCallPlanner_ParseRetryThenSuccess(t *testing.T) {
 	// First call: invalid JSON; second call: valid JSON
 	m := stubtest.NewScript(t, bin, []string{"not valid json{{{", validMultiJSON})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	out, err := callPlanner(context.Background(), deps, 0, false)
+	out, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner after retry: %v", err)
 	}
@@ -179,8 +200,9 @@ func TestCallPlanner_SingleWithoutMessage_RetryThenSuccess(t *testing.T) {
 	singleWithMsg := `{"count":1,"single":true,"commits":[{"title":"feat: x","description":"a.txt"}],"message":"feat: x"}`
 	m := stubtest.NewScript(t, bin, []string{singleNoMsg, singleWithMsg})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	out, err := callPlanner(context.Background(), deps, 0, false)
+	out, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner after retry: %v", err)
 	}
@@ -202,8 +224,9 @@ func TestCallPlanner_UnparseableAfterRetry(t *testing.T) {
 	// Both calls: invalid JSON
 	m := stubtest.NewScript(t, bin, []string{"bad json{{{{", "also bad {{{{"})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	_, err := callPlanner(context.Background(), deps, 0, false)
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -223,8 +246,9 @@ func TestCallPlanner_SingleWithoutMessage_AfterRetry(t *testing.T) {
 	singleNoMsg := `{"count":1,"single":true,"commits":[{"title":"feat: x","description":"a.txt"}]}`
 	m := stubtest.NewScript(t, bin, []string{singleNoMsg, singleNoMsg})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	_, err := callPlanner(context.Background(), deps, 0, false)
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -254,8 +278,9 @@ func TestCallPlanner_SafetyCap_Auto(t *testing.T) {
 	m := stubtest.Manifest(bin, stubtest.Options{Out: overCapJSON})
 	deps := plannerDeps(t, repo, m)
 	deps.Config = cfg
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	_, err := callPlanner(context.Background(), deps, 0, false)
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err == nil {
 		t.Fatal("expected safety cap error, got nil")
 	}
@@ -296,9 +321,10 @@ func TestCallPlanner_SafetyCap_ForcedSkips(t *testing.T) {
 	m := stubtest.Manifest(bin, stubtest.Options{Out: overCapJSON})
 	deps := plannerDeps(t, repo, m)
 	deps.Config = cfg
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
 	// forcedCount=15 > 0 ⇒ cap is bypassed (forced mode trusts --commits)
-	out, err := callPlanner(context.Background(), deps, 15, false)
+	out, err := callPlanner(context.Background(), deps, 15, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner with forcedCount=15 should skip cap: %v", err)
 	}
@@ -320,8 +346,9 @@ func TestCallPlanner_Timeout(t *testing.T) {
 
 	deps := plannerDeps(t, repo, m)
 	deps.Config = cfg
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
-	_, err := callPlanner(context.Background(), deps, 0, false)
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err == nil {
 		t.Fatal("expected error on timeout, got nil")
 	}
@@ -342,10 +369,11 @@ func TestCallPlanner_UnbornNilExamples(t *testing.T) {
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: validSingleJSON})
 	deps := plannerDeps(t, repo, m)
+	baseTree, tStart := freezeForPlanner(t, repo, true)
 
 	// isUnborn=true → plannerExamples short-circuits to nil
 	// BuildPlannerSystemPrompt(nil) is nil-safe — should not panic
-	out, err := callPlanner(context.Background(), deps, 0, true)
+	out, err := callPlanner(context.Background(), deps, 0, true, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner with isUnborn=true: %v", err)
 	}
@@ -375,11 +403,12 @@ func TestCallPlanner_ResolvesSubProvider(t *testing.T) {
 	deps := plannerDeps(t, repo, m)
 	deps.Config.Provider = "pi"              // the manifest NAME — the conflation source; must NOT be emitted
 	deps.Config.Model = "openrouter/gpt-5.4" // slash-prefix model → Render emits --provider openrouter
+	baseTree, tStart := freezeForPlanner(t, repo, false)
 
 	var buf bytes.Buffer
 	deps.Verbose = ui.NewVerbose(&buf, true)
 
-	out, err := callPlanner(context.Background(), deps, 0, false)
+	out, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
 	if err != nil {
 		t.Fatalf("callPlanner: %v", err)
 	}
@@ -391,5 +420,54 @@ func TestCallPlanner_ResolvesSubProvider(t *testing.T) {
 	}
 	if strings.Contains(cmd, "--provider pi") {
 		t.Errorf("planner command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
+	}
+}
+
+// TestCallPlanner_DiffsFrozenTStart verifies that the planner diffs the FROZEN T_start,
+// not the live working tree. A file written to the working tree AFTER the freeze is absent
+// from the planner's diff payload (exclusion test for FR-M1b).
+func TestCallPlanner_DiffsFrozenTStart(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "a.txt", "changed content") // UNSTAGED
+
+	// Build a planner stub that captures its stdin payload.
+	captureDir := t.TempDir()
+	captureFile := captureDir + "/payload"
+	captureScript := captureDir + "/capture.sh"
+	if err := os.WriteFile(captureScript, []byte(`#!/bin/sh
+cat > "`+captureFile+`"
+echo '`+validSingleJSON+`'`), 0o755); err != nil {
+		t.Fatalf("write capture script: %v", err)
+	}
+	m := stubtest.Manifest(bin, stubtest.Options{Out: validSingleJSON})
+	m.Command = &captureScript
+
+	deps := plannerDeps(t, repo, m)
+
+	// Freeze — captures baseTree + tStart BEFORE the sentinel exists.
+	baseTree, tStart := freezeForPlanner(t, repo, false)
+
+	// AFTER the freeze: write a sentinel file (simulates a concurrent change).
+	writeFile(t, repo, "sentinel.txt", "concurrent")
+
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
+	if err != nil {
+		t.Fatalf("callPlanner: %v", err)
+	}
+
+	// Verify the sentinel is absent from the captured payload.
+	payload, err := os.ReadFile(captureFile)
+	if err != nil {
+		t.Fatalf("read payload: %v", err)
+	}
+	if strings.Contains(string(payload), "sentinel.txt") {
+		t.Errorf("planner diff contains 'sentinel.txt' — the freeze should exclude post-freeze changes\npayload: %s", string(payload))
+	}
+	// Verify a.txt IS in the payload (the pre-freeze change is captured).
+	if !strings.Contains(string(payload), "a.txt") {
+		t.Errorf("planner diff missing 'a.txt' — the pre-freeze change should be captured\npayload: %s", string(payload))
 	}
 }

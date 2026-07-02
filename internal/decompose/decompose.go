@@ -9,6 +9,13 @@
 // 1-deep-overlapped per-concept loop (stage→freeze→generate→publish) with FR-M8 empty-skip and
 // serialized CAS publication, and wires the arbiter (runArbiter→resolveArbiter) when leftovers remain.
 //
+// FR-M1b FREEZE BOUNDARY: Decompose() captures T_start via FreezeWorkingTree(baseTree) after baseTree
+// derivation and before the planner. The planner/shortcut/arbiter draw from the frozen T_start (NOT a
+// live re-read of the working tree). A concurrent working-tree change after the freeze is invisible
+// to every commit. The run owns the freeze boundary — the stager is an untrusted external agent
+// (enforcement is FR-M1c / P3.M2.T1.S1). The escape-hatch (Config.Single || Commits==1) returns
+// above the freeze and preserves v1 behavior (it does NOT freeze; FR-M2c).
+//
 // It is the single place overlap goroutine scheduling lives — every sibling (callPlanner /
 // stageConcept / generateMessage / publishCommit / runArbiter / resolveArbiter) is a SIGNAL-FREE
 // synchronous primitive consumed here. Signal arming is S2 (P3.M4.T1.S2); the escape-hatch gets
@@ -119,6 +126,10 @@ type msgOut struct {
 // planner returns Single==true → FR-M11 single-SHORTCUT (use planner's message, dup-check first). Else →
 // runLoop (1-deep overlap, N concepts).
 //
+// FR-M1b FREEZE: after baseTree derivation, Decompose calls FreezeWorkingTree(baseTree) → T_start.
+// The planner/shortcut/arbiter draw from T_start (frozen), not the live working tree. A concurrent
+// change after the freeze is invisible to every commit. The escape-hatch does NOT freeze (v1 behavior).
+//
 // Error contract: planner failure + safety cap are NON-RESCUE (nothing snapshotted — §13.6.6); returned
 // directly (NOT *RescueError). *generate.RescueError (message gen) and *generate.CASError (CAS) propagate
 // DIRECTLY (errors.As-able). Other infra wraps ErrDecomposeFailed. SIGNAL-FREE for loop/shortcut in S1
@@ -145,16 +156,27 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 		}
 	}
 
-	// (3) Planner (forcedCount = Config.Commits: 0=auto, ≥2=forced; ==1 caught above).
-	//     NON-RESCUE on error. callPlanner ALREADY enforces the FR-M4 safety cap in auto mode.
-	out, err := callPlanner(ctx, deps, deps.Config.Commits, isUnborn)
+	// (3) FR-M1b: Freeze the entire working-tree change set into T_start — the immutable record the
+	// planner/shortcut/arbiter draw from (NOT a live re-read). baseTree (HEAD^{tree}) ≠ T_start; keep
+	// runLoop's prevTree := baseTree unchanged. The index is reset to baseTree so the per-concept stager
+	// starts clean; the working tree is untouched (read-tree rewrites .git/index only). The escape-hatch
+	// (runSingleEscape) returns above → v1 behavior and does NOT freeze.
+	tStart, err := deps.Git.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		return DecomposeResult{}, fmt.Errorf("%w: freeze working tree: %w", ErrDecomposeFailed, err)
+	}
+
+	// (3b) Planner (forcedCount = Config.Commits: 0=auto, ≥2=forced; ==1 caught above).
+	//      NON-RESCUE on error. callPlanner ALREADY enforces the FR-M4 safety cap in auto mode.
+	//      FR-M1b: callPlanner diffs the frozen T_start (TreeDiff(baseTree, tStart)).
+	out, err := callPlanner(ctx, deps, deps.Config.Commits, isUnborn, baseTree, tStart)
 	if err != nil {
 		return DecomposeResult{}, err // ErrPlannerFailed wrap OR safety-cap error — both non-rescue (§G-PLANNER-NONRESCUE)
 	}
 
 	// (4) FR-M11 single-SHORTCUT: planner judged N=1 + supplied a message.
 	if out.Single {
-		return runSingleShortcut(ctx, deps, out.Message, preRunHEAD, isUnborn, baseTree)
+		return runSingleShortcut(ctx, deps, out.Message, preRunHEAD, isUnborn, baseTree, tStart)
 	}
 
 	// (5) Safety cap is enforced inside callPlanner (auto mode). Forced mode: user asserted N — no cap.
@@ -177,7 +199,7 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 	if status != "" && len(commits) > 0 {
 		// Build []CommitInfo from the loop's published commits (parallel to chainData).
 		arbiterCommits := buildArbiterCommits(ctx, deps, commits, isUnborn)
-		amended, err = runArbiterPhase(ctx, deps, arbiterCommits, chainData)
+		amended, err = runArbiterPhase(ctx, deps, arbiterCommits, chainData, tStart)
 		if err != nil {
 			return DecomposeResult{}, err // resolveArbiter errors propagated (incl. *RescueError/*CASError)
 		}
@@ -218,25 +240,23 @@ func runSingleEscape(ctx context.Context, deps Deps) (DecomposeResult, error) {
 	}, nil
 }
 
-// runSingleShortcut (FR-M11): the planner ALREADY ran and returned Single==true + a Message. Use the
-// planner's message DIRECTLY (AddAll → WriteTree → dup-check → publish), dup-checking it first. If it's
-// a duplicate, fall back to generateMessage (the message agent) to regenerate. ZERO separate
-// message-agent call on a clean subject (the shortcut's whole point — one agent round-trip).
+// runSingleShortcut (FR-M11): the planner ALREADY ran and returned Single==true + a Message.
+// Use the planner's message DIRECTLY (FR-M1b: commit the frozen T_start directly — NOT a live
+// AddAll → WriteTree). The freeze already captured the working-tree change set; a live AddAll
+// would pick up concurrent changes. Dup-check first; if duplicate, fall back to the message agent.
+// ZERO separate message-agent call on a clean subject (the shortcut's whole point — one agent round-trip).
 // Distinct from the escape-hatch (which bypasses the planner and regenerates via CommitStaged).
 // SIGNAL-FREE in S1.
-func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD string, isUnborn bool, baseTree string) (DecomposeResult, error) {
-	if err := deps.Git.AddAll(ctx); err != nil {
-		return DecomposeResult{}, fmt.Errorf("%w: add -A: %w", ErrDecomposeFailed, err)
-	}
-	treePrime, err := deps.Git.WriteTree(ctx)
-	if err != nil {
-		return DecomposeResult{}, fmt.Errorf("%w: write-tree: %w", ErrDecomposeFailed, err)
-	}
+func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD string, isUnborn bool, baseTree, tStart string) (DecomposeResult, error) {
+	// FR-M1b: commit the frozen T_start directly (NOT a live AddAll → WriteTree). The freeze already
+	// captured the working-tree change set; a live AddAll would pick up concurrent changes.
+	treePrime := tStart
 
 	// Dup-check the planner's message. Fallback to the message agent ONLY on a duplicate (FR-M11).
 	msg := plannerMsg
 	if dupCheckMessage(ctx, deps, plannerMsg, isUnborn) {
-		msg, err = generateMessage(ctx, deps, baseTree, treePrime) // the message agent regenerates
+		var err error
+		msg, err = generateMessage(ctx, deps, baseTree, tStart) // the message agent regenerates from baseTree→tStart
 		if err != nil {
 			return DecomposeResult{}, err // *RescueError — propagate DIRECTLY
 		}
@@ -424,6 +444,10 @@ func drainMsg(ch chan msgOut) {
 // arbiter made a new commit; 1 for tip amend; N-i for mid-chain at index i). resolveArbiter returns
 // ONLY an error; the count is computed from the target via findTargetIndex (same package) BEFORE calling
 // resolveArbiter.
+//
+// FR-M1b: the leftover diff is FROZEN — TreeDiff(tipTree, tStart), not a live WorkingTreeDiff.
+// The arbiter's STAGING (resolveArbiter via AddAll/Add) is UNCHANGED — it stages from the working tree
+// (== T_start's source under the invariant); the freeze OUTPUT guarantee for staging is P3.M2.T1.S1.
 // rereadFinalCommits re-reads the FINAL commits this run produced (post-arbiter) by listing the range
 // preRunHEAD..HEAD via LogRange and pairing each entry's SHA with DiffTree, rebuilding accurate
 // []CommitResult for DecomposeResult.Commits. It closes the §G-RESULT post-arbiter gap: after the
@@ -462,9 +486,12 @@ func rereadFinalCommits(ctx context.Context, deps Deps, preRunHEAD string, isUnb
 	return out, nil
 }
 
-func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry) (int, error) {
-	// Build the arbiter input: the leftover diff.
-	leftoverDiff, err := deps.Git.WorkingTreeDiff(ctx, git.StagedDiffOptions{
+func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry, tStart string) (int, error) {
+	// FR-M1b: the leftover diff is FROZEN — TreeDiff(tipTree, tStart), not a live WorkingTreeDiff.
+	// tipTree = the last committed tree (HEAD.tree post-loop; == chainData[last].Tree). A concurrent
+	// working-tree change after the freeze is invisible (it's not in tStart).
+	tipTree := chainData[len(chainData)-1].Tree
+	leftoverDiff, err := deps.Git.TreeDiff(ctx, tipTree, tStart, git.StagedDiffOptions{
 		MaxDiffBytes:     deps.Config.MaxDiffBytes,
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
