@@ -4,12 +4,13 @@
 |---|---|
 | **Project name** | stagehand |
 | **Language / runtime** | Go (single static binary) |
-| **Status** | v2.0 specification (draft) |
+| **Status** | v2.1 specification (draft) |
 | **Author** | dustin |
-| **Last updated** | 2026-07-01 |
+| **Last updated** | 2026-07-02 |
 | **Origin** | `commit-pi` / `commit-claude` (zsh), `~/projects/git-scripts` |
 | **Document purpose** | Comprehensive PRD + technical specification. Defines the product surface, architecture, provider model, configuration model, git plumbing, testing, and distribution. Supersedes ad-hoc design discussion. |
 | **This revision** | Promotes **multi-commit decomposition** from the deferred v2 roadmap into the core spec (§13.6), adds **per-role provider/model configuration** (§16.4), adds **binary/non-text filtering** (§9.1), adds the **Antigravity CLI (`agy`)** provider (§12.5.1), adds a **cascading provider priority + tier-based default models** that are **decoupled from the author's z.ai subscription** (§9.16), and adds a **populated config bootstrap + schema versioning** (§9.17). The v1 single-commit core (§9, §13.1–§13.5) is implemented. **[config v3]** Folds the inference provider into the model string: `provider` is the agent platform (its original meaning), and multi-backend providers (pi, opencode) take the model as `inference/model` (e.g. `zai/glm-5.2`); pi splits the prefix into its `--provider` flag at render. No separate inference-provider field exists — the prefix IS the field (§12, §9.15, FR-R5b, FR-B7). |
+| **This revision (v2.1)** | Competitor feature parity + tool integrations, decided against a source-level review of aicommits and opencommit (`COMPETITOR-ANALYSIS.md`). Adds **payload exclusions** (`.stagehandignore` + `--exclude`, §9.18), **message shaping** (opt-in `--format` conventional/gitmoji/plain, `--locale`, `--context`, `--template`, §9.19), **git hook mode** (`stagehand hook` for `prepare-commit-msg`, §9.20), a **tool-integrations exporter** (`stagehand integrate` for the git alias and lazygit, with a no-mangle write protocol, §9.21), **`--edit` and `--push`** conveniences (§9.22), and **discovery** (`stagehand models`, `config init --interactive`, §9.23). Everything deferred or rejected — including the GitHub Action, editor extensions, and gitui — moved to **FUTURE_SPEC.md** with rationale; this document carries no stubs. |
 
 ---
 
@@ -22,7 +23,9 @@ This is two documents fused into one:
 
 Appendices (A–F) contain reference material: full prompt templates, example terminal sessions, and a line-by-line porting map from `commit-pi`.
 
-The single most important section for understanding the product's defensibility is **§5 (Unique Value Proposition)** and the single most important section for understanding the engineering is **§13 (The snapshot-based generation flow)**. If you read only two sections, read those. The most important section for understanding the **multi-commit** feature — the headline addition in this revision — is **§13.6 (Multi-commit decomposition)**; read it alongside §13.1–§13.5, which it composes.
+Ideas that are deferred or deliberately rejected live in **`FUTURE_SPEC.md`** at the repository root, each with its rationale. This document intentionally contains no stubs or placeholders for unbuilt features — if a capability is described here, it is in scope.
+
+The single most important section for understanding the product's defensibility is **§5 (Unique Value Proposition)** and the single most important section for understanding the engineering is **§13 (The snapshot-based generation flow)**. If you read only two sections, read those. The most important section for understanding the **multi-commit** feature — the v2.0 headline addition — is **§13.6 (Multi-commit decomposition)**; read it alongside §13.1–§13.5, which it composes.
 
 ---
 
@@ -176,13 +179,19 @@ The README hero pitch, verbatim candidate:
 - **G12.** Implement **per-role provider/model configuration** (§16.4): a global default that applies to all agent roles, overridable per role (planner / stager / message / arbiter).
 - **G13.** **Filter binary and other non-text filetypes** out of every diff payload sent to an agent, replacing each with a filename + change-status placeholder (§9.1).
 - **G14.** Ship a built-in manifest for **Antigravity CLI (`agy`)** — Google's Gemini-CLI successor, whose coding-plan quota is reachable only through `agy` (§12.5.1).
+- **G15.** Implement **payload exclusions** (§9.18): a `.stagehandignore` file and a repeatable `--exclude` flag that remove matching files from every agent payload (never from the commit), with placeholder lines so the planner still sees they changed.
+- **G16.** Implement **message shaping** (§9.19): an opt-in `--format` (conventional / gitmoji / plain) that overrides style learning, a `--locale` language instruction, a `--context` free-text hint, and a `--template` `$msg` wrapper.
+- **G17.** Implement **git hook mode** (§9.20): `stagehand hook install|uninstall|status` managing a `prepare-commit-msg` hook, plus the `hook exec` runtime, with a hard never-block-the-commit contract.
+- **G18.** Implement the **tool-integrations exporter** (§9.21): `stagehand integrate` writes a `git stagehand` alias and a lazygit `customCommands` keybind via a no-mangle write protocol (parse-first, preview + confirm, backup, post-write validation, marker idempotency).
+- **G19.** Implement the **`--edit`** (review in `$EDITOR` before the atomic commit) and **`--push`** (push after a fully-successful run) conveniences (§9.22).
+- **G20.** Implement **discovery** (§9.23): `stagehand models` (agent-CLI-sourced or curated, never HTTP) and `config init --interactive`.
 
 ### 6.2 Non-goals (v1 — explicitly deferred)
 
 - **N1.** Multi-commit decomposition on a **pre-staged index**. Decomposition activates only when nothing is staged (§13.6.1). If the user has already staged files, the single-commit primitive (§13.1–§13.5) runs unchanged — stagehand never re-partitions a hand-staged index. (Decomposition itself, formerly deferred, is now in scope; see §13.6.)
 - **N2.** Direct HTTP API calls to providers. Stagehand will never grow an `--api-key` flag for model access. This is a deliberate, permanent architectural boundary, not a limitation to be lifted later. (A user who wants direct API access should use opencommit.)
-- **N3.** Interactive commit-message editing / a TUI editor. v1 prints the message and commits. A `--edit` flag that drops into `$EDITOR` between generation and commit is a likely v1.1 addition but not required for v1.0.
-- **N4.** Pre-commit hook / CI integration as a shipped artifact. Users can wire Stagehand into hooks themselves; we do not ship a hook installer in v1.
+- **N3.** A TUI editor. ~~Interactive commit-message editing~~ — superseded in v2.1: the opt-in `--edit` flag is now specified (§9.22, FR-E1–E4). The default path remains fully non-interactive; a built-in TUI editor stays out permanently ( `$EDITOR` is the editor).
+- **N4.** CI integration as a shipped artifact (a GitHub Action). ~~Hook installer~~ — superseded in v2.1: the `prepare-commit-msg` hook installer is now specified (§9.20). The Action remains out: a headless runner cannot spend a coding-plan quota without exporting OAuth credentials into repo secrets, which conflicts with the product thesis (see `FUTURE_SPEC.md`).
 - **N5.** Managing the agent's authentication. Stagehand never sees, stores, or touches the agent's tokens. If the agent isn't authenticated, Stagehand surfaces the agent's error and exits.
 - **N6.** Telemetry / analytics in v1. Possibly opt-in later; never on by default.
 
@@ -233,6 +242,15 @@ Format: *As a &lt;persona&gt;, I want &lt;capability&gt;, so that &lt;benefit&gt
 - **US15.** As a power user, I want to route decomposition planning to a large-context model and commit-message generation to a fast model, so that each task uses the agent best suited to it — while still being able to set one model for everything.
 - **US16.** As a plan-holder, I want any changes the staging agents failed to claim to be reconciled automatically (folded into the correct just-made commit, or a new one) rather than left dangling, so that `git status` is clean after a decompose run.
 - **US17.** As a Gemini / Antigravity subscriber, I want to point stagehand at `agy` so that commit generation spends my Antigravity coding-plan quota, which is unreachable over the public API.
+- **US18.** As an IDE user, I want `stagehand hook install` so that a plain `git commit` — from the terminal, VS Code, or JetBrains — opens my editor pre-filled with a generated message.
+- **US19.** As a husky/lint-staged user, I want hook mode so that my pre-commit hooks still run (they are bypassed by design on the plumbing path), accepting that hook mode trades away the snapshot guarantees.
+- **US20.** As a plan-holder with generated/vendored files, I want `.stagehandignore` (and `--exclude`) so that noise files never bloat the agent payload — while still being committed faithfully.
+- **US21.** As a member of a non-English team, I want `--locale` so that generated messages are written in my team's language.
+- **US22.** As a member of a team that enforces conventional commits (or gitmoji), I want `--format conventional` so that stagehand emits the mandated format instead of imitating history.
+- **US23.** As a plan-holder on a ticket-driven workflow, I want `--template '$msg (#205)'` so that every generated message carries the ticket reference.
+- **US24.** As a lazygit user, I want `stagehand integrate lazygit` (and `integrate git-alias` for `git stagehand`) to wire my tools for me — without ever corrupting a hand-maintained config file.
+- **US25.** As a cautious adopter, I want `--edit` so that I can review and tweak the message in `$EDITOR` before the atomic commit — and keep staging the next batch while the editor is open.
+- **US26.** As a plan-holder, I want `--push` so that a fully-successful run ends with my branch pushed, with no prompt.
 
 ---
 
@@ -300,8 +318,8 @@ Each requirement has an ID (FR-n), a priority (P0 = must for v1, P1 = should for
 ### 9.8 Configuration & precedence (P0, → G8)
 
 - **FR34.** Precedence, highest to lowest: **CLI flags > environment variables > per-repo git config (`stagehand.*`) > per-repo file (`.stagehand.toml`) > global file (`$XDG_CONFIG_HOME/stagehand/config.toml`) > built-in provider defaults > built-in defaults.**
-- **FR35.** Environment variables use the `STAGEHAND_` prefix. The model-invocation knobs (§12) are `STAGEHAND_PROVIDER` (the agent platform), `STAGEHAND_MODEL`, and `STAGEHAND_REASONING`, each with per-role variants `STAGEHAND_<ROLE>_PROVIDER` / `_MODEL` / `_REASONING`. Others: `STAGEHAND_TIMEOUT`, `STAGEHAND_CONFIG`, `STAGEHAND_VERBOSE`, `STAGEHAND_NO_COLOR`.
-- **FR36.** Git config keys live under the `stagehand.` section (`stagehand.provider`, `stagehand.model`, `stagehand.reasoning`, `stagehand.timeout`, `stagehand.auto_stage_all`, etc.), with per-role `stagehand.role.<role>.{provider,model,reasoning}`. Read via `git config --get`.
+- **FR35.** Environment variables use the `STAGEHAND_` prefix. The model-invocation knobs (§12) are `STAGEHAND_PROVIDER` (the agent platform), `STAGEHAND_MODEL`, and `STAGEHAND_REASONING`, each with per-role variants `STAGEHAND_<ROLE>_PROVIDER` / `_MODEL` / `_REASONING`. Others: `STAGEHAND_TIMEOUT`, `STAGEHAND_CONFIG`, `STAGEHAND_VERBOSE`, `STAGEHAND_NO_COLOR`, `STAGEHAND_FORMAT`, `STAGEHAND_LOCALE`, `STAGEHAND_TEMPLATE`, `STAGEHAND_PUSH` (§9.19, §9.22).
+- **FR36.** Git config keys live under the `stagehand.` section (`stagehand.provider`, `stagehand.model`, `stagehand.reasoning`, `stagehand.timeout`, `stagehand.auto_stage_all`, `stagehand.format`, `stagehand.locale`, `stagehand.template`, `stagehand.push`, etc.), with per-role `stagehand.role.<role>.{provider,model,reasoning}`. Read via `git config --get`.
 - **FR37.** A config file may define provider overrides (`[provider.<name>]`), defaults (`[defaults]`), and generation tuning (`[generation]`).
 - **FR37a. `[provider.<name>]` blocks field-merge across layers.** A `[provider.<name>]` block merges **field-by-field across every config layer** (global → repo file → git config), exactly like scalar fields: a field a higher layer sets overrides that one field only; fields the higher layer omits are inherited from lower layers. A repo `[provider.pi]` setting only `default_model` must **not** erase other fields set in the global file. Field-merge onto the *built-in manifest* remains the registry's separate job. (The inference provider is NOT a `[provider.*]` field in v3 — it is the slash-prefix on `model`, FR-R5b.)
 - **FR38.** `stagehand config init` bootstraps a **populated** global config via cascading detection (§9.17, FR-B1); `stagehand config path` prints the resolved config path; `stagehand config upgrade` refreshes an existing config to the current schema version (FR-B5).
@@ -396,37 +414,97 @@ Each role resolves its **provider** (the agent platform), its **model** (which c
 - **FR-B7. Config →v3: inference provider folds into the model string (breaking).** v3 keeps `provider` as the agent platform (the original meaning) and removes the separate inference-provider concept entirely: the inference backend becomes a slash-prefix on `model` for multi-backend providers (§12, FR-R5b). On load of a `config_version < 3` file, stagehand auto-migrates **in memory** and emits a one-time deprecation notice pointing at `config upgrade`. The mapping: (a) `[provider.<name>]` blocks and the `[defaults] provider`/`[role.*] provider` fields are **unchanged** (they name the platform); (b) for a multi-backend provider, the former `[provider.<name>] default_provider = "X"` is **prepended** to its model as a prefix — `model = "Y"` + `default_provider = "X"` → `model = "X/Y"` (per-role and global); (c) the `default_provider` field is removed. Single-backend providers are untouched. **No value is invented:** a v2 file whose pi model has no resolvable prefix stays bare and becomes an FR-R5b error the user resolves by writing `zai/<model>`. `config upgrade` performs the same rewrite on disk. (Files that went through the abandoned intermediate `agent`/`[agent.*]` terminology are mapped back to `provider`/`[provider.*]` first, then step (b) applies.)
 - **FR-B6. Help de-duplication.** The `config` and `agents` parent commands must not list their leaf commands twice. The manual "Subcommands:" block is removed from each parent's `Long`; cobra's auto-generated "Available Commands" is the single source. (The v1 `stagehand config` output showed `init`/`path` both in the prose *and* in Available Commands — redundant.)
 
+### 9.18 Payload exclusions (P1, → G15)
+
+Both incumbents let users exclude files from the diff sent to the model (aicommits `--exclude`, opencommit `.opencommitignore`). Stagehand adopts the feature with one crucial difference stated up front: **exclusion affects only the agent payload, never the commit.** The snapshot is always faithful — an excluded file that is staged (or swept up by decomposition) is committed exactly as it stands. Stagehand will not grow a mechanism that silently drops content from commits.
+
+- **FR-X1. Pattern sources (union).** Exclusion patterns come from, in union: (a) the built-in denylist (lock files / snapshots / sourcemaps / vendor, FR3, and the binary filter, FR3a); (b) a **`.stagehandignore`** file at the repo root; (c) the config array `[generation].exclude = ["…", …]` (global and repo files union, like every list-valued key); (d) the repeatable **`--exclude <glob>` / `-x <glob>`** flag. There is no env var for exclusions (a colon-joined env list is a quoting trap; config covers the persistent case).
+- **FR-X2. `.stagehandignore` syntax.** One glob per line; blank lines and `#` comments ignored; patterns are gitignore-style globs relative to the repo root. **Negation (`!`) is not supported** — patterns translate to git `:(exclude)` pathspecs, which have no un-exclude; a `!` line is skipped with a `--verbose`-visible warning, never an error. Missing file = no-op.
+- **FR-X3. Applies to every diff path.** Exactly like binary filtering (FR3c): the staged diff (FR1–FR4), the decompose working-tree snapshot diff (§13.6.2), and the per-concept tree-to-tree diff (§13.6.3) all honor the same resolved pattern set, implemented as `:(exclude)` pathspecs on the underlying `git diff` calls.
+- **FR-X4. Placeholder, not silence.** Each excluded file that actually changed emits the one-line placeholder `"<status>\t[excluded] <path>"` (same shape and status source as FR3b's `[binary]` placeholders, distinguishable by tag). The planner must know an excluded file changed to group it into the right concept; the message agent must know it exists to avoid describing a half-picture.
+- **FR-X5. Documentation duty.** Docs and `--verbose` output state plainly that exclusion is payload-only: "excluded from what the agent sees, still committed." This is the inverse of what a user might fear (content loss) and the docs say so.
+
+### 9.19 Message shaping: format, locale, context, template (P1, → G16)
+
+Style learning (§9.3) remains the default and the flagship. This section adds four opt-in shaping controls, all defaulting to off/empty, all resolved through the standard precedence (FR34).
+
+- **FR-F1. Format modes.** `--format <mode>` / `STAGEHAND_FORMAT` / `stagehand.format` / `[generation].format`, mode ∈ **`auto` | `conventional` | `gitmoji` | `plain`**, default **`auto`**. `auto` is the current behavior: learned style (§17.1) for mature repos, the conventional fallback (FR14) for repos with ≤1 commit. Any other mode **replaces the style-examples block** in the system prompt with that mode's explicit instructions (§17.8); the history examples are omitted entirely (they would fight the explicit contract). An unknown mode is a hard configuration error. Duplicate rejection (§9.7) applies in every mode.
+- **FR-F2. `conventional`.** Generalizes the FR14 prompt to any repo age: `type(scope): description`, ~50-char subject, the standard type vocabulary (`feat fix docs style refactor perf test build ci chore revert`), body permitted per the multi-line rule (FR12 detection still runs; in `conventional` mode the body rule keys off history shape as usual).
+- **FR-F3. `gitmoji`.** Subject begins with exactly one gitmoji (the emoji character, not the `:shortcode:`), followed by a space and the description. The prompt embeds the canonical gitmoji reference table (emoji + meaning, from the gitmoji spec) **compiled into the binary** — no network fetch, ever. The table is a build-time constant refreshed like model defaults (FR-D5 discipline: verify at implementation, record the date).
+- **FR-F4. `plain`.** No examples, no format contract: just the output rules (§17.1 header), essence-not-filenames, and the subject-length target. The "give me a normal message, ignore my repo's weird history" escape hatch.
+- **FR-F5. Format applies everywhere a message is produced.** The message role, the planner's single-call shortcut message (FR-M11), and the arbiter-triggered (N+1)-th commit message all honor the resolved format. The planner's *partitioning* prompt is unaffected (it doesn't write messages except via FR-M11).
+- **FR-F6. Locale.** `--locale <lang>` / `STAGEHAND_LOCALE` / `stagehand.locale` / `[generation].locale`, default empty. When set, one line is appended to the system prompt: `Write the commit message in <lang>.` The value is a free-form language name or BCP-47 tag, passed verbatim (the model understands both; stagehand does not validate it and ships no i18n tables — the 20-locale file trees the incumbents maintain are exactly the kind of surface a model makes unnecessary). Empty = no instruction (in practice, English or whatever the history examples model). Composes with every format mode.
+- **FR-F7. Context injection.** `--context "<text>"` (flag only; per-invocation information by nature) appends a block to the **user payload** for the message and planner roles: `Additional context from the user (treat as authoritative):\n<text>`. This is how the user tells the agent *why* ("this is a hotfix for #812") when the diff alone can't say.
+- **FR-F8. Template.** `--template '<tpl>'` / `STAGEHAND_TEMPLATE` / `stagehand.template` / `[generation].template`, default empty. `<tpl>` must contain the literal `$msg` (hard error otherwise), which is replaced with the full generated message *after* parsing/cleanup and *before* the duplicate check (§9.7 must judge the final subject as it will land). Applies to every commit message in a run (all decompose commits included). Example: `stagehand --template '$msg (#205)'`.
+
+### 9.20 Git hook mode (P1, → G17)
+
+Both incumbents install a `prepare-commit-msg` hook; it is their bridge into IDE commit flows. Stagehand adopts it as an explicit **second mode** with inverted trade-offs, documented as such: hook mode goes through real `git commit`, so **pre-commit hooks run** (closing the §5 caveat for husky/lint-staged users) — but there is **no snapshot, no atomicity guarantee, no stage-while-generating**, and generation latency happens inside the commit. The flagship `stagehand` command is unchanged; hook mode is the convenience bridge.
+
+- **FR-H1. Install.** `stagehand hook install` resolves the hook directory via `git rev-parse --git-path hooks` (this honors `core.hooksPath` and worktrees) and writes an executable `prepare-commit-msg` POSIX-sh script containing a marker line (`# stagehand prepare-commit-msg hook v1`) and, essentially, `exec stagehand hook exec "$@"`. Per-repo, never global.
+- **FR-H2. Never clobber a foreign hook.** If a `prepare-commit-msg` file already exists: ours (marker present) → rewrite in place (idempotent upgrade); foreign → **refuse** (exit 1) and print the one-line invocation the user can add to their existing hook manually. There is no `--force` for this — overwriting someone's hook is exactly the mangling this project refuses to do. `hook install --print` writes the script to stdout instead of to disk.
+- **FR-H3. Uninstall / status.** `stagehand hook uninstall` removes the file only when the marker is present; refuses otherwise. `stagehand hook status` reports `none` / `stagehand (v1)` / `foreign`.
+- **FR-H4. The runtime: `stagehand hook exec <msg-file> [<source> [<sha>]]`.** Called by the installed script with git's `prepare-commit-msg` arguments. Exit 0 immediately (no generation) when `<source>` is any of `message`, `template`, `merge`, `squash`, `commit` — a message already exists (`-m`, `-t`, merge, squash, `--amend`); stagehand only fills the *empty* case (plain `git commit`). Also no-op when the staged diff is empty. Otherwise: run the standard pipeline — diff capture with exclusions and binary filtering (§9.1, §9.18), style learning or format mode (§9.3, §9.19), message-role generation, duplicate rejection (§9.7) — and write the message at the **top** of `<msg-file>`, preserving git's comment block beneath it. No snapshot, no `commit-tree`, no `update-ref`: git owns this commit.
+- **FR-H5. Never block the commit.** Any failure — agent missing, timeout, parse exhaustion, duplicate-retry exhaustion — leaves `<msg-file>` untouched, prints one warning line to stderr, and exits **0**: the user falls through to a normal empty-editor commit. Opt-in inversion: `hook install --strict` bakes a `--strict` flag into the script, making failures exit non-zero (aborting the commit) for users who want generation to be mandatory.
+- **FR-H6. Configuration.** Hook mode resolves provider/model/reasoning exactly like the single-commit path (the `message` role, §9.15) and honors `--timeout` semantics via the same config keys. It never decomposes (a hook fills one message for one in-flight commit, by definition).
+- **FR-H7. Docs duty (the FAQ).** The trade-off inversion is documented as a first-class FAQ entry: plumbing path = atomic + stage-while-generating, but pre-commit hooks bypassed; hook mode = pre-commit hooks honored, but no snapshot guarantees. Users pick per-workflow; the two modes compose (hook for `git commit`, flagship for `stagehand`).
+
+### 9.21 Tool integrations (P1, → G18)
+
+One command that wires stagehand into the git tools the user already runs — starting with the two that matter most to the primary persona: the **git alias** (`git stagehand`) and a **lazygit** keybind. This command edits user-owned dotfiles, so its write protocol is the point: **it must be impossible for stagehand to mangle a config file.** (gitui was evaluated and is blocked upstream — its `key_bindings.ron` only remaps built-in actions; there is no custom-command facility to bind to. See `FUTURE_SPEC.md`.)
+
+- **FR-I1. Surface.** `stagehand integrate list` — table of supported targets with: tool detected on `$PATH`, resolved config path, current status (`not installed` / `installed` / `foreign` where a conflicting entry exists). `stagehand integrate install <target>…` and `stagehand integrate remove <target>…` — explicit targets only (no "install everything" default). v2.1 targets: **`git-alias`**, **`lazygit`**.
+- **FR-I2. Detection-gated.** A target whose tool is not detected is listed but refuses to install (exit 1 with a note). `git-alias` requires only git itself.
+- **FR-I3. The no-mangle write protocol (every file-editing target).** In order, non-negotiable: **(a) parse first** — read and parse the existing file with a format-aware parser; a file that fails to parse is never written to (hard refusal with the parse error); **(b) idempotent upsert** — stagehand's contribution is identified by a marker (a comment or a well-known key); an existing stagehand entry is replaced, never duplicated; **(c) preview + confirm** — show a unified diff of the proposed change and ask `y/N` per file; `--yes` skips the prompt (for scripts); **(d) backup** — write `<file>.stagehand-backup.<unix-ts>` before modifying; **(e) validate after** — re-parse the written file; on failure, restore the backup automatically and report; **(f) surgical scope** — only stagehand's marker-identified entry is ever touched; all other content, including comments and formatting outside the edited node, is preserved; **(g) create-if-missing** — a missing config file (or parent dir) is created via the same preview + confirm flow. `remove` runs the same protocol to delete only the marker-identified entry.
+- **FR-I4. `git-alias`.** Implemented by delegating to git itself: `git config --global alias.<name> '!stagehand'` (default name `stagehand` → `git stagehand`; `--alias-name <n>` overrides). git performs the `.gitconfig` edit, so the FR-I3 machinery is unnecessary — but the command and resulting alias are still shown and confirmed (FR-I3c), and an existing `alias.<name>` with a *different* value is surfaced before overwriting. `remove` = `git config --global --unset alias.<name>` (only when its value is ours).
+- **FR-I5. `lazygit`.** Adds a `customCommands` entry to lazygit's config file, located via `lazygit --print-config-dir` when available, else the platform default. Entry defaults (each overridable): `key: '<c-a>'` (`--key <k>` — `<c-a>` is the binding the originating `commit-pi` workflow used, §2.1), `context: 'files'`, `command: 'stagehand'`, `output: 'none'` (silent, stay in the UI — US8), `description: 'stagehand: AI commit'`, marked with a `# stagehand-integration` comment for FR-I3b idempotency. The YAML edit is **comment-preserving** (node-level round-trip, e.g. `yaml.v3`'s Node API); the exact `customCommands` field names (`output` vs the older `subprocess`/`showOutput`) are verified against the current lazygit schema at implementation time and recorded with the verification date (FR-D5 discipline — see Appendix E).
+- **FR-I6. Uninstall symmetry.** Every target that can be installed can be removed, restoring the file to its pre-stagehand state for that entry (the rest of the file untouched, per FR-I3f).
+
+### 9.22 Workflow conveniences: `--edit` and `--push` (P2, → G19)
+
+- **FR-E1. `--edit`.** After generation and duplicate rejection, before `commit-tree`: write the message plus a commented summary (tree SHA, `diff-tree --name-status` of the snapshot) to `.git/STAGEHAND_EDITMSG`; open `$GIT_EDITOR` → `$VISUAL` → `$EDITOR` → `vi` on it; on close, strip comment lines and trailing whitespace and commit the result via the normal plumbing path. An empty result aborts with exit 1 ("empty commit message — aborted"; intentional abort, not a rescue: HEAD and the index are untouched, the orphan tree object is garbage-collected by git eventually).
+- **FR-E2. Editing while staging stays safe.** The snapshot is frozen before the editor opens, so the user can stage the next batch during the edit session — the same §13.4 property, extended through the editor. The docs call this out: it is the one thing `git commit -e`-style flows cannot offer on top of generation.
+- **FR-E3. The edited message is user-authored.** It bypasses the duplicate re-check (git parity: git never rejects a hand-written message) and the template (FR-F8) is applied *before* the editor opens, so the user edits the final text.
+- **FR-E4. Composition.** In decompose mode, `--edit` gates **each** commit's message before its (already serialized) publication. With `--dry-run`, `--edit` is ignored with a warning (there is nothing to commit). In hook mode it is meaningless (git already opens the editor) and rejected as a usage error on `hook exec`.
+- **FR-P1. `--push`.** `--push` / `STAGEHAND_PUSH` / `stagehand.push` / `[generation].push`, default false. After the **entire run** publishes successfully (the one commit on the single path; every commit plus arbiter resolution on the decompose path), run plain `git push` (no arguments), streaming its output. Never prompts (the opencommit version prompts; that contradicts §5's non-interactive design).
+- **FR-P2. Push failure is not commit failure.** The commits stand. git's stderr is shown verbatim (including the no-upstream hint — stagehand does **not** auto-`--set-upstream`; publishing a new branch is the user's call), with a closing note "commits created; push failed", exit 1.
+- **FR-P3. Skip conditions.** No push on `--dry-run`, when the run created zero commits (exit 2 path), or when any part of the run failed (rescue/CAS abort) — push happens only after a fully-clean run.
+
+### 9.23 Discovery: model listing & interactive bootstrap (P2, → G20)
+
+- **FR-L1. `stagehand models [<provider>]`.** Prints the models reachable by the given provider (default: the resolved default provider; `--all` for every detected provider). Source of truth, in order: (a) the manifest's `list_models_command` (FR-L2) — run it, print its stdout under a provider heading; (b) if absent or it fails, print the curated per-role tier table (FR-D4) for that provider, annotated with its verification date and "consult `<command> --help` for the live list". **Never an HTTP call** (N2): the incumbents list models by hitting provider APIs with the user's key; stagehand has no key and asks the agent CLI instead — same reason the whole product exists.
+- **FR-L2. Manifest field `list_models_command`.** An optional argv array in the provider manifest (§12.1), e.g. `["opencode", "models"]`. Empty by default. Populated at implementation time only for providers whose CLI actually exposes a listing (verified per FR-D5, recorded with date).
+- **FR-L3. `config init --interactive`.** TTY-gated (non-TTY → exit 1 pointing at plain `config init`, which stays non-interactive because FR-B3 runs it from post-install scripts). Flow: pick a provider from the detected set (default highlighted per FR-D1), show that provider's per-role model defaults (FR-D4) for acceptance or per-role edit (a multi-backend provider's models prompt for the `inference/` prefix rather than guessing, per FR-D2), then write the same file FR-B1 writes. Composes with `--force`.
+
 ---
 
-## 10. v1 scope, v1.1, and v2 roadmap
+## 10. Version scope (v1.0 → v2.1)
 
 ### 10.1 v1.0 (shipped — the single-commit core)
 
 Everything in §9 marked P0 or P1 *other than* the §9.14/§9.15 additions. Concretely: diff capture, snapshot, prompt construction, auto-stage-all, generation via provider manifest, raw/json parsing with robust fallback, duplicate rejection, atomic commit, rescue protocol, config precedence, `providers list/show`, `config init/path`, `--dry-run`, `--verbose`, color. Built-in manifests for pi, Claude Code, Gemini CLI, opencode; documented (possibly stubbed) manifests for Codex and Cursor CLI. This is the implemented baseline against which the v2.0 additions below compose.
 
-### 10.2 v1.1 (likely quick follow-ons)
+### 10.2 v1.1 (resolved)
 
-- **`--edit`**: drop into `$EDITOR` with the generated message before committing.
-- **`--body` / `--no-body`**: force multi-line or single-line regardless of history detection.
-- **`--scope` / `--type`**: hint conventional-commit scope/type to the model.
-- **`--amend`**: amend the previous commit's message via generation.
-- **Fuzzy duplicate detection**: reject subjects within a Levenshtein distance of N of a recent subject (configurable), not just exact matches.
-- **Per-provider `model` overrides in config** beyond the single global default.
+The v1.1 candidate list has been fully dispositioned: **`--edit`** graduated into the spec (§9.22, FR-E1–E4); **per-provider model overrides** were subsumed by per-role configuration (§9.15/§16.4) and `[provider.<name>]` field-merge (FR-37a). The remaining candidates (`--body`/`--no-body`, `--scope`/`--type`, `--amend`, fuzzy duplicate detection) moved to `FUTURE_SPEC.md`.
 
-### 10.3 v2.0 (this revision) — multi-commit decomposition + per-role models
+### 10.3 v2.0 — multi-commit decomposition + per-role models
 
-The headline feature, **formerly deferred to "v2" and now specified**: when nothing is staged, decompose a dirty working tree into N logically-coherent commits via the snapshot machinery, with overlapped staging/generation and an arbiter pass for leftovers. Fully specified in **§13.6** (flow), **§9.14** (requirements), **§16.4** (config), **§17.5–§17.7** (prompts). This revision also adds per-role provider/model config (§9.15, §16.4), binary/non-text filtering (§9.1), and the Antigravity `agy` provider (§12.5.1).
+The headline feature, **formerly deferred to "v2" and now specified**: when nothing is staged, decompose a dirty working tree into N logically-coherent commits via the snapshot machinery, with overlapped staging/generation and an arbiter pass for leftovers. Fully specified in **§13.6** (flow), **§9.14** (requirements), **§16.4** (config), **§17.5–§17.7** (prompts). The v2.0 revision also added per-role provider/model config (§9.15, §16.4), binary/non-text filtering (§9.1), and the Antigravity `agy` provider (§12.5.1).
 
 This is exactly why the snapshot/atomic-commit foundation was built so carefully in v1: v2 reuses it N times in a loop. The old v1 auto-stage-all "one commit" behavior survives as the `--single` / `--no-decompose` escape hatch (and as the default when something is already staged).
 
-### 10.4 v2+ (speculative)
+### 10.4 v2.1 (this revision) — competitor parity + tool integrations
 
-- Pre-commit hook installer (`stagehand hook install`).
-- Branch-aware context (include PR title / branch name in the prompt).
-- Conventional-commit validation and auto-fixup.
-- Gitmoji support.
-- Opt-in, anonymous usage telemetry.
-- A `--background` daemon mode that generates and commits asynchronously, notifying on completion (turns generation latency into true fire-and-forget).
+Decided feature-by-feature against the source-level review in `COMPETITOR-ANALYSIS.md`, under three rules: features both incumbents share are accepted (as far as they agree with each other); anything contradicting the core (no HTTP/API keys, non-interactive atomic default, style learning, "writes commit messages, nothing else") is disqualified even if both have it; everything else was judged on simplicity and value. The result:
+
+- **Accepted and specified:** payload exclusions (§9.18), format/locale/context/template shaping (§9.19), git hook mode (§9.20), the tool-integrations exporter (§9.21), `--edit` and `--push` (§9.22), `stagehand models` + `config init --interactive` (§9.23). Hook mode also resolves the pre-commit-hooks caveat honestly: the plumbing path bypasses them by design; hook mode honors them (FR-H7).
+- **Already closed before this revision:** lock-file/binary exclusion defaults (FR3/FR3a), config migrations (`config_version` + `config upgrade`, §9.17), populated bootstrap (FR-B1).
+- **Disqualified or deferred:** every remaining item — API-key providers, PR generation, the GitHub Action, editor extensions, generate-N-and-pick, interactive multiselect, chunking, clipboard, self-update, `config describe`, gitui — lives in `FUTURE_SPEC.md`, each with its reason. Earlier speculative roadmap items (branch-aware context, conventional-commit validation, telemetry, `--background`) moved there too; gitmoji graduated into §9.19 and the hook installer into §9.20.
+
+### 10.5 Beyond this document
+
+There is no speculative section anymore. Deferred and rejected ideas — with the reasoning that deferred or rejected them — live in **`FUTURE_SPEC.md`**.
 
 ---
 
@@ -563,6 +641,12 @@ detect = "pi"
 
 # The executable to run. Resolved via exec.LookPath; may be an absolute path.
 command = "pi"
+
+# Optional argv that asks the AGENT CLI to list its reachable models, e.g.
+# ["opencode", "models"]. Used by `stagehand models` (§9.23, FR-L1/L2).
+# Empty => stagehand prints its curated per-role defaults table (FR-D4) instead.
+# NEVER an HTTP call (§6.2 N2): the agent CLI is the only model authority.
+list_models_command = []
 
 # Optional subcommand tokens inserted between `command` and the flags
 # (e.g. opencode uses ["run"], codex uses ["exec"]).
@@ -1223,6 +1307,16 @@ stagehand/
 │   │   ├── arbiter.go             # arbiter agent call + amend/new/rebuild resolution (stagehand does git)
 │   │   ├── chain.go               # linear-chain rebuild for mid-chain amend (FR-M10)
 │   │   └── *_test.go              # integration with stub planner/stager/arbiter + a temp repo
+│   ├── hook/                      # git hook mode (§9.20)
+│   │   ├── hook.go                # install/uninstall/status; script template + marker (FR-H1–H3)
+│   │   ├── exec.go                # prepare-commit-msg runtime (`hook exec`, FR-H4/H5)
+│   │   └── *_test.go              # temp repo; asserts never-block + foreign-hook refusal
+│   ├── integrate/                 # tool-integrations exporter (§9.21)
+│   │   ├── integrate.go           # target registry, detection, list/install/remove
+│   │   ├── protocol.go            # the no-mangle write protocol (FR-I3): parse→diff→confirm→backup→validate
+│   │   ├── gitalias.go            # git-alias target (delegates the edit to `git config`, FR-I4)
+│   │   ├── lazygit.go             # lazygit customCommands target (comment-preserving YAML, FR-I5)
+│   │   └── *_test.go              # golden-file round-trips; corrupt-input refusal; backup/restore
 │   └── ui/
 │       ├── output.go              # progress messages, color, TTY detect
 │       └── exitcode.go            # canonical exit codes
@@ -1241,6 +1335,7 @@ stagehand/
 ├── docs/
 │   └── PRD.md                     # this document
 ├── .goreleaser.yaml
+├── FUTURE_SPEC.md                 # deferred + rejected ideas, with rationale (kept out of this spec)
 ├── go.mod
 ├── go.sum
 ├── Makefile
@@ -1335,6 +1430,13 @@ With no command, runs the default action: commit staged changes (auto-staging al
 | `--planner-provider <p>` / `--planner-model <m>` | `STAGEHAND_PLANNER_PROVIDER` / `_MODEL` | `stagehand.role.planner.*` | global | Per-role override for the decomposition planner (§16.4). |
 | `--stager-provider <p>` / `--stager-model <m>` | `STAGEHAND_STAGER_PROVIDER` / `_MODEL` | `stagehand.role.stager.*` | global | Per-role override for the (tooled) staging agent. |
 | `--arbiter-provider <p>` / `--arbiter-model <m>` | `STAGEHAND_ARBITER_PROVIDER` / `_MODEL` | `stagehand.role.arbiter.*` | global | Per-role override for the leftover arbiter. |
+| `--exclude <glob>`, `-x` (repeatable) | — | — | — | Exclude matching files from the agent payload (placeholder line instead; never excluded from the commit). Unions with `.stagehandignore` and `[generation].exclude` (§9.18). |
+| `--format <mode>` | `STAGEHAND_FORMAT` | `stagehand.format` | `auto` | Message format: `auto` (style learning) \| `conventional` \| `gitmoji` \| `plain` (§9.19, FR-F1). |
+| `--locale <lang>` | `STAGEHAND_LOCALE` | `stagehand.locale` | — | Write the message in this language (free-form name or BCP-47 tag; FR-F6). |
+| `--context <text>` | — | — | — | Free-text hint appended to the payload for the message + planner roles (FR-F7). |
+| `--template <tpl>` | `STAGEHAND_TEMPLATE` | `stagehand.template` | — | Wrap every generated message; `$msg` = the message (hard error if absent; FR-F8). |
+| `--edit` | — | — | `false` | Open `$EDITOR` on the message before the atomic commit; staging stays safe during the edit (§9.22, FR-E1–E4). |
+| `--push` | `STAGEHAND_PUSH` | `stagehand.push` | `false` | Plain `git push` after a fully-successful run; never prompts (FR-P1–P3). |
 | `--dry-run` | — | — | `false` | Generate and print the message; do not commit. |
 | `--verbose`, `-v` | `STAGEHAND_VERBOSE` | — | `false` | Print resolved command, raw output, retries. |
 | `--no-color` | `STAGEHAND_NO_COLOR` | — | TTY-aware | Disable color. Respects `NO_COLOR`. |
@@ -1345,9 +1447,13 @@ With no command, runs the default action: commit staged changes (auto-staging al
 
 - **`stagehand providers list`** — List all known providers (built-in + user). Mark detected (on `$PATH`) vs not. Show the resolved default (highest-priority *installed* built-in per FR-D1's order: pi, opencode, cursor, agy, gemini, qwen-code, codex, claude).
 - **`stagehand providers show <name>`** — Print the fully-resolved manifest as TOML.
-- **`stagehand config init`** — Bootstrap a **populated, working** config (auto-detects the default provider and writes its per-role models); `--provider <name>` to target one, `--force` to overwrite, `--template` for the inert reference (§9.17).
+- **`stagehand config init`** — Bootstrap a **populated, working** config (auto-detects the default provider and writes its per-role models); `--provider <name>` to target one, `--force` to overwrite, `--template` for the inert reference, `--interactive` for the TTY-gated wizard (§9.17, §9.23 FR-L3).
 - **`stagehand config path`** — Print the resolved global config path.
 - **`stagehand config upgrade`** — Rewrite an existing config to the current schema version in place (§9.17, FR-B5).
+- **`stagehand hook install|uninstall|status`** — Manage the per-repo `prepare-commit-msg` hook (§9.20). `install --print` emits the script instead of writing; `install --strict` makes generation failures abort the commit (default: never block, FR-H5). Refuses to touch a foreign hook (FR-H2).
+- **`stagehand hook exec <msg-file> [<source> [<sha>]]`** — The hook runtime (called by the installed script, not by users): fills the commit-message file from the staged diff; no-op when a message source already exists (FR-H4).
+- **`stagehand integrate list|install <target>…|remove <target>…`** — Wire stagehand into installed git tools (§9.21). Targets: `git-alias` (adds `git stagehand`; `--alias-name` overrides), `lazygit` (customCommands keybind; `--key` overrides `<c-a>`). Every file edit runs the no-mangle protocol (FR-I3): preview diff + `y/N` (skip with `--yes`), timestamped backup, post-write validation with auto-restore.
+- **`stagehand models [<provider>]`** — List models reachable by a provider, via the manifest's `list_models_command` where the agent CLI supports it, else the curated FR-D4 table; `--all` covers every detected provider. Never an HTTP call (§9.23, FR-L1).
 
 ### 15.4 Exit codes
 
@@ -1381,12 +1487,34 @@ stagehand --dry-run
 # Quick checkpoint: stage everything and commit in one shot.
 stagehand -a
 
-# From lazygit config.yml:
+# Wire up lazygit + the git alias automatically (preview + confirm; §9.21):
+stagehand integrate install git-alias lazygit
+# …which writes, into lazygit's config.yml:
 #   customCommands:
-#     - key: '<c-a>'
+#     - key: '<c-a>'                       # stagehand-integration
+#       context: 'files'
 #       command: 'stagehand'
 #       loadingText: 'Generating commit message…'
 #       output: 'none'
+
+# Install the prepare-commit-msg hook: plain `git commit` (and IDE commit
+# boxes) opens the editor pre-filled with a generated message (§9.20).
+stagehand hook install
+
+# Review the message in $EDITOR before the atomic commit (staging stays safe).
+stagehand --edit
+
+# Team conventions: conventional commits, in German, with a ticket ref.
+stagehand --format conventional --locale de --template '$msg (#205)'
+
+# Tell the agent what the diff can't say.
+stagehand --context "hotfix for the pagination regression in #812"
+
+# Keep noise out of the agent payload (still committed faithfully; §9.18).
+stagehand -x 'dist/**' -x '*.min.js'
+
+# Push once the whole run has landed cleanly.
+stagehand --push
 
 # Pipe the generated message elsewhere (dry-run, stdout = message only).
 stagehand --dry-run --no-color | tee /tmp/msg.txt
@@ -1402,15 +1530,15 @@ stagehand --commits 3
 stagehand --single
 
 # Route planning to a big context, keep messages on the fast default.
-stagehand --planner-model gemini-3.1-pro --planner-agent agy
+stagehand --planner-provider agy --planner-model gemini-3.1-pro
 
 # Per-repo: plan with Antigravity's quota, messages with pi's.
 #   .stagehand.toml:
 #     [defaults]
-#       agent    = "pi"
-#       provider = "zai"
+#       provider = "pi"
+#       model    = "zai/glm-5.2"
 #     [role.planner]
-#       agent    = "agy"
+#       provider = "agy"
 #       model    = "gemini-3.1-pro"
 ```
 
@@ -1431,6 +1559,8 @@ stagehand --planner-model gemini-3.1-pro --planner-agent agy
 Higher wins. Agent-platform manifests merge field-by-field (a user override that sets only `default_model` leaves all other fields from the built-in manifest intact).
 
 **`config_version` is metadata, not a precedence layer.** Every config file carries `config_version = <int>`; on load, stagehand compares it to its compile-time `CurrentConfigVersion` and emits an advisory staleness warning (or points to `config upgrade`) per §9.17 FR-B4/B5. It does not participate in value resolution.
+
+**`.stagehandignore` is not a config layer either.** Exclusion patterns are list-valued and **union** across all sources — built-in denylist, `.stagehandignore`, `[generation].exclude` (global and repo), `--exclude` — rather than overriding each other (§9.18, FR-X1). Precedence applies to scalars; exclusions accumulate.
 
 ### 16.2 Full config file example
 
@@ -1454,6 +1584,11 @@ strip_code_fence    = true
 subject_target_chars = 50
 binary_extensions   = []        # extra non-text extensions to filter (FR3a; merges with built-in denylist)
 max_commits         = 12        # safety cap on auto-decompose (FR-M4)
+exclude             = []        # payload-exclusion globs; unions with .stagehandignore and --exclude (§9.18)
+format              = "auto"    # auto | conventional | gitmoji | plain (§9.19, FR-F1)
+locale              = ""        # e.g. "German" or "pt-BR"; empty = no language instruction (FR-F6)
+template            = ""        # e.g. "$msg (#205)"; $msg is replaced with the generated message (FR-F8)
+push                = false     # plain `git push` after a fully-successful run (§9.22, FR-P1)
 
 # Override a built-in provider/agent platform (field-merged with the built-in manifest).
 [provider.pi]
@@ -1671,6 +1806,29 @@ Respond with ONLY JSON: {"target": "<sha from the list>"} or {"target": null}.
 ```
 
 User payload: the commit list + the leftover diff. Stagehand performs all resulting git (FR-M10); the arbiter only returns the decision.
+
+### 17.8 Format modes, locale, and context (v2.1; §9.19)
+
+Three orthogonal deltas to the prompts above. All default to off; `auto` format means §17.1/§17.2 verbatim.
+
+**Format modes (FR-F1–F5).** A non-`auto` format **replaces** the style-examples block (the `Match the tone and style…` section plus the anti-reuse warning — there are no examples to protect) with an explicit contract; the output rules, essence-not-filenames instruction, and multi-line rule are retained:
+
+- `conventional`: *"Format: `type(scope): description`. type ∈ feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert; scope optional. Target ~50 characters for the subject."*
+- `gitmoji`: *"Begin the subject with exactly ONE emoji from the gitmoji list below (the emoji character itself, not a `:shortcode:`), followed by a space and the description."* — followed by the compiled-in gitmoji reference table (emoji + meaning).
+- `plain`: no format contract and no examples; output rules + essence + subject-length target only.
+
+The planner's partitioning prompt (§17.5) is unchanged by format modes; when the planner emits a message (FR-M11), its style-examples block undergoes the same substitution.
+
+**Locale (FR-F6).** When set, appended to the system prompt (any format, both repo-age variants): `Write the commit message in <lang>.` Nothing else changes — the diff, examples, and rules stay in their original language; models handle the mix natively, which is why stagehand ships zero i18n prompt files.
+
+**Context (FR-F7).** When `--context` is given, inserted into the **user payload** (message and planner roles), after the instruction line and before the diff — the same slot the duplicate-rejection block occupies (§17.3), and before it when both are present:
+
+```
+Additional context from the user (treat as authoritative):
+<text>
+```
+
+**Template (FR-F8) is not a prompt feature.** It is a post-generation string substitution (parse → cleanup → template → duplicate check); the model never sees it, so it can never leak into the generated prose.
 
 ---
 
@@ -2003,6 +2161,10 @@ To commit the originally staged files manually:
 11. **Verify current model names per provider (FR-D5, blocking for defaults):** confirm the live flagship/mid/fast model token for each of pi, opencode, cursor, agy, gemini, qwen-code, codex, claude (e.g. is it `gpt-5.4` or newer? `gemini-3.1-pro` or newer? Claude Opus/Sonnet/Haiku current versions? `qwen3-coder-plus` current?). Record names + verification date in the manifest source.
 12. **pi OpenAI routing:** determine which of pi's current sub-providers routes to an OpenAI model (openrouter? a native openai sub-provider?) so pi's shipped `backend/model` default is wired end-to-end; if none is universal, ship pi's model empty and let `config init` prompt for the prefix.
 13. **Config `upgrade` mechanics:** finalize how `config upgrade` preserves user values vs. comments-out renamed keys (FR-B5) — keep it simple (no value-type migration) until a real rename occurs.
+14. **lazygit `customCommands` schema (gates FR-I5):** verify against the current lazygit release the exact field names (`output` vs the older `subprocess`/`showOutput`), the `context` value for the files panel, and config-dir resolution via `lazygit --print-config-dir`; confirm the chosen comment-preserving YAML approach (e.g. `yaml.v3` Node API) round-trips a real hand-maintained config byte-identically outside the edited node. Record names + verification date (FR-D5 discipline).
+15. **Hook script portability (gates FR-H1):** confirm the POSIX-sh `prepare-commit-msg` script runs under git-for-windows' sh, and that `git rev-parse --git-path hooks` resolves correctly under `core.hooksPath` and linked worktrees.
+16. **Gitmoji table currency (gates FR-F3):** embed the canonical gitmoji set at build time; verify the list against the spec at implementation and record the date.
+17. **`list_models_command` per provider (gates FR-L1/L2):** determine which agent CLIs actually expose a model listing (opencode's `opencode models` is the known case) and populate the field only where verified; everyone else falls back to the curated FR-D4 table.
 
 ## Appendix F — Decision log (key calls and why)
 
@@ -2024,6 +2186,14 @@ To commit the originally staged files manually:
 - **Model defaults are research-driven and refreshable, not pinned from stale knowledge.** The implementing agent verifies current names per provider; a future automated refresh process keeps them current. (§9.16 FR-D5)
 - **Config schema versioning + advisory staleness warning.** Simple integer version + a warning + `config upgrade`; no auto-migration (no existing users). (§9.17 FR-B4/B5)
 - **Manifests are config-overridable, compiled-in as defaults.** Decouples "support a new agent" from "cut a release." (§12.1, §12.8)
+- **Competitor parity decided by rule, not by taste (v2.1).** Features both incumbents share → accepted; features contradicting the core (no HTTP/API keys, non-interactive atomic default, style learning, scope discipline) → disqualified even when both have them; the rest judged on simplicity/value. `COMPETITOR-ANALYSIS.md` is the evidence base. (§10.4)
+- **Format modes are an opt-in override, not a new default (v2.1).** Style learning stays the flagship; `--format` exists for teams with a mandated convention and for repos with no history worth learning. An explicit mode drops the history examples entirely rather than mixing two masters. (§9.19)
+- **Hook mode ships with a never-block contract (v2.1).** A generation failure must never stop a commit; the hook exits 0 and leaves the message file untouched. `--strict` inverts this for those who want it. Hook mode is also the honest answer to the pre-commit-hooks caveat: the plumbing path bypasses them by design, hook mode honors them. (§9.20, FR-H5/H7)
+- **Payload exclusion never means commit exclusion (v2.1).** `.stagehandignore`/`--exclude` shape what the agent sees; the snapshot always commits the staged truth. A tool whose pitch is "never corrupts your repo" does not grow a knob that makes commits diverge from the index. (§9.18, FR-X5)
+- **GitHub Action rejected (v2.1).** A headless runner can only spend a coding-plan quota by exporting OAuth credentials into repo-level secrets — per-provider, fragile, ToS-hostile, and the repo's CI would drain one person's personal plan. opencommit's Action works precisely because it is an API-key tool; that is the architecture stagehand exists to refuse. (`FUTURE_SPEC.md`)
+- **PR generation stays out despite ranking #2 in the analysis (v2.1).** §6.3 is permanent: stagehand writes commit messages. Scope discipline beats parity scoring. (`FUTURE_SPEC.md`)
+- **Self-update, clipboard, and chunking rejected (v2.1).** Package managers own binary updates; `--dry-run --no-color | wl-copy` is clipboard mode; 200k-token agent contexts + byte caps + decomposition make chunk-and-combine a quality regression, not a feature. (`FUTURE_SPEC.md`)
+- **Integrations ship git-alias + lazygit only, behind a no-mangle protocol (v2.1).** gitui is blocked upstream (keybinds can only remap built-in actions — verified against its changelog 2026-07-02). Every file edit: parse-first, preview + confirm, backup, post-write validation with auto-restore, marker idempotency. The git alias delegates the edit to `git config` itself. (§9.21)
 
 ---
 
