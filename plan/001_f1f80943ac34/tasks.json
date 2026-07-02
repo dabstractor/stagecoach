@@ -297,7 +297,7 @@
                   "id": "P1.M4.T1.S2",
                   "type": "Subtask",
                   "title": "internal/prompt/system.go — buildSystemPrompt (raw contract, style learn, anti-reuse)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S1"

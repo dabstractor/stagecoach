@@ -1,0 +1,183 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1_M4_T1_S2_1782977789918_pre-execution_c7a6802e",
+      "taskId": "P1_M4_T1_S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M4_T1_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-02T07:36:29.918Z"
+      },
+      "createdAt": "2026-07-02T07:36:29.918Z"
+    },
+    {
+      "id": "P1_M4_T1_S2_1782977900230_pre-execution_d6cbb3cc",
+      "taskId": "P1_M4_T1_S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M4_T1_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-02T07:38:20.230Z"
+      },
+      "createdAt": "2026-07-02T07:38:20.230Z"
+    },
+    {
+      "id": "P1_M4_T1_S2_1782978169846_coder-response_bbf55eea",
+      "taskId": "P1_M4_T1_S2",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M4_T1_S2.md",
+        "stage": "coder-response",
+        "coderResponse": "All gates pass. Implementation complete.\n\n## Summary\n\nCreated **two new files** in the existing `internal/prompt/` package (no other files touched):\n\n### `internal/prompt/system.go`\n- **FILE-level comment** (`// This file adds …`) + plain `package prompt` — defers the package doc to `examples.go`, mirroring `internal/git/log.go` → `git.go`.\n- **stdlib-only imports** (`fmt`, `strings`); no `internal/git`, no config, no go-git, no new dep.\n- **Exported `DefaultSubjectTargetChars = 50`** (mirrors S1's `DefaultExampleCount = 20`).\n- **Unexported canonical-string constants** committed VERBATIM from PRD §17.1/§17.2/Appendix A, including the SHORTER `newRepoRawContract` (no \"no quoting\", no body line), the UTF-8 `≤` (U+2264) in `examplesFooter`, and both multi-line rule variants.\n- **`BuildSystemPrompt`** branches on `newRepo` FIRST: §17.2 conventional-commit fallback (no examples/anti-reuse) vs §17.1 mature prompt (full raw contract + examples wrapped by `---` + CRITICAL anti-reuse + hasMultiline-selected multi-line rule). `target` interpolated via `fmt.Sprintf`.\n- godoc cites PRD FR13/FR14, §17.1/§17.2, §17.4, Appendix A, and reference_impl.md §4 D1 (raw default, NOT JSON).\n\n### `internal/prompt/system_test.go`\n- White-box `package prompt`, stdlib `testing`+`strings` only. 7 tests via `strings.Contains` assertions: new-repo path, mature single-line, **the correct multi-line variant** (multi when `hasMultiline=true`, single when false), target interpolation (72 on both paths), no-JSON-anywhere, raw contract present on both paths, and newest-first example rendering with header/footer ordering.\n\n### Validation gates\n| Gate | Result |\n|---|---|\n| `go build ./internal/prompt/` | ✅ clean |\n| `go vet ./internal/prompt/` | ✅ clean |\n| `gofmt -l internal/prompt/` | ✅ empty (after `gofmt -s -w`) |\n| `go test ./internal/prompt/` | ✅ PASS (S1 tests still green + 7 new) |\n| `go test ./...` / `make test` | ✅ whole-module green |\n\nScope confirmed: only the two files added; `examples.go`/`examples_test.go`, `go.mod`/`go.sum`, and all other packages unchanged; `// Package prompt` appears exactly once (in `examples.go`); no `payload.go` (S3). The no-JSON invariant holds for **rendered prompts** (the `json` matches in `system.go` are only in godoc comments documenting the §17.4 rationale — verified absent from the actual output strings by `TestBuildSystemPrompt_NoJSONAnywhere`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-02T07:42:49.846Z"
+      },
+      "createdAt": "2026-07-02T07:42:49.846Z"
+    },
+    {
+      "id": "P1_M4_T1_S2_1782978170227_validation-gate-3_5a4bc04f",
+      "taskId": "P1_M4_T1_S2",
+      "label": "After validation gate 3",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M4_T1_S2.md",
+        "stage": "validation-gate-3",
+        "coderResponse": "All gates pass. Implementation complete.\n\n## Summary\n\nCreated **two new files** in the existing `internal/prompt/` package (no other files touched):\n\n### `internal/prompt/system.go`\n- **FILE-level comment** (`// This file adds …`) + plain `package prompt` — defers the package doc to `examples.go`, mirroring `internal/git/log.go` → `git.go`.\n- **stdlib-only imports** (`fmt`, `strings`); no `internal/git`, no config, no go-git, no new dep.\n- **Exported `DefaultSubjectTargetChars = 50`** (mirrors S1's `DefaultExampleCount = 20`).\n- **Unexported canonical-string constants** committed VERBATIM from PRD §17.1/§17.2/Appendix A, including the SHORTER `newRepoRawContract` (no \"no quoting\", no body line), the UTF-8 `≤` (U+2264) in `examplesFooter`, and both multi-line rule variants.\n- **`BuildSystemPrompt`** branches on `newRepo` FIRST: §17.2 conventional-commit fallback (no examples/anti-reuse) vs §17.1 mature prompt (full raw contract + examples wrapped by `---` + CRITICAL anti-reuse + hasMultiline-selected multi-line rule). `target` interpolated via `fmt.Sprintf`.\n- godoc cites PRD FR13/FR14, §17.1/§17.2, §17.4, Appendix A, and reference_impl.md §4 D1 (raw default, NOT JSON).\n\n### `internal/prompt/system_test.go`\n- White-box `package prompt`, stdlib `testing`+`strings` only. 7 tests via `strings.Contains` assertions: new-repo path, mature single-line, **the correct multi-line variant** (multi when `hasMultiline=true`, single when false), target interpolation (72 on both paths), no-JSON-anywhere, raw contract present on both paths, and newest-first example rendering with header/footer ordering.\n\n### Validation gates\n| Gate | Result |\n|---|---|\n| `go build ./internal/prompt/` | ✅ clean |\n| `go vet ./internal/prompt/` | ✅ clean |\n| `gofmt -l internal/prompt/` | ✅ empty (after `gofmt -s -w`) |\n| `go test ./internal/prompt/` | ✅ PASS (S1 tests still green + 7 new) |\n| `go test ./...` / `make test` | ✅ whole-module green |\n\nScope confirmed: only the two files added; `examples.go`/`examples_test.go`, `go.mod`/`go.sum`, and all other packages unchanged; `// Package prompt` appears exactly once (in `examples.go`); no `payload.go` (S3). The no-JSON invariant holds for **rendered prompts** (the `json` matches in `system.go` are only in godoc comments documenting the §17.4 rationale — verified absent from the actual output strings by `TestBuildSystemPrompt_NoJSONAnywhere`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/prompt/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/prompt/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/prompt/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/prompt/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/prompt\t0.033s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T07:42:50.227Z"
+      },
+      "createdAt": "2026-07-02T07:42:50.227Z"
+    },
+    {
+      "id": "P1_M4_T1_S2_1782978170228_complete_017d37be",
+      "taskId": "P1_M4_T1_S2",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M4_T1_S2.md",
+        "stage": "complete",
+        "coderResponse": "All gates pass. Implementation complete.\n\n## Summary\n\nCreated **two new files** in the existing `internal/prompt/` package (no other files touched):\n\n### `internal/prompt/system.go`\n- **FILE-level comment** (`// This file adds …`) + plain `package prompt` — defers the package doc to `examples.go`, mirroring `internal/git/log.go` → `git.go`.\n- **stdlib-only imports** (`fmt`, `strings`); no `internal/git`, no config, no go-git, no new dep.\n- **Exported `DefaultSubjectTargetChars = 50`** (mirrors S1's `DefaultExampleCount = 20`).\n- **Unexported canonical-string constants** committed VERBATIM from PRD §17.1/§17.2/Appendix A, including the SHORTER `newRepoRawContract` (no \"no quoting\", no body line), the UTF-8 `≤` (U+2264) in `examplesFooter`, and both multi-line rule variants.\n- **`BuildSystemPrompt`** branches on `newRepo` FIRST: §17.2 conventional-commit fallback (no examples/anti-reuse) vs §17.1 mature prompt (full raw contract + examples wrapped by `---` + CRITICAL anti-reuse + hasMultiline-selected multi-line rule). `target` interpolated via `fmt.Sprintf`.\n- godoc cites PRD FR13/FR14, §17.1/§17.2, §17.4, Appendix A, and reference_impl.md §4 D1 (raw default, NOT JSON).\n\n### `internal/prompt/system_test.go`\n- White-box `package prompt`, stdlib `testing`+`strings` only. 7 tests via `strings.Contains` assertions: new-repo path, mature single-line, **the correct multi-line variant** (multi when `hasMultiline=true`, single when false), target interpolation (72 on both paths), no-JSON-anywhere, raw contract present on both paths, and newest-first example rendering with header/footer ordering.\n\n### Validation gates\n| Gate | Result |\n|---|---|\n| `go build ./internal/prompt/` | ✅ clean |\n| `go vet ./internal/prompt/` | ✅ clean |\n| `gofmt -l internal/prompt/` | ✅ empty (after `gofmt -s -w`) |\n| `go test ./internal/prompt/` | ✅ PASS (S1 tests still green + 7 new) |\n| `go test ./...` / `make test` | ✅ whole-module green |\n\nScope confirmed: only the two files added; `examples.go`/`examples_test.go`, `go.mod`/`go.sum`, and all other packages unchanged; `// Package prompt` appears exactly once (in `examples.go`); no `payload.go` (S3). The no-JSON invariant holds for **rendered prompts** (the `json` matches in `system.go` are only in godoc comments documenting the §17.4 rationale — verified absent from the actual output strings by `TestBuildSystemPrompt_NoJSONAnywhere`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/prompt/system.go and internal/prompt/system_test.go implementing BuildSystemPrompt (PRD §17.1 mature + §17.2 new-repo paths, RAW-output contract per §17.4, no JSON anywhere, target interpolated via fmt.Sprintf). All 5 validation gates pass: go build clean, go vet clean, gofmt -l empty, go test ./internal/prompt/ PASS (S1 tests + 7 new), go test ./... whole-module green. Scope respected — only 2 files added, stdlib-only imports, package doc appears once in examples.go, no go.mod/go.sum changes, no payload.go."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/prompt/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/prompt/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/prompt/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/prompt/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/prompt\t0.033s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T07:42:50.228Z"
+      },
+      "createdAt": "2026-07-02T07:42:50.228Z"
+    }
+  ],
+  "lastModified": "2026-07-02T07:42:50.228Z"
+}
