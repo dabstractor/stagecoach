@@ -59,7 +59,7 @@ var ErrPlannerFailed = errors.New("decompose: planner failed")
 func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool) (prompt.PlannerOutput, error) {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl, _ := config.ResolveRoleModel("planner", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
+	_, mdl, rsn := config.ResolveRoleModel("planner", deps.Config)
 
 	// 2. Capture the working-tree diff (caps from cfg).
 	diff, err := deps.Git.WorkingTreeDiff(ctx, git.StagedDiffOptions{
@@ -90,10 +90,9 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool)
 		}
 
 		// v3 FR-R5b: the inference provider is the model slash-prefix ("inference/model"),
-		// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning.
-		// (Old: prov from ResolveRoleModel was the manifest name, NOT the upstream backend —
-		// the provider param has been folded into the model slash-prefix; DefaultProvider removed.)
-		spec, rerr := deps.Roles.Planner.Render(mdl, sysPrompt, payload, "", provider.RenderBare)
+		// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning
+		// via ResolveRoleModel's 3rd return (rsn).
+		spec, rerr := deps.Roles.Planner.Render(mdl, sysPrompt, payload, rsn, provider.RenderBare)
 		if rerr != nil {
 			return prompt.PlannerOutput{}, fmt.Errorf("%w: render: %w", ErrPlannerFailed, rerr)
 		}

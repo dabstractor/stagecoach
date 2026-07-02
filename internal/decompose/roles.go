@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
@@ -35,10 +36,10 @@ type RoleManifests struct {
 	Arbiter provider.Manifest // bare
 }
 
-// RoleModels holds the four resolved (provider, model) pairs (one config.RoleConfig per role) produced
-// by ResolveRoles. Post-auto-detect and post-stager-fallback. The orchestrator passes
-// RoleModels.X.Model + RoleModels.X.Provider as the Render model/provider params. config.RoleConfig
-// is {Provider, Model}.
+// RoleModels holds the four resolved (provider, model, reasoning) triples (one config.RoleConfig
+// per role) produced by ResolveRoles. Post-auto-detect and post-stager-fallback. The orchestrator passes
+// RoleModels.X.Model + RoleModels.X.Provider as the Render model/provider params, and RoleModels.X.Reasoning
+// as the Render reasoning param (FR-R6). config.RoleConfig is {Provider, Model, Reasoning}.
 type RoleModels struct {
 	Planner config.RoleConfig
 	Stager  config.RoleConfig
@@ -93,7 +94,7 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 	var rmodels RoleModels
 
 	for _, role := range []string{"planner", "stager", "message", "arbiter"} {
-		prov, mdl, _ := config.ResolveRoleModel(role, cfg) // TODO(P1.M2.T1.S2): wire reasoning into RoleModels
+		prov, mdl, rsn := config.ResolveRoleModel(role, cfg)
 
 		if prov == "" {
 			prov = reg.DefaultProvider(installed) // auto-detect (mirrors buildDeps)
@@ -140,11 +141,18 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 			}
 		}
 
-		// TODO(P1.M2.T1.S2): re-add the role-named FR-R5b guard using the model slash-prefix
-		// (a bare model on a provider_flag agent ⇒ error). Render now enforces FR-R5b at the
-		// chokepoint for ALL paths (including decompose).
+		// FR-R5b (role-named early check; Render re-enforces at the chokepoint for ALL paths). A model PINNED on a
+		// multi-provider (provider_flag set, e.g. pi) MUST carry its inference backend as a slash-prefix
+		// ("zai/glm-5.2"); a bare model is an unroutable config error, never a silent bare --model. Mirrors
+		// Render's guard (render.go) but fires earlier with the role name. mdl=="" is NOT pinned ⇒ no guard
+		// (Render uses the manifest DefaultModel + its own guard). Single-backend providers (ProviderFlag=="")
+		// are never guarded.
+		if isMultiProvider(m) && mdl != "" && !strings.Contains(mdl, "/") {
+			return RoleManifests{}, RoleModels{}, fmt.Errorf(
+				"role %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"", role, mdl, m.Name)
+		}
 
-		setRole(&rm, &rmodels, role, m, prov, mdl)
+		setRole(&rm, &rmodels, role, m, prov, mdl, rsn)
 	}
 
 	return rm, rmodels, nil
@@ -171,13 +179,10 @@ func isMultiProvider(m provider.Manifest) bool {
 	return m.ProviderFlag != nil && *m.ProviderFlag != ""
 }
 
-// TODO(P1.M2.T1.S2): re-add inferenceProvider if needed for the model-prefix guard.
-// (DefaultProvider field removed in v3; Render enforces FR-R5b at the chokepoint.)
-
-// setRole assigns the resolved manifest and RoleConfig to the correct struct field for the given role.
-// A 4-case switch (no reflection — vet-friendly, clear, fast).
-func setRole(rm *RoleManifests, rmodels *RoleModels, role string, m provider.Manifest, prov, mdl string) {
-	rc := config.RoleConfig{Provider: prov, Model: mdl}
+// setRole assigns the resolved manifest and RoleConfig (provider, model, reasoning) to the correct
+// struct field for the given role. A 4-case switch (no reflection — vet-friendly, clear, fast).
+func setRole(rm *RoleManifests, rmodels *RoleModels, role string, m provider.Manifest, prov, mdl, rsn string) {
+	rc := config.RoleConfig{Provider: prov, Model: mdl, Reasoning: rsn}
 	switch role {
 	case "planner":
 		rm.Planner, rmodels.Planner = m, rc

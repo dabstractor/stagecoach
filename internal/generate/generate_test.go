@@ -414,14 +414,18 @@ func TestCommitStaged_ResolvesSubProviderFromManifest(t *testing.T) {
 	writeFile(t, repo, "f.txt", "content")
 	stageFile(t, repo, "f.txt")
 
-	// Pi-shaped stub: emit --provider with a merged DefaultProvider that MUST be honored.
+	// Pi-shaped stub: ProviderFlag triggers slash-prefix splitting in Render.
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: provider ok"})
-	pflag, dp := "--provider", "openrouter"
+	pflag := "--provider"
 	m.ProviderFlag = &pflag
-	m.DefaultProvider = &dp
+	mf := "--model"
+	m.ModelFlag = &mf
+	dm := "gpt-5.4"
+	m.DefaultModel = &dm
 
 	cfg := config.Defaults()
 	cfg.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+	cfg.Model = "openrouter/gpt-5.4" // slash-prefix model → Render emits --provider openrouter
 
 	var buf bytes.Buffer
 	deps := Deps{Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(&buf, true)}

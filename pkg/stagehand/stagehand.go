@@ -56,21 +56,24 @@ type Result struct {
 	Model     string // the resolved model
 }
 
-// RoleModel is a per-role provider/model override for DecomposeOptions (PRD §14.1, §16.4, FR-R1–R5).
-// A zero value ⇒ the role inherits the global default (FR-R2); a non-empty field overrides just that
-// field (FR-R3 field-merge). Models are provider-specific (FR-R5).
+// RoleModel is a per-role provider/model/reasoning override for DecomposeOptions (PRD §14.1, §16.4, FR-R1–R5,
+// FR-R6). A zero value ⇒ the role inherits the global default (FR-R2); a non-empty field overrides just that
+// field (FR-R3 field-merge). Models are provider-specific (FR-R5). Reasoning is off|low|medium|high (FR-R6);
+// "" ⇒ inherit global [defaults].reasoning ⇒ shipped default.
 //
-// Stable as of v2.0.
+// Stable as of v2.0 (additive-only per §14.1).
 type RoleModel struct {
-	Provider string
-	Model    string
+	Provider  string
+	Model     string
+	Reasoning string // off|low|medium|high (FR-R6); "" ⇒ inherit the global [defaults].reasoning ⇒ shipped default
 }
 
 // DecomposeOptions configures the multi-commit pipeline (PRD §14.1, §13.6). The embedded Options
 // (Provider/Model/DryRun/Timeout/Verbose/VerboseOn/Config) apply to the MESSAGE role. Count 0 ⇒
 // auto-decompose (planner decides); >0 ⇒ force exactly Count commits. Single true ⇒ bypass the planner
 // (delegate to GenerateCommit, the v1 single-commit path). MaxCommits 0 ⇒ the config default (12);
-// >0 ⇒ override the safety cap. Planner/Stager/Arbiter are per-role overrides (zero ⇒ global default).
+// >0 ⇒ override the safety cap. Planner/Stager/Arbiter are per-role overrides (zero ⇒ global default);
+// each RoleModel carries Provider, Model, and Reasoning (FR-R6).
 //
 // Stable as of v2.0.
 type DecomposeOptions struct {
@@ -257,9 +260,9 @@ func resolveDecomposeConfig(ctx context.Context, opts DecomposeOptions) (config.
 	}
 
 	// Per-role field-merge (G-ROLE-FIELD-MERGE): zero RoleModel ⇒ inherit global (FR-R2).
-	if opts.Planner.Provider != "" || opts.Planner.Model != "" ||
-		opts.Stager.Provider != "" || opts.Stager.Model != "" ||
-		opts.Arbiter.Provider != "" || opts.Arbiter.Model != "" {
+	if opts.Planner.Provider != "" || opts.Planner.Model != "" || opts.Planner.Reasoning != "" ||
+		opts.Stager.Provider != "" || opts.Stager.Model != "" || opts.Stager.Reasoning != "" ||
+		opts.Arbiter.Provider != "" || opts.Arbiter.Model != "" || opts.Arbiter.Reasoning != "" {
 		if cfg.Roles == nil {
 			cfg.Roles = map[string]config.RoleConfig{}
 		}
@@ -273,7 +276,7 @@ func resolveDecomposeConfig(ctx context.Context, opts DecomposeOptions) (config.
 
 // applyRoleOverride applies a non-zero RoleModel onto cfg.Roles[role] (FR-R3 field-merge).
 func applyRoleOverride(roles map[string]config.RoleConfig, role string, rm RoleModel) {
-	if rm.Provider == "" && rm.Model == "" {
+	if rm.Provider == "" && rm.Model == "" && rm.Reasoning == "" {
 		return
 	}
 	rc := roles[role] // copy (zero value if absent)
@@ -282,6 +285,9 @@ func applyRoleOverride(roles map[string]config.RoleConfig, role string, rm RoleM
 	}
 	if rm.Model != "" {
 		rc.Model = rm.Model
+	}
+	if rm.Reasoning != "" {
+		rc.Reasoning = rm.Reasoning
 	}
 	roles[role] = rc
 }

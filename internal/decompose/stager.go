@@ -75,16 +75,15 @@ var ErrStagerMovedHEAD = errors.New("decompose: stager moved HEAD")
 func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) error {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl, _ := config.ResolveRoleModel("stager", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
+	_, mdl, rsn := config.ResolveRoleModel("stager", deps.Config)
 
 	// 2. Build the §17.6 stager task from the concept's title + description.
 	task := prompt.BuildStagerTask(concept.Title, concept.Description)
 
 	// v3 FR-R5b: the inference provider is the model slash-prefix ("inference/model"),
-	// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning.
-	// (Old: prov from ResolveRoleModel was the manifest name, NOT the upstream backend —
-	// the provider param has been folded into the model slash-prefix; DefaultProvider removed.)
-	spec, rerr := deps.Roles.Stager.Render(mdl, "", task, "", provider.RenderTooled)
+	// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning
+	// via ResolveRoleModel's 3rd return (rsn).
+	spec, rerr := deps.Roles.Stager.Render(mdl, "", task, rsn, provider.RenderTooled)
 	if rerr != nil {
 		return fmt.Errorf("%w: render: %v", ErrStagerFailed, rerr)
 	}

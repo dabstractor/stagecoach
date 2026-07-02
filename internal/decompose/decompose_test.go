@@ -1540,11 +1540,11 @@ func (l *lockedBuffer) String() string {
 	return l.b.String()
 }
 
-// piShape sets ProviderFlag and DefaultProvider on a manifest to simulate a pi-shaped agent
-// whose merged DefaultProvider should be honored by Render.
-func piShape(m *provider.Manifest, providerFlag, defaultProvider string) {
+// piShape sets ProviderFlag on a manifest to simulate a pi-shaped agent (multi-provider).
+// The sub-provider is now encoded in the model slash-prefix (v3 FR-R5b), so callers must also
+// set a slash-prefix model on the config/role to exercise the --provider flag.
+func piShape(m *provider.Manifest, providerFlag string) {
 	m.ProviderFlag = &providerFlag
-	m.DefaultProvider = &defaultProvider
 }
 
 // TestDecompose_ArbiterTipAmend_RereadsFinalSHA: 2 concepts + leftover; arbiter amends the tip.
@@ -1713,20 +1713,21 @@ func TestDecompose_RoleResolvesSubProvider(t *testing.T) {
 
 	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
 	plannerM := stubtest.Manifest(bin, stubtest.Options{Out: plannerJSON})
-	piShape(&plannerM, "--provider", "openrouter")
+	piShape(&plannerM, "--provider")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	piShape(&stagerM, "--provider", "openrouter")
+	piShape(&stagerM, "--provider")
 
 	messageM := stubtest.NewScript(t, bin, []string{"feat: add a", "feat: add b"})
-	piShape(&messageM, "--provider", "openrouter")
+	piShape(&messageM, "--provider")
 
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Out: `{"target": null}`})
-	piShape(&arbiterM, "--provider", "openrouter")
+	piShape(&arbiterM, "--provider")
 
 	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
-	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+	deps.Config.Provider = "pi"              // the manifest NAME — the conflation source; must NOT be emitted
+	deps.Config.Model = "openrouter/gpt-5.4" // slash-prefix model → Render emits --provider openrouter
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
 		"c1": {"a.txt"},
 		"c2": {"b.txt"},

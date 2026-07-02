@@ -309,11 +309,16 @@ func TestStageConcept_ResolvesSubProvider(t *testing.T) {
 	stgInitRepo(t, repo)
 
 	m := tooledStubManifest(t, bin, stubtest.Options{Out: ""}) // stager ignores stdout; exit 0
-	pflag, dp := "--provider", "openrouter"
-	m.ProviderFlag, m.DefaultProvider = &pflag, &dp // pi-shaped: merged DefaultProvider MUST be honored
+	pflag := "--provider"
+	m.ProviderFlag = &pflag // pi-shaped: ProviderFlag triggers slash-prefix splitting
+	mf := "--model"
+	m.ModelFlag = &mf
+	dm := "gpt-5.4"
+	m.DefaultModel = &dm
 
 	deps := stagerDeps(t, repo, m)
-	deps.Config.Provider = "pi" // the manifest NAME — the conflation source; must NOT be emitted
+	deps.Config.Provider = "pi"              // the manifest NAME — the conflation source; must NOT be emitted
+	deps.Config.Model = "openrouter/gpt-5.4" // slash-prefix model → Render emits --provider openrouter
 
 	var buf bytes.Buffer
 	deps.Verbose = ui.NewVerbose(&buf, true)

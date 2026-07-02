@@ -79,7 +79,7 @@ type CommitInfo struct {
 func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDiff string) (prompt.ArbiterOutput, error) {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl, _ := config.ResolveRoleModel("arbiter", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
+	_, mdl, rsn := config.ResolveRoleModel("arbiter", deps.Config)
 
 	// 2. Convert []CommitInfo → []prompt.ArbiterCommit (FileChange→path seam) + build the valid-SHA set.
 	arbiterCommits, validSHAs := convertArbiterCommits(commits)
@@ -89,10 +89,9 @@ func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDi
 	payload := prompt.BuildArbiterUserPayload(arbiterCommits, leftoverDiff)
 
 	// v3 FR-R5b: the inference provider is the model slash-prefix ("inference/model"),
-	// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning.
-	// (Old: prov from ResolveRoleModel was the manifest name, NOT the upstream backend —
-	// the provider param has been folded into the model slash-prefix; DefaultProvider removed.)
-	spec, rerr := deps.Roles.Arbiter.Render(mdl, sysPrompt, payload, "", provider.RenderBare)
+	// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning
+	// via ResolveRoleModel's 3rd return (rsn).
+	spec, rerr := deps.Roles.Arbiter.Render(mdl, sysPrompt, payload, rsn, provider.RenderBare)
 	if rerr != nil {
 		return prompt.ArbiterOutput{}, fmt.Errorf("%w: render: %w", ErrArbiterFailed, rerr)
 	}

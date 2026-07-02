@@ -21,7 +21,7 @@ func goRegistry(t *testing.T, names []string, extraOverrides map[string]provider
 	}
 	for name, ov := range extraOverrides {
 		if base, ok := overrides[name]; ok {
-			// Merge extra fields (e.g. DefaultProvider) onto the install override WITHOUT dropping
+			// Merge extra fields onto the install override WITHOUT dropping
 			// Command="go" (which makes the agent "installed"). Models a correctly-configured user.
 			overrides[name] = provider.MergeManifest(base, ov)
 		} else {
@@ -29,15 +29,6 @@ func goRegistry(t *testing.T, names []string, extraOverrides map[string]provider
 		}
 	}
 	return provider.NewRegistry(overrides)
-}
-
-// withInferenceProvider returns a manifest override carrying only DefaultProvider — for use as a
-// goRegistry extraOverride. It models a correctly-configured multi-provider-agent user: one who set
-// [provider.<name>] default_provider so a pinned model routes (FR-R5b). go-merged with the install
-// override, so the agent stays "installed" (Command="go") AND carries the inference provider.
-func withInferenceProvider(p string) provider.Manifest {
-	v := p
-	return provider.Manifest{DefaultProvider: &v}
 }
 
 // bogusRegistry builds a Registry where all built-in providers are overridden to a bogus command
@@ -99,13 +90,13 @@ func geminiManifest(t *testing.T) provider.Manifest {
 
 func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 	// All 4 roles resolve to pi (global provider=pi, no per-role override). pi is multi-provider, so a
-	// pinned model needs an inference provider (FR-R5b) — model a correctly-configured user here.
-	reg := goRegistry(t, []string{"pi"}, map[string]provider.Manifest{"pi": withInferenceProvider("zai")})
+	// pinned model MUST use the slash-prefix form (FR-R5b) — model a correctly-configured user here.
+	reg := bogusRegistry(t, []string{"pi"})
 	wantPi := piManifest(t)
 
 	cfg := config.Config{
 		Provider: "pi",
-		Model:    "gpt-5.4-nano",
+		Model:    "zai/gpt-5.4-nano", // slash-prefix: inference backend + model (FR-R5b)
 	}
 
 	rm, rmodels, err := ResolveRoles(cfg, reg)
@@ -125,8 +116,8 @@ func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 			t.Errorf("role %q provider = %q, want pi", role, rc.Provider)
 		}
 		// Model should be the global model (inherited via ResolveRoleModel).
-		if rc.Model != "gpt-5.4-nano" {
-			t.Errorf("role %q model = %q, want gpt-5.4-nano", role, rc.Model)
+		if rc.Model != "zai/gpt-5.4-nano" {
+			t.Errorf("role %q model = %q, want zai/gpt-5.4-nano", role, rc.Model)
 		}
 	}
 
@@ -141,10 +132,11 @@ func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback(t *testing.T) {
-	// Stager is set to gemini (TooledFlags nil → cannot stage); fallback to pi (first capable).
-	// The fallback lands on pi (multi-provider) with pi's stager model → needs an inference provider.
-	reg := goRegistry(t, []string{"gemini", "pi", "claude"}, map[string]provider.Manifest{"pi": withInferenceProvider("zai")})
-	wantPi := piManifest(t)
+	// Stager is set to gemini (TooledFlags nil → cannot stage); fallback to claude (first tooled-capable
+	// installed after gemini). Pi is NOT installed in this fixture (so fallback skips it). Claude is
+	// single-backend (ProviderFlag="") so the FR-R5b guard does not fire on the fallback model.
+	reg := bogusRegistry(t, []string{"gemini", "claude"})
+	wantClaude := claudeManifest(t)
 
 	cfg := config.Config{
 		Provider: "gemini",
@@ -158,21 +150,21 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 		t.Fatalf("ResolveRoles: %v", err)
 	}
 
-	// Stager should have fallen back to pi.
-	if rm.Stager.Name != wantPi.Name {
-		t.Errorf("Stager manifest.Name = %q, want %q", rm.Stager.Name, wantPi.Name)
+	// Stager should have fallen back to claude.
+	if rm.Stager.Name != wantClaude.Name {
+		t.Errorf("Stager manifest.Name = %q, want %q", rm.Stager.Name, wantClaude.Name)
 	}
-	if rmodels.Stager.Provider != "pi" {
-		t.Errorf("Stager provider = %q, want pi", rmodels.Stager.Provider)
+	if rmodels.Stager.Provider != "claude" {
+		t.Errorf("Stager provider = %q, want claude", rmodels.Stager.Provider)
 	}
 
-	// Stager model should be pi's stager default from the FR-D4 table.
-	wantStagerModel := config.DefaultModelsForProvider("pi")["stager"]
+	// Stager model should be claude's stager default from the FR-D4 table.
+	wantStagerModel := config.DefaultModelsForProvider("claude")["stager"]
 	if rmodels.Stager.Model != wantStagerModel {
 		t.Errorf("Stager model = %q, want %q", rmodels.Stager.Model, wantStagerModel)
 	}
 
-	// Stager TooledFlags should be non-empty (fallback to pi which is capable).
+	// Stager TooledFlags should be non-empty (fallback to claude which is capable).
 	if len(rm.Stager.TooledFlags) == 0 {
 		t.Error("Stager.TooledFlags is empty after fallback, want non-empty")
 	}
@@ -250,8 +242,9 @@ func TestResolveRoles_NoStagerCapable(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_FR5b_BareModelOnPi(t *testing.T) {
-	// Planner has a model set but NO provider; auto-detect picks pi (multi-provider) → error.
-	reg := goRegistry(t, []string{"pi"}, nil)
+	// Planner has a model set but NO provider; auto-detect picks pi (multi-provider) → FR-R5b error
+	// because "glm-5-turbo" has no slash-prefix.
+	reg := bogusRegistry(t, []string{"pi"})
 
 	cfg := config.Config{
 		Roles: map[string]config.RoleConfig{
@@ -261,11 +254,11 @@ func TestResolveRoles_FR5b_BareModelOnPi(t *testing.T) {
 
 	_, _, err := ResolveRoles(cfg, reg)
 	if err == nil {
-		t.Fatal("ResolveRoles returned nil error, want FR-R5b error")
+		t.Fatal("ResolveRoles returned nil error, want FR-R5b model-prefix error")
 	}
 	errMsg := err.Error()
-	if !strings.Contains(errMsg, "no inference provider") || !strings.Contains(errMsg, "[provider.pi] default_provider") {
-		t.Errorf("error = %q, want FR-R5b inference-provider error", errMsg)
+	if !strings.Contains(errMsg, "must be inference/model") || !strings.Contains(errMsg, "planner") {
+		t.Errorf("error = %q, want role-named must be inference/model error", errMsg)
 	}
 }
 
@@ -306,12 +299,10 @@ func TestResolveRoles_FR5b_BareModelOnClaude_NoError(t *testing.T) {
 // TestResolveRoles_FR5b_ProviderSet_NoInferenceProvider
 // ---------------------------------------------------------------------------
 
-func TestResolveRoles_FR5b_ProviderSet_NoInferenceProvider(t *testing.T) {
-	// The config-init default pattern: provider="pi" (the AGENT name) + a pinned model, but NO
-	// inference provider ([provider.pi] default_provider unset). This is the exact misconfiguration
-	// that emitted a bare `pi --model <m>` and returned empty output. FR-R5b forbids it — it must
-	// error, NOT silently render an unroutable command. (The prior test blessed this as no-error.)
-	reg := goRegistry(t, []string{"pi"}, nil)
+func TestResolveRoles_FR5b_BareModelOnExplicitPi(t *testing.T) {
+	// Provider="pi" (the AGENT name, multi-provider) + a bare model (no slash-prefix).
+	// This is a misconfiguration: pi requires "inference/model" form. FR-R5b forbids it.
+	reg := bogusRegistry(t, []string{"pi"})
 
 	cfg := config.Config{
 		Provider: "pi",
@@ -322,11 +313,11 @@ func TestResolveRoles_FR5b_ProviderSet_NoInferenceProvider(t *testing.T) {
 
 	_, _, err := ResolveRoles(cfg, reg)
 	if err == nil {
-		t.Fatal("ResolveRoles returned nil error; want FR-R5b inference-provider error " +
-			"(provider=\"pi\" is the AGENT name, not an inference provider)")
+		t.Fatal("ResolveRoles returned nil error; want FR-R5b model-prefix error")
 	}
-	if !strings.Contains(err.Error(), "no inference provider") {
-		t.Errorf("error = %q, want inference-provider message", err)
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "must be inference/model") || !strings.Contains(errMsg, "planner") {
+		t.Errorf("error = %q, want role-named must be inference/model error", errMsg)
 	}
 }
 
@@ -334,15 +325,15 @@ func TestResolveRoles_FR5b_ProviderSet_NoInferenceProvider(t *testing.T) {
 // TestResolveRoles_FR5b_InferenceProviderSet_NoError
 // ---------------------------------------------------------------------------
 
-func TestResolveRoles_FR5b_InferenceProviderSet_NoError(t *testing.T) {
-	// Same as above BUT [provider.pi] default_provider="zai" is set → the model routes → no error.
-	// This is the correctly-configured pi user (the fix path FR-R5b is meant to guide users TO).
-	reg := goRegistry(t, []string{"pi"}, map[string]provider.Manifest{"pi": withInferenceProvider("zai")})
+func TestResolveRoles_FR5b_SlashPrefixModel_NoError(t *testing.T) {
+	// A slash-prefix model on pi → no error. This is the correctly-configured pi user
+	// (the fix path FR-R5b is meant to guide users TO).
+	reg := bogusRegistry(t, []string{"pi"})
 
 	cfg := config.Config{
 		Provider: "pi",
 		Roles: map[string]config.RoleConfig{
-			"planner": {Provider: "pi", Model: "gpt-5.4"},
+			"planner": {Provider: "pi", Model: "zai/gpt-5.4"},
 		},
 	}
 
@@ -353,8 +344,8 @@ func TestResolveRoles_FR5b_InferenceProviderSet_NoError(t *testing.T) {
 	if rmodels.Planner.Provider != "pi" {
 		t.Errorf("Planner provider = %q, want pi", rmodels.Planner.Provider)
 	}
-	if rmodels.Planner.Model != "gpt-5.4" {
-		t.Errorf("Planner model = %q, want gpt-5.4", rmodels.Planner.Model)
+	if rmodels.Planner.Model != "zai/gpt-5.4" {
+		t.Errorf("Planner model = %q, want zai/gpt-5.4", rmodels.Planner.Model)
 	}
 	if rm.Planner.Name != "pi" {
 		t.Errorf("Planner manifest.Name = %q, want pi", rm.Planner.Name)
@@ -429,15 +420,16 @@ func TestResolveRoles_Uninstalled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_PerRoleOverrides(t *testing.T) {
-	// Per-role overrides: planner=claude, stager=pi, message=claude, arbiter=pi. The pi roles pin a
-	// model → need an inference provider (FR-R5b); claude is single-backend (no provider needed).
-	reg := goRegistry(t, []string{"pi", "claude"}, map[string]provider.Manifest{"pi": withInferenceProvider("zai")})
+	// Per-role overrides: planner=claude, stager=pi (slash-prefix model, FR-R5b), message=claude,
+	// arbiter=pi (no model → use manifest default). Claude is single-backend (no provider needed);
+	// pi roles use slash-prefix models (FR-R5b).
+	reg := bogusRegistry(t, []string{"pi", "claude"})
 
 	cfg := config.Config{
 		Provider: "claude", // global default
 		Roles: map[string]config.RoleConfig{
 			"planner": {Provider: "claude", Model: "opus"},
-			"stager":  {Provider: "pi", Model: "gpt-5.4-mini"},
+			"stager":  {Provider: "pi", Model: "zai/gpt-5.4-mini"},
 			"message": {Provider: "claude", Model: "haiku"},
 			"arbiter": {Provider: "pi"},
 		},
@@ -455,7 +447,7 @@ func TestResolveRoles_PerRoleOverrides(t *testing.T) {
 		wantModel    string
 	}{
 		{"planner", "claude", "opus"},
-		{"stager", "pi", "gpt-5.4-mini"},
+		{"stager", "pi", "zai/gpt-5.4-mini"},
 		{"message", "claude", "haiku"},
 		{"arbiter", "pi", ""},
 	}
@@ -471,6 +463,57 @@ func TestResolveRoles_PerRoleOverrides(t *testing.T) {
 		if m.Name != tt.wantProvider {
 			t.Errorf("role %q manifest.Name = %q, want %q", tt.role, m.Name, tt.wantProvider)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestResolveRoles_ReasoningShippedDefault
+// ---------------------------------------------------------------------------
+
+func TestResolveRoles_ReasoningShippedDefault(t *testing.T) {
+	// When nothing sets reasoning, planner gets "high" (FR-R6 shipped default via ResolveRoleModel);
+	// other roles get "" (off). Claude is single-backend ⇒ no FR-R5b guard.
+	reg := bogusRegistry(t, []string{"claude"})
+
+	cfg := config.Config{} // nothing set
+
+	_, rmodels, err := ResolveRoles(cfg, reg)
+	if err != nil {
+		t.Fatalf("ResolveRoles: %v", err)
+	}
+	if rmodels.Planner.Reasoning != "high" {
+		t.Errorf("planner reasoning = %q, want high (FR-R6 shipped default)", rmodels.Planner.Reasoning)
+	}
+	if rmodels.Stager.Reasoning != "" {
+		t.Errorf("stager reasoning = %q, want \"\" (off)", rmodels.Stager.Reasoning)
+	}
+	if rmodels.Message.Reasoning != "" {
+		t.Errorf("message reasoning = %q, want \"\" (off)", rmodels.Message.Reasoning)
+	}
+	if rmodels.Arbiter.Reasoning != "" {
+		t.Errorf("arbiter reasoning = %q, want \"\" (off)", rmodels.Arbiter.Reasoning)
+	}
+}
+
+func TestResolveRoles_ReasoningPerRoleSet(t *testing.T) {
+	// Per-role reasoning override: message sets reasoning="low"; planner inherits shipped "high".
+	reg := bogusRegistry(t, []string{"claude"})
+
+	cfg := config.Config{
+		Roles: map[string]config.RoleConfig{
+			"message": {Reasoning: "low"},
+		},
+	}
+
+	_, rmodels, err := ResolveRoles(cfg, reg)
+	if err != nil {
+		t.Fatalf("ResolveRoles: %v", err)
+	}
+	if rmodels.Planner.Reasoning != "high" {
+		t.Errorf("planner reasoning = %q, want high (shipped default)", rmodels.Planner.Reasoning)
+	}
+	if rmodels.Message.Reasoning != "low" {
+		t.Errorf("message reasoning = %q, want low (per-role override)", rmodels.Message.Reasoning)
 	}
 }
 
