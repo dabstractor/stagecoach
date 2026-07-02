@@ -1,0 +1,121 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Reasoning opt-in everywhere (off for all roles)",
+      "status": "Researching",
+      "description": "Flip the shipped per-role reasoning default from planner=high to off for ALL roles (FR-R6), making reasoning opt-in everywhere. Also have config init write an uncommented reasoning=\"off\" into [defaults] for discoverability (FR-B1). This is a small, focused delta on the fully-implemented v2.0/v3 codebase — no new subsystems, no new code paths, one map-entry removal plus mechanical test/comment/doc updates. Grounded in plan/004_136878664597/architecture/system_context.md and critical_findings.md.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Remove planner=high shipped fallback; off everywhere",
+          "status": "Planned",
+          "description": "The shipped reasoning fallback for the planner role changes from \"high\" to \"\" (off). Every role — planner, stager, message, arbiter — resolves to off when nothing else is set. The config init command additionally emits an uncommented reasoning=\"off\" line in [defaults].",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Flip shipped reasoning default to off for all roles",
+              "status": "Planned",
+              "description": "Remove the defaultRoleReasoning map (which contained {\"planner\": \"high\"}) from internal/config/roles.go, eliminate the shipped-default fallback branch in ResolveRoleModel, update the doc comments in config.go/roles.go that cite 'planner=high', update all test assertions that expected the old shipped default, and update the user-facing flag-help/doc surfaces. Per §3 (IMPLICIT TDD), tests are updated WITH the code change — the safest path is: remove the map entry, run go test ./..., and fix every failing assertion the tests enumerate.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Remove defaultRoleReasoning map + ResolveRoleModel fallback + config.go doc comments + config-package test assertions",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_136878664597/architecture/system_context.md §3 (Change A) and critical_findings.md Finding 1. The defaultRoleReasoning map at internal/config/roles.go lines 1–13 is {\"planner\": \"high\"}. ResolveRoleModel at roles.go:57–63 has a second if-block: `if reasoning == \"\" { reasoning = defaultRoleReasoning[role] }` that is the shipped fallback. Off (\"\") is the natural zero value — no role except planner had an entry, so removing it makes ALL roles default to off.\n2. INPUT: The existing internal/config/roles.go (the defaultRoleReasoning var + its doc comment block lines 1–19, and ResolveRoleModel's fallback at line ~63), and internal/config/config.go (doc comments at lines 27–28 RoleConfig.Reasoning, line 65 Config.Reasoning, line 126 Defaults Reasoning — all cite 'planner=high' or 'shipped fallback').\n3. LOGIC: (a) In roles.go: DELETE the defaultRoleReasoning var and its comment block entirely. In ResolveRoleModel (the `if reasoning == \"\"` block at line ~63): REMOVE the final `reasoning = defaultRoleReasoning[role]` fallback so reasoning falls through to just `cfg.Reasoning` (the global, which is \"\" when unset). Rewrite the doc comment block (lines ~20–40) to state that reasoning has NO shipped per-role default — every role is off out of the box, and a user sets [role.<role>].reasoning or the global [defaults].reasoning to enable it. (b) In config.go: update the 3 doc comments (RoleConfig.Reasoning at ~line 36, Config.Reasoning at ~line 65, Defaults() at ~line 126) to say 'off for every role; opt-in per role' instead of 'planner=high'/'shipped fallback'. (c) In roles_test.go: flip TestResolveRoleModel_FullOverride planner reasoning assertion from \"high\" to \"\"; flip TestResolveRoleModel_BothEmptyManifestSentinel same; in TestResolveRoleModel_AllCanonicalRoles, change the planner want-entry reasoning from \"high\" to \"\"; RENAME TestResolveRoleModel_PlannerShippedDefault → TestResolveRoleModel_NoShippedReasoningDefault and assert ALL roles (loop roleNames) return \"\" reasoning when nothing is set; update TestResolveRoleModel_ReasoningGlobalFallback and TestResolveRoleModel_ReasoningOffIsNonZero comments to remove 'beats shipped default' wording (the assertions themselves stay valid — the planner now inherits global like any other role).\n4. OUTPUT: ResolveRoleModel returns reasoning=\"\" for all roles when nothing is set (no shipped default). The config-package tests are green. No other package is affected yet (decompose/cmd tests are S2).\n5. DOCS: [Mode A] The doc comments in roles.go and config.go ride WITH the work. These are internal Go comments — no external doc file is touched in this subtask.",
+                  "prd_selectors": [
+                    "h2.9",
+                    "h3.31",
+                    "h2.16",
+                    "h3.66",
+                    "h3.69",
+                    "h3.10"
+                  ]
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "Update downstream test assertions + user-facing surfaces (decompose roles_test, default_action_test, root.go flag help, pkg/stagehand comment, docs/cli.md)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_136878664597/architecture/system_context.md §3 (Change A downstream sites) and critical_findings.md Finding 3 (verbose_test.go is NOT changed). S1 removed the shipped default; these are the ripple-effect test + surface updates. The ui/verbose_test.go fixture (line 14) explicitly sets Reasoning:\"high\" on the planner RoleLine — it tests the reasoningSuffix FORMATTER, not the default, and MUST NOT be changed.\n2. INPUT: S1's behavioral change (defaultRoleReasoning removed, planner now resolves to \"\"). The affected files: internal/decompose/roles_test.go (lines ~540–580), internal/cmd/default_action_test.go (lines ~1438–1440), internal/cmd/root.go (line ~137 --reasoning flag help), pkg/stagehand/stagehand.go (lines ~62, ~66 RoleModel doc comment), docs/cli.md (line ~43 --reasoning default column).\n3. LOGIC: (a) In decompose/roles_test.go: RENAME TestResolveRoles_ReasoningShippedDefault → TestResolveRoles_NoShippedReasoningDefault; change the planner assertion from rmodels.Planner.Reasoning == \"high\" to == \"\"; in TestResolveRoles_ReasoningPerRoleSet change the planner assertion from \"high\" to \"\" (planner inherits nothing now; only message sets \"low\"). (b) In default_action_test.go TestProgressLabel_DecomposeVerboseRoles (~line 1438): replace the assertion `strings.Contains(stderr, \"(reasoning: high)\")` with `strings.Contains(stderr, \"(reasoning:\")` INVERTED — assert NO reasoning suffix appears on ANY role line (since all four default to off, reasoningSuffix returns \"\" for all). Use `if strings.Contains(stderr, \"(reasoning:\")` → error. (c) In root.go line ~137: change the --reasoning flag help string from 'default off, planner: high' to 'default off for every role'. (d) In pkg/stagehand/stagehand.go lines ~62, ~66: update RoleModel doc comments from 'shipped default' to 'off by default for every role'. (e) In docs/cli.md line ~43: change the --reasoning row default column from '\"\" (off; planner: high)' to '\"\" (off)'.\n4. OUTPUT: go test ./... is fully green across ALL packages. The --reasoning flag help, the public RoleModel doc comment, and docs/cli.md all reflect 'off for every role'. No stale 'planner=high' references remain anywhere in the tree (verify with: grep -rn 'planner.*high' internal/ pkg/ docs/).\n5. DOCS: [Mode A] root.go flag help string, pkg/stagehand RoleModel doc comment, and docs/cli.md flag table ride WITH the work.",
+                  "prd_selectors": [
+                    "h2.9",
+                    "h3.31",
+                    "h3.62",
+                    "h2.16",
+                    "h3.69",
+                    "h3.60"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "config init emits uncommented reasoning = \"off\" in [defaults] (FR-B1)",
+              "status": "Planned",
+              "description": "The config init bootstrap config generator now writes an UNCOMMENTED reasoning = \"off\" line in the [defaults] section, immediately after the provider line, so the field is discoverable and obviously opt-in in the generated file. Previously reasoning was either absent or commented out.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Add uncommented reasoning = \"off\" to bootstrap config [defaults] + test + docs/configuration.md",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_136878664597/architecture/system_context.md §3 (Change B) and architecture critical_findings.md. The bootstrap config writer is internal/config/bootstrap.go function buildBootstrapConfig (lines ~78–160). The [defaults] section is written at lines ~119–128: it writes `provider = \"<target>\"` uncommented, then `# model`, `# timeout`, `# auto_stage_all`, `# verbose` as commented lines. FR-B1 requires reasoning to be uncommented and set to \"off\" so the field is discoverable. The test is in bootstrap_test.go function TestBuildBootstrapConfig_Pi (~line 26).\n2. INPUT: The existing buildBootstrapConfig function and its [defaults] writer in bootstrap.go. The existing TestBuildBootstrapConfig_Pi in bootstrap_test.go. The docs/configuration.md config example (lines ~77–83) which currently has reasoning COMMENTED with text 'planner defaults to high'.\n3. LOGIC: (a) In bootstrap.go buildBootstrapConfig, after the `b.WriteString` for the provider line (line ~124) and before the commented `# model` line, insert: `b.WriteString(\"reasoning = \\\"off\\\"   # off|low|medium|high; off by default for every role (FR-R6) — opt in per role below\\n\")`. This writes an UNCOMMENTED line so the generated config visibly exposes the reasoning field. (b) In bootstrap_test.go TestBuildBootstrapConfig_Pi, add an assertion after the existing `provider = \"pi\"` check: `if !strings.Contains(content, \"reasoning = \\\"off\\\"\") { t.Error(\"missing uncommented reasoning = \\\"off\\\" in [defaults]\") }`. (c) In docs/configuration.md (~line 77–83): move reasoning from commented (`# reasoning = \"off\"`) to uncommented with updated comment text '# off|low|medium|high; off by default for every role (FR-R6)'.\n4. OUTPUT: `stagehand config init` produces a config file with an uncommented `reasoning = \"off\"` under [defaults]. The bootstrap test asserts this. docs/configuration.md matches. go test ./internal/config/ is green.\n5. DOCS: [Mode A] The inline comment on the emitted reasoning line in bootstrap.go, and the docs/configuration.md config example, ride WITH the work.",
+                  "prd_selectors": [
+                    "h2.9",
+                    "h3.33",
+                    "h2.16",
+                    "h3.67",
+                    "h3.10"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Final Mode B sweep (per §5): verify that no changeset-level documentation (README.md, docs/how-it-works.md, docs/providers.md, docs/README.md) retains stale references to the old planner=high reasoning default. Each per-file doc touched by T1/T2 was already updated as Mode A; this task is the catch-all that ensures the whole delta is coherent across all user-facing surfaces.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Verify README.md and remaining docs/ files have no stale reasoning-default references",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T1.S2",
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_136878664597/architecture/critical_findings.md Finding 4. The delta_prd.md incorrectly claimed 'no docs/ directory exists' — docs/ DOES exist (cli.md, configuration.md, how-it-works.md, providers.md, README.md). However, the conclusion (no separate Mode B sweep needed) is expected to hold: README.md shows `--reasoning high` as an invocation EXAMPLE (not a default claim); docs/providers.md documents the manifest reasoning_levels field SHAPE (not defaults); docs/how-it-works.md has no reasoning references. T1.S2 already updated docs/cli.md; T2.S1 already updated docs/configuration.md. This subtask verifies the remaining surfaces.\n2. INPUT: The completed T1 (defaultRoleReasoning removed) and T2 (config init emits reasoning=\"off\"). The docs/ files NOT yet touched: README.md (project root), docs/how-it-works.md, docs/providers.md, docs/README.md.\n3. LOGIC: Run `grep -rn 'planner.*high\\|planner.*default.*high\\|reasoning.*planner.*high' README.md docs/` to find any remaining stale reference to the old planner=high default. If any are found, update them to reflect 'off for every role; opt-in per role'. If none are found (expected), this is a verification no-op — confirm and exit. Specifically check: README.md only references `--reasoning high` as a usage example (correct — leave as-is, it shows the user CAN set it, not that it IS the default). docs/providers.md documents the reasoning_levels manifest table shape (correct — the table itself is unchanged, only the default level changed). docs/how-it-works.md should have no reasoning-default claims.\n4. OUTPUT: No stale 'planner defaults to high' or equivalent text remains in ANY user-facing documentation. The `grep` returns zero matches (excluding invocation examples that correctly show `--reasoning high` as user-set, not as a default).\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task. Its output is the verification that all docs are coherent with the delta.",
+                  "prd_selectors": [
+                    "h2.21",
+                    "h3.90",
+                    "h2.9",
+                    "h3.31",
+                    "h3.33"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
