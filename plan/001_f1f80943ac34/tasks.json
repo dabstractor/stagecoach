@@ -578,7 +578,7 @@
               "id": "P1.M7.T3",
               "type": "Task",
               "title": "Subcommands (providers, config)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "stagehand providers list/show (FR46-FR48) and stagehand config init/path (FR38) — the discovery + onboarding UX.",
               "subtasks": [
                 {
@@ -597,7 +597,7 @@
                   "id": "P1.M7.T3.S2",
                   "type": "Subtask",
                   "title": "config init / path subcommands (FR38)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M5.T2.S1"

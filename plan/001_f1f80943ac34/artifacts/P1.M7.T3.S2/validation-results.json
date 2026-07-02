@@ -1,0 +1,82 @@
+[
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "gofmt -l internal/config/example.go internal/config/example_test.go cmd/stagehand/config.go cmd/stagehand/config_test.go",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go vet ./internal/config/ ./cmd/stagehand/",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go build ./...",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go test ./internal/config/ -run TestExampleConfig -v",
+    "stdout": "=== RUN   TestExampleConfig_ParsesToDefaults\n--- PASS: TestExampleConfig_ParsesToDefaults (0.00s)\n=== RUN   TestExampleConfig_DocumentsEveryKey\n--- PASS: TestExampleConfig_DocumentsEveryKey (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/internal/config\t0.003s\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go test ./cmd/stagehand/ -run TestConfig -v",
+    "stdout": "=== RUN   TestConfigPath_PrintsXDG\n--- PASS: TestConfigPath_PrintsXDG (0.00s)\n=== RUN   TestConfigPath_HomeFallback\n--- PASS: TestConfigPath_HomeFallback (0.00s)\n=== RUN   TestConfigPath_ErrorsWhenUnset\n--- PASS: TestConfigPath_ErrorsWhenUnset (0.00s)\n=== RUN   TestConfigInit_WritesValidDefaults\n--- PASS: TestConfigInit_WritesValidDefaults (0.00s)\n=== RUN   TestConfigInit_NoClobber\n--- PASS: TestConfigInit_NoClobber (0.00s)\n=== RUN   TestConfigInit_ForceOverwrites\n--- PASS: TestConfigInit_ForceOverwrites (0.00s)\n=== RUN   TestConfigCmd_Registered\n--- PASS: TestConfigCmd_Registered (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t0.003s\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go test ./...",
+    "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go run ./cmd/stagehand config path",
+    "stdout": "/home/dustin/.config/stagehand/config.toml\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "XDG_CONFIG_HOME=$(mktemp -d) go run ./cmd/stagehand config init",
+    "stdout": "Wrote commented example config to /tmp/tmp.iNNHb3Rj9Q/stagehand/config.toml\nAdd ./.stagehand.toml to your local .gitignore? [y/N] ",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  }
+]

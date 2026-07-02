@@ -225,3 +225,29 @@ the global file, an environment variable, a CLI flag, or an explicit
 `--config`/`STAGEHAND_CONFIG` path sets the provider — those are user-chosen,
 not attacker-committable. (Hardening planned for v1.1: restrict repo-local
 overrides to non-`command` fields unless `STAGEHAND_TRUST_REPO_CONFIG=1`.)
+
+## 7. Onboarding: `stagehand config init` / `config path`
+
+Two subcommands (FR38, PRD §15.3/§16.1) remove the XDG guesswork and scaffold a
+fully-documented config for first-time setup:
+
+- **`stagehand config path`** — prints the resolved global config path
+  (`$XDG_CONFIG_HOME/stagehand/config.toml`, defaulting to
+  `~/.config/stagehand/config.toml`). Errors (exit 1) when neither
+  `XDG_CONFIG_HOME` nor `HOME` is set.
+
+- **`stagehand config init`** — writes a fully-commented example config (PRD
+  §16.2 — every key documented inline) to that path. The written file is a
+  documented **no-op**: every line is commented, so the built-in defaults
+  ([§1](#1-precedence-order-fr34)) stay in effect until you delete the leading
+  `# ` on a line you want to change. It refuses to overwrite an existing file
+  without `--force`, and — when run inside a git repository — offers to append
+  `./.stagehand.toml` to `./.gitignore` (the per-repo file is not committed by
+  default; PRD §16.1 layer 4).
+
+> **Canonical reference.** The generated, inline-commented file **is** the
+> per-key config-file reference: it documents every key, its type, and the
+> built-in default value right next to the key. Rather than duplicating the
+> tables here, run `stagehand config init` and read the file — the key tables
+> in [§4](#4-stagehandtoml-keys-162) and the defaults in [§1](#1-precedence-order-fr34)
+> cover the same surface.

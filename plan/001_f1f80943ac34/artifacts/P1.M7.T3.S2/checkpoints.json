@@ -1,0 +1,231 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M7.T3.S2_1782991405913_pre-execution_16e66baa",
+      "taskId": "P1.M7.T3.S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M7_T3_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-02T11:23:25.913Z"
+      },
+      "createdAt": "2026-07-02T11:23:25.913Z"
+    },
+    {
+      "id": "P1.M7.T3.S2_1782992040646_coder-response_9d853b4a",
+      "taskId": "P1.M7.T3.S2",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M7_T3_S2.md",
+        "stage": "coder-response",
+        "coderResponse": "All validation gates pass. The implementation is complete.\n\n## Summary\n\nI executed PRP **P1_M7_T3_S2** — adding the `stagehand config` command tree (FR38) — in one pass, following the existing `providers.go`/`providers_test.go` sibling patterns exactly.\n\n### Files created/modified\n\n| File | Status | Purpose |\n|------|--------|---------|\n| `internal/config/example.go` | NEW | `ExampleConfig() string` — the fully-commented PRD §16.2 template (Mode A reference), values = `Default*` constants |\n| `internal/config/example_test.go` | NEW | white-box `package config`: `TestExampleConfig_ParsesToDefaults` (strip `#`→`fileDTO`→asserts `Default*`) + `TestExampleConfig_DocumentsEveryKey` |\n| `cmd/stagehand/config.go` | NEW | `config` parent + `init` (local `--force`) + `path` children; registers via `init()` so `main.go` is untouched; hermetic `writeExampleConfig`/`offerGitignore`/`isYes` helpers |\n| `cmd/stagehand/config_test.go` | NEW | white-box `package main`: MOCKING contract (XDG/HOME/unset path; writes+parses-to-defaults; no-clobber; `--force`; gitignore y/n/no-repo; tree-registered) |\n| `docs/CONFIGURATION.md` | MODIFIED | additive `## 7. Onboarding` section (cross-links key tables, no duplication) |\n\n### Validation gates (all green)\n- **L1** gofmt clean · **L2** `go vet` clean · **L3** `go build ./...` OK\n- **L4** `TestExampleConfig` ✓ · **L5** `TestConfig` ✓ · **L6** `go test ./...` all 7 packages ✓\n- **L7** `config path` → `~/.config/stagehand/config.toml`\n- **L8** `XDG_CONFIG_HOME=$(mktemp -d) config init` writes template (exit 0); second run without `--force` errors (exit 1); `--force` overwrites (exit 0)\n\n### Key design decision\nThe template uses `# ` for uncomment-to-activate settings and `## ` for permanent prose/headers. Stripping one `#` leaves prose as valid TOML comments, so the whole template parses back to `config.Default()` (the core MOCKING contract) while every line remains a comment (documented no-op). This is documented in the `ExampleConfig` doc comment. Imports stay thin (`fmt/io/os/bufio/path/filepath/strings` + cobra + `internal/config`; **no** `internal/git`/`internal/generate`), and `main.go` was not modified (tree self-registers via `init()`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-02T11:34:00.646Z"
+      },
+      "createdAt": "2026-07-02T11:34:00.646Z"
+    },
+    {
+      "id": "P1.M7.T3.S2_1782992041821_validation-gate-1_1cfc93c5",
+      "taskId": "P1.M7.T3.S2",
+      "label": "After validation gate 1",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M7_T3_S2.md",
+        "stage": "validation-gate-1",
+        "coderResponse": "All validation gates pass. The implementation is complete.\n\n## Summary\n\nI executed PRP **P1_M7_T3_S2** — adding the `stagehand config` command tree (FR38) — in one pass, following the existing `providers.go`/`providers_test.go` sibling patterns exactly.\n\n### Files created/modified\n\n| File | Status | Purpose |\n|------|--------|---------|\n| `internal/config/example.go` | NEW | `ExampleConfig() string` — the fully-commented PRD §16.2 template (Mode A reference), values = `Default*` constants |\n| `internal/config/example_test.go` | NEW | white-box `package config`: `TestExampleConfig_ParsesToDefaults` (strip `#`→`fileDTO`→asserts `Default*`) + `TestExampleConfig_DocumentsEveryKey` |\n| `cmd/stagehand/config.go` | NEW | `config` parent + `init` (local `--force`) + `path` children; registers via `init()` so `main.go` is untouched; hermetic `writeExampleConfig`/`offerGitignore`/`isYes` helpers |\n| `cmd/stagehand/config_test.go` | NEW | white-box `package main`: MOCKING contract (XDG/HOME/unset path; writes+parses-to-defaults; no-clobber; `--force`; gitignore y/n/no-repo; tree-registered) |\n| `docs/CONFIGURATION.md` | MODIFIED | additive `## 7. Onboarding` section (cross-links key tables, no duplication) |\n\n### Validation gates (all green)\n- **L1** gofmt clean · **L2** `go vet` clean · **L3** `go build ./...` OK\n- **L4** `TestExampleConfig` ✓ · **L5** `TestConfig` ✓ · **L6** `go test ./...` all 7 packages ✓\n- **L7** `config path` → `~/.config/stagehand/config.toml`\n- **L8** `XDG_CONFIG_HOME=$(mktemp -d) config init` writes template (exit 0); second run without `--force` errors (exit 1); `--force` overwrites (exit 0)\n\n### Key design decision\nThe template uses `# ` for uncomment-to-activate settings and `## ` for permanent prose/headers. Stripping one `#` leaves prose as valid TOML comments, so the whole template parses back to `config.Default()` (the core MOCKING contract) while every line remains a comment (documented no-op). This is documented in the `ExampleConfig` doc comment. Imports stay thin (`fmt/io/os/bufio/path/filepath/strings` + cobra + `internal/config`; **no** `internal/git`/`internal/generate`), and `main.go` was not modified (tree self-registers via `init()`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "gofmt -l internal/config/example.go internal/config/example_test.go cmd/stagehand/config.go cmd/stagehand/config_test.go",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/config/ ./cmd/stagehand/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./internal/config/ -run TestExampleConfig -v",
+            "stdout": "=== RUN   TestExampleConfig_ParsesToDefaults\n--- PASS: TestExampleConfig_ParsesToDefaults (0.00s)\n=== RUN   TestExampleConfig_DocumentsEveryKey\n--- PASS: TestExampleConfig_DocumentsEveryKey (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/internal/config\t0.003s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./cmd/stagehand/ -run TestConfig -v",
+            "stdout": "=== RUN   TestConfigPath_PrintsXDG\n--- PASS: TestConfigPath_PrintsXDG (0.00s)\n=== RUN   TestConfigPath_HomeFallback\n--- PASS: TestConfigPath_HomeFallback (0.00s)\n=== RUN   TestConfigPath_ErrorsWhenUnset\n--- PASS: TestConfigPath_ErrorsWhenUnset (0.00s)\n=== RUN   TestConfigInit_WritesValidDefaults\n--- PASS: TestConfigInit_WritesValidDefaults (0.00s)\n=== RUN   TestConfigInit_NoClobber\n--- PASS: TestConfigInit_NoClobber (0.00s)\n=== RUN   TestConfigInit_ForceOverwrites\n--- PASS: TestConfigInit_ForceOverwrites (0.00s)\n=== RUN   TestConfigCmd_Registered\n--- PASS: TestConfigCmd_Registered (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t0.003s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand config path",
+            "stdout": "/home/dustin/.config/stagehand/config.toml\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "XDG_CONFIG_HOME=$(mktemp -d) go run ./cmd/stagehand config init",
+            "stdout": "Wrote commented example config to /tmp/tmp.iNNHb3Rj9Q/stagehand/config.toml\nAdd ./.stagehand.toml to your local .gitignore? [y/N] ",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T11:34:01.821Z"
+      },
+      "createdAt": "2026-07-02T11:34:01.821Z"
+    },
+    {
+      "id": "P1.M7.T3.S2_1782992041825_complete_9ac1945d",
+      "taskId": "P1.M7.T3.S2",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M7_T3_S2.md",
+        "stage": "complete",
+        "coderResponse": "All validation gates pass. The implementation is complete.\n\n## Summary\n\nI executed PRP **P1_M7_T3_S2** — adding the `stagehand config` command tree (FR38) — in one pass, following the existing `providers.go`/`providers_test.go` sibling patterns exactly.\n\n### Files created/modified\n\n| File | Status | Purpose |\n|------|--------|---------|\n| `internal/config/example.go` | NEW | `ExampleConfig() string` — the fully-commented PRD §16.2 template (Mode A reference), values = `Default*` constants |\n| `internal/config/example_test.go` | NEW | white-box `package config`: `TestExampleConfig_ParsesToDefaults` (strip `#`→`fileDTO`→asserts `Default*`) + `TestExampleConfig_DocumentsEveryKey` |\n| `cmd/stagehand/config.go` | NEW | `config` parent + `init` (local `--force`) + `path` children; registers via `init()` so `main.go` is untouched; hermetic `writeExampleConfig`/`offerGitignore`/`isYes` helpers |\n| `cmd/stagehand/config_test.go` | NEW | white-box `package main`: MOCKING contract (XDG/HOME/unset path; writes+parses-to-defaults; no-clobber; `--force`; gitignore y/n/no-repo; tree-registered) |\n| `docs/CONFIGURATION.md` | MODIFIED | additive `## 7. Onboarding` section (cross-links key tables, no duplication) |\n\n### Validation gates (all green)\n- **L1** gofmt clean · **L2** `go vet` clean · **L3** `go build ./...` OK\n- **L4** `TestExampleConfig` ✓ · **L5** `TestConfig` ✓ · **L6** `go test ./...` all 7 packages ✓\n- **L7** `config path` → `~/.config/stagehand/config.toml`\n- **L8** `XDG_CONFIG_HOME=$(mktemp -d) config init` writes template (exit 0); second run without `--force` errors (exit 1); `--force` overwrites (exit 0)\n\n### Key design decision\nThe template uses `# ` for uncomment-to-activate settings and `## ` for permanent prose/headers. Stripping one `#` leaves prose as valid TOML comments, so the whole template parses back to `config.Default()` (the core MOCKING contract) while every line remains a comment (documented no-op). This is documented in the `ExampleConfig` doc comment. Imports stay thin (`fmt/io/os/bufio/path/filepath/strings` + cobra + `internal/config`; **no** `internal/git`/`internal/generate`), and `main.go` was not modified (tree self-registers via `init()`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1_M7.T3.S2 implemented in one pass. Added internal/config/example.go (ExampleConfig — fully-commented §16.2 template) + white-box example_test.go (parses back to Default* constants); added cmd/stagehand/config.go (config init/path tree, self-registered via init() so main.go is untouched, local --force flag, hermetic writeExampleConfig/offerGitignore/isYes helpers) + white-box config_test.go covering the full MOCKING contract (XDG/HOME/unset path, writes-valid-TOML-parsing-to-defaults, no-clobber, --force overwrite, gitignore y/n/no-repo); appended an additive '## 7. Onboarding' section to docs/CONFIGURATION.md (Mode A pointer, no key-table duplication). All 8 validation gates pass: gofmt clean, go vet clean, go build ./... OK, TestExampleConfig + TestConfig + go test ./... all green, and both smoke tests (config path; XDG_CONFIG_HOME=$(mktemp -d) config init with no-clobber + --force) behave per spec. config.go imports only fmt/io/os/bufio/path/filepath/strings + cobra + internal/config (no internal/git/generate). A stray stagehand binary produced by an intermediate go build ./cmd/stagehand/ was restored via git checkout."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "gofmt -l internal/config/example.go internal/config/example_test.go cmd/stagehand/config.go cmd/stagehand/config_test.go",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/config/ ./cmd/stagehand/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./internal/config/ -run TestExampleConfig -v",
+            "stdout": "=== RUN   TestExampleConfig_ParsesToDefaults\n--- PASS: TestExampleConfig_ParsesToDefaults (0.00s)\n=== RUN   TestExampleConfig_DocumentsEveryKey\n--- PASS: TestExampleConfig_DocumentsEveryKey (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/internal/config\t0.003s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./cmd/stagehand/ -run TestConfig -v",
+            "stdout": "=== RUN   TestConfigPath_PrintsXDG\n--- PASS: TestConfigPath_PrintsXDG (0.00s)\n=== RUN   TestConfigPath_HomeFallback\n--- PASS: TestConfigPath_HomeFallback (0.00s)\n=== RUN   TestConfigPath_ErrorsWhenUnset\n--- PASS: TestConfigPath_ErrorsWhenUnset (0.00s)\n=== RUN   TestConfigInit_WritesValidDefaults\n--- PASS: TestConfigInit_WritesValidDefaults (0.00s)\n=== RUN   TestConfigInit_NoClobber\n--- PASS: TestConfigInit_NoClobber (0.00s)\n=== RUN   TestConfigInit_ForceOverwrites\n--- PASS: TestConfigInit_ForceOverwrites (0.00s)\n=== RUN   TestConfigCmd_Registered\n--- PASS: TestConfigCmd_Registered (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t0.003s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand config path",
+            "stdout": "/home/dustin/.config/stagehand/config.toml\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "XDG_CONFIG_HOME=$(mktemp -d) go run ./cmd/stagehand config init",
+            "stdout": "Wrote commented example config to /tmp/tmp.iNNHb3Rj9Q/stagehand/config.toml\nAdd ./.stagehand.toml to your local .gitignore? [y/N] ",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T11:34:01.825Z"
+      },
+      "createdAt": "2026-07-02T11:34:01.825Z"
+    }
+  ],
+  "lastModified": "2026-07-02T11:34:01.825Z"
+}
