@@ -80,3 +80,11 @@ tooled_flags = [
 # --- output ---
 output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
 strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent wraps the output.
+
+# --- reasoning levels (v3; §12.1, FR-R6) ---
+# claude exposes `--effort low|medium|high` (verified vs `claude --help`, external_deps.md §claude).
+# off has no entry ⇒ graceful no-op (FR-R6). Tokens append after the model flag at render.
+[reasoning_levels]
+high = ["--effort", "high"]
+medium = ["--effort", "medium"]
+low = ["--effort", "low"]

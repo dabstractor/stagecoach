@@ -408,6 +408,30 @@ func TestRender_ReasoningTokensAppended(t *testing.T) {
 	}
 }
 
+func TestRender_ClaudeReasoningEffortTokens(t *testing.T) {
+	m := builtinClaude() // the REAL built-in (not synthetic)
+	// high/medium/low → --effort <level> appended after the model flag
+	for _, lvl := range []string{"high", "medium", "low"} {
+		s, err := m.Render("sonnet", "", "", lvl)
+		if err != nil {
+			t.Fatalf("%s: %v", lvl, err)
+		}
+		if !containsPair(s.Args, "--effort", lvl) {
+			t.Errorf("claude %s: want --effort %s in %v", lvl, lvl, s.Args)
+		}
+	}
+	// off / "" → no --effort token, never an error (FR-R6 no-op)
+	for _, lvl := range []string{"off", ""} {
+		s, err := m.Render("sonnet", "", "", lvl)
+		if err != nil {
+			t.Fatalf("%q: %v", lvl, err)
+		}
+		if containsToken(s.Args, "--effort") {
+			t.Errorf("claude %q: want NO --effort token in %v", lvl, s.Args)
+		}
+	}
+}
+
 func TestRender_ReasoningNilTableNoOp(t *testing.T) {
 	// nil ReasoningLevels + any level → no-op, no error (FR-R6 graceful; nil map reads are safe)
 	m := Manifest{Name: "n", Command: strPtr("agent"), ModelFlag: strPtr("--model")}

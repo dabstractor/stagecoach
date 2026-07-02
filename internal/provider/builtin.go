@@ -98,7 +98,8 @@ func builtinPi() Manifest {
 //
 // NOTE: (1) ProviderFlag is strPtr("") — §12.4 WRITES `provider_flag = "" # n/a` (non-nil empty); the
 // §12.2 renderer's model-prefix fold (FR-R5b) does NOT split for provider_flag="" (claude has
-// no sub-provider concept). (2) ReasoningLevels is nil — §12.4 OMITS the key entirely.
+// no sub-provider concept). (2) ReasoningLevels is populated — claude `--effort` (verified,
+// external_deps.md §claude); off ⇒ no-op.
 // (3) BareFlags has TWO "" value tokens (the args to --tools / --setting-sources) — do NOT drop them.
 func builtinClaude() Manifest {
 	return Manifest{
@@ -130,9 +131,16 @@ func builtinClaude() Manifest {
 			"--setting-sources", "",
 			"--no-session-persistence",
 		},
+		// REASONING LEVELS (v3; §12.1, FR-R6). claude exposes `--effort low|medium|high` (verified vs
+		// `claude --help`, external_deps.md §claude — NOT --thinking-effort). off has no entry ⇒ no-op.
+		ReasoningLevels: map[string][]string{
+			"high":   {"--effort", "high"},
+			"medium": {"--effort", "medium"},
+			"low":    {"--effort", "low"},
+		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
-		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent in §12.4).
+		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env: nil (absent in §12.4).
 	}
 }
 

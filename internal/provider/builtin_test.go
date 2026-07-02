@@ -63,6 +63,11 @@ tooled_flags = [
 ]
 output = "raw"
 strip_code_fence = true
+
+[reasoning_levels]
+high = ["--effort", "high"]
+medium = ["--effort", "medium"]
+low = ["--effort", "low"]
 `
 
 // geminiTOML — PRD §12.5 VERBATIM EXCEPT prompt_delivery is REVISED to "stdin" (the work-item contract;
@@ -331,6 +336,14 @@ func TestBuiltinManifests_ClaudeFields(t *testing.T) {
 	assertStr(t, "Output", m.Output, "raw")
 	if m.StripCodeFence == nil || *m.StripCodeFence != true {
 		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+
+	// ReasoningLevels: populated (FR-R6; claude --effort)
+	if m.ReasoningLevels == nil || len(m.ReasoningLevels["high"]) == 0 {
+		t.Errorf("ReasoningLevels missing 'high' entry: %v", m.ReasoningLevels)
+	}
+	if _, ok := m.ReasoningLevels["off"]; ok {
+		t.Errorf("ReasoningLevels should NOT have an 'off' entry (off ⇒ no-op)")
 	}
 
 	// Absent fields → nil

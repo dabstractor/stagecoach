@@ -32,7 +32,7 @@ Each manifest has 18 fields (matching the TOML tags in `internal/provider/manife
 | `strip_code_fence` | bool | `true` | Strip one layer of `` ``` `` / `~~~` fences from agent output. |
 | `retry_instruction` | string | `"Output ONLY the commit message. No preamble, no markdown, no quotes."` | Prepended to the payload on a parse-failure retry. |
 | `env` | table | `nil` (none) | Environment variables set only for the subprocess (as `KEY=VAL`). |
-| `reasoning_levels` | table | nil (none) | Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op (FR-R6). Appended after the model flag at render. |
+| `reasoning_levels` | table | nil (none) | Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op (FR-R6). Appended after the model flag at render. claude populates high/medium/low via `--effort` (verified `claude --help`); all other built-ins are nil (graceful no-op). |
 | `experimental` | bool | false | Marks a provider experimental (agy, qwen-code) — surfaced in `providers list`/`show`. Absent/false ⇒ stable. |
 
 ## Command rendering
