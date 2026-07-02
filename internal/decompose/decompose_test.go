@@ -364,9 +364,9 @@ func TestDecompose_SingleShortcut_CleanStatus(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	dcmInitRepo(t, repo)
-	dcmCommitRaw(t, repo, "initial")          // BORN repo (preRunHEAD set; baseTree = HEAD^{tree})
-	dcmWriteFile(t, repo, "a.txt", "a\n")      // 2 un-staged files ⇒ FR-M2b one-file short-circuit does NOT fire
-	dcmWriteFile(t, repo, "b.txt", "b\n")      //   ⇒ planner is invoked in auto mode
+	dcmCommitRaw(t, repo, "initial")      // BORN repo (preRunHEAD set; baseTree = HEAD^{tree})
+	dcmWriteFile(t, repo, "a.txt", "a\n") // 2 un-staged files ⇒ FR-M2b one-file short-circuit does NOT fire
+	dcmWriteFile(t, repo, "b.txt", "b\n") //   ⇒ planner is invoked in auto mode
 
 	// Planner returns FR-M11 single:true + a message ⇒ routes to runSingleShortcut.
 	plannerJSON := `{"count":1,"single":true,"commits":[{"title":"add a and b","description":"a.txt + b.txt"}],"message":"feat: add a and b"}`
