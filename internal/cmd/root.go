@@ -38,16 +38,23 @@ var (
 // exactly as flagProvider/flagModel do. Do NOT read these vars directly — cfg.Commits/Single/...
 // is the source of truth after PersistentPreRunE.
 var (
-	flagCommits         int
-	flagSingle          bool
-	flagNoDecompose     bool
-	flagMaxCommits      int
-	flagPlannerProvider string
-	flagPlannerModel    string
-	flagStagerProvider  string
-	flagStagerModel     string
-	flagArbiterProvider string
-	flagArbiterModel    string
+	flagCommits          int
+	flagSingle           bool
+	flagNoDecompose      bool
+	flagMaxCommits       int
+	flagReasoning        string
+	flagPlannerProvider  string
+	flagPlannerModel     string
+	flagPlannerReasoning string
+	flagStagerProvider   string
+	flagStagerModel      string
+	flagStagerReasoning  string
+	flagMessageProvider  string
+	flagMessageModel     string
+	flagMessageReasoning string
+	flagArbiterProvider  string
+	flagArbiterModel     string
+	flagArbiterReasoning string
 )
 
 // Behavioral flags (NOT Config fields; read directly by the default-action RunE in S2 / dry-run in S4).
@@ -125,6 +132,21 @@ func init() {
 		"Per-role provider override for the leftover arbiter (env STAGEHAND_ARBITER_PROVIDER; git stagehand.role.arbiter)")
 	pf.StringVar(&flagArbiterModel, "arbiter-model", "",
 		"Per-role model override for the leftover arbiter (env STAGEHAND_ARBITER_MODEL; git stagehand.role.arbiter)")
+	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
+	pf.StringVar(&flagReasoning, "reasoning", "",
+		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off, planner: high)")
+	pf.StringVar(&flagPlannerReasoning, "planner-reasoning", "",
+		"Per-role reasoning override for the decomposition planner (env STAGEHAND_PLANNER_REASONING; git stagehand.role.planner)")
+	pf.StringVar(&flagStagerReasoning, "stager-reasoning", "",
+		"Per-role reasoning override for the (tooled) staging agent (env STAGEHAND_STAGER_REASONING; git stagehand.role.stager)")
+	pf.StringVar(&flagMessageProvider, "message-provider", "",
+		"Per-role provider override for the message composer (env STAGEHAND_MESSAGE_PROVIDER; git stagehand.role.message)")
+	pf.StringVar(&flagMessageModel, "message-model", "",
+		"Per-role model override for the message composer (env STAGEHAND_MESSAGE_MODEL; git stagehand.role.message)")
+	pf.StringVar(&flagMessageReasoning, "message-reasoning", "",
+		"Per-role reasoning override for the message composer (env STAGEHAND_MESSAGE_REASONING; git stagehand.role.message)")
+	pf.StringVar(&flagArbiterReasoning, "arbiter-reasoning", "",
+		"Per-role reasoning override for the leftover arbiter (env STAGEHAND_ARBITER_REASONING; git stagehand.role.arbiter)")
 	// --version is auto-added by cobra (Version field above); --help/-h is cobra's built-in.
 }
 

@@ -59,7 +59,7 @@ var ErrPlannerFailed = errors.New("decompose: planner failed")
 func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool) (prompt.PlannerOutput, error) {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl := config.ResolveRoleModel("planner", deps.Config)
+	_, mdl, _ := config.ResolveRoleModel("planner", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
 
 	// 2. Capture the working-tree diff (caps from cfg).
 	diff, err := deps.Git.WorkingTreeDiff(ctx, git.StagedDiffOptions{

@@ -79,7 +79,7 @@ type CommitInfo struct {
 func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDiff string) (prompt.ArbiterOutput, error) {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl := config.ResolveRoleModel("arbiter", deps.Config)
+	_, mdl, _ := config.ResolveRoleModel("arbiter", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
 
 	// 2. Convert []CommitInfo → []prompt.ArbiterCommit (FileChange→path seam) + build the valid-SHA set.
 	arbiterCommits, validSHAs := convertArbiterCommits(commits)

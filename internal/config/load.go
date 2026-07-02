@@ -51,6 +51,18 @@ func (c *Config) setRoleModel(role, model string) {
 	c.Roles[role] = rc
 }
 
+// setRoleReasoning sets the Reasoning field for a role in cfg.Roles, lazily allocating the map.
+// Map-value-copy write-back is REQUIRED (same idiom as setRoleModel).
+// Setting Reasoning does NOT clobber existing Provider/Model — FR-R3 field-merge.
+func (c *Config) setRoleReasoning(role, reasoning string) {
+	if c.Roles == nil {
+		c.Roles = make(map[string]RoleConfig)
+	}
+	rc := c.Roles[role]
+	rc.Reasoning = reasoning
+	c.Roles[role] = rc
+}
+
 // Load resolves the full Stagehand configuration by applying PRD §16.1 layers in precedence order
 // (lowest → highest): (1) built-in Defaults(); (2) global TOML; (3) repo-local TOML; (4) repo git
 // config; (5) STAGEHAND_* env vars; (7) CLI flags (only explicitly-set ones). Higher wins. Returns one
@@ -156,6 +168,9 @@ func loadEnv(cfg *Config) error {
 	if v, ok := os.LookupEnv("STAGEHAND_MODEL"); ok && v != "" {
 		cfg.Model = v
 	}
+	if v, ok := os.LookupEnv("STAGEHAND_REASONING"); ok && v != "" {
+		cfg.Reasoning = v
+	}
 	if v, ok := os.LookupEnv("STAGEHAND_TIMEOUT"); ok && v != "" {
 		d, err := parseTimeout(v)
 		if err != nil {
@@ -186,6 +201,9 @@ func loadEnv(cfg *Config) error {
 		}
 		if v, ok := os.LookupEnv(prefix + "_MODEL"); ok && v != "" {
 			cfg.setRoleModel(role, v)
+		}
+		if v, ok := os.LookupEnv(prefix + "_REASONING"); ok && v != "" {
+			cfg.setRoleReasoning(role, v)
 		}
 	}
 
@@ -219,6 +237,11 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.Model = v
 		}
 	}
+	if fs.Changed("reasoning") {
+		if v, err := fs.GetString("reasoning"); err == nil {
+			cfg.Reasoning = v
+		}
+	}
 	if fs.Changed("timeout") {
 		if v, err := fs.GetString("timeout"); err == nil {
 			if d, perr := parseTimeout(v); perr == nil {
@@ -247,6 +270,11 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 		if fs.Changed(role + "-model") {
 			if v, err := fs.GetString(role + "-model"); err == nil {
 				cfg.setRoleModel(role, v)
+			}
+		}
+		if fs.Changed(role + "-reasoning") {
+			if v, err := fs.GetString(role + "-reasoning"); err == nil {
+				cfg.setRoleReasoning(role, v)
 			}
 		}
 	}

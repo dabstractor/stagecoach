@@ -100,7 +100,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 
 	// 4. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl := config.ResolveRoleModel("message", deps.Config)
+	_, mdl, _ := config.ResolveRoleModel("message", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
 	resolved := deps.Roles.Message.Resolve()
 	retryInstr := *resolved.RetryInstruction
 

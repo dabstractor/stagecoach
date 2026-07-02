@@ -63,21 +63,21 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Config per-role reasoning plumbing & decompose ResolveRoles rework",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Thread the reasoning level through config (global + per-role, all four roles incl. message), make ResolveRoleModel a 3-return, and rework decompose/roles.go so FR-R5b is enforced via the model-prefix (not a removed manifest field). Wires real reasoning values into every Render call site.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Reasoning config plumbing + ResolveRoles v3 + decompose callers",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Adds reasoning to the config model (RoleConfig + global default), env/flag wiring (all four roles incl. message — corrects the v2 gap), makes ResolveRoleModel return reasoning, and updates ResolveRoles + the four decompose Render callers + pkg/stagehand public RoleModel.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Config reasoning field: RoleConfig.Reasoning + global default + file/overlay/env/flag plumbing",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -96,7 +96,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "ResolveRoles v3: model-prefix FR-R5b guard + RoleModels.Reasoning + 4 decompose callers + pkg/stagehand RoleModel",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

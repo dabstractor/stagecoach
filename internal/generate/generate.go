@@ -193,7 +193,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning.
 		// (Old: cfg.Provider was the manifest name, NOT the upstream backend — the provider param
 		// has been folded into the model slash-prefix; DefaultProvider field removed.)
-		spec, rerr := deps.Manifest.Render(cfg.Model, sysPrompt, payload, "")
+		spec, rerr := deps.Manifest.Render(cfg.Model, sysPrompt, payload, cfg.Reasoning)
 		if rerr != nil {
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}

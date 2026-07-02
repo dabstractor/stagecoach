@@ -93,7 +93,7 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 	var rmodels RoleModels
 
 	for _, role := range []string{"planner", "stager", "message", "arbiter"} {
-		prov, mdl := config.ResolveRoleModel(role, cfg)
+		prov, mdl, _ := config.ResolveRoleModel(role, cfg) // TODO(P1.M2.T1.S2): wire reasoning into RoleModels
 
 		if prov == "" {
 			prov = reg.DefaultProvider(installed) // auto-detect (mirrors buildDeps)

@@ -19,8 +19,9 @@ import (
 // fc.Role["planner"] EXACTLY as a [provider.pi] table decodes into fc.Provider["pi"]. materialize converts
 // each to a typed RoleConfig. Both fields "" ⇒ the role inherits the global [defaults] (FR-R2).
 type fileRoleConfig struct {
-	Provider string `toml:"provider"`
-	Model    string `toml:"model"`
+	Provider  string `toml:"provider"`
+	Model     string `toml:"model"`
+	Reasoning string `toml:"reasoning"`
 }
 
 // fileConfig is the §16.2 file decode target: NESTED (matches [defaults]/[generation]/[role.X]/[provider.X]),
@@ -37,6 +38,7 @@ type fileConfig struct {
 type fileDefaults struct {
 	Provider     string `toml:"provider"`
 	Model        string `toml:"model"`
+	Reasoning    string `toml:"reasoning"`
 	Timeout      string `toml:"timeout"` // §16.2 duration string, e.g. "120s"; parsed in loadTOML
 	AutoStageAll bool   `toml:"auto_stage_all"`
 	Verbose      bool   `toml:"verbose"`
@@ -163,6 +165,9 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if d.Model != "" {
 		c.Model = d.Model
 	}
+	if d.Reasoning != "" {
+		c.Reasoning = d.Reasoning
+	}
 	if d.AutoStageAll {
 		c.AutoStageAll = true // v1 limitation: cannot set false via file
 	}
@@ -204,7 +209,7 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if len(fc.Role) > 0 {
 		c.Roles = make(map[string]RoleConfig, len(fc.Role))
 		for role, frc := range fc.Role {
-			c.Roles[role] = RoleConfig{Provider: frc.Provider, Model: frc.Model}
+			c.Roles[role] = RoleConfig{Provider: frc.Provider, Model: frc.Model, Reasoning: frc.Reasoning}
 		}
 	}
 	c.Providers = fc.Provider // nil-safe: nil if no [provider] table
@@ -232,6 +237,9 @@ func overlay(dst, src *Config) {
 	}
 	if src.Model != "" {
 		dst.Model = src.Model
+	}
+	if src.Reasoning != "" {
+		dst.Reasoning = src.Reasoning
 	}
 	if src.Timeout != 0 {
 		dst.Timeout = src.Timeout
@@ -292,6 +300,9 @@ func overlay(dst, src *Config) {
 			}
 			if rc.Model != "" {
 				existing.Model = rc.Model
+			}
+			if rc.Reasoning != "" {
+				existing.Reasoning = rc.Reasoning
 			}
 			dst.Roles[role] = existing
 		}

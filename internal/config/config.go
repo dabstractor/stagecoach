@@ -17,21 +17,24 @@ func strPtr(s string) *string { return &s }
 // multi-commit decomposition + binary filtering.
 const CurrentConfigVersion = 2
 
-// RoleConfig holds a per-role provider/model override (PRD §16.4, §9.15 FR-R1–R5).
-// A role is one of "planner", "stager", "message", "arbiter" (§13.6.2). Both fields "" ⇒
+// RoleConfig holds a per-role provider/model/reasoning override (PRD §16.4, §9.15 FR-R1–R6).
+// A role is one of "planner", "stager", "message", "arbiter" (§13.6.2). Any field "" ⇒
 // the role inherits the global [defaults] (FR-R2); a non-empty value overrides just that
 // field (FR-R3 field-merge across layers). Model strings are provider-specific (FR-R5):
 // a role's Model is interpreted by that role's resolved Provider's manifest, so changing
 // a role's Provider without updating its Model is a configuration error stagehand surfaces.
 // For multi-provider agents (pi/opencode/agy) Provider is required when Model is set (FR-R5b).
+// Reasoning controls thinking effort (off|low|medium|high; FR-R6); "" ⇒ inherit global ⇒ shipped
+// default (planner=high, others=off).
 //
 // Config.Roles (below) carries the RESOLVED per-role table; it is toml:"-" because the
 // [role.<role>] FILE tables decode into fileConfig's fileRoleConfig map (S2) and
 // materialize/overlay into this typed map — the same raw-map→typed-field pattern
 // Config.Providers uses.
 type RoleConfig struct {
-	Provider string `toml:"provider"`
-	Model    string `toml:"model"`
+	Provider  string `toml:"provider"`
+	Model     string `toml:"model"`
+	Reasoning string `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning ⇒ shipped default
 }
 
 // Config is the fully-resolved Stagehand configuration: the single value produced by the 7-layer
@@ -59,6 +62,7 @@ type Config struct {
 	// [defaults] (PRD §16.2)
 	Provider     string        `toml:"provider"`       // "" => auto-detect (PRD §15.2)
 	Model        string        `toml:"model"`          // "" => provider manifest default_model
+	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ ResolveRoleModel's shipped fallback (planner=high)
 	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 120s
 	AutoStageAll bool          `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4)
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
@@ -119,6 +123,7 @@ func Defaults() Config {
 	return Config{
 		Provider:            "",
 		Model:               "",
+		Reasoning:           "", // FR-R6: "" ⇒ fall through to the per-role shipped default (planner=high) in ResolveRoleModel
 		Timeout:             120 * time.Second,
 		AutoStageAll:        true,
 		Verbose:             false,

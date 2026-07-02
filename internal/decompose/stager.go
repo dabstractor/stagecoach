@@ -75,7 +75,7 @@ var ErrStagerMovedHEAD = errors.New("decompose: stager moved HEAD")
 func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) error {
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
-	_, mdl := config.ResolveRoleModel("stager", deps.Config)
+	_, mdl, _ := config.ResolveRoleModel("stager", deps.Config) // TODO(P1.M2.T1.S2): wire reasoning
 
 	// 2. Build the §17.6 stager task from the concept's title + description.
 	task := prompt.BuildStagerTask(concept.Title, concept.Description)
