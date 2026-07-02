@@ -133,6 +133,11 @@ stagehand --single
 # model = "opus"
 ```
 
+> [!NOTE]
+> `--reasoning` is provider-dependent: it engages deeper reasoning for **pi** (`--thinking`) and
+> **claude** (`--effort`). Other providers treat it as a graceful no-op (no error) per FR-R6. It
+> applies to any role via `--<role>-reasoning` or `[role.*] reasoning`.
+
 See [How Stagehand works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
 
 ### lazygit binding

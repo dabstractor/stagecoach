@@ -40,7 +40,7 @@ With no subcommand, `stagehand` runs the **default action**. The routing depends
 | `--stager-model <name>` | string | "" | `STAGEHAND_STAGER_MODEL` | — | Per-role model override for the (tooled) staging agent |
 | `--arbiter-provider <name>` | string | "" | `STAGEHAND_ARBITER_PROVIDER` | — | Per-role provider override for the leftover arbiter |
 | `--arbiter-model <name>` | string | "" | `STAGEHAND_ARBITER_MODEL` | — | Per-role model override for the leftover arbiter |
-| `--reasoning <level>` | string | "" (off; planner: high) | `STAGEHAND_REASONING` | `stagehand.reasoning` | Global reasoning effort: off|low|medium|high |
+| `--reasoning <level>` | string | "" (off; planner: high) | `STAGEHAND_REASONING` | `stagehand.reasoning` | Global reasoning effort: off\|low\|medium\|high. Provider-dependent: engages for pi (`--thinking`) and claude (`--effort`); other providers are a graceful no-op (FR-R6). |
 | `--planner-reasoning <level>` | string | "" | `STAGEHAND_PLANNER_REASONING` | — | Per-role reasoning for the planner |
 | `--stager-reasoning <level>` | string | "" | `STAGEHAND_STAGER_REASONING` | — | Per-role reasoning for the stager |
 | `--message-provider <name>` | string | "" | `STAGEHAND_MESSAGE_PROVIDER` | — | Per-role provider override for the message composer |
@@ -209,7 +209,7 @@ stagehand --single
 # Route planning to a bigger model
 stagehand --planner-provider claude --planner-model opus
 
-# Use reasoning for deeper analysis
+# Use reasoning for deeper analysis (pi: --thinking, claude: --effort; others no-op)
 stagehand --reasoning high
 
 # Per-repo per-role config (.stagehand.toml)
