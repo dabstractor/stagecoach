@@ -4,14 +4,14 @@
       "type": "Phase",
       "id": "P1",
       "title": "Reasoning opt-in everywhere (off for all roles)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Flip the shipped per-role reasoning default from planner=high to off for ALL roles (FR-R6), making reasoning opt-in everywhere. Also have config init write an uncommented reasoning=\"off\" into [defaults] for discoverability (FR-B1). This is a small, focused delta on the fully-implemented v2.0/v3 codebase — no new subsystems, no new code paths, one map-entry removal plus mechanical test/comment/doc updates. Grounded in plan/004_136878664597/architecture/system_context.md and critical_findings.md.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Remove planner=high shipped fallback; off everywhere",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The shipped reasoning fallback for the planner role changes from \"high\" to \"\" (off). Every role — planner, stager, message, arbiter — resolves to off when nothing else is set. The config init command additionally emits an uncommented reasoning=\"off\" line in [defaults].",
           "tasks": [
             {
@@ -88,14 +88,14 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Final Mode B sweep (per §5): verify that no changeset-level documentation (README.md, docs/how-it-works.md, docs/providers.md, docs/README.md) retains stale references to the old planner=high reasoning default. Each per-file doc touched by T1/T2 was already updated as Mode A; this task is the catch-all that ensures the whole delta is coherent across all user-facing surfaces.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "Verify README.md and remaining docs/ files have no stale reasoning-default references",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
