@@ -170,7 +170,7 @@
               "id": "P1.M3.T1",
               "type": "Task",
               "title": "Git wrapper, exec helper & temp-repo test util",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Foundational git.Git wrapper + a run() exec helper, plus a shared temp-repo test harness used by every internal/git test and the generate integration suite.",
               "subtasks": [
                 {
@@ -186,7 +186,7 @@
                   "id": "P1.M3.T1.S2",
                   "type": "Subtask",
                   "title": "internal/git/gittestutil_test.go — temp-repo harness",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
