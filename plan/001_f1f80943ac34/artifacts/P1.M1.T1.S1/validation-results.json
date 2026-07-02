@@ -1,0 +1,72 @@
+[
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "make build",
+    "stdout": "go build -ldflags \"-X main.version=a830674\" -o bin/stagehand ./cmd/stagehand\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go vet ./...",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "test -z \"$(gofmt -l .)\"",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "make -n test coverage vet fmt clean lint",
+    "stdout": "go test ./...\ngo test -coverprofile=coverage.out ./...\ngo vet ./...\ngofmt -s -w .\nrm -rf bin coverage.out dist\ngolangci-lint run\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 2,
+    "description": "Level 2 gate",
+    "success": true,
+    "command": "go test ./...",
+    "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "./bin/stagehand --version",
+    "stdout": "stagehand version a830674\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "test \"$(./bin/stagehand --version)\" != \"stagehand version dev\"",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  }
+]

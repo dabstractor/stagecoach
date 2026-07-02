@@ -1,0 +1,115 @@
+{
+  "taskId": "P1.M1.T1.S1",
+  "taskHash": "48fd19494e81cb3f11e70d643045b982a8f6ae328df3afdbebc6c177e04734ce",
+  "createdAt": 1782955672461,
+  "accessedAt": 1782955672461,
+  "version": "1.0",
+  "prp": {
+    "taskId": "P1_M1_T1_S1",
+    "objective": "Establish the foundational Go module github.com/dustin/stagehand (cobra v1.10.2 + pelletier/go-toml/v2 v2.4.2 pinned, go 1.22 directive), a runnable cobra root-command stub whose built-in --version flag prints the ldflags-injected version and exits 0, a Makefile (build/test/coverage/lint/vet/fmt/clean with version-injecting ldflags), and repo-hygiene files (.gitignore + optional .editorconfig). This is the DAG entry point: every downstream package imports this module path. The root command has NO Run (the default action is wired in M7.T2). DOCS impact: none (README is Mode B, M8.T4).",
+    "context": "# PRP — P1.M1.T1.S1: go.mod, cmd/stagehand/main.go cobra stub, Makefile, .gitignore\n\n## Goal\n\n**Feature Goal**: Establish the foundational Go module `github.com/dustin/stagehand`, a runnable cobra CLI stub whose `--version` flag reports the build version, a Makefile with the canonical build/test/lint/coverage targets wired to version-injecting ldflags, and repo-hygiene files. This is the entry point of the build DAG — every downstream package (internal/ui, internal/provider, …) imports this module path.\n\n**Deliverable**: A working repo with `go.mod` + `go.sum`, `cmd/stagehand/main.go`, `Makefile`, `.gitignore` (+ optional `.editorconfig`) such that `make build` produces `./bin/stagehand` and `./bin/stagehand --version` prints the version and exits 0.\n\n**Success Definition**: `make build` → `./bin/stagehand`; `./bin/stagehand --version` → `stagehand version <git-describe>` on stdout, exit 0 (NOT the `dev` default — proves ldflags injection); bare `./bin/stagehand` → prints help, exit 0. All Makefile targets present. Module importable by downstream packages.\n\n## Why\n\n- This is the **root of the acyclic dependency DAG** (plan_overview.md M1). Nothing else can be built until the module + a compiling binary exist.\n- Establishes the module path `github.com/dustin/stagehand` that every `internal/*` and `pkg/stagehand` package imports, and the `go install github.com/dustin/stagehand/cmd/stagehand@latest` distribution path (PRD §21.3).\n- Pins the two runtime deps (cobra, go-toml/v2) so M2/M5 don't re-negotiate versions.\n- Keeps a clean **v2-readiness / wiring seam**: the root command has NO `Run` yet — the default action (`maybeAutoStage(); CommitStaged()`) is wired in M7.T2 (decisions.md §1, §6). This task must not entangle staging/commit logic.\n\n## What (user-visible behavior & technical requirements)\n\n1. `make build` compiles `./cmd/stagehand` to `./bin/stagehand`, injecting the version via `-ldflags \"-X main.version=$(VERSION)\"` where `VERSION := $(shell git describe --tags --always --dirty)`.\n2. `./bin/stagehand --version` prints `stagehand version <VERSION>` to **stdout** and exits 0.\n3. `./bin/stagehand` (no args) prints cobra help to stdout and exits 0 (no `Run`).\n4. `go.mod` module = `github.com/dustin/stagehand`; deps cobra v1.10.2 + pelletier/go-toml/v2 v2.4.2 present.\n5. Makefile targets: `build`, `test`, `coverage`, `lint`, `vet`, `fmt`, `clean`.\n6. `.gitignore` ignores `bin/`, `*.out`, `coverage.out`, `dist/`.\n\n### Success Criteria\n- [ ] go.mod: module `github.com/dustin/stagehand`, `go 1.22`, requires cobra v1.10.2 + go-toml/v2 v2.4.2.\n- [ ] `make build` exits 0 and produces `./bin/stagehand`.\n- [ ] `./bin/stagehand --version` exits 0 and prints the `git describe` value (NOT `dev`).\n- [ ] Bare `./bin/stagehand` prints help, exit 0.\n- [ ] All 7 Makefile targets exist; recipes are TAB-indented.\n- [ ] main.go has NO `Run`/`RunE` and imports only stdlib + cobra (no internal/*).\n\n## All Needed Context\n\n### Documentation & References\n```yaml\n- file: PRD.md  # (lines ~831-890) §14 Package layout\n  why: canonical target layout — cmd/stagehand/main.go, internal/*, pkg/stagehand, providers/, Makefile, go.mod at repo root\n  pattern: \"main.go lives at cmd/stagehand/main.go (NOT repo root); Makefile + go.mod at repo root\"\n- file: PRD.md  # §21.1 Build, §21.3 Install, §22.3 Dependencies\n  why: make build → ./bin/stagehand; version via -ldflags -X main.version; Go 1.22+; cobra + go-toml/v2; NO go-git\n- file: plan/001_f1f80943ac34/architecture/external_deps.md §A\n  why: deps cobra v1.10.2 + pelletier/go-toml/v2 v2.4.2 verified resolvable on host; module path github.com/dustin/stagehand\n- file: plan/001_f1f80943ac34/architecture/system_context.md §1,§3\n  why: repo is GREENFIELD (no go.mod/code/Makefile). §3 confirms cobra + go-toml, shell-out-to-git (no go-git dep).\n- file: plan/001_f1f80943ac34/architecture/decisions.md §1\n  why: module path + exact §14 layout; v2-readiness seam (no staging logic in this task)\n- url: https:\n  why: \"Command.Version field — when set, cobra auto-adds a --version flag and prints the version template, exiting 0 with NO Run required\"\n  critical: \"This is the ONLY clean way to make bare `stagehand --version` print+exit-0 without a Run. Do NOT register a manual --version string flag (it would require an argument and break `--version`).\"\n- url: https:\n  why: cobra basics — root command, Execute(), default help-on-no-subcommand behavior\n- url: https:\n  critical: \"go mod tidy REMOVES modules not imported by any package. go-toml has no importer until M5/config → tidy strips it. DO NOT run tidy in this task.\"\n- url: https:\n  why: \"-X importpath.name=value sets a string var at link time → how -ldflags injects main.version\"\n- file: plan/001_f1f80943ac34/prps/research/P1_M1_T1_S1_research.md\n  why: empirical verification log (deps resolve, --version behavior, gofmt gate, go-tidy gotcha)\n\n```\n\n### Current codebase (greenfield)\n```\nstagehand-hack/\n├── .git            (gitfile; working tree effectively empty of code)\n├── PRD.md\n└── plan/001_f1f80943ac34/  (architecture/, prds/, tasks.json — READ-ONLY research)\n\n```\nNO go.mod, NO go.sum, NO Go source, NO Makefile. Clean-room.\n\n### Desired codebase after this task\n```\nstagehand/\n├── cmd/\n│   └── stagehand/\n│       └── main.go        # cobra root stub: var version + Execute(); no Run\n├── go.mod                 # module github.com/dustin/stagehand; go 1.22; cobra + go-toml\n├── go.sum                 # populated by go get\n├── Makefile               # build/test/coverage/lint/vet/fmt/clean\n├── .gitignore             # bin/, *.out, coverage.out, dist/\n└── .editorconfig          # OPTIONAL (contract marks optional)\n\n```\n\n### Known gotchas (verified)\n```go\n\n```\n\n## Implementation Blueprint\n\n### Implementation Tasks (ordered by dependencies)\n\n```yaml\nTask 1: INIT module + deps\n  RUN: go mod init github.com/dustin/stagehand\n  RUN: go get github.com/spf13/cobra@v1.10.2 github.com/pelletier/go-toml/v2@v2.4.2\n  RUN: go mod edit -go=1.22\n  DO_NOT: run `go mod tidy` (strips go-toml — no importer until M5).\n  VERIFY: go.mod shows module github.com/dustin/stagehand, \"go 1.22\", and BOTH\n          github.com/spf13/cobra v1.10.2 and github.com/pelletier/go-toml/v2 v2.4.2\n          (either direct or \"// indirect\" is fine — `go build` does not rewrite indirect annotations, and we avoid `go mod tidy` which would strip go-toml).\n  PLACEMENT: go.mod + go.sum at repo root.\nTask 2: CREATE cmd/stagehand/main.go  (cobra root stub)\n  IMPLEMENT: package main; `var version = \"dev\"` (package-level; ldflags target; no init()).\n  IMPLEMENT: rootCmd := &cobra.Command{Use:\"stagehand\", Short:\"<one-line pitch>\", Version: version}\n  IMPLEMENT: main() { if err := rootCmd.Execute(); err != nil { os.Exit(1) } }\n  MUST_NOT: add Run/RunE/PersistentPreRun (default action wired in M7.T2).\n  MUST_NOT: register a manual --version flag; MUST_NOT call SetVersionTemplate (use cobra default).\n  MUST_NOT: import any internal/* package (none exist yet; M1.T2 creates internal/ui).\n  PATTERN: rely on cobra built-in Version field → --version prints \"stagehand version <v>\" stdout exit 0;\n           bare invocation → help, exit 0.\n  NAMING/PLACEMENT: cmd/stagehand/main.go (NOT repo-root main.go), `package main`.\nTask 3: CREATE Makefile  (TAB-indented recipes)\n  DEFINE: VERSION := $(shell git describe --tags --always --dirty)\n  DEFINE: .PHONY: build test coverage lint vet fmt clean\n  TARGET build:   go build -ldflags \"-X main.version=$(VERSION)\" -o bin/stagehand ./cmd/stagehand\n  TARGET test:    go test ./...\n  TARGET coverage: go test -coverprofile=coverage.out ./...\n  TARGET lint:    golangci-lint run\n  TARGET vet:     go vet ./...\n  TARGET fmt:     gofmt -s -w .\n  TARGET clean:   rm -rf bin coverage.out dist\n  GOTCHA: every recipe line begins with a literal TAB.\n  PLACEMENT: repo root.\nTask 4: CREATE .gitignore  (+ optional .editorconfig)\n  CONTENT (exact, one per line): bin/ , *.out , coverage.out , dist/\n  OPTIONAL: .editorconfig (root=true; [*] charset=utf-8 end_of_line=lf insert_final_newline=true;\n           [*.go] indent_style=tab; [Makefile] indent_style=tab). Contract marks this optional.\n  PLACEMENT: repo root.\n\n```\n\n### Integration points\n```yaml\nMODULE: github.com/dustin/stagehand  # downstream internal/* + pkg/stagehand import this path; do NOT change.\nBUILD: ./bin/stagehand               # consumed by every manual/integration test run (M6/M7/M8).\nDOCS: none                            # README is Mode B, synced in M8.T4. Create NO README/docs here.\n\n```\n\n## Validation Loop\n\n### Level 1 — Syntax/Style/Build (run after each file)\n- `make build` → exits 0, produces ./bin/stagehand.\n- `go vet ./...` → clean.\n- `test -z \"$(gofmt -l .)\"` → no unformatted files (gofmt -l recurses; always exits 0, so wrap in test -z).\n\n### Level 2 — Component/Module\n- `go test ./...` → exit 0 (no _test.go yet → \"no test files\", still exit 0; proves module integrity).\n\n### Level 3 — Behavioral (the contract verification)\n- `./bin/stagehand --version` → prints `stagehand version <git-describe>`, exit 0.\n- `test \"$(./bin/stagehand --version)\" != \"stagehand version dev\"` → proves ldflags injection worked.\n- bare `./bin/stagehand` → prints help, exit 0.\n- `make -n test coverage vet fmt clean lint` → all targets resolve (dry-run; does NOT require golangci-lint installed).\n\n## DOCS Impact\n**None.** This task creates no documentation. The README is Mode B and is synced in M8.T4 (per this item's contract `DOCS: none`). Do NOT create README.md or docs/.\n\n## Anti-patterns to avoid\n- ❌ Do NOT run `go mod tidy` here (strips go-toml).\n- ❌ Do NOT register a manual `--version` flag or customize the version template (breaks `stagehand --version`).\n- ❌ Do NOT add a Run/RunE or any staging/commit logic (M7.T2's job — keep the seam clean).\n- ❌ Do NOT space-indent Makefile recipes (must be TABs).\n- ❌ Do NOT create README/docs/providers/*.toml/.goreleaser.yaml (out of scope — M8).\n- ❌ Do NOT pin the go directive above 1.22 (would needlessly restrict `go install` users).\n",
+    "implementationSteps": [
+      "Initialize the Go module and pin both deps: run `go mod init github.com/dustin/stagehand`, then `go get github.com/spf13/cobra@v1.10.2 github.com/pelletier/go-toml/v2@v2.4.2`, then `go mod edit -go=1.22`. DO NOT run `go mod tidy` (it strips go-toml, which has no importer until M5/config). Verify `cat go.mod` shows module `github.com/dustin/stagehand`, a `go 1.22` line, and both `github.com/spf13/cobra v1.10.2` (direct) and `github.com/pelletier/go-toml/v2 v2.4.2` (may be `// indirect` — correct here). go.sum must be populated.",
+      "Create `cmd/stagehand/main.go` (package main, at path cmd/stagehand/main.go — NOT repo root). Declare package-level `var version = \"dev\"` (the ldflags target; no init()). Build a root `*cobra.Command` with `Use:\"stagehand\"`, a one-line `Short` pitch, and `Version: version`. `main()` calls `if err := rootCmd.Execute(); err != nil { os.Exit(1) }`. Use cobra's BUILT-IN `Version` field (NOT a manual flag) so `--version` prints `stagehand version <version>` to stdout and exits 0, and bare invocation prints help. Do NOT add Run/RunE/PersistentPreRun (wired in M7.T2), do NOT register a manual --version flag, do NOT call SetVersionTemplate, do NOT import any internal/* package.",
+      "Create `Makefile` at repo root with TAB-indented recipes (spaces cause 'missing separator'). Define `VERSION := $(shell git describe --tags --always --dirty)` and `.PHONY: build test coverage lint vet fmt clean`. Targets: `build` → `go build -ldflags \"-X main.version=$(VERSION)\" -o bin/stagehand ./cmd/stagehand`; `test` → `go test ./...`; `coverage` → `go test -coverprofile=coverage.out ./...`; `lint` → `golangci-lint run`; `vet` → `go vet ./...`; `fmt` → `gofmt -s -w .`; `clean` → `rm -rf bin coverage.out dist`. The build output path must be `./bin/stagehand`.",
+      "Create `.gitignore` at repo root with exactly these entries, one per line: `bin/`, `*.out`, `coverage.out`, `dist/`. Optionally add a minimal `.editorconfig` (the contract marks this optional: root=true; [*] charset=utf-8 end_of_line=lf insert_final_newline=true; [*.go] indent_style=tab; [Makefile] indent_style=tab).",
+      "DOCS impact: NONE. Do NOT create README.md or docs/ in this task (README is Mode B, synced in M8.T4 per this item's contract). Confirm no out-of-scope files (no internal/*, no providers/*.toml, no .goreleaser.yaml) are created."
+    ],
+    "validationGates": [
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "make build",
+        "manual": false
+      },
+      {
+        "level": 3,
+        "description": "Level 3 gate",
+        "command": "./bin/stagehand --version",
+        "manual": false
+      },
+      {
+        "level": 3,
+        "description": "Level 3 gate",
+        "command": "test \"$(./bin/stagehand --version)\" != \"stagehand version dev\"",
+        "manual": false
+      },
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "go vet ./...",
+        "manual": false
+      },
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "test -z \"$(gofmt -l .)\"",
+        "manual": false
+      },
+      {
+        "level": 2,
+        "description": "Level 2 gate",
+        "command": "go test ./...",
+        "manual": false
+      },
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "make -n test coverage vet fmt clean lint",
+        "manual": false
+      }
+    ],
+    "successCriteria": [
+      {
+        "description": "go.mod declares module `github.com/dustin/stagehand`, a `go 1.22` directive, and requires for BOTH github.com/spf13/cobra v1.10.2 and github.com/pelletier/go-toml/v2 v2.4.2 (either direct or `// indirect` is acceptable — without `go mod tidy` the indirect annotations are not rewritten; that is expected and harmless). go.sum is populated.",
+        "satisfied": false
+      },
+      {
+        "description": "`make build` exits 0 and produces the executable at `./bin/stagehand`.",
+        "satisfied": false
+      },
+      {
+        "description": "`./bin/stagehand --version` exits 0 and prints `stagehand version <VERSION>` where VERSION equals `git describe --tags --always --dirty` (currently a short SHA), NOT the `dev` default — proving ldflags -X main.version injection works.",
+        "satisfied": false
+      },
+      {
+        "description": "Bare `./bin/stagehand` (no args) prints cobra help to stdout and exits 0 (no Run is wired yet; the default action is added in M7.T2).",
+        "satisfied": false
+      },
+      {
+        "description": "Makefile defines all seven targets — build, test, coverage, lint, vet, fmt, clean — with TAB-indented recipes and VERSION from `git describe --tags --always --dirty`.",
+        "satisfied": false
+      },
+      {
+        "description": ".gitignore ignores bin/, *.out, coverage.out, and dist/.",
+        "satisfied": false
+      },
+      {
+        "description": "cmd/stagehand/main.go has NO Run/RunE/PersistentPreRun and imports only stdlib + cobra (no internal/* imports) — preserving the M1.T2/M7.T2 wiring seam.",
+        "satisfied": false
+      },
+      {
+        "description": "golangci-lint is not required to be installed; only the `lint` Makefile target text must exist (validated via `make -n lint`).",
+        "satisfied": false
+      }
+    ],
+    "references": [
+      "PRD.md §14 Package layout (lines ~831-890): target layout — cmd/stagehand/main.go, Makefile, go.mod at repo root. file:///home/dustin/projects/stagehand-hack/PRD.md",
+      "PRD.md §21.1 Build, §21.3 Install paths (go install github.com/dustin/stagehand/cmd/stagehand@latest), §22.3 Dependencies (Go 1.22+; cobra; pelletier/go-toml/v2; NO go-git). file:///home/dustin/projects/stagehand-hack/PRD.md",
+      "plan/001_f1f80943ac34/architecture/external_deps.md §A: deps cobra v1.10.2 + pelletier/go-toml/v2 v2.4.2 verified resolvable; module path github.com/dustin/stagehand.",
+      "plan/001_f1f80943ac34/architecture/system_context.md §1 (greenfield repo) and §3 (cobra + go-toml, shell-out-to-git).",
+      "plan/001_f1f80943ac34/architecture/decisions.md §1 (module path + §14 layout; v2-readiness seam — no staging logic here).",
+      "cobra Command.Version field (auto --version flag, prints template, exit 0): https://pkg.go.dev/github.com/spf13/cobra#Command",
+      "cobra version flag README: https://github.com/spf13/cobra/blob/main/README.md",
+      "go mod tidy removes unused modules: https://go.dev/ref/mod#go-mod-tidy",
+      "ldflags -X version injection: https://pkg.go.dev/cmd/link",
+      "Research notes: plan/001_f1f80943ac34/prps/research/P1_M1_T1_S1_research.md"
+    ]
+  },
+  "compressionLevel": "standard",
+  "inputTokens": 3231,
+  "outputTokens": 2901,
+  "compressionRatio": 1.1137538779731126,
+  "originalSize": 10025,
+  "compressedSize": 10025
+}

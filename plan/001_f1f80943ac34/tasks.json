@@ -1,0 +1,732 @@
+{
+  "backlog": [
+    {
+      "id": "P1",
+      "type": "Phase",
+      "title": "Stagehand v1.0 — agent-agnostic, snapshot-based commit-message generator",
+      "status": "Ready",
+      "description": "Ship the v1.0 product per PRD §10.1: a single static Go binary that generates git commit messages by shelling out to the user's installed coding-agent CLI (spending their existing coding-plan quota), commits atomically via git plumbing (write-tree / commit-tree / update-ref CAS) so the index can be staged concurrently with generation, learns repo commit-message style with an anti-duplicate guarantee, supports six built-in agent providers via a config-overridable manifest system, and is distributed via Homebrew/go install/Releases. Research is complete (architecture/ dir); this phase decomposes the ship list into an acyclic, dependency-true build DAG. Multi-commit decomposition is explicitly v2 and out of scope, but the v1 architecture must not preclude it (v2-readiness seam: CommitStaged assumes the index is already staged).",
+      "milestones": [
+        {
+          "id": "P1.M1",
+          "type": "Milestone",
+          "title": "Project Skeleton & UI",
+          "status": "Planned",
+          "description": "Establish the Go module, a runnable cobra command stub, build tooling (Makefile), and the internal/ui package (canonical exit codes + TTY/color-aware output). Foundational, no provider/config types yet. Entry point for the DAG.",
+          "tasks": [
+            {
+              "id": "P1.M1.T1",
+              "type": "Task",
+              "title": "Build & module scaffolding",
+              "status": "Complete",
+              "description": "Initialize the Go module, a cobra root command that prints --version, a Makefile (build/test/lint/coverage with version ldflags), and repo hygiene files.",
+              "subtasks": [
+                {
+                  "id": "P1.M1.T1.S1",
+                  "type": "Subtask",
+                  "title": "go.mod, cmd/stagehand/main.go cobra stub, Makefile, .gitignore",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Repo is greenfield (system_context.md §1). Module path `github.com/dustin/stagehand` verified resolvable; deps cobra v1.10.2 + pelletier/go-toml/v2 v2.4.2 resolve cleanly (external_deps.md §A, verified on host). Target layout = PRD §14.\n2. INPUT: None (foundational).\n3. LOGIC: `go mod init github.com/dustin/stagehand`; `go get` cobra + go-toml/v2. cmd/stagehand/main.go: cobra root command with persistent `--version` flag bound to `var version string` (default \"dev\"); with no subcommand and no Run, print help (Run is wired in M7.T2). Makefile targets: `build` (→ ./bin/stagehand via `go build -ldflags \"-X main.version=$(VERSION)\"`, VERSION from `git describe --tags --always --dirty`), `test` (`go test ./...`), `coverage` (`go test -coverprofile=coverage.out ./...`), `lint` (golangci-lint run), `vet`, `fmt`, `clean`. .gitignore: bin/, *.out, coverage.out, dist/. .editorconfig optional. Verify `make build` then `./bin/stagehand --version` prints the version and exits 0.\n4. OUTPUT: Importable module + runnable binary for M1.T2 and every downstream package. DOCS: none (README is Mode B, M8.T4)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M1.T2",
+              "type": "Task",
+              "title": "UI layer (exit codes + output/color)",
+              "status": "Planned",
+              "description": "Canonical exit codes (PRD §15.4) and a TTY/color-aware output writer that keeps stdout clean for piping and sends progress to stderr (PRD FR18, FR50-FR51).",
+              "subtasks": [
+                {
+                  "id": "P1.M1.T2.S1",
+                  "type": "Subtask",
+                  "title": "internal/ui/exitcode.go — canonical exit codes",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §15.4 defines a fixed code table; decisions.md §3 / rescue paths depend on these constants.\n2. INPUT: None.\n3. LOGIC: Define named constants: Success=0, Error=1, NothingToCommit=2, Rescue=3, Timeout=124. Pure constants (no logic). Test: assert exact integer values (golden) so downstream exit-code mapping never drifts.\n4. OUTPUT: `ui.Exit*` consts consumed by cmd/stagehand error mapping (M7.T2.S1) and rescue/timeout paths."
+                },
+                {
+                  "id": "P1.M1.T2.S2",
+                  "type": "Subtask",
+                  "title": "internal/ui/output.go — progress, color, TTY/NO_COLOR detection",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR18 (auto-stage notice), FR50 (verbose→stderr), FR51 (color when TTY, disable via --no-color / NO_COLOR). decisions.md §3 routes rescue/progress prints through a UI writer.\n2. INPUT: None (constructs from env + fd stat).\n3. LOGIC: An Output struct holding stdout/stderr writers, color-enabled bool, verbose bool. Methods: Progressf(format,args)→always stderr; Resultf → stdout (subject + diff-tree lines); Verbosef → stderr only when verbose. Color enabled iff stdout is a TTY AND NO_COLOR unset AND no --no-color (use a minimal ANSI helper, no dep). MOCKING: tests inject bytes.Buffer writers + set/unset NO_COLOR; assert Progressf lands on stderr, Resultf on stdout, color codes absent when NO_COLOR=1. Per FR51 progress NEVER pollutes stdout (kept pipe-clean for `stagehand --dry-run | tee`).\n4. OUTPUT: ui.Output used by cmd/stagehand (M7.T2) and generate/rescue (M6.T1.S3, M6.T2.S1)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M2",
+          "type": "Milestone",
+          "title": "Provider System",
+          "status": "Planned",
+          "description": "Build internal/provider: the Manifest type + command renderer (§12.1-12.2), the robust output parser (§12.9), six verified built-in manifests (external_deps.md §B, 4 corrections), the registry with field-by-field override merge + PATH detection, and the executor (subprocess run with timeout + process-group kill). Owns the canonical Manifest type that config (M5) imports. Self-contained; no import cycle.",
+          "tasks": [
+            {
+              "id": "P1.M2.T1",
+              "type": "Task",
+              "title": "Manifest type & command rendering",
+              "status": "Planned",
+              "description": "Define the Manifest struct (PRD §12.1 schema) and the Render algorithm (§12.2) that turns a logical intent into an exec.Cmd arg slice + stdin payload, with the system-prompt-via-stdin fallback.",
+              "subtasks": [
+                {
+                  "id": "P1.M2.T1.S1",
+                  "type": "Subtask",
+                  "title": "internal/provider/manifest.go — Manifest struct + Render(model,provider,sys,user)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §B + decisions.md §5 define the exact rendering algorithm; §19 mandates NO sh -c (direct exec.Command with []string).\n2. INPUT: None (foundational type).\n3. LOGIC: Manifest struct with ALL §12.1 fields: Name, Detect, Command, Subcommand []string, PromptDelivery (stdin|positional|flag), PromptFlag, PrintFlag, ModelFlag, DefaultModel, SystemPromptFlag, ProviderFlag, DefaultProvider, BareFlags []string, Output (raw|json), JSONField, StripCodeFence bool, RetryInstruction string, Env map[string]string. Render(model, provider, sys, user string) (*Rendered, error) implementing §12.2 byte-exactly: args = Subcommand; if ProviderFlag!=\"\"&&provider!=\"\" args+=ProviderFlag,provider; if ModelFlag!=\"\"&&model!=\"\" args+=ModelFlag,model; if SystemPromptFlag!=\"\"&&sys!=\"\" args+=SystemPromptFlag,sys; args+=BareFlags; if PrintFlag!=\"\" args+=PrintFlag. Delivery switch: stdin→StdinPayload set (system_prompt_flag==\"\"? prepend sys+\"\\n\\n\"+user : user); positional→args+=user; flag→args+=PromptFlag,user. Rendered{Args []string, StdinPayload string, DeliverViaStdin bool, Env []string}. MOCKING: golden-table tests — for each of pi/claude/gemini/opencode/codex/cursor (from external_deps §B.1-B.6 rendered lines as oracle) assert arg ORDER and StdinPayload byte-exact; cover stdin-vs-positional, with/without system_prompt_flag (fallback prepend), with/without provider+model.\n4. OUTPUT: provider.Manifest + Rendered consumed by executor (M2.T4.S1), built-ins (M2.T3.S1), and config override merge (M5.T3.S1). DOCS: Mode A — godoc on the schema fields citing PRD §12.1."
+                }
+              ]
+            },
+            {
+              "id": "P1.M2.T2",
+              "type": "Task",
+              "title": "Output parsing pipeline",
+              "status": "Planned",
+              "description": "The robust parseOutput function (§12.9) that turns agent stdout into a commit message, handling code-fence stripping, JSON extraction with fallback, and newline normalization.",
+              "subtasks": [
+                {
+                  "id": "P1.M2.T2.S1",
+                  "type": "Subtask",
+                  "title": "internal/provider/parse.go — parseOutput(raw, m) (msg, ok)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §4 (full pipeline) + reference_impl.md D1 (raw default replaces JSON+sed). PRD §17.4 rationale.\n2. INPUT: provider.Manifest (P1.M2.T1.S1) for Output/JSONField/StripCodeFence fields.\n3. LOGIC: parseOutput(raw string, m Manifest) (string,bool): (1) s=TrimSpace(raw); (2) if m.StripCodeFence && s starts with ``` or ~~~: drop the fence-opener line (incl. any language tag) and everything from the LAST matching closer onward, re-trim; (3) switch m.Output: raw→msg=s; json→try json.Unmarshal(s); on fail find first '{' and matching last '}' (brace-balanced substring) and retry; extract obj[m.JSONField] as string; ANY failure → fall back to raw (msg=s) and set a fallback flag for verbose logging; (4) normalize \\r\\n→\\n and collapse 3+ consecutive newlines→2; (5) TrimSpace; ok = msg != \"\". MOCKING: table-driven tests — raw clean, fenced-raw, fenced-json, json-embedded-in-prose, malformed-json→fallback-to-raw, empty→(\"\",false).\n4. OUTPUT: parseOutput consumed by the generate inner parse-correction loop (P1.M6.T1.S1)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M2.T3",
+              "type": "Task",
+              "title": "Built-in manifests & registry",
+              "status": "Planned",
+              "description": "The six compiled-in provider manifests (with the four corrections vs PRD text) and a registry that merges user overrides field-by-field and detects installed agents on PATH.",
+              "subtasks": [
+                {
+                  "id": "P1.M2.T3.S1",
+                  "type": "Subtask",
+                  "title": "internal/provider/builtin.go — 6 verified manifests",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §B (live --help verified 2026-06-30) + §C (4 corrections). All six agents installed on host (system_context §2) so manifests are confirmed, not stubbed.\n2. INPUT: provider.Manifest type (P1.M2.T1.S1).\n3. LOGIC: Define Builtins() map[string]Manifest for: pi (§B.1, matches PRD §12.3 byte-identical to commit-pi); claude (§B.2 — ADD --disable-slash-commands + --no-chrome to BareFlags per ext_deps §C.1, fuller than PRD §12.4); gemini (§B.3 — positional delivery, -p DEPRECATED do not use, system prompt prepended; carry stdin-vs-positional to integration M8.T3 per Appendix E.1); opencode (§B.4); codex (§B.5 — CORRECTED prompt_delivery=stdin + add --ephemeral, resolves Appendix E.4a); cursor (§B.6 — command=\"agent\", --mode ask --trust, E.4b strongly indicated). Each field set exactly per §B.1-B.6 TOML. MOCKING: tests assert each builtin TOML-encodes round-trip; spot-check claude BareFlags has 5 entries, codex PromptDelivery==\"stdin\", gemini PrintFlag==\"\".\n4. OUTPUT: Builtins() base for registry (P1.M2.T3.S2) + config override base (P1.M5.T3.S1) + reference manifests (P1.M8.T1.S1). DOCS: Mode A — package doc listing the six built-ins + pointer to §12.8 for adding user manifests (feeds PROVIDERS.md in M8.T4.S2)."
+                },
+                {
+                  "id": "P1.M2.T3.S2",
+                  "type": "Subtask",
+                  "title": "internal/provider/registry.go — override merge + PATH detect",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §6 — provider manifests merge FIELD-BY-FIELD (an override setting only default_model keeps all other built-in fields). PRD FR46-FR48 (list/show/detect).\n2. INPUT: Builtins() (P1.M2.T3.S1) + user overrides (map[string]Manifest, from config — injected, registry does NOT import config to avoid cycle, per plan_overview key decision 1).\n3. LOGIC: NewRegistry(builtins, overrides map[string]Manifest); Get(name) → merged manifest: start from builtin (if any), apply each non-zero/non-nil/non-empty field from override; slices (BareFlags) and maps (Env) replaced wholesale if present in override, else inherited; new names (no builtin) used as-is. List() → sorted names. Detect() → map[name]bool via exec.LookPath(manifest.Detect or .Command). MOCKING: tests — override{DefaultModel:\"x\"} over pi leaves BareFlags intact; override{BareFlags:[...]} replaces; new name \"myagent\" resolves; detect true for real pi on PATH + false for \"definitely-not-an-agent-xyz\".\n4. OUTPUT: provider.Registry consumed by config Load (P1.M5.T3.S1) + CLI providers list/show (P1.M7.T3.S1)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M2.T4",
+              "type": "Task",
+              "title": "Executor (subprocess run + timeout + process-group kill)",
+              "status": "Planned",
+              "description": "Run a rendered provider command: feed stdin, capture stdout, enforce a timeout, and kill the whole process group on cancel/timeout (§12.2, §18.4, FR24-FR25).",
+              "subtasks": [
+                {
+                  "id": "P1.M2.T4.S1",
+                  "type": "Subtask",
+                  "title": "internal/provider/executor.go — Executor.Run(ctx, m, model, provider, sys, payload)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §5 (render→exec), §18.4 (Setpgid + process-group kill + grace SIGKILL). FR24 (capture stdout), FR25 (timeout→kill→rescue). NO sh -c (§19).\n2. INPUT: provider.Manifest + Render (P1.M2.T1.S1).\n3. LOGIC: Executor.Run(ctx, m Manifest, model, provider, sys, payload string) (stdout string, err error): render→ exec.Command(m.Command, rendered.Args...); cmd.Dir = repo root; cmd.Stdin = bytes.NewReader(rendered.StdinPayload) if DeliverViaStdin else nil (/dev/null); cmd.Env = os.Environ()+m.Env; SysProcAttr{Setpgid:true} so the agent + its children form a killable process group; capture stdout into a buffer; run in a goroutine, select on done vs ctx.Done(); on ctx cancel/timeout → kill the process GROUP (syscall SIGTERM to -PGID, then SIGKILL after ~2s grace), return typed ErrTimeout(ctx deadline) or context-cancel error; on non-zero exit return ErrAgent with a short stderr excerpt. Expose a way for the signal handler (M6.T2) to share/observe this context. MOCKING: tests use a fake command (small go test helper /bin/echo or a generated stub) — assert stdin is fed exactly, stdout captured, a hanging stub is killed on timeout and ErrTimeout returned, clean exit returns stdout. No real LLM calls.\n4. OUTPUT: provider.Executor consumed by generate (P1.M6.T1.S1) and the signal handler (P1.M6.T2.S1) via shared context."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M3",
+          "type": "Milestone",
+          "title": "Git Plumbing",
+          "status": "Planned",
+          "description": "Build internal/git: a thin wrapper over the real git binary (no go-git, PRD §22.3), a temp-repo test harness, the atomicity primitives (write-tree/commit-tree/update-ref CAS), diff capture with caps+exclusions, history queries, and staging primitives. All tested against a real git binary + temp repos.",
+          "tasks": [
+            {
+              "id": "P1.M3.T1",
+              "type": "Task",
+              "title": "Git wrapper, exec helper & temp-repo test util",
+              "status": "Planned",
+              "description": "Foundational git.Git wrapper + a run() exec helper, plus a shared temp-repo test harness used by every internal/git test and the generate integration suite.",
+              "subtasks": [
+                {
+                  "id": "P1.M3.T1.S1",
+                  "type": "Subtask",
+                  "title": "internal/git/git.go — Git wrapper + run(args) exec helper",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §2; system_context §2 (git 2.54 present). PRD §22.3 — shell out to real git, NO go-git. NO sh -c (§19).\n2. INPUT: None.\n3. LOGIC: Git struct{dir string; git string (default \"git\")}. run(args ...string) (stdout string, err error): exec.Command(git, args...) with Dir=dir, capture stdout+stderr, on non-zero exit return typed *ExitError{Args, Code, Stderr}. Constructor New(dir) resolves git via exec.LookPath. MOCKING: tests — run(\"version\") returns a string containing \"git version\"; run(\"rev-parse\",\"--git-dir\") in an init'd temp dir works; run in a non-repo dir returns a clear error.\n4. OUTPUT: git.Git + run() used by every plumbing/diff/log/stage subtask (M3.T2/T3/T4) and the test util (M3.T1.S2)."
+                },
+                {
+                  "id": "P1.M3.T1.S2",
+                  "type": "Subtask",
+                  "title": "internal/git/gittestutil_test.go — temp-repo harness",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §20.1 layer 2 (unit, real git binary, temp repo); decisions.md §8 (shared harness). Test infra stands as its own unit (plan_overview §8).\n2. INPUT: git.Git (P1.M3.T1.S1).\n3. LOGIC: Helpers in a _test.go (or testutil build-tagged file): newTempRepo(t) → temp dir + `git init -q` + deterministic user.email/user.name config, returns *Git; seedCommits(g, msgs []string) creates commits with given full messages (for history/multi-line tests); writeFileStage(g, path, content) writes a file + `git add`. Self-test asserts the harness bootstraps a repo with ≥2 commits and rev-parse HEAD succeeds. MOCKING: uses the REAL git binary (that is the point — catches plumbing regressions); only the repo is temporary (t.Cleanup removes dir).\n4. OUTPUT: shared harness for all internal/git/*_test.go and generate integration tests (P1.M6.T3)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M3.T2",
+              "type": "Task",
+              "title": "Plumbing primitives (atomicity)",
+              "status": "Planned",
+              "description": "The git plumbing that underpins snapshot-based atomic commits: RevParseHEAD, WriteTree, CommitTree, UpdateRefCAS — the §18.1 safety invariant rests on these.",
+              "subtasks": [
+                {
+                  "id": "P1.M3.T2.S1",
+                  "type": "Subtask",
+                  "title": "internal/git/plumbing.go — RevParseHEAD, WriteTree, CommitTree, UpdateRefCAS",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §1; decisions.md §7 (safety invariants — NEVER git commit, NEVER update-ref --force, NEVER 1-arg update-ref except root commit). PRD §13.2 (plumbing semantics).\n2. INPUT: git.Git (P1.M3.T1.S1).\n3. LOGIC: RevParseHEAD() (sha string, hasParent bool, err) — `rev-parse HEAD`; hasParent=false on rootless repo (treat non-zero/empty as ok=false, not error). WriteTree() (sha, err) — `write-tree`; detect 'unresolved merge conflicts' in stderr → return clear error (FR8) BEFORE any generation. CommitTree(parent, msg, tree string) (sha, err) — `commit-tree -m <msg> <tree>`; OMIT -p when parent==\"\" (root commit, FR39). UpdateRefCAS(ref, newSHA, expected string) error — `update-ref <ref> <newSHA> <expected>` (2-arg CAS form, refuses if HEAD moved); when expected==\"\" (root commit) use the no-expected form. NEVER --force. MOCKING: temp-repo tests — root commit (no -p) created + update-ref advances HEAD; CAS succeeds when HEAD unchanged; CAS FAILS (returns err) when HEAD moved concurrently AND HEAD value is unchanged afterward (atomic invariant); write-tree errors clearly on a staged conflict (construct one).\n4. OUTPUT: atomicity primitives consumed by the commit step of generate (P1.M6.T1.S1) and asserted by invariant tests (P1.M6.T3.S3)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M3.T3",
+              "type": "Task",
+              "title": "Diff capture",
+              "status": "Planned",
+              "description": "StagedDiff(cfg) reproducing commit-pi's md-vs-other capture with per-file md line cap, total byte cap, and pathspec exclusions (FR1-FR5).",
+              "subtasks": [
+                {
+                  "id": "P1.M3.T3.S1",
+                  "type": "Subtask",
+                  "title": "internal/git/diff.go — StagedDiff(cfg) (string, error)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §1 (exact capture mechanics); external_deps.md §D (verified git 2.54 pathspec syntax); decisions.md §9 (porting map).\n2. INPUT: git.Git (P1.M3.T1.S1); cfg scalars MaxMdLines (default 100), MaxDiffBytes (default 300000).\n3. LOGIC: FR1-FR5. md_files = `git diff --cached --name-only -- '*.md' '*.markdown'`. For each md file: `git diff --cached -- <file>` capped at MaxMdLines lines (head -n semantics, per-FILE). other_diff = `git diff --cached -- ':!*.lock' ':!package-lock.json' ':!pnpm-lock.yaml' ':!yarn.lock' ':!*.snap' ':!*.map' ':!vendor/*' ':!.md' ':!.markdown'` capped at MaxDiffBytes TOTAL bytes (head -c). Concatenate markdown_diff + other_diff in that order. Return (\"\", nil) — NOT an error — when nothing staged (the CLI/generate layer decides auto-stage/exit per FR5). MOCKING: temp-repo tests — a .md file diff capped at 100 lines; a large file capped at 300KB; *.lock/*.snap/*.map/vendor/* excluded; both md+other present and concatenated md-first; nothing staged → \"\".\n4. OUTPUT: diff payload string consumed by prompt.AssemblePayload (P1.M4.T1.S3)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M3.T4",
+              "type": "Task",
+              "title": "History queries & staging primitives",
+              "status": "Planned",
+              "description": "CommitCount / RecentMessages / RecentSubjects (style examples + dedupe set) and HasStagedChanges / AddAll (CLI staging path).",
+              "subtasks": [
+                {
+                  "id": "P1.M3.T4.S1",
+                  "type": "Subtask",
+                  "title": "internal/git/log.go — CommitCount, RecentMessages(n), RecentSubjects(n)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §1 & §6; external_deps.md §D (verified log formats).\n2. INPUT: git.Git (P1.M3.T1.S1).\n3. LOGIC: CommitCount() (int, error) — `rev-list --count HEAD`, return 0 on rootless repo (no error). RecentMessages(n) (string, error) — `git log --format='---%n%B' -<n>` raw (the prompt layer trims blanks + caps lines; do not trim here). RecentSubjects(n) ([]string, error) — `git log --format=%s -<n>` split into lines, trimmed. MOCKING: temp-repo seeded with known messages — counts match; subjects returned newest-first in order; root repo → 0 / empty.\n4. OUTPUT: history for prompt examples + multi-line detect (P1.M4.T1.S1) and the dedupe set (P1.M6.T1.S2)."
+                },
+                {
+                  "id": "P1.M3.T4.S2",
+                  "type": "Subtask",
+                  "title": "internal/git/stage.go — HasStagedChanges, AddAll",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR5/FR16/FR20; decisions.md §1 (staging primitives only — policy lives in CLI layer, not here).\n2. INPUT: git.Git (P1.M3.T1.S1).\n3. LOGIC: HasStagedChanges() (bool, error) — `git diff --cached --quiet`; exit 0 → true (staged), exit 1 → false (clean), other → error. AddAll() error — `git add -A`. MOCKING: temp-repo tests — true after staging a file, false on clean index; AddAll stages new + modified + deleted files.\n4. OUTPUT: staging primitives for the CLI auto-stage path (P1.M7.T2.S2) and the empty-check (P1.M7.T2.S1)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M4",
+          "type": "Milestone",
+          "title": "Prompt Construction",
+          "status": "Planned",
+          "description": "Build internal/prompt: history example fetch + multi-line detection (the awk heuristic), the system-prompt builder (raw-output contract, style learning, anti-reuse), and payload assembly (reference ordering: diff-then-instruction). Decoupled from config — builders take scalar settings. Depends on git history (M3).",
+          "tasks": [
+            {
+              "id": "P1.M4.T1",
+              "type": "Task",
+              "title": "Prompt construction package (examples, system prompt, payload)",
+              "status": "Planned",
+              "description": "The three prompt concerns: examples+multiline detection, system-prompt builder, and payload assembly.",
+              "subtasks": [
+                {
+                  "id": "P1.M4.T1.S1",
+                  "type": "Subtask",
+                  "title": "internal/prompt/examples.go — history examples + multi-line detection",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M3.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §6 (the awk heuristic to port); PRD FR10-FR12.\n2. INPUT: git.RecentMessages + git.CommitCount (P1.M3.T4.S1).\n3. LOGIC: FetchExamples(g, n=20) ([]string, hasMultiline bool, err): if CommitCount<=1 return ([],false,nil) (new-repo path); else take RecentMessages(20), trim blank lines, cap total at 100 lines. Multi-line detect = port the awk heuristic: split the raw log on '---' separators; if ANY group has >1 non-empty line → hasMultiline=true. MOCKING: temp-repo seeded with single-line-only history → hasMultiline=false; add one multi-line commit → true; trimming/cap behavior asserted.\n4. OUTPUT: examples + hasMultiline for the system-prompt builder (P1.M4.T1.S2)."
+                },
+                {
+                  "id": "P1.M4.T1.S2",
+                  "type": "Subtask",
+                  "title": "internal/prompt/system.go — buildSystemPrompt (raw contract, style learn, anti-reuse)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M4.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §17.1-17.2 + Appendix A (canonical strings, commit as Go constants); reference_impl.md D1 (raw default, NOT JSON); decisions.md §9.\n2. INPUT: examples + hasMultiline (P1.M4.T1.S1); SubjectTargetChars setting (default 50).\n3. LOGIC: BuildSystemPrompt(examples []string, hasMultiline bool, newRepo bool, target int) string. New-repo path (CommitCount<=1): the §17.2 conventional-commit fallback (role line, raw-output contract, essence-not-filenames, ~50 chars, 'type(scope): description'). Mature path: §17.1 — role line ('commit message generator'), RAW-output contract ('Output ONLY the commit message. No preamble, no markdown, no code fences, no quoting.'), essence-not-filenames instruction, the style examples with the explicit CRITICAL anti-reuse prohibition ('You MUST NOT copy or reuse ANY phrasing… Reusing example text is a critical failure.'), the conditional multi-line rule chosen by hasMultiline (§17.1 two variants), and the ~target-char subject line. Commit the canonical strings as named Go constants (PRD Appendix A). MOCKING: tests — mature prompt contains examples + the anti-reuse clause + the CORRECT multi-line variant; new-repo prompt contains the conventional template; raw contract present and NO JSON instruction anywhere.\n4. OUTPUT: system prompt string for the executor (P1.M6.T1.S1)."
+                },
+                {
+                  "id": "P1.M4.T1.S3",
+                  "type": "Subtask",
+                  "title": "internal/prompt/payload.go — AssemblePayload(diff, instruction, rejected)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §3 + D5 (★ byte order is <diff>\\n\\n<instruction>, the REFERENCE ordering, NOT the PRD §17.3 prose which says instruction-then-diff — this is an EXPLICIT FLAGGED DECISION). PRD §17.3.\n2. INPUT: diff string (from git.StagedDiff, P1.M3.T3.S1, passed as a parameter — no import dep).\n3. LOGIC: AssemblePayload(diff, instruction string, rejected []string) string. Base layout: `<diff>\\n\\n<instruction>` (reference ordering — recency of the imperative near generation start). On duplicate-retry (len(rejected)>0): insert the §17.3 rejection block AFTER the instruction and BEFORE the diff — 'IMPORTANT: The following messages were REJECTED because they already exist in git history. You MUST generate something COMPLETELY DIFFERENT:' + a bulleted list of each rejected subject + 'Create an entirely new message with different wording.' — yielding `<diff>\\n\\n<instruction>\\n\\n<rejection block>`. (Preserve diff-first; append rejection block last so the model sees it immediately before generating.) MOCKING: tests — base ordering diff-first; rejection block present with each subject when rejected non-empty; empty rejected → no block; deterministic bytes.\n4. OUTPUT: payload string fed to executor stdin/positional in the generate inner loop (P1.M6.T1.S1)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M5",
+          "type": "Milestone",
+          "title": "Configuration Model",
+          "status": "Planned",
+          "description": "Build internal/config: the Config struct + built-in defaults, the source loaders (global+repo TOML via go-toml/v2, repo git-config via `git config`), and Load() implementing the full precedence chain (FR34) with field-by-field provider-override merge. Imports provider.Manifest (M2) for provider overrides — registry does NOT import config (no cycle).",
+          "tasks": [
+            {
+              "id": "P1.M5.T1",
+              "type": "Task",
+              "title": "Config struct & defaults",
+              "status": "Planned",
+              "description": "The Config type carrying all resolved settings + ProviderOverrides, and the built-in default values (PRD §16.1).",
+              "subtasks": [
+                {
+                  "id": "P1.M5.T1.S1",
+                  "type": "Subtask",
+                  "title": "internal/config/config.go Config + internal/config/defaults.go",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §6 (defaults table); PRD §16.1.\n2. INPUT: provider.Manifest type (P1.M2.T1.S1) — used for ProviderOverrides map[string]Manifest.\n3. LOGIC: Config struct fields: Provider, Model string; Timeout time.Duration; AutoStageAll, Verbose, NoColor bool; MaxDiffBytes, MaxMdLines, MaxDuplicateRetries, SubjectTargetChars int; Output string; StripCodeFence bool; ConfigPath string; ProviderOverrides map[string]Manifest. Default() returns §16.1 values: Timeout 120s, AutoStageAll true, MaxDiffBytes 300000, MaxMdLines 100, MaxDuplicateRetries 3, Output \"raw\", StripCodeFence true, SubjectTargetChars 50. ProviderOverrides empty (built-in manifests applied separately by registry). MOCKING: tests — Default() returns the exact table; round-trip a populated Config.\n4. OUTPUT: Config + Default() for Load() (P1.M5.T3.S1) and consumed by generate (P1.M6.T1.S1) + CLI (P1.M7.T2)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M5.T2",
+              "type": "Task",
+              "title": "Source loaders (TOML files + git-config)",
+              "status": "Planned",
+              "description": "Read each config source into a partial overlay without mutating a base: global file, repo file (go-toml/v2), and repo git-config (`git config --get`).",
+              "subtasks": [
+                {
+                  "id": "P1.M5.T2.S1",
+                  "type": "Subtask",
+                  "title": "internal/config/file.go — global+repo TOML + git-config readers",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M5.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §6; PRD §16.2-16.3, FR35-FR37. XDG default ~/.config/stagehand/config.toml.\n2. INPUT: Config type (P1.M5.T1.S1); ConfigPath override (from --config flag/env, resolved by caller).\n3. LOGIC: readGlobalFile() — $XDG_CONFIG_HOME/stagehand/config.toml (fallback ~/.config/...); readRepoFile() — ./.stagehand.toml; both via go-toml/v2 into a partial struct supporting [defaults], [generation], and [provider.<name>] tables (provider tables → ProviderOverrides). Missing file → empty overlay + nil error (not an error). readGitConfig() — for each known stagehand.* key run `git config --get stagehand.<key>` (+ `--bool` for AutoStageAll); map git-config key names (e.g. autoStageAll) to Config fields. Each reader returns an OVERLAY (only fields it sets), never mutates a shared base. MOCKING: tests — parse the §16.2 example file into expected Config + ProviderOverrides; git-config bool parsing; missing files → empty overlay no error; malformed TOML → clear error.\n4. OUTPUT: per-source overlays merged by Load() (P1.M5.T3.S1); global-path resolution reused by config path/init subcommands (P1.M7.T3.S2)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M5.T3",
+              "type": "Task",
+              "title": "Load() precedence resolution + provider override merge",
+              "status": "Planned",
+              "description": "The single Load() entry point applying the FR34 precedence chain and field-merging provider overrides into built-in manifests via the registry.",
+              "subtasks": [
+                {
+                  "id": "P1.M5.T3.S1",
+                  "type": "Subtask",
+                  "title": "internal/config Load() — precedence chain + provider field-merge + trust notice",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M5.T1.S1",
+                    "P1.M5.T2.S1",
+                    "P1.M2.T3.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §6; PRD FR34, §19 (repo-local config trust notice).\n2. INPUT: Default() (P1.M5.T1.S1); file+git-config overlays (P1.M5.T2.S1); provider.Registry merge semantics (P1.M2.T3.S2); a Flags struct (CLI flags + STAGEHAND_* env, provided by the CLI layer in M7.T2).\n3. LOGIC: Load(flags Flags, repoDir string) (cfg Config, reg provider.Registry, trustNotice string, err). Resolve LOWEST→HIGHEST: builtin defaults → builtin manifests → global file → repo file → repo git-config → env STAGEHAND_* → CLI flags. Apply scalar overrides in order (higher wins; only set fields override). Build the registry: NewRegistry(provider.Builtins(), cfg.ProviderOverrides) so overrides field-merge over built-ins. When a REPO-local source (.stagehand.toml or git-config) overrides Provider, set trustNotice (§19: 'stagehand: repo-local config changed provider to <name>'). MOCKING: tests — each level beats the one below; env>git-config>repo-file>global-file; flag>env; provider field-merge keeps unspecified built-in fields when override sets only DefaultModel; trustNotice set only on repo-local provider override.\n4. OUTPUT: fully-resolved Config + Registry for the CLI (P1.M7.T2.S1) + GenerateCommit (P1.M7.T1.S1). DOCS: Mode A — this subtask OWNS the config-reference surface: precedence order, STAGEHAND_* env vars, stagehand.* git-config keys, and .stagehand.toml keys (materialize/update a docs/CONFIGURATION.md or comprehensive godoc here)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M6",
+          "type": "Milestone",
+          "title": "Generation Orchestrator (the core IP)",
+          "status": "Planned",
+          "description": "Build internal/generate: the two-nested-loop CommitStaged orchestrator (outer duplicate-rejection wrapping inner parse-correction), dedupe, the rescue protocol, signal handling (process-group kill + restore before commit), and the stub-provider integration harness with safety-invariant proofs. This is PRD §13 — the snapshot-based atomic-commit core and the product's defensibility. Integrates M2+M3+M4+M5. NEVER stages (v2 seam).",
+          "tasks": [
+            {
+              "id": "P1.M6.T1",
+              "type": "Task",
+              "title": "CommitStaged orchestrator, dedupe & rescue",
+              "status": "Planned",
+              "description": "The core: diff→snapshot→prompt→generate(two nested loops)→dedupe→commit-tree→update-ref CAS, with rescue on failure.",
+              "subtasks": [
+                {
+                  "id": "P1.M6.T1.S1",
+                  "type": "Subtask",
+                  "title": "internal/generate/generate.go — CommitStaged(ctx, deps) (Result, error)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M2.T4.S1",
+                    "P1.M2.T2.S1",
+                    "P1.M3.T2.S1",
+                    "P1.M3.T3.S1",
+                    "P1.M4.T1.S2",
+                    "P1.M4.T1.S3",
+                    "P1.M5.T1.S1",
+                    "P1.M6.T1.S2",
+                    "P1.M6.T1.S3"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §3 (★ THE two-nested-loop contract ★); reference_impl.md §2 (counting semantics); PRD §13. This is the most important subtask in the plan.\n2. INPUT: injected deps (git.Git, provider.Executor, resolved provider.Manifest, Config) — all stubbable. From M3: StagedDiff, RevParseHEAD, WriteTree, CommitTree, UpdateRefCAS. From M2: Executor.Run, parseOutput. From M4: BuildSystemPrompt, AssemblePayload. From M5: Config. From this task: isDuplicate/firstLine (S2), Rescue (S3).\n3. LOGIC: CommitStaged(ctx, deps) (Result, error): diff=StagedDiff(cfg); if diff==\"\" return ErrNothingToCommit (CLI maps to exit 2). PARENT=RevParseHEAD(); TREE=WriteTree(); on WriteTree error → abort BEFORE generation (FR8). installSignalHandler (P1.M6.T2.S1) with TREE/PARENT. sys=BuildSystemPrompt(examples, hasMultiline, newRepo, target); subjects=RecentSubjects(50); instruction='Generate a commit message for these changes:'; rejected:=[]. OUTER dup loop for dupAttempt:=0; dupAttempt<=cfg.MaxDuplicateRetries; dupAttempt++ (== 1 initial + N retries per PRD FR32): payload=AssemblePayload(diff,instruction,rejected); INNER parse loop, FRESH 2-try budget each outer iter: stdout,err=Executor.Run(ctx,...); on err/timeout→Rescue+return ErrRescue; msg,ok=parseOutput(stdout,manifest); if ok break; else payload=manifest.RetryInstruction (corrective) ; parseAttempt++. If !ok after inner→Rescue+ErrRescue. subject=firstLine(msg); if !isDuplicate(subject,subjects) goto COMMIT; else rejected=append(rejected,subject). If outer exhausted→Rescue(candidate=msg)+ErrRescue. COMMIT: NEW=CommitTree(PARENT,msg,TREE) (omit -p when PARENT==\"\"); restoreSignalHandler() (BEFORE update-ref — ref 'trap - INT TERM'); err=UpdateRefCAS(\"HEAD\",NEW,PARENT) (no expected when root); if err (HEAD moved)→print msg + manual recovery, return ErrHeadMoved (exit 1, NEVER force). print [short] subject + `git diff-tree --no-commit-id --name-status -r NEW` (FR42); return Result{CommitSHA:NEW, Subject, Message:msg}. NOTE: this function NEVER calls git add (v2 seam — staging policy is CLI-only).\n4. OUTPUT: CommitStaged for pkg/stagehand (P1.M7.T1.S1) + CLI default action (P1.M7.T2.S1); asserted by integration + invariant tests (P1.M6.T3.S2/S3)."
+                },
+                {
+                  "id": "P1.M6.T1.S2",
+                  "type": "Subtask",
+                  "title": "internal/generate/dedupe.go — isDuplicate + firstLine",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M3.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR30-FR33; decisions.md §3. (Fuzzy/Levenshtein is explicitly v1.1, NOT here.)\n2. INPUT: recentSubjects []string from git.RecentSubjects(50) (P1.M3.T4.S1).\n3. LOGIC: firstLine(msg string) string — the subject = first '\\n'-delimited line, trimmed. isDuplicate(subject string, subjects []string) bool — EXACT, case-sensitive match (FR31-32). MOCKING: table tests — exact match true; near/paraphrased match false (fuzzy deferred); leading/trailing whitespace ignored via trim; firstLine of a multi-line message returns only line 1.\n4. OUTPUT: isDuplicate + firstLine for the generate outer loop (P1.M6.T1.S1)."
+                },
+                {
+                  "id": "P1.M6.T1.S3",
+                  "type": "Subtask",
+                  "title": "internal/generate/rescue.go — rescue protocol (FR43-FR45)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T2.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: reference_impl.md §5 (verbatim message to port); PRD §18.3 (enrichment: candidate message line).\n2. INPUT: TREE, PARENT strings; optional candidate message; ui.Output (P1.M1.T2.S2) for printing.\n3. LOGIC: Rescue(out *ui.Output, tree, parent, candidate string) prints the §18.3 block: failure notice, 'Tree ID: <tree>', and the exact manual recovery command `git commit-tree [-p <parent>] -m \"Your message\" <tree> | xargs git update-ref HEAD` with the '(omit -p ... if first commit)' note. If candidate!=\"\" append: 'A candidate message was produced but rejected: \"<candidate>\". You can use it manually in the command above.' Fires on: parse-fail-after-retries, duplicate-exhaustion, timeout, SIGINT/SIGTERM post-snapshot. Does NOT fire on CAS failure (that prints its own message + exit 1, PRD §18.2). MOCKING: tests — output contains the tree SHA + the manual command + the omit-(-p) note; candidate line present iff candidate non-empty; root (parent==\"\") omits -p in the printed command.\n4. OUTPUT: Rescue() called by CommitStaged failure paths (P1.M6.T1.S1) + the signal handler (P1.M6.T2.S1)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M6.T2",
+              "type": "Task",
+              "title": "Signal handling & timeout integration",
+              "status": "Planned",
+              "description": "SIGINT/SIGTERM → cancel the executor context (process-group kill) + run rescue if the snapshot was taken; restore the default handler before the final update-ref (matches commit-pi's `trap - INT TERM`).",
+              "subtasks": [
+                {
+                  "id": "P1.M6.T2.S1",
+                  "type": "Subtask",
+                  "title": "internal/generate/signal.go — signal.Notify → rescue; restore before commit",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M6.T1.S3",
+                    "P1.M2.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §18.4; reference_impl.md §1 (trap installed after write-tree, restored before commit).\n2. INPUT: TREE/PARENT captured post-snapshot; ui.Output; Rescue (P1.M6.T1.S3); the executor context (P1.M2.T4.S1) whose cancellation triggers process-group kill.\n3. LOGIC: installSignalHandler(ctxCancel func(), rescueFn func()) — signal.Notify on SIGINT,SIGTERM; on receipt: call ctxCancel (executor kills the process group via Setpgid + grace SIGKILL), then if TREE!=\"\" run rescueFn, then exit with Rescue code (P1.M1.T2.S1). restoreSignalHandler() — signal.Reset(SIGINT,SIGTERM) back to default; CommitStaged calls this immediately BEFORE UpdateRefCAS so a Ctrl-C at the last instant is not mistaken for a failure (ref 'trap - INT TERM'). MOCKING: tests — send SIGINT to the process → rescue printed with the tree + handler restored; after restore, a signal during the (mocked) update-ref does NOT trigger rescue and the normal path completes.\n4. OUTPUT: signal integration wired into CommitStaged (P1.M6.T1.S1)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M6.T3",
+              "type": "Task",
+              "title": "Integration harness & safety-invariant proofs",
+              "status": "Planned",
+              "description": "The stub provider (fake agent), the end-to-end integration suite (temp-repo + stub driving CommitStaged across all paths), and the property tests asserting the §18.1 invariants. Test infra stands as its own unit (plan_overview §8).",
+              "subtasks": [
+                {
+                  "id": "P1.M6.T3.S1",
+                  "type": "Subtask",
+                  "title": "internal/generate/stubprovider_test.go — fake agent",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §8; PRD §20.1 layer 3.\n2. INPUT: provider.Executor contract (P1.M2.T4.S1).\n3. LOGIC: A fake agent — a tiny Go test binary (or shell script) used as the provider Command. Reads stdin (so we can assert the payload was delivered), and is configurable per-test to emit: (a) a canned valid message; (b) empty/garbage (to exercise the inner parse-correction retry then success or rescue); (c) a subject duplicating a known recent commit (to exercise the outer dup loop); (d) hang until killed (to exercise timeout). Replaces the real agent entirely. MOCKING: self-test asserts the stub emits the configured behavior.\n4. OUTPUT: stub consumed by the e2e suite (P1.M6.T3.S2) and invariant tests (P1.M6.T3.S3)."
+                },
+                {
+                  "id": "P1.M6.T3.S2",
+                  "type": "Subtask",
+                  "title": "internal/generate/integration_test.go — end-to-end flow (temp-repo + stub)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M6.T1.S1",
+                    "P1.M6.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §8; PRD §20.1 layer 3 (covers all paths) + §13.5 edge cases.\n2. INPUT: CommitStaged (P1.M6.T1.S1); stub provider (P1.M6.T3.S1); temp-repo harness (P1.M3.T1.S2).\n3. LOGIC: Drive CommitStaged end-to-end and assert outcomes: SUCCESS — created commit exists with the correct TREE, PARENT, and message (verify via git cat-file/show); DUP-RETRY-THEN-SUCCESS — stub emits a duplicate subject once, then a unique one → commit created with the unique subject; PARSE-FAIL-THEN-RESCUE — stub emits garbage on both inner tries → Rescue printed, NO commit created, HEAD/index unchanged; TIMEOUT — stub hangs → Rescue + ErrTimeout, no commit; CAS-FAILURE — move HEAD mid-test (commit elsewhere) → UpdateRefCAS fails, HEAD unchanged, ErrHeadMoved (no force); ROOT-COMMIT — empty repo → commit-tree without -p, update-ref advances HEAD from nothing; NOTHING-STAGED — CommitStaged returns ErrNothingToCommit (the CLI layer, not generate, does auto-stage). MOCKING: stub provides all agent behavior; real git binary for the repo.\n4. OUTPUT: proves the core flow; feeds the invariant assertions (P1.M6.T3.S3)."
+                },
+                {
+                  "id": "P1.M6.T3.S3",
+                  "type": "Subtask",
+                  "title": "internal/generate/invariants_test.go — safety property tests (§18.1)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M6.T3.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decisions.md §7; PRD §18.1 (the invariant) + §20.2 (property tests). These tests encode the product's core safety guarantee.\n2. INPUT: the integration suite's failure-path scenarios (P1.M6.T3.S2).\n3. LOGIC: Assert across ALL failure paths (rescue, timeout, CAS-fail, parse-fail): (1) IDEMPOTENT INDEX — `git diff --cached --name-only` output is byte-identical before and after the run (no index mutation); (2) ATOMIC HEAD — `git rev-parse HEAD` unchanged after a CAS failure; (3) SNAPSHOT IMMUTABILITY — `git cat-file -p <TREE_SHA>` stable even after additional files are staged mid-run. Plus static assertions: the codebase never calls `git commit`, never `update-ref --force`, and never 1-arg update-ref except the root-commit case. MOCKING: temp-repo + stub; snapshot git state before, run a failing path, assert identical after.\n4. OUTPUT: proof of the §18.1 invariant — the safety property that distinguishes Stagehand from every incumbent."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M7",
+          "type": "Milestone",
+          "title": "CLI & Public Library API",
+          "status": "Planned",
+          "description": "Wire the public pkg/stagehand.GenerateCommit (thin wrapper over CommitStaged, v2-stable seam) and the cmd/stagehand cobra CLI: global flags, the default action (maybeAutoStage → GenerateCommit → exit codes), the auto-stage CLI path, and the providers/config subcommands. Staging policy lives ONLY here, preserving the v2 seam.",
+          "tasks": [
+            {
+              "id": "P1.M7.T1",
+              "type": "Task",
+              "title": "Public library API (pkg/stagehand)",
+              "status": "Planned",
+              "description": "The tiny, stable public surface (PRD §14.1): GenerateCommit + Options + Result, delegating to internal/generate.CommitStaged.",
+              "subtasks": [
+                {
+                  "id": "P1.M7.T1.S1",
+                  "type": "Subtask",
+                  "title": "pkg/stagehand/stagehand.go — GenerateCommit(ctx, opts) (Result, error)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M6.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §14.1 + Appendix E.6 (ship as Stable, additive-only); decisions.md §1 (v2 seam — does NOT stage).\n2. INPUT: internal/generate.CommitStaged (P1.M6.T1.S1); resolved Config+Registry (built internally or accepted in opts).\n3. LOGIC: Options{Provider, Model, SystemExtra string; DryRun bool; Timeout time.Duration}; Result{CommitSHA, Subject, Message, Provider, Model string}. GenerateCommit(ctx, opts) resolves provider+model, calls CommitStaged. DryRun → run the full diff→snapshot→generate→parse→dedupe pipeline but SKIP commit-tree/update-ref; return the message with CommitSHA=\"\" (PRD FR49). It NEVER stages (caller stages first). MOCKING: tests — DryRun returns the message + empty CommitSHA + no commit created in a temp repo; default delegates to CommitStaged and creates a commit.\n4. OUTPUT: public API for integrators (US12) + the CLI default action (P1.M7.T2.S1). DOCS: Mode A — godoc `// Stable as of v1.0` on the exported Options/Result/GenerateCommit (Appendix E.6)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M7.T2",
+              "type": "Task",
+              "title": "CLI root command, global flags & default action",
+              "status": "Planned",
+              "description": "The cobra root command with all global flags (PRD §15.2), precedence loading, the default action (auto-stage → GenerateCommit → print → exit codes), verbosity/color.",
+              "subtasks": [
+                {
+                  "id": "P1.M7.T2.S1",
+                  "type": "Subtask",
+                  "title": "cmd/stagehand — cobra root + global flags + default Run + exit codes",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M7.T1.S1",
+                    "P1.M5.T3.S1",
+                    "P1.M2.T3.S2",
+                    "P1.M1.T2.S1",
+                    "P1.M3.T4.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §15.1-15.2 (flags), §15.4 (exit codes), FR50-FR51 (verbose/color); decisions.md §6 (precedence).\n2. INPUT: GenerateCommit (P1.M7.T1.S1); config.Load (P1.M5.T3.S1); provider.Registry detect (P1.M2.T3.S2); HasStagedChanges/AddAll (P1.M3.T4.S2); ui exitcodes+Output (P1.M1.T2.S1/S2).\n3. LOGIC: cobra root cmd; persistent flags: --provider, --model, --config, --timeout, --all/-a, --no-auto-stage, --dry-run, --verbose/-v, --no-color, --version. Build a Flags struct from CLI flags + STAGEHAND_* env (env via os.Getenv) and pass to config.Load for precedence resolution. Default Run: cfg,reg,notice:=Load(...); if notice!=\"\" print trust notice; resolvedProvider/model from cfg (validate provider exists in reg + detected on PATH, else exit Error with 'Provider X: command Y not found. Is the agent installed?'); maybeAutoStage (P1.M7.T2.S2); res,err:=stagehand.GenerateCommit(ctx, opts); map err→exit code (nil→Success 0; ErrNothingToCommit→2; ErrRescue/ErrTimeout→Rescue 3; ErrTimeout→124; other→Error 1); on success print '[<short>] <subject>' + diff-tree --name-status (FR42); verbose prints the resolved command, raw agent stdout, and each retry attempt to stderr (FR50); color TTY-aware (FR51). --version short-circuits. MOCKING: tests — flag parsing; precedence flag>env>git-config>file; --dry-run prints message exit 0 no commit; nothing-staged path→exit 2; --version; missing provider→Error exit.\n4. OUTPUT: the runnable default action (the product's main surface). DOCS: Mode A — CLI flag/env reference + --help text live here (materialize/update docs/CONFIGURATION.md CLI section + cobra Long/Short help strings)."
+                },
+                {
+                  "id": "P1.M7.T2.S2",
+                  "type": "Subtask",
+                  "title": "maybeAutoStage — auto-stage-all & nothing-staged CLI path",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M7.T2.S1",
+                    "P1.M3.T4.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §9.4, FR16-FR20; decisions.md §1 + plan_overview key decision 6 (staging policy lives ONLY in the CLI layer; generate never stages — this preserves the v2 seam where v2's main replaces this with a partition loop).\n2. INPUT: HasStagedChanges + AddAll (P1.M3.T4.S2); cfg.AutoStageAll; flags --all, --no-auto-stage.\n3. LOGIC: maybeAutoStage(g, cfg, flags) error implementing FR16-FR20: if --all/-a → AddAll (FR20, forces staging even when something is already staged). Else if !HasStagedChanges: if cfg.AutoStageAll && !flags.NoAutoStage → AddAll, then print 'Nothing staged — staging all changes (N files).' (FR18), then re-check; if STILL clean → return ErrNothingToCommit (exit 2, FR17); else (NoAutoStage) → return ErrNothingStaged (exit 2, FR19). Order: this runs BEFORE GenerateCommit (so the snapshot captures the staged set). MOCKING: tests — nothing-staged+auto→AddAll+notice+proceed; clean tree→exit 2; --no-auto-stage+nothing→exit 2 (no add); --all stages extra files on top of existing staged.\n4. OUTPUT: the sole staging entry-point; v2 swaps this for partitioned staging (seam preserved)."
+                }
+              ]
+            },
+            {
+              "id": "P1.M7.T3",
+              "type": "Task",
+              "title": "Subcommands (providers, config)",
+              "status": "Planned",
+              "description": "stagehand providers list/show (FR46-FR48) and stagehand config init/path (FR38) — the discovery + onboarding UX.",
+              "subtasks": [
+                {
+                  "id": "P1.M7.T3.S1",
+                  "type": "Subtask",
+                  "title": "providers list / show subcommands (FR46-FR48)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M2.T3.S2",
+                    "P1.M5.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR46-FR48, US10; external_deps §B (detected set).\n2. INPUT: provider.Registry (List, Detect, Get) (P1.M2.T3.S2); resolved default from cfg (P1.M5.T3.S1).\n3. LOGIC: `providers list` — print all built-in+user provider names, mark detected (on PATH) vs not via Detect(), and show the resolved default provider+model (FR46). `providers show <name>` — print the FULLY-RESOLVED manifest (built-in field-merged with user overrides) as TOML (FR47) so users can debug exact command rendering. MOCKING: tests — list marks pi/claude/etc detected (real PATH) and a fabricated name not-detected; show emits TOML that decodes back to the same manifest; a user override is reflected in show output.\n4. OUTPUT: discovery UX (US10). DOCS: Mode A — the list/show output format is the provider reference surface."
+                },
+                {
+                  "id": "P1.M7.T3.S2",
+                  "type": "Subtask",
+                  "title": "config init / path subcommands (FR38)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M5.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR38, §16.1/§16.2.\n2. INPUT: global config path resolution (P1.M5.T2.S1).\n3. LOGIC: `config init` — write the commented example config (the §16.2 template, with all sections commented) to the resolved global path; refuse to overwrite an existing file unless --force; on user confirm, offer to add ./.stagehand.toml to a local .gitignore (PRD §16.1). `config path` — print the resolved global config path (XDG-aware). MOCKING: tests — init writes valid TOML that parses back to defaults; existing-file no-clobber; --force overwrites; path prints the expected XDG/default location.\n4. OUTPUT: onboarding UX. DOCS: Mode A — the generated example config IS the canonical config-file reference (every key documented inline)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "P1.M8",
+          "type": "Milestone",
+          "title": "Manifests, Distribution, Docs & Release",
+          "status": "Planned",
+          "description": "Ship the reference providers/*.toml, goreleaser distribution (Homebrew/go install/Releases/Scoop/AUR), Makefile finalization, the real-agent progressive verification suite (resolving PRD Appendix E open questions against live agents), and the changeset-level documentation (README + docs/ consolidation, Mode B).",
+          "tasks": [
+            {
+              "id": "P1.M8.T1",
+              "type": "Task",
+              "title": "Reference provider manifests",
+              "status": "Planned",
+              "description": "Human-readable providers/*.toml matching the compiled built-ins, for contributor reference and copy-paste.",
+              "subtasks": [
+                {
+                  "id": "P1.M8.T1.S1",
+                  "type": "Subtask",
+                  "title": "providers/{pi,claude,gemini,opencode,codex,cursor}.toml",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [
+                    "P1.M2.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps §B (verified manifests); PRD §14 (providers/ shipped reference). These are REFERENCE copies; the built-ins are compiled into the binary (P1.M2.T3.S1) so the tool works with zero config.\n2. INPUT: internal/provider/builtin.go (P1.M2.T3.S1) — the authoritative source.\n3. LOGIC: Write providers/<name>.toml for each of the six, byte-consistent with the verified built-ins (the 4 corrections from external_deps §C applied). Add a short header comment per file explaining the provider + any TO-CONFIRM note (gemini delivery, codex/cursor per §12.7.2). MOCKING: a small test/script asserts each providers/*.toml decodes to the SAME Manifest as the compiled builtin (golden equivalence) so the two never drift.\n4. OUTPUT: contributor-facing reference (PRD §14). DOCS: Mode A — each .toml file documents its provider inline."
+                }
+              ]
+            },
+            {
+              "id": "P1.M8.T2",
+              "type": "Task",
+              "title": "Distribution & release",
+              "status": "Planned",
+              "description": "goreleaser config (cross-compile, Homebrew/Scoop/AUR, checksums), install.sh, and Makefile finalization (G9).",
+              "subtasks": [
+                {
+                  "id": "P1.M8.T2.S1",
+                  "type": "Subtask",
+                  "title": ".goreleaser.yaml + install.sh",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M7.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §21.2-21.3; system_context §3 (goreleaser is build-time only). Module path github.com/dustin/stagehand (confirm org segment with author — affects go install + tap repo names).\n2. INPUT: module path; main.version ldflags target (P1.M1.T1.S1).\n3. LOGIC: .goreleaser.yaml — archives + standalone binaries for linux/darwin/windows × amd64/arm64; ldflags `-X main.version={{.Version}}`; Homebrew formula → a tap repo (dustin/homebrew-tap); Scoop manifest → a bucket; AUR PKGBUILD; checksums + changelog. install.sh — curl|sh one-liner detecting OS/arch and fetching the right binary+checksum from GitHub Releases (§21.3). Validate `goreleaser check` passes and a `goreleaser release --snapshot --clean` builds all targets locally. MOCKING: `goreleaser check` + snapshot build as the gate.\n4. OUTPUT: releasable artifacts (G9). DOCS: Mode A — install paths (§21.3) referenced by README (P1.M8.T4.S1)."
+                },
+                {
+                  "id": "P1.M8.T2.S2",
+                  "type": "Subtask",
+                  "title": "Makefile finalize + release target",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M8.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §21.1; decisions.md §1.\n2. INPUT: Makefile skeleton (P1.M1.T1.S1); goreleaser config (P1.M8.T2.S1).\n3. LOGIC: Finalize Makefile — `build` injects version via git describe; add `release` target (goreleaser release --clean), `release-snapshot` (snapshot), `cross-build` sanity check; ensure `make build test lint` is the contributor loop. MOCKING: `make build` produces a versioned binary; `make release-snapshot` succeeds.\n4. OUTPUT: dev + release build flow."
+                }
+              ]
+            },
+            {
+              "id": "P1.M8.T3",
+              "type": "Task",
+              "title": "Real-agent progressive verification",
+              "status": "Planned",
+              "description": "A gated //go:build integration_real suite that invokes the actual installed agents end-to-end and resolves the PRD Appendix E open questions (§12.7.2 progressive verification). Run manually pre-release; skipped in CI.",
+              "subtasks": [
+                {
+                  "id": "P1.M8.T3.S1",
+                  "type": "Subtask",
+                  "title": "integration_real suite + resolve Appendix E confirmations",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M6.T1.S1",
+                    "P1.M2.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps §B (open items) + §12.7.2; system_context §2 (ALL six agents installed on host — so every manifest is confirmable). PRD §20.1 layer 4, Appendix E.1/E.2/E.4.\n2. INPUT: CommitStaged (P1.M6.T1.S1); built-in manifests (P1.M2.T3.S1); real agents on PATH.\n3. LOGIC: Build a //go:build integration_real suite gated behind STAGEHAND_RUN_REAL=1 that, for each installed agent (pi/claude/gemini/opencode/codex/cursor), runs a real end-to-end commit generation against a temp repo with a small staged diff and asserts a non-empty, non-duplicate commit message is produced and the commit lands. Specifically RESOLVE: Appendix E.1 (gemini: confirm stdin accepts ~300KB else keep positional + document the cap), E.2 (claude --tools \"\" suppresses tool use in -p; if not, try --disallowed-tools syntax), E.4a (codex exec writes the answer to stdout + exit 0), E.4b (cursor --mode ask is genuinely read-only over -p's default full-tools). For any field that cannot be confirmed, set a safe default + leave a `# TO CONFIRM` comment (never silently assume). Record the verified findings back into architecture/external_deps.md. MOCKING: none — this is the real-agent verification (the whole point); it is NOT in CI.\n4. OUTPUT: verified manifest behavior resolving PRD Appendix E; findings persisted to architecture/ for future maintainers."
+                }
+              ]
+            },
+            {
+              "id": "P1.M8.T4",
+              "type": "Task",
+              "title": "Changeset-level documentation sync (Mode B)",
+              "status": "Planned",
+              "description": "The whole-feature/overview docs that only make sense once everything lands: the README marketing surface (§21.5) and the docs/ cross-cutting consolidation of the per-file Mode A slices written throughout.",
+              "subtasks": [
+                {
+                  "id": "P1.M8.T4.S1",
+                  "type": "Subtask",
+                  "title": "README.md — §21.5 marketing surface",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M7.T2.S1",
+                    "P1.M7.T3.S1",
+                    "P1.M8.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §5 (positioning/UVP), §21.5 (README structure), §7.4 (anti-persona — say plainly who it's NOT for). This is the marketing surface.\n2. INPUT: the complete, working tool + all install paths (P1.M8.T2.S1) + CLI/providers UX (P1.M7.T2.S1, P1.M7.T3.S1).\n3. LOGIC: Write README.md per §21.5: (1) Hero — the §5 one-sentence pitch; (2) 30-second demo (asciinema/gif placeholder); (3) 'Why not opencommit/aicommits?' — the coding-plan paragraph in 3 sentences (§2.2, §4.3); (4) Install — the four paths (§21.3); (5) Quick start — one `stagehand` invocation; (6) Configure your agent — `providers list` → `git config stagehand.provider`; (7) The snapshot workflow diagram (§13.4 'stage while it thinks'); (8) CLI+config reference (link to docs/); (9) Adding a new agent (§12.8) — the contributor hook; (10) FAQ / 'Stagehand is not for you if…' (§7.4). Verify every command/example in the README actually runs against the built binary.\n4. OUTPUT: README.md (Mode B whole-feature doc)."
+                },
+                {
+                  "id": "P1.M8.T4.S2",
+                  "type": "Subtask",
+                  "title": "docs/ cross-cutting reference consolidation",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M8.T4.S1",
+                    "P1.M5.T3.S1",
+                    "P1.M7.T2.S1",
+                    "P1.M2.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §15 (CLI ref), §16 (config), §12 (providers). Consolidates the Mode A per-file slices written across M5/M7/M2.\n2. INPUT: the Mode A doc slices — config reference (P1.M5.T3.S1), CLI flag/env reference + help text (P1.M7.T2.S1), provider list/show + built-ins (P1.M2.T3.S1, P1.M7.T3.S1).\n3. LOGIC: Assemble docs/CONFIGURATION.md (precedence order FR34, STAGEHAND_* env vars, stagehand.* git-config keys, .stagehand.toml keys, defaults table) and docs/PROVIDERS.md (manifest schema §12.1, the six built-ins, adding a user provider §12.8, the tools-disable asymmetry §12.7.1). Link both from README. Remove duplication, ensure no stale content vs the implemented behavior, final proofread against PRD §15/§16/§12.\n4. OUTPUT: cohesive, non-duplicated doc set (Mode B consolidation) — the complete reference surface."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
