@@ -134,7 +134,7 @@ func init() {
 		"Per-role model override for the leftover arbiter (env STAGEHAND_ARBITER_MODEL; git stagehand.role.arbiter)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
-		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off, planner: high)")
+		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")
 	pf.StringVar(&flagPlannerReasoning, "planner-reasoning", "",
 		"Per-role reasoning override for the decomposition planner (env STAGEHAND_PLANNER_REASONING; git stagehand.role.planner)")
 	pf.StringVar(&flagStagerReasoning, "stager-reasoning", "",

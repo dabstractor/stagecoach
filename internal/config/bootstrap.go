@@ -124,6 +124,7 @@ func buildBootstrapConfig(target string, installed []string) string {
 		b.WriteString("  # no built-in agent detected on $PATH; defaulted to \"pi\" — edit if you use a different agent")
 	}
 	b.WriteString("\n")
+	b.WriteString("reasoning = \"off\"   # off|low|medium|high; off by default for every role (FR-R6) — opt in per role below\n")
 	b.WriteString("# model          = \"\"\n# timeout        = \"120s\"\n# auto_stage_all = true\n# verbose        = false\n")
 
 	// [role.*] for the target (UNCOMMENTED), canonical order: planner, stager, message, arbiter

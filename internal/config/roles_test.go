@@ -39,8 +39,8 @@ func TestResolveRoleModel_FullOverride(t *testing.T) {
 	if p != "agy" || m != "gemini-2.5-pro" {
 		t.Errorf("ResolveRoleModel(planner) = (%q,%q), want (agy,gemini-2.5-pro) [full override]", p, m)
 	}
-	if r != "high" {
-		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"high\" [FR-R6 shipped default]", r)
+	if r != "" {
+		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"\" (off — no shipped default)", r)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestResolveRoleModel_BothEmptyManifestSentinel(t *testing.T) {
 	if p != "" || m != "" {
 		t.Errorf("ResolveRoleModel(planner) = (%q,%q), want (\"\",\"\") [manifest-default sentinel]", p, m)
 	}
-	if r != "high" {
-		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"high\" [FR-R6 shipped planner default]", r)
+	if r != "" {
+		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"\" (off — no shipped default)", r)
 	}
 }
 
@@ -109,10 +109,10 @@ func TestResolveRoleModel_AllCanonicalRoles(t *testing.T) {
 		"stager":  {Provider: "agy", Model: "gemini-2.5-flash"},
 	}
 	want := map[string][3]string{
-		"planner": {"agy", "gemini-2.5-pro", "high"}, // overridden provider/model; reasoning = shipped high
-		"stager":  {"agy", "gemini-2.5-flash", ""},   // overridden provider/model; reasoning = shipped off
-		"message": {"pi", "gpt-5.4", ""},             // global; reasoning = shipped off
-		"arbiter": {"pi", "gpt-5.4", ""},             // global; reasoning = shipped off
+		"planner": {"agy", "gemini-2.5-pro", ""},   // overridden provider/model; reasoning off (no shipped default)
+		"stager":  {"agy", "gemini-2.5-flash", ""}, // overridden provider/model; reasoning = shipped off
+		"message": {"pi", "gpt-5.4", ""},           // global; reasoning = shipped off
+		"arbiter": {"pi", "gpt-5.4", ""},           // global; reasoning = shipped off
 	}
 	for _, role := range roleNames { // roleNames is load.go's package-level canonical list (same package)
 		p, m, r := ResolveRoleModel(role, cfg)
@@ -151,26 +151,22 @@ func TestResolveRoleModel_ReasoningGlobalFallback(t *testing.T) {
 	if r != "low" {
 		t.Errorf("ResolveRoleModel(stager) reasoning = %q, want \"low\" [global fallback]", r)
 	}
-	// Planner: per-role not set, global "low" wins over shipped "high" (global is higher precedence).
+	// Planner: per-role reasoning not set, so it inherits the global "low" (no shipped planner default anymore).
 	_, _, rp := ResolveRoleModel("planner", cfg)
 	if rp != "low" {
-		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"low\" [global beats shipped default]", rp)
+		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"low\" [global fallback]", rp)
 	}
 }
 
-func TestResolveRoleModel_PlannerShippedDefault(t *testing.T) {
-	cfg := Defaults() // Roles nil, Provider/Model/Reasoning all ""
-	p, m, r := ResolveRoleModel("planner", cfg)
-	if p != "" || m != "" {
-		t.Errorf("planner provider/model = (%q,%q), want (\"\",\"\") [manifest sentinel]", p, m)
-	}
-	if r != "high" {
-		t.Errorf("planner reasoning = %q, want \"high\" [FR-R6 shipped default, global unset]", r)
-	}
-	// message has NO shipped non-off default:
-	_, _, rm := ResolveRoleModel("message", cfg)
-	if rm != "" {
-		t.Errorf("message reasoning = %q, want \"\" (off — no shipped non-off default)", rm)
+func TestResolveRoleModel_NoShippedReasoningDefault(t *testing.T) {
+	// FR-R6: NO role has a non-off shipped reasoning default — not even the planner. With nothing
+	// set (no per-role override, no global), every role resolves reasoning to "" (off).
+	cfg := Defaults()                // Roles nil, Provider/Model/Reasoning all ""
+	for _, role := range roleNames { // roleNames: load.go's package-level canonical list (same package)
+		_, _, r := ResolveRoleModel(role, cfg)
+		if r != "" {
+			t.Errorf("ResolveRoleModel(%s) reasoning = %q, want \"\" (off — no shipped default)", role, r)
+		}
 	}
 }
 
@@ -178,11 +174,11 @@ func TestResolveRoleModel_ReasoningOffIsNonZero(t *testing.T) {
 	cfg := Defaults()
 	cfg.Reasoning = "off" // explicitly set off — non-empty, so it's a real override
 	_, _, r := ResolveRoleModel("planner", cfg)
-	// "off" beats the shipped "high" because global is higher precedence than shipped default
+	// Explicit "off" is a real (non-empty) value, so it is respected (planner inherits the global "off").
 	if r != "off" {
-		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"off\" [global off beats shipped high]", r)
+		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"off\" [explicit global off respected]", r)
 	}
-	// Per-role "off" also beats shipped default
+	// Per-role "off" beats a global "high"
 	cfg.Roles = map[string]RoleConfig{
 		"planner": {Reasoning: "off"},
 	}

@@ -26,6 +26,12 @@ func TestBuildBootstrapConfig_Pi(t *testing.T) {
 		t.Error("missing provider = \"pi\"")
 	}
 
+	// reasoning = "off" uncommented in [defaults] (FR-B1 — emitted so the field is discoverable
+	// in the generated file rather than hidden; off is the shipped default for every role, FR-R6)
+	if !strings.Contains(content, `reasoning = "off"`) {
+		t.Error("missing uncommented reasoning = \"off\" in [defaults]")
+	}
+
 	// pi's four role models blanked (no sub-provider in bootstrap — pi picks its own backend default)
 	assertContains(t, content, "[role.planner]", `model = ""`)
 	assertContains(t, content, "[role.stager]", `model = ""`)

@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Reasoning opt-in everywhere (off for all roles)",
-      "status": "Researching",
+      "status": "Planned",
       "description": "Flip the shipped per-role reasoning default from planner=high to off for ALL roles (FR-R6), making reasoning opt-in everywhere. Also have config init write an uncommented reasoning=\"off\" into [defaults] for discoverability (FR-B1). This is a small, focused delta on the fully-implemented v2.0/v3 codebase — no new subsystems, no new code paths, one map-entry removal plus mechanical test/comment/doc updates. Grounded in plan/004_136878664597/architecture/system_context.md and critical_findings.md.",
       "milestones": [
         {
@@ -18,14 +18,14 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Flip shipped reasoning default to off for all roles",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Remove the defaultRoleReasoning map (which contained {\"planner\": \"high\"}) from internal/config/roles.go, eliminate the shipped-default fallback branch in ResolveRoleModel, update the doc comments in config.go/roles.go that cite 'planner=high', update all test assertions that expected the old shipped default, and update the user-facing flag-help/doc surfaces. Per §3 (IMPLICIT TDD), tests are updated WITH the code change — the safest path is: remove the map entry, run go test ./..., and fix every failing assertion the tests enumerate.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S1",
                   "title": "Remove defaultRoleReasoning map + ResolveRoleModel fallback + config.go doc comments + config-package test assertions",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_136878664597/architecture/system_context.md §3 (Change A) and critical_findings.md Finding 1. The defaultRoleReasoning map at internal/config/roles.go lines 1–13 is {\"planner\": \"high\"}. ResolveRoleModel at roles.go:57–63 has a second if-block: `if reasoning == \"\" { reasoning = defaultRoleReasoning[role] }` that is the shipped fallback. Off (\"\") is the natural zero value — no role except planner had an entry, so removing it makes ALL roles default to off.\n2. INPUT: The existing internal/config/roles.go (the defaultRoleReasoning var + its doc comment block lines 1–19, and ResolveRoleModel's fallback at line ~63), and internal/config/config.go (doc comments at lines 27–28 RoleConfig.Reasoning, line 65 Config.Reasoning, line 126 Defaults Reasoning — all cite 'planner=high' or 'shipped fallback').\n3. LOGIC: (a) In roles.go: DELETE the defaultRoleReasoning var and its comment block entirely. In ResolveRoleModel (the `if reasoning == \"\"` block at line ~63): REMOVE the final `reasoning = defaultRoleReasoning[role]` fallback so reasoning falls through to just `cfg.Reasoning` (the global, which is \"\" when unset). Rewrite the doc comment block (lines ~20–40) to state that reasoning has NO shipped per-role default — every role is off out of the box, and a user sets [role.<role>].reasoning or the global [defaults].reasoning to enable it. (b) In config.go: update the 3 doc comments (RoleConfig.Reasoning at ~line 36, Config.Reasoning at ~line 65, Defaults() at ~line 126) to say 'off for every role; opt-in per role' instead of 'planner=high'/'shipped fallback'. (c) In roles_test.go: flip TestResolveRoleModel_FullOverride planner reasoning assertion from \"high\" to \"\"; flip TestResolveRoleModel_BothEmptyManifestSentinel same; in TestResolveRoleModel_AllCanonicalRoles, change the planner want-entry reasoning from \"high\" to \"\"; RENAME TestResolveRoleModel_PlannerShippedDefault → TestResolveRoleModel_NoShippedReasoningDefault and assert ALL roles (loop roleNames) return \"\" reasoning when nothing is set; update TestResolveRoleModel_ReasoningGlobalFallback and TestResolveRoleModel_ReasoningOffIsNonZero comments to remove 'beats shipped default' wording (the assertions themselves stay valid — the planner now inherits global like any other role).\n4. OUTPUT: ResolveRoleModel returns reasoning=\"\" for all roles when nothing is set (no shipped default). The config-package tests are green. No other package is affected yet (decompose/cmd tests are S2).\n5. DOCS: [Mode A] The doc comments in roles.go and config.go ride WITH the work. These are internal Go comments — no external doc file is touched in this subtask.",
@@ -42,7 +42,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Update downstream test assertions + user-facing surfaces (decompose roles_test, default_action_test, root.go flag help, pkg/stagehand comment, docs/cli.md)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"

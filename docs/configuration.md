@@ -77,11 +77,11 @@ config_version = 3
 
 [defaults]
 provider = "claude"
+reasoning = "off"   # off|low|medium|high; off by default for every role (FR-R6)
 # model          = ""
 # timeout        = "120s"
 # auto_stage_all = true
 # verbose        = false
-# reasoning       = "off"  # off|low|medium|high; planner defaults to high (FR-R6)
 
 # --- per-role models for the default provider "claude" (PRD §16.4, §9.15) ---
 

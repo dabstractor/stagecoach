@@ -1435,8 +1435,9 @@ func TestProgressLabel_DecomposeVerboseRoles(t *testing.T) {
 			t.Errorf("stderr missing 'DEBUG: %s'; got %q", role, stderr)
 		}
 	}
-	// Planner line must carry the reasoning suffix (shipped default = high).
-	if !strings.Contains(stderr, "(reasoning: high)") {
-		t.Errorf("stderr missing '(reasoning: high)' on planner line; got %q", stderr)
+	// No role carries a reasoning suffix: reasoning is off by default for every role (FR-R6),
+	// so the verbose roster must contain no "(reasoning: …)" suffix on any role line.
+	if strings.Contains(stderr, "(reasoning:") {
+		t.Errorf("stderr unexpectedly contains a reasoning suffix; got %q", stderr)
 	}
 }

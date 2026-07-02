@@ -59,13 +59,13 @@ type Result struct {
 // RoleModel is a per-role provider/model/reasoning override for DecomposeOptions (PRD §14.1, §16.4, FR-R1–R5,
 // FR-R6). A zero value ⇒ the role inherits the global default (FR-R2); a non-empty field overrides just that
 // field (FR-R3 field-merge). Models are provider-specific (FR-R5). Reasoning is off|low|medium|high (FR-R6);
-// "" ⇒ inherit global [defaults].reasoning ⇒ shipped default.
+// "" ⇒ inherit the global [defaults].reasoning (off by default for every role).
 //
 // Stable as of v2.0 (additive-only per §14.1).
 type RoleModel struct {
 	Provider  string
 	Model     string
-	Reasoning string // off|low|medium|high (FR-R6); "" ⇒ inherit the global [defaults].reasoning ⇒ shipped default
+	Reasoning string // off|low|medium|high (FR-R6); "" ⇒ inherit the global [defaults].reasoning (off by default)
 }
 
 // DecomposeOptions configures the multi-commit pipeline (PRD §14.1, §13.6). The embedded Options

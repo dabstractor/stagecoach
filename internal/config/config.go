@@ -24,8 +24,8 @@ const CurrentConfigVersion = 3
 // a role's Model is interpreted by that role's resolved Provider's manifest, so changing
 // a role's Provider without updating its Model is a configuration error stagehand surfaces.
 // For multi-provider agents (pi/opencode/agy) Provider is required when Model is set (FR-R5b).
-// Reasoning controls thinking effort (off|low|medium|high; FR-R6); "" ⇒ inherit global ⇒ shipped
-// default (planner=high, others=off).
+// Reasoning controls thinking effort (off|low|medium|high; FR-R6); "" ⇒ inherit the global
+// [defaults].reasoning, which is "off" for every role out of the box (no shipped per-role default).
 //
 // Config.Roles (below) carries the RESOLVED per-role table; it is toml:"-" because the
 // [role.<role>] FILE tables decode into fileConfig's fileRoleConfig map (S2) and
@@ -34,7 +34,7 @@ const CurrentConfigVersion = 3
 type RoleConfig struct {
 	Provider  string `toml:"provider"`
 	Model     string `toml:"model"`
-	Reasoning string `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning ⇒ shipped default
+	Reasoning string `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default)
 }
 
 // Config is the fully-resolved Stagehand configuration: the single value produced by the 7-layer
@@ -62,7 +62,7 @@ type Config struct {
 	// [defaults] (PRD §16.2)
 	Provider     string        `toml:"provider"`       // "" => auto-detect (PRD §15.2)
 	Model        string        `toml:"model"`          // "" => provider manifest default_model
-	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ ResolveRoleModel's shipped fallback (planner=high)
+	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default; config init writes "off")
 	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 120s
 	AutoStageAll bool          `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4)
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
@@ -123,7 +123,7 @@ func Defaults() Config {
 	return Config{
 		Provider:            "",
 		Model:               "",
-		Reasoning:           "", // FR-R6: "" ⇒ fall through to the per-role shipped default (planner=high) in ResolveRoleModel
+		Reasoning:           "", // FR-R6: off for every role by default; config init writes reasoning = "off" into [defaults] (FR-B1)
 		Timeout:             120 * time.Second,
 		AutoStageAll:        true,
 		Verbose:             false,

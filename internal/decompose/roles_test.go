@@ -537,9 +537,9 @@ func TestResolveRoles_PerRoleOverrides(t *testing.T) {
 // TestResolveRoles_ReasoningShippedDefault
 // ---------------------------------------------------------------------------
 
-func TestResolveRoles_ReasoningShippedDefault(t *testing.T) {
-	// When nothing sets reasoning, planner gets "high" (FR-R6 shipped default via ResolveRoleModel);
-	// other roles get "" (off). Claude is single-backend ⇒ no FR-R5b guard.
+func TestResolveRoles_NoShippedReasoningDefault(t *testing.T) {
+	// FR-R6: NO role has a non-off shipped reasoning default — not even the planner. With nothing
+	// set, every role resolves reasoning to "" (off). Claude is single-backend ⇒ no FR-R5b guard.
 	reg := bogusRegistry(t, []string{"claude"})
 
 	cfg := config.Config{} // nothing set
@@ -548,8 +548,8 @@ func TestResolveRoles_ReasoningShippedDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveRoles: %v", err)
 	}
-	if rmodels.Planner.Reasoning != "high" {
-		t.Errorf("planner reasoning = %q, want high (FR-R6 shipped default)", rmodels.Planner.Reasoning)
+	if rmodels.Planner.Reasoning != "" {
+		t.Errorf("planner reasoning = %q, want \"\" (off — no shipped default)", rmodels.Planner.Reasoning)
 	}
 	if rmodels.Stager.Reasoning != "" {
 		t.Errorf("stager reasoning = %q, want \"\" (off)", rmodels.Stager.Reasoning)
@@ -563,7 +563,7 @@ func TestResolveRoles_ReasoningShippedDefault(t *testing.T) {
 }
 
 func TestResolveRoles_ReasoningPerRoleSet(t *testing.T) {
-	// Per-role reasoning override: message sets reasoning="low"; planner inherits shipped "high".
+	// Per-role reasoning override: message sets reasoning="low"; planner stays "" (off — no shipped default).
 	reg := bogusRegistry(t, []string{"claude"})
 
 	cfg := config.Config{
@@ -576,8 +576,8 @@ func TestResolveRoles_ReasoningPerRoleSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveRoles: %v", err)
 	}
-	if rmodels.Planner.Reasoning != "high" {
-		t.Errorf("planner reasoning = %q, want high (shipped default)", rmodels.Planner.Reasoning)
+	if rmodels.Planner.Reasoning != "" {
+		t.Errorf("planner reasoning = %q, want \"\" (off — no shipped default)", rmodels.Planner.Reasoning)
 	}
 	if rmodels.Message.Reasoning != "low" {
 		t.Errorf("message reasoning = %q, want low (per-role override)", rmodels.Message.Reasoning)
