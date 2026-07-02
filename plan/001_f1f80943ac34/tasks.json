@@ -11,7 +11,7 @@
           "id": "P1.M1",
           "type": "Milestone",
           "title": "Project Skeleton & UI",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Establish the Go module, a runnable cobra command stub, build tooling (Makefile), and the internal/ui package (canonical exit codes + TTY/color-aware output). Foundational, no provider/config types yet. Entry point for the DAG.",
           "tasks": [
             {
@@ -36,7 +36,7 @@
               "id": "P1.M1.T2",
               "type": "Task",
               "title": "UI layer (exit codes + output/color)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Canonical exit codes (PRD §15.4) and a TTY/color-aware output writer that keeps stdout clean for piping and sends progress to stderr (PRD FR18, FR50-FR51).",
               "subtasks": [
                 {
@@ -52,7 +52,7 @@
                   "id": "P1.M1.T2.S2",
                   "type": "Subtask",
                   "title": "internal/ui/output.go — progress, color, TTY/NO_COLOR detection",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD FR18 (auto-stage notice), FR50 (verbose→stderr), FR51 (color when TTY, disable via --no-color / NO_COLOR). decisions.md §3 routes rescue/progress prints through a UI writer.\n2. INPUT: None (constructs from env + fd stat).\n3. LOGIC: An Output struct holding stdout/stderr writers, color-enabled bool, verbose bool. Methods: Progressf(format,args)→always stderr; Resultf → stdout (subject + diff-tree lines); Verbosef → stderr only when verbose. Color enabled iff stdout is a TTY AND NO_COLOR unset AND no --no-color (use a minimal ANSI helper, no dep). MOCKING: tests inject bytes.Buffer writers + set/unset NO_COLOR; assert Progressf lands on stderr, Resultf on stdout, color codes absent when NO_COLOR=1. Per FR51 progress NEVER pollutes stdout (kept pipe-clean for `stagehand --dry-run | tee`).\n4. OUTPUT: ui.Output used by cmd/stagehand (M7.T2) and generate/rescue (M6.T1.S3, M6.T2.S1)."
