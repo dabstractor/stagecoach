@@ -175,6 +175,11 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	resolved := deps.Manifest.Resolve()
 	retryInstr := *resolved.RetryInstruction // resolved default: "Output ONLY the commit message…"
 
+	// FR-R3: resolve the message role so --message-model / [role.message] drive Render.
+	// No message override ⇒ (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.
+	// Provider is discarded (manifest is deps.Manifest, selected upstream by buildDeps; P1.M2.T2.S1).
+	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
+
 	var rejected []string
 	var candidate string // last generated message (for RescueError.Candidate)
 	var parseFail bool   // previous attempt failed parsing → prepend retryInstr next attempt
@@ -193,7 +198,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning.
 		// (Old: cfg.Provider was the manifest name, NOT the upstream backend — the provider param
 		// has been folded into the model slash-prefix; DefaultProvider field removed.)
-		spec, rerr := deps.Manifest.Render(cfg.Model, sysPrompt, payload, cfg.Reasoning)
+		spec, rerr := deps.Manifest.Render(msgModel, sysPrompt, payload, msgReasoning)
 		if rerr != nil {
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}
@@ -285,7 +290,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	}
 
 	// Step 10: return Result.
-	model := cfg.Model
+	model := msgModel
 	if model == "" {
 		model = *resolved.DefaultModel
 	}

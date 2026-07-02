@@ -40,6 +40,14 @@ func main() {
 		_ = os.WriteFile(marker, []byte("1"), 0o644)
 	}
 
+	// 1c. Write the received argv (if STAGEHAND_STUB_ARGSFILE is set). This lets tests observe
+	//     the exact rendered command-line end-to-end (model, reasoning tokens, etc.). Must happen
+	//     AFTER stdin drain (deadlock guard) and AFTER the marker write (test synchronization).
+	//     Join with NUL so flag values containing spaces survive; tests split on "\x00".
+	if argsFile := os.Getenv("STAGEHAND_STUB_ARGSFILE"); argsFile != "" {
+		_ = os.WriteFile(argsFile, []byte(strings.Join(os.Args, "\x00")), 0o644)
+	}
+
 	// 2. Sleep AFTER draining (timeout simulation). The parent isn't blocked on stdin anymore.
 	if ms := envInt("STAGEHAND_STUB_SLEEP_MS", 0); ms > 0 {
 		time.Sleep(time.Duration(ms) * time.Millisecond)

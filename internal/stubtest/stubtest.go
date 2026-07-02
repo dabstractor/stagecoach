@@ -28,6 +28,7 @@ type Options struct {
 	Counter        string // STAGEHAND_STUB_COUNTER path (used with Script)
 	Output         string // manifest Output; "" → "raw"
 	StripCodeFence *bool  // manifest StripCodeFence; nil → true
+	ArgsFile       string // STAGEHAND_STUB_ARGSFILE (writes the stub's os.Args to this path — observe rendered argv)
 }
 
 var (
@@ -73,6 +74,9 @@ func optsEnvMap(o Options) map[string]string {
 	}
 	if o.Stderr != "" {
 		m["STAGEHAND_STUB_STDERR"] = o.Stderr
+	}
+	if o.ArgsFile != "" {
+		m["STAGEHAND_STUB_ARGSFILE"] = o.ArgsFile
 	}
 	if o.Script != "" {
 		m["STAGEHAND_STUB_SCRIPT"] = o.Script

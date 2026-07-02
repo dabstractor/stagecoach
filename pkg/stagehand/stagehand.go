@@ -444,7 +444,11 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	}
 
 	resolved := deps.Manifest.Resolve()
-	model := cfg.Model
+	// FR-R3: resolve the message role so --message-model / [role.message] drive Render.
+	// No message override ⇒ (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.
+	// Provider is discarded (manifest is deps.Manifest, selected upstream by buildDeps; P1.M2.T2.S1).
+	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
+	model := msgModel
 	if model == "" {
 		model = *resolved.DefaultModel
 	}
@@ -464,7 +468,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			payload = retryInstr + "\n\n" + payload
 		}
 
-		spec, rerr := deps.Manifest.Render(cfg.Model, sysPrompt, payload, cfg.Reasoning)
+		spec, rerr := deps.Manifest.Render(msgModel, sysPrompt, payload, msgReasoning)
 		if rerr != nil {
 			return Result{}, fmt.Errorf("render: %w", rerr)
 		}

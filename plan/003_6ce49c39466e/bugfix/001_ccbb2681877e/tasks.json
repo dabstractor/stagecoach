@@ -59,21 +59,21 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Issue 2 — Resolve message role on the single-commit path",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Per-role message overrides (--message-model / --message-provider / --message-reasoning, [role.message]) are silently ignored on the single-commit path. Both entry points (generate.CommitStaged at generate.go:196 and pkg/stagehand.runPipeline at stagehand.go:467) pass the global cfg.Model/cfg.Reasoning directly to Render, bypassing config.ResolveRoleModel(\"message\"). Additionally, buildDeps (stagehand.go:316) selects the manifest from the global cfg.Provider, so --message-provider picks the wrong manifest. The multi-commit path resolves correctly (message.go:103). Fix all three fields (provider, model, reasoning) on the single path.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Resolve message model and reasoning in single-commit Render calls",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Thread config.ResolveRoleModel(\"message\", cfg) into both single-commit Render call sites so that --message-model and --message-reasoning (and [role.message] model/reasoning) drive the generated commit instead of the global defaults. When no message override is set, ResolveRoleModel returns (cfg.Provider, cfg.Model, cfg.Reasoning) — identical to current behavior (back-compatible).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Fix generate.CommitStaged and runPipeline to use ResolveRoleModel(\"message\")",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The bug is at two call sites: `internal/generate/generate.go:196` (`deps.Manifest.Render(cfg.Model, sysPrompt, payload, cfg.Reasoning)`) inside CommitStaged, and `pkg/stagehand/stagehand.go:467` (identical call) inside runPipeline. The reference pattern is `internal/decompose/message.go:103`: `_, mdl, rsn := config.ResolveRoleModel(\"message\", deps.Config)` then `Render(mdl, ..., rsn)`. Both packages already import `github.com/dustin/stagehand/internal/config` (generate.go:12, stagehand.go:16) — no new imports needed. ResolveRoleModel (roles.go:41) returns (provider, model, reasoning); when no message override it returns (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.\n2. INPUT: `cfg config.Config` (already received by both functions) which carries `cfg.Roles[\"message\"]` populated by the loaders (load.go setRoleModel/setRoleReasoning). The `config.ResolveRoleModel` function (roles.go:41).\n3. LOGIC: (A) In generate.go CommitStaged: before the dedupe loop (around line 194), add `_, msgModel, msgReasoning := config.ResolveRoleModel(\"message\", cfg)`. Change line 196 to `deps.Manifest.Render(msgModel, sysPrompt, payload, msgReasoning)`. (B) In stagehand.go runPipeline: before the loop (around line 446), add `msgProv, msgModel, msgReasoning := config.ResolveRoleModel(\"message\", cfg)`. Change line 467 to use msgModel/msgReasoning. ALSO update the `model` local var (currently `model := cfg.Model; if model == \"\" { model = *resolved.DefaultModel }` at lines 446-448) to use msgModel (apply the same DefaultModel fallback to msgModel). Update `Result.Model` at lines 520 and 555 to use the resolved model. The resolved provider (msgProv) is handled separately by P1.M2.T2.S1 (buildDeps manifest selection). TEST (implicit TDD): create a stub Manifest whose Render records the received (model, reasoning). Set `cfg.Roles[\"message\"] = config.RoleConfig{Model: \"haiku\", Reasoning: \"high\"}` with `cfg.Model == \"\"`/`cfg.Reasoning == \"\"`. Run CommitStaged and assert the stub received model=\"haiku\", reasoning=\"high\". Repeat for runPipeline (dryRun path) asserting Result.Model == \"haiku\". Then assert the no-override case (cfg.Roles empty) still passes cfg.Model — regression-safe.\n4. OUTPUT: --message-model / --message-reasoning / [role.message] model|reasoning now drive the single-commit path's Render. Consumed by both CommitStaged and runPipeline.\n5. DOCS: none — no user-facing/config/API surface change beyond fixing the already-documented FR-R3 behavior. (README/cli.md already document these flags; they simply start working.)",
@@ -90,14 +90,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Resolve message provider for manifest selection on the single path",
-              "status": "Planned",
+              "status": "Ready",
               "description": "buildDeps (stagehand.go:316) selects the provider manifest from the global cfg.Provider, so --message-provider (and [role.message] provider) selects the wrong manifest. Since buildDeps is called ONLY from GenerateCommit (the single-commit entry point, confirmed by grep), resolve the message role's provider there for manifest selection. When no message-provider override, ResolveRoleModel returns cfg.Provider — back-compatible.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Use message role's provider in buildDeps for manifest selection",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -118,21 +118,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Issue 3 — Add index-sync to runSingleShortcut (FR-M11 planner-single)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The FR-M11 planner-single shortcut (runSingleShortcut, decompose.go:316) commits the frozen T_start directly via publishCommit but never re-syncs the index, leaving HEAD.tree==tStart while index==baseTree. This causes git status to report the just-committed files as staged-deletions + untracked, violating the §20.2 loop-index-cleanliness invariant. The sibling runOneFileShortcut already fixed this exact bug (decompose.go:294-300, 'CRITICAL (findings §4)'). Mirror that fix.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Add ReadTree index-sync to runSingleShortcut after publishCommit",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Insert the same index-sync (ReadTree of the committed tree) that runOneFileShortcut uses (decompose.go:294-300) into runSingleShortcut (decompose.go:316-341), immediately after publishCommit succeeds and before buildCommitResult. This is a 4-line insertion mirroring the established fix pattern. Success-only (on publish error we return early).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Add ReadTree(treePrime) index-sync + regression test asserting clean git status",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: `runSingleShortcut` (internal/decompose/decompose.go:316-341) commits `treePrime` (== tStart, assigned line 319, never reassigned) via `publishCommit` (line 332) then goes straight to `buildCommitResult` (line 337) — NO index sync. `publishCommit` (message.go:197) does CommitTree + UpdateRefCAS (touches HEAD only, NOT index). `FreezeWorkingTree` (git.go:1223) reset the index to baseTree. So after success: HEAD.tree==tStart but index==baseTree ⇒ dirty `git status`. The sibling `runOneFileShortcut` (decompose.go:280-314) fixed this at lines 294-300 with `deps.Git.ReadTree(ctx, tStart)` wrapped in an ErrDecomposeFailed error. `ReadTree` (git.go:131) replaces the index with the tree's contents (MUTATES index only). `ErrDecomposeFailed` is in scope (decompose.go:28). `fmt` is already imported. `treePrime == tStart` so ReadTree(treePrime) is identical to the reference fix.\n2. INPUT: The `runSingleShortcut` function at decompose.go:316. The `deps.Git.ReadTree(ctx, tree string) error` primitive (git.go:131). The `treePrime` local variable (line 319). The `ErrDecomposeFailed` sentinel error (decompose.go:28).\n3. LOGIC: Insert the following block between decompose.go lines 336 (after the publishCommit error-return block closes) and 337 (before `cr, err := buildCommitResult(...)`): `if err := deps.Git.ReadTree(ctx, treePrime); err != nil { return DecomposeResult{}, fmt.Errorf(\"%w: single-shortcut index sync: %w\", ErrDecomposeFailed, err) }` with a comment mirroring runOneFileShortcut's 'CRITICAL (findings §4)' explanation. TEST (implicit TDD): add `TestDecompose_SingleShortcut_CleanStatus` in decompose_test.go (the existing `TestDecompose_SingleShortcut_CleanMessage` at line 314 uses an UNBORN repo and does NOT assert git status — it misses this bug). The new test must use a BORN repo (has an initial commit) with 2+ un-staged files, run Decompose in auto mode with a planner stub returning `{\"single\":true,\"message\":\"feat: add a and b\"}`, then assert `dcmStatusPorcelain(t, repo) == \"\"` using the existing helper (decompose_test.go:111). Mirror `TestDecompose_OneFileShortcut_PlannerBypassed` (decompose_test.go:1507) which asserts the same `dcmStatusPorcelain == \"\"` at line 1549. The assertion MUST fail before the fix (index==baseTree ≠ HEAD.tree) and pass after.\n4. OUTPUT: After a successful planner-single decompose run, `git status --porcelain` is empty — the §20.2 loop-index-cleanliness invariant holds. The index matches HEAD.tree.\n5. DOCS: none — internal fix enforcing an existing documented invariant (§20.2); no config/API/flag surface change.",

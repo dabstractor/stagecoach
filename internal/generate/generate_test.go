@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -400,6 +401,100 @@ func TestCommitStaged_IdempotentIndexOnFailure(t *testing.T) {
 	afterIndexFull := gitOut(t, repo, "diff", "--cached")
 	if afterIndexFull != beforeIndexFull {
 		t.Error("staged diff content changed (byte-for-byte mismatch)")
+	}
+}
+
+// sliceContains reports whether args contains s.
+func sliceContains(args []string, s string) bool {
+	for _, a := range args {
+		if a == s {
+			return true
+		}
+	}
+	return false
+}
+
+// TestCommitStaged_MessageRoleOverride verifies that per-role [role.message] overrides
+// (Model + Reasoning) reach Render end-to-end AND Result.Model reports the resolved model.
+// Uses the STAGEHAND_STUB_ARGSFILE knob to observe the exact rendered argv from the stub.
+func TestCommitStaged_MessageRoleOverride(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello")
+	stageFile(t, repo, "new.txt")
+
+	argsFile := filepath.Join(t.TempDir(), "args")
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login", ArgsFile: argsFile})
+	pflag := "--model"
+	m.ModelFlag = &pflag
+	m.ReasoningLevels = map[string][]string{"high": {"--thinking", "high"}}
+	dm := "gpt-5.4"
+	m.DefaultModel = &dm
+
+	cfg := config.Defaults()
+	cfg.Roles = map[string]config.RoleConfig{"message": {Model: "haiku", Reasoning: "high"}}
+	// cfg.Model=="" && cfg.Reasoning=="" → ResolveRoleModel returns the role overrides
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+
+	// Result.Model must reflect the message role override.
+	if res.Model != "haiku" {
+		t.Errorf("Result.Model = %q, want %q", res.Model, "haiku")
+	}
+
+	// Verify the rendered argv contains --model haiku and the reasoning token.
+	raw, _ := os.ReadFile(argsFile)
+	args := strings.Split(string(raw), "\x00")
+	if !sliceContains(args, "--model") || !sliceContains(args, "haiku") {
+		t.Errorf("Render did not receive message model haiku; args=%v", args)
+	}
+	if !sliceContains(args, "--thinking") || !sliceContains(args, "high") {
+		t.Errorf("Render did not receive message reasoning high; args=%v", args)
+	}
+}
+
+// TestCommitStaged_NoMessageOverride_Regression verifies that with cfg.Roles empty (no per-role
+// override), CommitStaged passes cfg.Model to Render and Result.Model == cfg.Model — identical
+// to the pre-fix behavior (back-compat regression guard).
+func TestCommitStaged_NoMessageOverride_Regression(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello")
+	stageFile(t, repo, "new.txt")
+
+	argsFile := filepath.Join(t.TempDir(), "args")
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login", ArgsFile: argsFile})
+
+	pflag := "--model"
+	m.ModelFlag = &pflag
+
+	cfg := config.Defaults()
+	cfg.Model = "openrouter/gpt-5.4"
+	// cfg.Roles == nil → ResolveRoleModel returns ("", cfg.Model, "") — back-compat
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+
+	if res.Model != "openrouter/gpt-5.4" {
+		t.Errorf("Result.Model = %q, want %q", res.Model, "openrouter/gpt-5.4")
+	}
+
+	raw, _ := os.ReadFile(argsFile)
+	args := strings.Split(string(raw), "\x00")
+	if !sliceContains(args, "--model") || !sliceContains(args, "openrouter/gpt-5.4") {
+		t.Errorf("Render did not receive global model; args=%v", args)
+	}
+	if sliceContains(args, "--thinking") {
+		t.Errorf("Render unexpectedly has a reasoning token; args=%v", args)
 	}
 }
 

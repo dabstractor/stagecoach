@@ -1138,3 +1138,88 @@ func TestDecompose_StagerOverride(t *testing.T) {
 		t.Errorf("res.Commits = %d entries, want 0 (ResolveRoles failed pre-loop)", len(res.Commits))
 	}
 }
+
+// TestGenerateCommit_MessageRoleOverride_DryRun verifies that per-role [role.message] overrides
+// (Model) reach the runPipeline path and Result.Model reports the resolved model.
+// Uses DryRun:true to exercise runPipeline without creating a commit.
+func TestGenerateCommit_MessageRoleOverride_DryRun(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+
+	// Build config with message role override + stub provider registered.
+	cfg := config.Defaults()
+	cfg.Provider = "stub"
+	cfg.Roles = map[string]config.RoleConfig{"message": {Model: "haiku", Reasoning: "high"}}
+	cfg.Providers = map[string]map[string]any{
+		"stub": {
+			"command":          bin,
+			"prompt_delivery":  "stdin",
+			"output":           "raw",
+			"strip_code_fence": true,
+			"env": map[string]any{
+				"STAGEHAND_STUB_OUT": "feat: with override",
+			},
+		},
+	}
+
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "data")
+	stageFile(t, repo, "new.txt")
+
+	wd, _ := os.Getwd()
+	os.Chdir(repo)
+	t.Cleanup(func() { os.Chdir(wd) })
+
+	// DryRun forces the runPipeline path.
+	res, err := GenerateCommit(context.Background(), Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun: %v", err)
+	}
+	if res.CommitSHA != "" {
+		t.Errorf("CommitSHA = %q, want empty (DryRun)", res.CommitSHA)
+	}
+	if res.Model != "haiku" {
+		t.Errorf("Result.Model = %q, want %q (message role override)", res.Model, "haiku")
+	}
+}
+
+// TestGenerateCommit_NoMessageOverride_Regression verifies that with cfg.Roles empty (no per-role
+// override), Result.Model == cfg.Model — identical to the pre-fix behavior.
+func TestGenerateCommit_NoMessageOverride_Regression(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+
+	cfg := config.Defaults()
+	cfg.Provider = "stub"
+	cfg.Model = "openrouter/gpt-5.4"
+	cfg.Providers = map[string]map[string]any{
+		"stub": {
+			"command":          bin,
+			"prompt_delivery":  "stdin",
+			"output":           "raw",
+			"strip_code_fence": true,
+			"env": map[string]any{
+				"STAGEHAND_STUB_OUT": "feat: no override",
+			},
+		},
+	}
+
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "data")
+	stageFile(t, repo, "new.txt")
+
+	wd, _ := os.Getwd()
+	os.Chdir(repo)
+	t.Cleanup(func() { os.Chdir(wd) })
+
+	// DryRun exercises runPipeline; no Roles set → ResolveRoleModel returns globals.
+	res, err := GenerateCommit(context.Background(), Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun: %v", err)
+	}
+	if res.Model != "openrouter/gpt-5.4" {
+		t.Errorf("Result.Model = %q, want %q (global model, no override)", res.Model, "openrouter/gpt-5.4")
+	}
+}
