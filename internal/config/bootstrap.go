@@ -215,6 +215,8 @@ const bootstrapHeader = `# Stagehand configuration file (populated bootstrap).
 #   STAGEHAND_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
 #   STAGEHAND_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
 #   STAGEHAND_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
+#   STAGEHAND_REASONING                  global reasoning effort: off|low|medium|high (PRD §9.8 FR35, §16.2)
+#   STAGEHAND_<ROLE>_REASONING           per-role reasoning override (role = planner|stager|message|arbiter)
 #   STAGEHAND_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
 #
 # Git config keys (PRD §9.8 FR36 / §16.3) — alternative to this file, scoped to one repo:

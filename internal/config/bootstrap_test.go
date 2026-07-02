@@ -183,6 +183,16 @@ func TestGenerateBootstrapConfig_NamedProvider(t *testing.T) {
 	}
 }
 
+// TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars guards Issue 4: the generated config
+// header must document the FR-R6 reasoning env vars (global + per-role), matching docs/cli.md.
+func TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars(t *testing.T) {
+	content := buildBootstrapConfig("pi", nil)
+	assertContains(t, content,
+		"STAGEHAND_REASONING",
+		"STAGEHAND_<ROLE>_REASONING",
+	)
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
