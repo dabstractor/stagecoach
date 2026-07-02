@@ -182,7 +182,7 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 	// (5) Safety cap is enforced inside callPlanner (auto mode). Forced mode: user asserted N — no cap.
 
 	// (6) The loop (1-deep overlap, FR-M8 empty-skip, serialized CAS, FR-M12 isolation).
-	commits, chainData, err := runLoop(ctx, deps, out.Commits, baseTree, preRunHEAD, isUnborn)
+	commits, chainData, err := runLoop(ctx, deps, out.Commits, baseTree, tStart, preRunHEAD, isUnborn)
 	if err != nil {
 		// FR-M12: partial failures (rescue/CAS) AND hard failures return the partial commits that
 		// already landed (0..i-1). The arbiter does NOT run on a loop abort (§18.3).
@@ -279,6 +279,13 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 // It returns the ordered []CommitResult (oldest first) + the parallel []ChainEntry (for resolveArbiter).
 // On any error it returns the PARTIAL commits that already landed (0..i-1) — they are real and stand.
 //
+// FR-M1c FREEZE ENFORCEMENT: after each staging step (invokeStagerRetry → freezeSnapshot → tree[i]),
+// runLoop verifies tree[i] is a content-subset of T_start (only paths present in T_start, with T_start's
+// blob content) via verifyFreezeSubset. The orchestrator owns the freeze boundary — the external stager
+// is NOT trusted. On violation the run aborts HARD (non-rescue) with partial commits; mirrors the
+// ErrStagerMovedHEAD ref-axis guard (drainMsg + return partial). NOTE: the arbiter's staging (chain.go)
+// is a SEPARATE freeze surface — enforcement of that surface is out of scope for this task (contract point 3).
+//
 // Algorithm (§13.6.3 + FR-M12): for each concept i — stage[i] with retry-once-then-empty (msg[i-1] in
 // flight) → freeze tree[i] → FR-M8 skip check → drain+publish msg[i-1] (FR-M12a: *RescueError →
 // FormatRescueMulti + *DecomposeRescueError; FR-M12b: *CASError → ce.Error() + abort) → launch msg[i]
@@ -288,11 +295,19 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 // Publication is strictly ordered (CAS chain). Channels are buffered(1) so goroutines never block on send.
 // On ANY error, drain the in-flight channel (<-ch) before returning (no leak). Signal uses SetSnapshot/
 // ClearSnapshot toggling (NOT RestoreDefault — one-shot+permanent, §G-RESTOREDEFAULT-ONESHOT).
-func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, baseTree, preRunHEAD string, isUnborn bool) ([]CommitResult, []ChainEntry, error) {
+func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, baseTree, tStart, preRunHEAD string, isUnborn bool) ([]CommitResult, []ChainEntry, error) {
 	var commits []CommitResult
 	var chainData []ChainEntry
 	prevTree := baseTree
 	prevSHA := preRunHEAD // CAS expected-old + parent for the next commit
+
+	// FR-M1c: T_start's changed-path set (invariant across the run) — the subset baseline every
+	// tree[i] is verified against after each staging step. Computed ONCE; any git error here aborts
+	// before any concept is processed.
+	tStartPaths, err := deps.Git.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: freeze baseline diff-tree-names: %w", ErrDecomposeFailed, err)
+	}
 
 	// launch runs generateMessage for one concept in a goroutine, returning a buffered result channel.
 	launch := func(i int, treeA, treeB string) chan msgOut {
@@ -401,6 +416,15 @@ func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, ba
 		if err != nil {
 			drainMsg(inflight)
 			return commits, nil, fmt.Errorf("%w: freeze snapshot[%d]: %w", ErrDecomposeFailed, i, err)
+		}
+
+		// FR-M1c freeze enforcement: verify tree[i] is a content-subset of T_start (only T_start
+		// paths, with T_start content). The orchestrator owns the freeze boundary — the external
+		// stager is NOT trusted. NON-RESCUE on violation: drain the in-flight message + return the
+		// partial commits that already landed (mirrors ErrStagerMovedHEAD).
+		if vErr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, i, treeI); vErr != nil {
+			drainMsg(inflight)
+			return commits, nil, vErr
 		}
 
 		// FR-M8 empty-skip: stager staged nothing new → skip commit i (no message, no publish).

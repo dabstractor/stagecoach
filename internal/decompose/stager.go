@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/prompt"
@@ -55,6 +56,23 @@ var ErrStagerFailed = errors.New("decompose: stager failed")
 // Produced by the HEAD pre/post-snapshot guard in invokeStagerRetry (decompose.go). Wrapped with %w
 // so errors.Is(err, ErrStagerMovedHEAD) is true for test assertions and exit-code mapping.
 var ErrStagerMovedHEAD = errors.New("decompose: stager moved HEAD")
+
+// ErrFreezeViolation is the sentinel for an FR-M1c FREEZE-ENFORCEMENT violation (PRD §9.14/§13.6.1
+// FR-M1c): the stager produced a tree[i] whose changed paths or blob contents are NOT traceable to
+// T_start — a concurrent working-tree change the external stager swept in, or a mis-behaving stager
+// that ran a bare `git add -A` staging a path or content not in T_start.
+//
+// This is the CONTENT-AXIS twin of ErrStagerMovedHEAD (the ref-axis guard): both are stager-safety
+// sentinels in stager.go, both are produced by the orchestrator (decompose.go), both are HARD
+// (non-rescue) errors. The orchestrator owns the freeze boundary, NOT the stager (PRD §19 / FR-M1c).
+//
+// NON-RESCUE: the violation is detected at tree[i] BEFORE its commit, so there is no
+// snapshot-then-CAS to rescue. Already-landed commits 0..i-1 stand (returned as partial results),
+// and the in-flight concept's staging remains in the index (FR-M12). Mirrors ErrStagerMovedHEAD's
+// drainMsg+return-partial abort pattern.
+//
+// Produced by verifyFreezeSubset; wrapped with %w so errors.Is(err, ErrFreezeViolation) is true.
+var ErrFreezeViolation = errors.New("decompose: freeze violation")
 
 // stageConcept invokes the stager agent once (TOOLED, no retry) for a single concept from the
 // planner's partition (PRD §13.6.2 / FR-M5). It is the tooled, no-retry, no-parse counterpart of
@@ -117,4 +135,71 @@ func freezeSnapshot(ctx context.Context, deps Deps) (string, error) {
 		return "", err
 	}
 	return treeSHA, nil
+}
+
+// verifyFreezeSubset verifies that tree[i] is a CONTENT-SUBSET of T_start (PRD §9.14/§13.6.1
+// FR-M1c): every path changed in diff(baseTree, treeI) must be present in tStartPaths AND carry
+// T_start's blob content. The orchestrator owns the freeze boundary — the external stager is NOT
+// trusted. This is the content-axis enforcement sibling of the ErrStagerMovedHEAD ref guard.
+//
+// The two-part check uses ONLY DiffTreeNames (no new git primitive — findings §4):
+//
+//	(A) PATH:  DiffTreeNames(baseTree, treeI) ⊆ tStartPaths (every changed path is in T_start's set).
+//	(B) CONTENT: changedTreeI ∩ DiffTreeNames(treeI, tStart) == ∅
+//	           (equivalent to `git diff treeI tStart -- <changedTreeI>` empty, done via the
+//	           intersection trick since the git.Git interface has no pathspec-restricted diff).
+//
+// Empty changedTreeI (empty staging / treeI == baseTree) ⇒ both checks trivially pass ⇒ no false
+// positive on the FR-M8 empty-skip.
+//
+// Returns nil if the subset holds; ErrFreezeViolation-wrapped error naming the offending path(s)
+// on a path-not-in-T_start or content-mismatch; ErrDecomposeFailed-wrapped error on a DiffTreeNames
+// git failure. The caller (runLoop) owns drainMsg+return-partial on violation.
+func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string, tStartPaths []string, i int, treeI string) error {
+	// (A) PATH check: tree[i]'s changed paths must all be in T_start's changed set.
+	changedTreeI, err := deps.Git.DiffTreeNames(ctx, baseTree, treeI)
+	if err != nil {
+		return fmt.Errorf("%w: freeze check diff-tree-names[%d]: %w", ErrDecomposeFailed, i, err)
+	}
+	tStartSet := pathSet(tStartPaths)
+	var extra []string
+	for _, p := range changedTreeI {
+		if _, ok := tStartSet[p]; !ok {
+			extra = append(extra, p)
+		}
+	}
+	if len(extra) > 0 {
+		return fmt.Errorf("%w: concept %d staged paths not present in T_start: %s",
+			ErrFreezeViolation, i, strings.Join(extra, ", "))
+	}
+
+	// (B) CONTENT check: tree[i]'s changed paths must carry T_start's blob content.
+	//     changedTreeI ∩ DiffTreeNames(treeI, tStart) == ∅ isolates the changed paths whose
+	//     content differs from T_start (proven equivalent to the contract's path-restricted
+	//     `git diff treeI tStart -- <changed paths>` without needing a pathspec).
+	delta, err := deps.Git.DiffTreeNames(ctx, treeI, tStart)
+	if err != nil {
+		return fmt.Errorf("%w: freeze check diff-tree-names[%d]: %w", ErrDecomposeFailed, i, err)
+	}
+	deltaSet := pathSet(delta)
+	var mismatch []string
+	for _, p := range changedTreeI {
+		if _, ok := deltaSet[p]; ok {
+			mismatch = append(mismatch, p)
+		}
+	}
+	if len(mismatch) > 0 {
+		return fmt.Errorf("%w: concept %d staged content not traceable to T_start: %s",
+			ErrFreezeViolation, i, strings.Join(mismatch, ", "))
+	}
+	return nil
+}
+
+// pathSet builds a set from a path slice for membership lookups.
+func pathSet(paths []string) map[string]struct{} {
+	s := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		s[p] = struct{}{}
+	}
+	return s
 }

@@ -609,6 +609,56 @@ func TestDecompose_StagerMovedHEAD(t *testing.T) {
 	}
 }
 
+func TestDecompose_StagerFreezeViolation(t *testing.T) {
+	// A rogue stager seam that stages a post-freeze sentinel → ErrFreezeViolation.
+	// Mirrors TestDecompose_StagerMovedHEAD (rogue stager + well-behaved stager pair).
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmCommitRaw(t, repo, "initial")        // BORN repo
+	dcmWriteFile(t, repo, "a.txt", "aaa\n") // the legit change in T_start
+
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a"})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+
+	// ROGUE seam: stages the concept path AND a post-freeze sentinel (simulating `git add -A`
+	// sweeping a concurrent change). The sentinel is written AFTER FreezeWorkingTree captured T_start.
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		dcmRunGit(t, repo, "add", "a.txt")                    // the legit concept path (in T_start)
+		dcmWriteFile(t, repo, "sentinel.txt", "concurrent\n") // appears AFTER the freeze
+		dcmRunGit(t, repo, "add", "sentinel.txt")             // stager sweeps it in (the violation)
+		return nil
+	}
+
+	_, err := Decompose(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected ErrFreezeViolation, got nil")
+	}
+	if !errors.Is(err, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sentinel.txt") {
+		t.Errorf("error missing 'sentinel.txt'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "not present in T_start") {
+		t.Errorf("error missing 'not present in T_start'; got: %s", err.Error())
+	}
+	// HEAD unchanged — only "initial" exists.
+	if got := dcmLogCount(t, repo); got != 1 {
+		t.Errorf("commit count = %d, want 1 (HEAD unchanged — only 'initial')", got)
+	}
+	// The sentinel is in no commit.
+	logOutput := dcmGitOut(t, repo, "log", "--name-only", "--format=")
+	if strings.Contains(logOutput, "sentinel.txt") {
+		t.Errorf("sentinel.txt appears in a commit — freeze violation should prevent this:\n%s", logOutput)
+	}
+}
+
 func TestDecompose_StagerGuardHappyPath(t *testing.T) {
 	// A well-behaved stager (git add, no ref mutation) completes normally — guard passes.
 	bin := stubtest.Build(t)

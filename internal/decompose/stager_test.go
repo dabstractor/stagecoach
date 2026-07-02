@@ -303,6 +303,154 @@ func TestFreezeSnapshot_MergeConflict(t *testing.T) {
 	}
 }
 
+func TestVerifyFreezeSubset_Happy(t *testing.T) {
+	// Well-behaved stager: treeI changes a.txt only (a subset of T_start with matching content).
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+	stgCommitRaw(t, repo, "initial") // baseTree = HEAD^{tree}
+
+	stgWriteFile(t, repo, "a.txt", "aaa\n")
+	stgWriteFile(t, repo, "b.txt", "bbb\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := stgGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+
+	// Stage only a.txt → WriteTree → treeI (a.txt only, subset of T_start).
+	stgRunGit(t, repo, "add", "a.txt")
+	treeI, err := g.WriteTree(ctx)
+	if err != nil {
+		t.Fatalf("WriteTree: %v", err)
+	}
+
+	tStartPaths, err := g.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		t.Fatalf("DiffTreeNames(base, tStart): %v", err)
+	}
+
+	deps := Deps{Git: g}
+	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI); err != nil {
+		t.Fatalf("verifyFreezeSubset(happy): %v", err)
+	}
+}
+
+func TestVerifyFreezeSubset_PathViolation(t *testing.T) {
+	// Rogue stager stages a sentinel not in T_start → path check fires.
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+	stgCommitRaw(t, repo, "initial")
+
+	stgWriteFile(t, repo, "a.txt", "aaa\n")
+	stgWriteFile(t, repo, "b.txt", "bbb\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := stgGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+
+	// Write a sentinel AFTER the freeze, add it → treeI has sentinel ∉ T_start.
+	stgWriteFile(t, repo, "sentinel.txt", "concurrent\n")
+	stgRunGit(t, repo, "add", "sentinel.txt")
+	treeI, err := g.WriteTree(ctx)
+	if err != nil {
+		t.Fatalf("WriteTree: %v", err)
+	}
+
+	tStartPaths, err := g.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		t.Fatalf("DiffTreeNames(base, tStart): %v", err)
+	}
+
+	deps := Deps{Git: g}
+	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI)
+	if err == nil {
+		t.Fatal("expected error for path violation, got nil")
+	}
+	if !errors.Is(err, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sentinel.txt") {
+		t.Errorf("error missing 'sentinel.txt'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "not present in T_start") {
+		t.Errorf("error missing 'not present in T_start'; got: %s", err.Error())
+	}
+}
+
+func TestVerifyFreezeSubset_ContentViolation(t *testing.T) {
+	// Rogue stager modifies a.txt to v2 (content not in T_start) → content check fires.
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+	stgCommitRaw(t, repo, "initial")
+
+	stgWriteFile(t, repo, "a.txt", "aaa\n")
+	stgWriteFile(t, repo, "b.txt", "bbb\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := stgGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+
+	// Modify a.txt to different content (not what T_start has) and stage it.
+	stgWriteFile(t, repo, "a.txt", "modified\n")
+	stgRunGit(t, repo, "add", "a.txt")
+	treeI, err := g.WriteTree(ctx)
+	if err != nil {
+		t.Fatalf("WriteTree: %v", err)
+	}
+
+	tStartPaths, err := g.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		t.Fatalf("DiffTreeNames(base, tStart): %v", err)
+	}
+
+	deps := Deps{Git: g}
+	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI)
+	if err == nil {
+		t.Fatal("expected error for content violation, got nil")
+	}
+	if !errors.Is(err, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "a.txt") {
+		t.Errorf("error missing 'a.txt'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "not traceable to T_start") {
+		t.Errorf("error missing 'not traceable to T_start'; got: %s", err.Error())
+	}
+}
+
+func TestVerifyFreezeSubset_EmptyStaging(t *testing.T) {
+	// Empty staging (treeI == baseTree) → changedTreeI is nil → both checks no-op → nil.
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+	stgCommitRaw(t, repo, "initial")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := stgGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	// treeI = baseTree (empty index → WriteTree yields empty tree if we reset first).
+	// Actually: WriteTree on a clean index (matching HEAD) yields the same tree.
+	treeI := baseTree
+	tStartPaths := []string{} // empty T_start (no changes)
+	tStart := baseTree
+
+	deps := Deps{Git: g}
+	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI); err != nil {
+		t.Fatalf("verifyFreezeSubset(empty staging): %v", err)
+	}
+}
+
 func TestStageConcept_ResolvesSubProvider(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
