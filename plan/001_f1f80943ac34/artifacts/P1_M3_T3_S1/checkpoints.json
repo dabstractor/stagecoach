@@ -1,0 +1,171 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1_M3_T3_S1_1782973603227_pre-execution_6f9829ba",
+      "taskId": "P1_M3_T3_S1",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M3_T3_S1.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-02T06:26:43.227Z"
+      },
+      "createdAt": "2026-07-02T06:26:43.227Z"
+    },
+    {
+      "id": "P1_M3_T3_S1_1782973798556_coder-response_e8e4029f",
+      "taskId": "P1_M3_T3_S1",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M3_T3_S1.md",
+        "stage": "coder-response",
+        "coderResponse": "All verification checks pass. Let me confirm the final implementation summary:\n\n**Implementation complete.** Two new files created in the existing `internal/git` package:\n\n- **`internal/git/diff.go`** — plain `package git` line (line 15, after a file-level comment mirroring `plumbing.go`), stdlib-only import (`strings`), defines:\n  - `type DiffSettings struct { MaxMdLines int; MaxDiffBytes int }` with godoc citing FR1–FR5, decisions.md §6, plan_overview.md §2.2\n  - `func capLines(s string, n int) string` — head -n N equivalent (byte-loop, inclusive Nth newline)\n  - `func capBytes(s string, n int) string` — head -c N equivalent\n  - `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)` — by-value clamp to defaults (100/300000), md capture per-file with per-file line cap, single other command with TOTAL byte cap, exact contract pathspec tokens verbatim (including literal no-star `:!.md`/`:!.markdown`), md+other concatenation no separator, `(\"\", nil)` on empty. Godoc cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1–FR5.\n\n- **`internal/git/diff_test.go`** — white-box `package git`, stdlib `fmt`/`strings`/`testing` only, composes the S2 harness, drives the real git binary. All 5 contract scenarios PASS.\n\n**Validation gates (all green):**\n| Gate | Result |\n|---|---|\n| L1 `go build ./internal/git/` | OK |\n| L2 `go vet ./internal/git/` | clean |\n| L3 `test -z \"$(gofmt -l internal/git/)\"` | clean |\n| L4 `go test ./internal/git/` | PASS (5 diff + S1/S2/T2 = 21 tests) |\n| L5 `go test ./...` / `make test` | whole-module green |\n\n**Scope/boundaries respected:** only the 2 new files exist; no tracked file modified; `go.mod`/`go.sum` untouched; `// Package git` doc appears exactly once (in `git.go`); no go-git/dep added; no `go mod tidy`; no README/docs/TOML.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\\\"\\\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\"\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-02T06:29:58.556Z"
+      },
+      "createdAt": "2026-07-02T06:29:58.556Z"
+    },
+    {
+      "id": "P1_M3_T3_S1_1782973799110_validation-gate-2_633d1b9d",
+      "taskId": "P1_M3_T3_S1",
+      "label": "After validation gate 2",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M3_T3_S1.md",
+        "stage": "validation-gate-2",
+        "coderResponse": "All verification checks pass. Let me confirm the final implementation summary:\n\n**Implementation complete.** Two new files created in the existing `internal/git` package:\n\n- **`internal/git/diff.go`** — plain `package git` line (line 15, after a file-level comment mirroring `plumbing.go`), stdlib-only import (`strings`), defines:\n  - `type DiffSettings struct { MaxMdLines int; MaxDiffBytes int }` with godoc citing FR1–FR5, decisions.md §6, plan_overview.md §2.2\n  - `func capLines(s string, n int) string` — head -n N equivalent (byte-loop, inclusive Nth newline)\n  - `func capBytes(s string, n int) string` — head -c N equivalent\n  - `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)` — by-value clamp to defaults (100/300000), md capture per-file with per-file line cap, single other command with TOTAL byte cap, exact contract pathspec tokens verbatim (including literal no-star `:!.md`/`:!.markdown`), md+other concatenation no separator, `(\"\", nil)` on empty. Godoc cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1–FR5.\n\n- **`internal/git/diff_test.go`** — white-box `package git`, stdlib `fmt`/`strings`/`testing` only, composes the S2 harness, drives the real git binary. All 5 contract scenarios PASS.\n\n**Validation gates (all green):**\n| Gate | Result |\n|---|---|\n| L1 `go build ./internal/git/` | OK |\n| L2 `go vet ./internal/git/` | clean |\n| L3 `test -z \"$(gofmt -l internal/git/)\"` | clean |\n| L4 `go test ./internal/git/` | PASS (5 diff + S1/S2/T2 = 21 tests) |\n| L5 `go test ./...` / `make test` | whole-module green |\n\n**Scope/boundaries respected:** only the 2 new files exist; no tracked file modified; `go.mod`/`go.sum` untouched; `// Package git` doc appears exactly once (in `git.go`); no go-git/dep added; no `go mod tidy`; no README/docs/TOML.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\\\"\\\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\"\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/git/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/git/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/git/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/git/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/git\t0.285s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T06:29:59.110Z"
+      },
+      "createdAt": "2026-07-02T06:29:59.110Z"
+    },
+    {
+      "id": "P1_M3_T3_S1_1782973799112_complete_f50b911c",
+      "taskId": "P1_M3_T3_S1",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M3_T3_S1.md",
+        "stage": "complete",
+        "coderResponse": "All verification checks pass. Let me confirm the final implementation summary:\n\n**Implementation complete.** Two new files created in the existing `internal/git` package:\n\n- **`internal/git/diff.go`** — plain `package git` line (line 15, after a file-level comment mirroring `plumbing.go`), stdlib-only import (`strings`), defines:\n  - `type DiffSettings struct { MaxMdLines int; MaxDiffBytes int }` with godoc citing FR1–FR5, decisions.md §6, plan_overview.md §2.2\n  - `func capLines(s string, n int) string` — head -n N equivalent (byte-loop, inclusive Nth newline)\n  - `func capBytes(s string, n int) string` — head -c N equivalent\n  - `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)` — by-value clamp to defaults (100/300000), md capture per-file with per-file line cap, single other command with TOTAL byte cap, exact contract pathspec tokens verbatim (including literal no-star `:!.md`/`:!.markdown`), md+other concatenation no separator, `(\"\", nil)` on empty. Godoc cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1–FR5.\n\n- **`internal/git/diff_test.go`** — white-box `package git`, stdlib `fmt`/`strings`/`testing` only, composes the S2 harness, drives the real git binary. All 5 contract scenarios PASS.\n\n**Validation gates (all green):**\n| Gate | Result |\n|---|---|\n| L1 `go build ./internal/git/` | OK |\n| L2 `go vet ./internal/git/` | clean |\n| L3 `test -z \"$(gofmt -l internal/git/)\"` | clean |\n| L4 `go test ./internal/git/` | PASS (5 diff + S1/S2/T2 = 21 tests) |\n| L5 `go test ./...` / `make test` | whole-module green |\n\n**Scope/boundaries respected:** only the 2 new files exist; no tracked file modified; `go.mod`/`go.sum` untouched; `// Package git` doc appears exactly once (in `git.go`); no go-git/dep added; no `go mod tidy`; no README/docs/TOML.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\\\"\\\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Implemented P1.M3.T3.S1: created internal/git/diff.go (plain `package git`, stdlib-only import `strings`) defining exported `DiffSettings{MaxMdLines int; MaxDiffBytes int}`, unexported `capLines` (head -n N) and `capBytes` (head -c N) helpers, and `func (g *Git) StagedDiff(cfg DiffSettings) (string, error)`. StagedDiff faithfully ports the commit-pi md-vs-other capture: by-value clamp of non-positive cfg to defaults (100/300000); markdown captured PER-FILE via `git diff --cached -- <file>` head -n capped per-file then concatenated; everything-else captured in ONE `git diff --cached --` invocation with the EXACT contract exclusion pathspec tokens (including the faithful literal no-star `:!.md`/`:!.markdown`) head -c capped TOTAL; concatenated markdown-first with no separator; returns (\"\", nil) — NOT an error — when nothing staged. Created internal/git/diff_test.go (white-box `package git`, stdlib testing only) covering all 5 contract MOCKING scenarios via the shipped S2 harness + the REAL git binary. All 5 validation gates pass: go build OK, go vet clean, gofmt empty, go test ./internal/git/ PASS (5 new + 16 existing S1/S2/T2 tests), go test ./... whole-module green. Scope boundaries verified: only the 2 new files created; git.go/git_test.go/gittestutil_test.go/plumbing*.go, main.go, Makefile, go.mod, go.sum, internal/ui, internal/provider unchanged; no go-git/testify/dep added; no go mod tidy; `// Package git` appears exactly once (in git.go); Mode A godoc on DiffSettings and StagedDiff cites PRD §22.3/§19, reference_impl.md §1, external_deps.md §D, decisions.md §9, FR1-FR5."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/git/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/git/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/git/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/git/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/git\t0.285s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T06:29:59.112Z"
+      },
+      "createdAt": "2026-07-02T06:29:59.112Z"
+    }
+  ],
+  "lastModified": "2026-07-02T06:29:59.112Z"
+}

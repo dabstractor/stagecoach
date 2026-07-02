@@ -219,14 +219,14 @@
               "id": "P1.M3.T3",
               "type": "Task",
               "title": "Diff capture",
-              "status": "Planned",
+              "status": "Complete",
               "description": "StagedDiff(cfg) reproducing commit-pi's md-vs-other capture with per-file md line cap, total byte cap, and pathspec exclusions (FR1-FR5).",
               "subtasks": [
                 {
                   "id": "P1.M3.T3.S1",
                   "type": "Subtask",
                   "title": "internal/git/diff.go — StagedDiff(cfg) (string, error)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1"
