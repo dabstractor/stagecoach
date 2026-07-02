@@ -99,15 +99,6 @@ func dcmLogCount(t *testing.T, dir string) int {
 	return n
 }
 
-// dcmIsUnborn reports whether the repo has zero commits.
-func dcmIsUnborn(t *testing.T, dir string) bool {
-	t.Helper()
-	// git rev-parse HEAD exits 128 on unborn
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
-	out, err := cmd.CombinedOutput()
-	return err != nil && strings.Contains(string(out), "HEAD")
-}
-
 // dcmStatusPorcelain returns git status --porcelain output.
 func dcmStatusPorcelain(t *testing.T, dir string) string {
 	t.Helper()

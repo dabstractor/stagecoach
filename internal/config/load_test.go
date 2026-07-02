@@ -396,8 +396,12 @@ func TestLoadFlags_PerRole(t *testing.T) {
 func TestLoadFlags_Decompose(t *testing.T) {
 	cfg := Defaults()
 	fs := newFlagSet(t)
-	fs.Set("commits", "3")
-	fs.Set("max-commits", "8")
+	if err := fs.Set("commits", "3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Set("max-commits", "8"); err != nil {
+		t.Fatal(err)
+	}
 	loadFlags(&cfg, fs)
 	if cfg.Commits != 3 {
 		t.Errorf("Commits=%d want 3", cfg.Commits)
@@ -412,7 +416,9 @@ func TestLoadFlags_Decompose(t *testing.T) {
 	// --no-decompose alias → Single=true
 	cfg2 := Defaults()
 	fs2 := newFlagSet(t)
-	fs2.Set("no-decompose", "true")
+	if err := fs2.Set("no-decompose", "true"); err != nil {
+		t.Fatal(err)
+	}
 	loadFlags(&cfg2, fs2)
 	if !cfg2.Single {
 		t.Errorf("Single=false want true (--no-decompose alias)")
@@ -653,7 +659,9 @@ func TestLoad_CommitsOneNormalizesSingle(t *testing.T) {
 	// flag path: --commits 1 → Single=true
 	os.Unsetenv("STAGEHAND_COMMITS")
 	fs := newFlagSet(t)
-	fs.Set("commits", "1")
+	if err := fs.Set("commits", "1"); err != nil {
+		t.Fatal(err)
+	}
 	cfg2, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
@@ -668,7 +676,9 @@ func TestLoad_PerRoleFlagBeatsEnv(t *testing.T) {
 	chdir(t, repo)
 	t.Setenv("STAGEHAND_PLANNER_MODEL", "env-model")
 	fs := newFlagSet(t)
-	fs.Set("planner-model", "flag-model")
+	if err := fs.Set("planner-model", "flag-model"); err != nil {
+		t.Fatal(err)
+	}
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)

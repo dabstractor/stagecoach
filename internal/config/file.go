@@ -237,7 +237,7 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if len(fc.Role) > 0 {
 		c.Roles = make(map[string]RoleConfig, len(fc.Role))
 		for role, frc := range fc.Role {
-			c.Roles[role] = RoleConfig{Provider: frc.Provider, Model: frc.Model, Reasoning: frc.Reasoning}
+			c.Roles[role] = RoleConfig(frc)
 		}
 	}
 	c.Providers = fc.Provider // nil-safe: nil if no [provider] table
