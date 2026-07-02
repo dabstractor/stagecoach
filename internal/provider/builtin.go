@@ -34,8 +34,8 @@ func BuiltinManifests() map[string]Manifest {
 // (provider=zai, model=glm-5-turbo) is a documented PERSONAL OVERRIDE, not the shipped default —
 // see TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride.
 //
-// NOTE: ReasoningLevels is nil (absent) in the shipped default. FR-D5 requires verification
-// before populating — FR-R6 makes nil a graceful no-op, and S1's call sites pass reasoning="".
+// NOTE: ReasoningLevels is populated — pi `--thinking` high/medium/low (verified `pi --help`,
+// external_deps.md §pi); off ⇒ no-op (no entry). minimal/xhigh have no stagehand level.
 // Per FR-D2 (PRD §9.16/§12.3), the shipped pi default is DECOUPLED from any one subscription:
 // default_model is "". config init fills per-role models from the FR-D4 table; the user/config
 // picks the backend (inference provider) via the model slash-prefix (v3 FR-R5b).
@@ -50,9 +50,6 @@ func builtinPi() Manifest {
 		DefaultModel:     strPtr(""), // FR-D2: was glm-5-turbo; decoupled from any one subscription
 		SystemPromptFlag: strPtr("--system-prompt"),
 		ProviderFlag:     strPtr("--provider"),
-		// ReasoningLevels: nil — TODO(FR-D5): populate reasoning_levels tokens once verified
-		// (e.g. claude --thinking-effort low|medium|high; verify per provider's --help/docs).
-		// nil is safe: FR-R6 makes it a graceful no-op (call sites pass reasoning="" in S1).
 		BareFlags: []string{
 			"--no-tools",
 			"--no-extensions",
@@ -60,6 +57,14 @@ func builtinPi() Manifest {
 			"--no-prompt-templates",
 			"--no-context-files",
 			"--no-session",
+		},
+		// REASONING LEVELS (v3; §12.1, FR-R6). pi exposes `--thinking off|minimal|low|medium|high|xhigh`
+		// (verified `pi --help`, external_deps.md §pi). off ⇒ no entry (natural zero no-op); stagehand's
+		// level set is off|low|medium|high, so minimal/xhigh are not mapped. Tokens append after the model flag.
+		ReasoningLevels: map[string][]string{
+			"high":   {"--thinking", "high"},
+			"medium": {"--thinking", "medium"},
+			"low":    {"--thinking", "low"},
 		},
 		// TOOLED MODE (v2 §11.5 — the stager role). pi has NO git-scoped allowlist flag (--help shows only
 		// the all-or-nothing --no-tools), so pi's tooled profile = bare MINUS --no-tools: pi's native tool

@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Issue 1 — Populate FR-R6 reasoning_levels in built-in providers",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The FR-R6 reasoning feature ships completely inert because all 8 built-in providers leave ReasoningLevels nil, making Render's reasoning-token branch (render.go:126) dead code. Populate the verified reasoning tokens for the two providers that support a thinking-effort control (pi: --thinking, claude: --effort). The config plumbing, Render guard, and defaultRoleReasoning are all correct — only the manifest data table is missing.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Populate ReasoningLevels for pi and claude built-in providers",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add verified ReasoningLevels map literals to builtinPi() and builtinClaude() in internal/provider/builtin.go so that Render(model, sys, payload, reasoning) appends the provider's thinking-effort tokens when a reasoning level resolves. Leave genuinely non-reasoning providers (gemini, agy, qwen-code, opencode, codex, cursor) nil — FR-R6 permits an honest per-provider no-op.",
               "subtasks": [
                 {
@@ -40,7 +40,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Populate pi ReasoningLevels with verified --thinking tokens",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Verified via `pi --help` on this machine (architecture/external_deps.md): pi uses `--thinking <level>` with values off|minimal|low|medium|high|xhigh. This resolves the long-standing TODO(FR-D5) at builtin.go:52-55. The Render guard at render.go:126 and the config defaultRoleReasoning (planner=high, roles.go:7-11) are CORRECT — only the manifest data is missing.\n2. INPUT: The `builtinPi()` constructor at `internal/provider/builtin.go:41` returns a Manifest with ReasoningLevels nil, carrying a TODO comment at lines 52-55: 'ReasoningLevels: nil — TODO(FR-D5): populate reasoning_levels tokens once verified'. The struct field is `ReasoningLevels map[string][]string` (manifest.go:89).\n3. LOGIC: Remove the TODO comment (lines 52-55) and add a `ReasoningLevels: map[string][]string{...}` literal to the pi Manifest struct, inserting it after the `BareFlags` block (around line 61, before the TooledFlags comment). The map must be: `{\"high\": {\"--thinking\", \"high\"}, \"medium\": {\"--thinking\", \"medium\"}, \"low\": {\"--thinking\", \"low\"}}`. NOTE: pi's `--thinking` also accepts 'minimal' and 'xhigh' but stagehand's level set is off|low|medium|high — map only the overlapping levels; 'off' is the natural zero-value no-op (not in the map). TEST (implicit TDD): add a test asserting `BuiltinManifests()[\"pi\"].ReasoningLevels[\"high\"]` is non-empty AND that `piManifest.Render(\"zai/glm-5.2\", \"\", \"\", \"high\")` produces Args containing `--thinking` then `high`. Also verify reasoning=\"medium\"/\"low\" produce the matching tokens, and reasoning=\"off\"/\"\" produce nothing.\n4. OUTPUT: The pi built-in manifest now emits `--thinking <level>` tokens on Render when reasoning resolves. The shipped default `planner = high` (roles.go defaultRoleReasoning) now has an observable effect on the planner path.\n5. DOCS: [Mode A] Update docs/providers.md to note pi now populates reasoning_levels (alongside the claude update from P1.M1.T1.S1). This rides WITH the work — do not create a separate docs subtask.",
@@ -66,14 +66,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Resolve message model and reasoning in single-commit Render calls",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Thread config.ResolveRoleModel(\"message\", cfg) into both single-commit Render call sites so that --message-model and --message-reasoning (and [role.message] model/reasoning) drive the generated commit instead of the global defaults. When no message override is set, ResolveRoleModel returns (cfg.Provider, cfg.Model, cfg.Reasoning) — identical to current behavior (back-compatible).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Fix generate.CommitStaged and runPipeline to use ResolveRoleModel(\"message\")",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The bug is at two call sites: `internal/generate/generate.go:196` (`deps.Manifest.Render(cfg.Model, sysPrompt, payload, cfg.Reasoning)`) inside CommitStaged, and `pkg/stagehand/stagehand.go:467` (identical call) inside runPipeline. The reference pattern is `internal/decompose/message.go:103`: `_, mdl, rsn := config.ResolveRoleModel(\"message\", deps.Config)` then `Render(mdl, ..., rsn)`. Both packages already import `github.com/dustin/stagehand/internal/config` (generate.go:12, stagehand.go:16) — no new imports needed. ResolveRoleModel (roles.go:41) returns (provider, model, reasoning); when no message override it returns (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.\n2. INPUT: `cfg config.Config` (already received by both functions) which carries `cfg.Roles[\"message\"]` populated by the loaders (load.go setRoleModel/setRoleReasoning). The `config.ResolveRoleModel` function (roles.go:41).\n3. LOGIC: (A) In generate.go CommitStaged: before the dedupe loop (around line 194), add `_, msgModel, msgReasoning := config.ResolveRoleModel(\"message\", cfg)`. Change line 196 to `deps.Manifest.Render(msgModel, sysPrompt, payload, msgReasoning)`. (B) In stagehand.go runPipeline: before the loop (around line 446), add `msgProv, msgModel, msgReasoning := config.ResolveRoleModel(\"message\", cfg)`. Change line 467 to use msgModel/msgReasoning. ALSO update the `model` local var (currently `model := cfg.Model; if model == \"\" { model = *resolved.DefaultModel }` at lines 446-448) to use msgModel (apply the same DefaultModel fallback to msgModel). Update `Result.Model` at lines 520 and 555 to use the resolved model. The resolved provider (msgProv) is handled separately by P1.M2.T2.S1 (buildDeps manifest selection). TEST (implicit TDD): create a stub Manifest whose Render records the received (model, reasoning). Set `cfg.Roles[\"message\"] = config.RoleConfig{Model: \"haiku\", Reasoning: \"high\"}` with `cfg.Model == \"\"`/`cfg.Reasoning == \"\"`. Run CommitStaged and assert the stub received model=\"haiku\", reasoning=\"high\". Repeat for runPipeline (dryRun path) asserting Result.Model == \"haiku\". Then assert the no-override case (cfg.Roles empty) still passes cfg.Model — regression-safe.\n4. OUTPUT: --message-model / --message-reasoning / [role.message] model|reasoning now drive the single-commit path's Render. Consumed by both CommitStaged and runPipeline.\n5. DOCS: none — no user-facing/config/API surface change beyond fixing the already-documented FR-R3 behavior. (README/cli.md already document these flags; they simply start working.)",

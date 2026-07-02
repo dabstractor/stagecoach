@@ -408,6 +408,30 @@ func TestRender_ReasoningTokensAppended(t *testing.T) {
 	}
 }
 
+func TestRender_PiReasoningThinkingTokens(t *testing.T) {
+	m := builtinPi() // the REAL built-in (not synthetic)
+	// high/medium/low → --thinking <level> appended after the model flag (FR-R5b fold first)
+	for _, lvl := range []string{"high", "medium", "low"} {
+		s, err := m.Render("zai/glm-5.2", "", "", lvl) // folds to --provider zai --model glm-5.2
+		if err != nil {
+			t.Fatalf("%s: %v", lvl, err)
+		}
+		if !containsPair(s.Args, "--thinking", lvl) {
+			t.Errorf("pi %s: want --thinking %s in %v", lvl, lvl, s.Args)
+		}
+	}
+	// off / "" → no --thinking token, never an error (FR-R6 no-op)
+	for _, lvl := range []string{"off", ""} {
+		s, err := m.Render("zai/glm-5.2", "", "", lvl)
+		if err != nil {
+			t.Fatalf("%q: %v", lvl, err)
+		}
+		if containsToken(s.Args, "--thinking") {
+			t.Errorf("pi %q: want NO --thinking token in %v", lvl, s.Args)
+		}
+	}
+}
+
 func TestRender_ClaudeReasoningEffortTokens(t *testing.T) {
 	m := builtinClaude() // the REAL built-in (not synthetic)
 	// high/medium/low → --effort <level> appended after the model flag

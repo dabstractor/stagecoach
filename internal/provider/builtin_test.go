@@ -40,6 +40,11 @@ tooled_flags = [
 ]
 output = "raw"
 strip_code_fence = true
+
+[reasoning_levels]
+high = ["--thinking", "high"]
+medium = ["--thinking", "medium"]
+low = ["--thinking", "low"]
 `
 
 const claudeTOML = `name = "claude"
@@ -277,6 +282,14 @@ func TestBuiltinManifests_PiFields(t *testing.T) {
 	assertStr(t, "Output", m.Output, "raw")
 	if m.StripCodeFence == nil || *m.StripCodeFence != true {
 		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+
+	// ReasoningLevels: high/medium/low populated (verified pi --thinking); off absent (no-op)
+	if m.ReasoningLevels == nil || len(m.ReasoningLevels["high"]) == 0 {
+		t.Errorf("ReasoningLevels missing 'high' entry: %v", m.ReasoningLevels)
+	}
+	if _, ok := m.ReasoningLevels["off"]; ok {
+		t.Errorf("ReasoningLevels should NOT have an 'off' entry (off ⇒ no-op)")
 	}
 
 	// Absent fields → nil

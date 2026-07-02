@@ -100,3 +100,12 @@ strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent 
 # output -> "raw", strip_code_fence -> true, retry_instruction ->
 # "Output ONLY the commit message. No preamble, no markdown, no quotes.",
 # and print_flag/model_flag/etc -> "" (no flag emitted).
+
+# --- reasoning levels (v3; §12.1, FR-R6) ---
+# pi exposes `--thinking off|minimal|low|medium|high|xhigh` (verified `pi --help`, external_deps.md §pi).
+# off has no entry ⇒ graceful no-op (FR-R6); minimal/xhigh have no stagehand level. Tokens append
+# after the model flag at render.
+[reasoning_levels]
+high = ["--thinking", "high"]
+medium = ["--thinking", "medium"]
+low = ["--thinking", "low"]
