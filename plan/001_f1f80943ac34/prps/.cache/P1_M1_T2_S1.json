@@ -1,0 +1,97 @@
+{
+  "taskId": "P1.M1.T2.S1",
+  "taskHash": "6145904bcf9388f883f30ba645889d683595dcda4ba71cf109e8c2644a92a289",
+  "createdAt": 1782956244164,
+  "accessedAt": 1782956244164,
+  "version": "1.0",
+  "prp": {
+    "taskId": "P1_M1_T2_S1",
+    "objective": "Create internal/ui/exitcode.go defining the five canonical exit-code constants (ui.ExitSuccess=0, ui.ExitError=1, ui.ExitNothingToCommit=2, ui.ExitRescue=3, ui.ExitTimeout=124) per PRD §15.4, as pure typed-int constants with no logic and no imports, plus a golden table-driven test (internal/ui/exitcode_test.go) asserting the exact integer values so downstream cmd/stagehand error mapping (M7.T2.S1) and rescue/timeout paths (M6) never drift. This is the first file under internal/ and the repo's first _test.go, establishing the stdlib `testing` pattern. DOCS impact: none (exit codes already documented in PRD §15.4; README is Mode B, M8.T4).",
+    "context": "# PRP — P1.M1.T2.S1: internal/ui/exitcode.go — canonical exit codes\n\n## Goal\n\n**Feature Goal**: Define the single, canonical set of process exit-code constants for stagehand in `internal/ui/exitcode.go`, frozen to the exact integer values mandated by PRD §15.4, so every error/timeout/rescue/nothing-to-commit path across the binary maps to the same codes.\n\n**Deliverable**: A new file `internal/ui/exitcode.go` (package `ui`) exporting five typed `int` constants (`ExitSuccess`, `ExitError`, `ExitNothingToCommit`, `ExitRescue`, `ExitTimeout`) with explicit integer literals, plus `internal/ui/exitcode_test.go` — a golden, table-driven test asserting each constant equals its exact PRD §15.4 value. This is the first file under `internal/` and the first `_test.go` in the repo.\n\n**Success Definition**: `go test ./internal/ui/` passes and asserts ExitSuccess==0, ExitError==1, ExitNothingToCommit==2, ExitRescue==3, ExitTimeout==124 exactly; `go build ./internal/ui/` and `go vet ./internal/ui/` are clean; the file imports nothing (pure constants). `cmd/stagehand` (and any future package) can import `github.com/dustin/stagehand/internal/ui` and pass these consts to `os.Exit`.\n\n## Why\n\n- **PRD §15.4 is a binding fixed code table.** Users, shell scripts, and CI read stagehand's exit code to branch behavior (e.g. `stagehand && ...`, `timeout 120 stagehand`). A silent shift (2↔3, or Timeout becoming 4) breaks every consumer.\n- **Cross-task contract freeze.** decisions.md §3 (the two-nested-loop orchestrator) routes every failure to a RESCUE branch; decisions.md §7 lists the CAS-failure path as \"exit 1\"; M7.T2.S1 maps cobra RunE errors to these codes; M6.T2.S1 (rescue) and the timeout path return ExitRescue / ExitTimeout. All of that depends on these constants being stable — hence the golden test.\n- **Establishes the `internal/ui` package** (sibling `output.go` arrives in P1.M1.T2.S2) and the repo-wide testing pattern (stdlib `testing`, table-driven).\n- **124 is deliberate**, not arbitrary: it mirrors the GNU `timeout` utility's own exit-124-on-timeout convention (PRD §15.4), so a stagehand invocation wrapped under `timeout` reports timeout consistently.\n\n## What (technical requirements)\n\n1. New file `internal/ui/exitcode.go`, `package ui`.\n2. Five exported, typed `int` constants with EXPLICIT integer literals (NOT iota):\n   - `ExitSuccess = 0`\n   - `ExitError = 1`\n   - `ExitNothingToCommit = 2`\n   - `ExitRescue = 3`\n   - `ExitTimeout = 124`\n3. Each constant carries a doc comment naming the PRD §15.4 meaning and at least one triggering condition.\n4. No imports, no functions, no logic — a pure constants file.\n5. New file `internal/ui/exitcode_test.go` (`package ui`, white-box) with a table-driven golden test asserting the exact values above.\n\n### Success Criteria\n- [ ] `internal/ui/exitcode.go` exists, `package ui`, imports nothing.\n- [ ] Five exported `int` constants with the exact names and values above (0,1,2,3,124).\n- [ ] Constants use explicit literals, NOT iota (124 is non-sequential).\n- [ ] `internal/ui/exitcode_test.go` is table-driven and asserts each const == its exact int.\n- [ ] `go test ./internal/ui/` and `go test ./...` exit 0.\n- [ ] `go build ./internal/ui/` and `go vet ./internal/ui/` clean; `gofmt -l internal/ui/` empty.\n\n## All Needed Context\n\n### Documentation & References\n```yaml\n- file: PRD.md   # §15.4 Exit codes (line ~958) — THE binding table\n  why: source of truth for the exact integer→meaning mapping\n  critical: values are 0,1,2,3,124 — 124 is the timeout code (GNU `timeout` convention), deliberately non-sequential\n- file: PRD.md   # FR17 (line 258), §9.10/B.5 rescue, §18.x\n  why: which code each path emits — FR17 clean tree → 2; rescue → 3; timeout → 124; general fail → 1; success → 0\n- file: plan/001_f1f80943ac34/architecture/decisions.md  # §3 (orchestrator RESCUE branch), §7 (CAS-failure exit 1)\n  why: downstream rescue/timeout paths consume ui.Exit* — constants must be frozen exactly\n- file: plan/001_f1f80943ac34/tasks.json  # P1.M1.T2.S1 context_scope\n  why: contract — pure constants, golden test on exact ints, output is ui.Exit* consumed by cmd/stagehand (M7.T2.S1)\n- file: cmd/stagehand/main.go   # existing consumer-to-be pattern\n  why: shows module path github.com/dustin/stagehand and that os.Exit(1) is already used; M7.T2 will swap to os.Exit(ui.Exit*)\n- file: Makefile   # `test` target = go test ./...\n  why: how tests run repo-wide; this task's tests are exercised by `make test`\n- url: https:\n  why: typed int const syntax `const ExitSuccess int = 0`; confirms explicit literals vs iota semantics\n  critical: iota is sequential (0,1,2,3,4) and would silently break ExitTimeout=124 — DO NOT use iota\n- url: https:\n  why: os.Exit(code int) — typed int consts pass directly with no conversion\n- url: https:\n  why: 124 = GNU `timeout`'s convention for command-exceeded-limit; documents why 124 (not e.g. 4)\n\n```\n\n### Current codebase\n```\nstagehand-hack/\n├── cmd/stagehand/main.go     # cobra root stub (M1.T1.S1, complete)\n├── go.mod                     # module github.com/dustin/stagehand, go 1.22\n├── go.sum\n├── Makefile                   # build/test/coverage/lint/vet/fmt/clean\n├── bin/stagehand\n└── plan/001_f1f80943ac34/     # READ-ONLY research/architecture\n\n```\nNOTE: `internal/` does NOT exist yet. No `_test.go` exists anywhere yet — this task introduces the first test file.\n\n### Desired codebase after this task\n```\nstagehand-hack/\n├── internal/\n│   └── ui/\n│       ├── exitcode.go        # package ui; five typed int consts (ExitSuccess..ExitTimeout); no imports\n│       └── exitcode_test.go    # package ui; table-driven golden test on exact ints\n└── (existing files unchanged)\n\n```\n\n### Known gotchas\n```go\n\n```\n\n## Implementation Blueprint\n\n### Implementation Tasks (ordered by dependencies)\n```yaml\nTask 1: CREATE internal/ui/exitcode.go\n  IMPLEMENT: `package ui` with a `// Package ui ...` doc comment (this is the first ui file).\n  IMPLEMENT: five exported typed int constants with EXPLICIT literals + per-const doc comments:\n    ExitSuccess        = 0    \n    ExitError          = 1    \n    ExitNothingToCommit= 2    \n    ExitRescue         = 3    \n    ExitTimeout        = 124  \n  MUST_NOT: use iota (non-sequential values — would corrupt ExitTimeout).\n  MUST_NOT: import anything (pure constants).\n  MUST_NOT: add functions, vars, or logic.\n  NAMING: Exit-prefixed exported consts (contract: \"ui.Exit*\").\n  PLACEMENT: internal/ui/exitcode.go (NOT repo root; NOT cmd/).\n  FOLLOW: stdlib typed-int-const idiom (io.SeekStart, os.O_RDONLY).\nTask 2: CREATE internal/ui/exitcode_test.go\n  IMPLEMENT: `package ui` (white-box), stdlib `testing` only (NO new deps).\n  IMPLEMENT: table-driven TestExitCodes: []struct{ name string; got int; want int }{\n    {\"ExitSuccess\", int(ExitSuccess), 0},\n    {\"ExitError\", int(ExitError), 1},\n    {\"ExitNothingToCommit\", int(ExitNothingToCommit), 2},\n    {\"ExitRescue\", int(ExitRescue), 3},\n    {\"ExitTimeout\", int(ExitTimeout), 124},\n  } loop with t.Errorf(\"%s = %d, want %d\", ...) on mismatch.\n  NAMING: TestExitCodes; place in internal/ui/exitcode_test.go (alongside the file it tests).\n  COVERAGE: all five consts asserted to EXACT ints (golden). This is the regression guard the contract demands.\n  ESTABLISHES: repo-wide testing pattern (stdlib testing, table-driven, t.Errorf).\n\n```\n\n### Implementation Patterns\n```go\npackage ui\nconst ExitSuccess int = 0\nconst ExitError int = 1\nconst ExitNothingToCommit int = 2\nconst ExitRescue int = 3\nconst ExitTimeout int = 124\n\n```\n\n```go\npackage ui\nimport \"testing\"\nfunc TestExitCodes(t *testing.T) {\n\ttests := []struct {\n\t\tname string\n\t\tgot  int\n\t\twant int\n\t}{\n\t\t{\"ExitSuccess\", int(ExitSuccess), 0},\n\t\t{\"ExitError\", int(ExitError), 1},\n\t\t{\"ExitNothingToCommit\", int(ExitNothingToCommit), 2},\n\t\t{\"ExitRescue\", int(ExitRescue), 3},\n\t\t{\"ExitTimeout\", int(ExitTimeout), 124},\n\t}\n\tfor _, tc := range tests {\n\t\ttc := tc\n\t\tt.Run(tc.name, func(t *testing.T) {\n\t\t\tif tc.got != tc.want {\n\t\t\t\tt.Errorf(\"%s = %d, want %d\", tc.name, tc.got, tc.want)\n\t\t\t}\n\t\t})\n\t}\n}\n\n```\n\n### Integration Points\n```yaml\nPACKAGE: github.com/dustin/stagehand/internal/ui   # new package; import path for M7.T2.S1, M6.T2.S1, etc.\nCONSUMERS (downstream, DO NOT implement here):\n  - cmd/stagehand (M7.T2.S1): os.Exit(ui.ExitError|ExitNothingToCommit|ExitRescue|ExitTimeout|ExitSuccess)\n  - internal/generate/rescue.go (M6.T2.S1): rescue → ExitRescue\n  - timeout path: ctx deadline → ExitTimeout\nSIBLING: internal/ui/output.go (P1.M1.T2.S2) — plain `package ui`, no duplicate package doc comment.\nDOCS: none — exit codes already in PRD §15.4; README is Mode B (M8.T4). Create NO README/docs.\n\n```\n\n## Validation Loop\n\n### Level 1 — Syntax/Style/Build\n- `go build ./internal/ui/` → exits 0 (compiles the new package).\n- `go vet ./internal/ui/` → clean.\n- `test -z \"$(gofmt -l internal/ui/\"` → no unformatted files (gofmt -l always exits 0, so wrap in test -z — proven pattern from M1.T1.S1).\n\n### Level 2 — Unit Tests (the contract verification)\n- `go test ./internal/ui/` → PASS, asserting all five exact ints (golden).\n- `go test ./...` → whole-module integrity (Makefile `test` target stays green).\n\n### Level 3 — (none; pure constants have no runtime behavior to integration-test)\n\n## DOCS Impact\n**None.** Exit codes are already specified in PRD §15.4 (the source of truth this task encodes). No README/docs are created here (README is Mode B, synced in M8.T4). This task adds code + test only.\n\n## Anti-patterns to avoid\n- ❌ Do NOT use iota — values are non-sequential (124); iota would silently corrupt ExitTimeout.\n- ❌ Do NOT make the consts untyped if downstream needs int type safety (typed int matches stdlib idiom and passes to os.Exit directly).\n- ❌ Do NOT import anything in exitcode.go (pure constants; an import means you added logic).\n- ❌ Do NOT add functions, init(), or variables — contract says \"pure constants (no logic)\".\n- ❌ Do NOT create output.go here (that is P1.M1.T2.S2) or any other internal/* package.\n- ❌ Do NOT change go.mod/go.sum (stdlib `testing` only; no new deps).\n- ❌ Do NOT add a `// Package ui` doc comment to output.go later (duplicate-comment lint) — that doc lives here.",
+    "implementationSteps": [
+      "Create `internal/ui/exitcode.go` (new package `ui`, at path internal/ui/exitcode.go — internal/ does not exist yet so create the directory). Add a `// Package ui ...` doc comment (this is the first ui file; the sibling output.go in P1.M1.T2.S2 must NOT repeat a package doc comment). Declare five exported, typed `int` constants with EXPLICIT integer literals and per-constant doc comments: `ExitSuccess int = 0` (commit created / dry-run message printed), `ExitError int = 1` (general error: generation/parse failure, agent missing, CAS conflict per decisions.md §7), `ExitNothingToCommit int = 2` (clean tree after auto-stage, or nothing staged with --no-auto-stage, per FR17), `ExitRescue int = 3` (snapshot taken, commit not created, manual recovery printed, per §9.10/B.5), `ExitTimeout int = 124` (generation exceeded --timeout; 124 mirrors the GNU `timeout` convention per PRD §15.4). Use the stdlib typed-int-const idiom (cf. io.SeekStart, os.O_RDONLY). DO NOT use iota (values are non-sequential and iota would silently turn ExitTimeout into 4). DO NOT import anything — a pure-constants file imports nothing. DO NOT add functions, init(), or variables. Naming: Exit-prefixed exported consts per the contract's \"ui.Exit*\" requirement.",
+      "Create `internal/ui/exitcode_test.go` (`package ui`, white-box so it references the consts directly) using the stdlib `testing` package only — NO new dependencies, so do NOT modify go.mod/go.sum. This is the repo's first _test.go and establishes the repo-wide testing pattern (stdlib testing, table-driven, t.Errorf). Implement a table-driven `TestExitCodes` over `[]struct{ name string; got int; want int }` with exactly these rows: {\"ExitSuccess\", int(ExitSuccess), 0}, {\"ExitError\", int(ExitError), 1}, {\"ExitNothingToCommit\", int(ExitNothingToCommit), 2}, {\"ExitRescue\", int(ExitRescue), 3}, {\"ExitTimeout\", int(ExitTimeout), 124}. In the loop use `tc := tc` and `t.Run(tc.name, ...)` with `t.Errorf(\"%s = %d, want %d\", tc.name, tc.got, tc.want)` on mismatch. This golden test is the contract's regression guard so downstream exit-code mapping never drifts. Name the test TestExitCodes and place the file alongside the code it tests.",
+      "Verify with the validation gates in order: `go build ./internal/ui/` (must compile), `go vet ./internal/ui/` (must be clean), `test -z \"$(gofmt -l internal/ui/)\"` (no unformatted files), `go test ./internal/ui/` (PASS, all five exact ints asserted), and `go test ./...` (whole-module integrity; the Makefile `test` target stays green). Fix any failure before declaring done.",
+      "DOCS impact: NONE. Exit codes are already documented in PRD §15.4 (the source of truth encoded here). Do NOT create README.md or docs/. Confirm scope boundaries: only `internal/ui/exitcode.go` and `internal/ui/exitcode_test.go` were added; go.mod/go.sum unchanged; no other internal/* package or output.go (that is P1.M1.T2.S2) was created."
+    ],
+    "validationGates": [
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "go build ./internal/ui/",
+        "manual": false
+      },
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "go vet ./internal/ui/",
+        "manual": false
+      },
+      {
+        "level": 1,
+        "description": "Level 1 gate",
+        "command": "test -z \"$(gofmt -l internal/ui/)\"",
+        "manual": false
+      },
+      {
+        "level": 2,
+        "description": "Level 2 gate",
+        "command": "go test ./internal/ui/",
+        "manual": false
+      },
+      {
+        "level": 2,
+        "description": "Level 2 gate",
+        "command": "go test ./...",
+        "manual": false
+      }
+    ],
+    "successCriteria": [
+      {
+        "description": "`internal/ui/exitcode.go` exists with `package ui` and imports nothing (pure-constants file).",
+        "satisfied": false
+      },
+      {
+        "description": "Five exported typed `int` constants exist with the exact names and values: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124 (matching PRD §15.4).",
+        "satisfied": false
+      },
+      {
+        "description": "Constants use explicit integer literals, NOT iota (ExitTimeout=124 is non-sequential; iota would corrupt it).",
+        "satisfied": false
+      },
+      {
+        "description": "`internal/ui/exitcode_test.go` exists (`package ui`), is table-driven, and asserts each constant equals its exact integer value (golden test) using only the stdlib `testing` package (no go.mod/go.sum changes).",
+        "satisfied": false
+      },
+      {
+        "description": "`go test ./internal/ui/` exits 0 (PASS) and `go test ./...` exits 0 (whole-module integrity, Makefile `test` target green).",
+        "satisfied": false
+      },
+      {
+        "description": "`go build ./internal/ui/` and `go vet ./internal/ui/` are clean, and `gofmt -l internal/ui/` produces no output.",
+        "satisfied": false
+      },
+      {
+        "description": "Scope boundaries respected: only internal/ui/exitcode.go and internal/ui/exitcode_test.go were added; no output.go (P1.M1.T2.S2), no other internal/* package, no README/docs, and go.mod/go.sum unchanged.",
+        "satisfied": false
+      }
+    ],
+    "references": [
+      "PRD.md §15.4 Exit codes (the binding value table, line ~958): 0=Success, 1=Error, 2=NothingToCommit, 3=Rescue, 124=Timeout. file:///home/dustin/projects/stagehand-hack/PRD.md",
+      "PRD.md FR17 (line 258): clean tree after auto-stage → exit code 2; §9.10 / Appendix B.5 rescue → exit code 3; §18.x / §826 timeout & empty-diff paths. file:///home/dustin/projects/stagehand-hack/PRD.md",
+      "plan/001_f1f80943ac34/architecture/decisions.md §3 (generate orchestrator RESCUE branch) and §7 (CAS-failure 'exit 1', safety invariants) — downstream consumers of ui.Exit*.",
+      "plan/001_f1f80943ac34/tasks.json — P1.M1.T2.S1 contract_scope: pure constants, golden test on exact ints, output ui.Exit* consumed by cmd/stagehand (M7.T2.S1).",
+      "cmd/stagehand/main.go — module path github.com/dustin/stagehand; existing os.Exit(1) usage to be replaced by os.Exit(ui.Exit*) in M7.T2.S1.",
+      "Go constant declarations (typed int const syntax; iota vs explicit literals): https://go.dev/ref/spec#Constant_declarations",
+      "os.Exit(code int): https://pkg.go.dev/os#Exit",
+      "Exit status / GNU timeout 124 convention: https://en.wikipedia.org/wiki/Exit_status",
+      "Research notes: plan/001_f1f80943ac34/prps/research/P1_M1_T2_S1_research.md"
+    ]
+  },
+  "compressionLevel": "standard",
+  "inputTokens": 3410,
+  "outputTokens": 2862,
+  "compressionRatio": 1.1914744933612857,
+  "originalSize": 10172,
+  "compressedSize": 10172
+}

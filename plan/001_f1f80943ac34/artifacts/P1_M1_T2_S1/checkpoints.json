@@ -1,0 +1,171 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1_M1_T2_S1_1782956244166_pre-execution_f5d70339",
+      "taskId": "P1_M1_T2_S1",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M1_T2_S1.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-02T01:37:24.166Z"
+      },
+      "createdAt": "2026-07-02T01:37:24.166Z"
+    },
+    {
+      "id": "P1_M1_T2_S1_1782956312674_coder-response_09b6e762",
+      "taskId": "P1_M1_T2_S1",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M1_T2_S1.md",
+        "stage": "coder-response",
+        "coderResponse": "All validation gates pass and scope boundaries are respected. Implementation complete.\n\n## Summary\n\nImplemented **P1.M1.T2.S1** — the canonical exit-code constants for stagehand per PRD §15.4.\n\n**Files created:**\n- `internal/ui/exitcode.go` — `package ui` with the `// Package ui` doc comment (the first ui file), five exported typed `int` constants with explicit literals and per-const doc comments: `ExitSuccess=0`, `ExitError=1`, `ExitNothingToCommit=2`, `ExitRescue=3`, `ExitTimeout=124`. No imports, no functions, no iota.\n- `internal/ui/exitcode_test.go` — `package ui` (white-box), stdlib `testing` only, table-driven `TestExitCodes` asserting all five exact ints (golden regression guard).\n\n**Validation gates (all pass):**\n- ✅ Level 1: `go build ./internal/ui/` clean, `go vet ./internal/ui/` clean, `gofmt -l` empty\n- ✅ Level 2: `go test ./internal/ui/` PASS (5/5 subtests), `go test ./...` exits 0\n- Level 3: N/A (pure constants, no runtime behavior)\n\n**Scope verification:** `internal/ui/` contains exactly the two intended files; go.mod/go.sum unchanged (empty git diff); no iota; no imports in exitcode.go; no output.go/README/docs created.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-02T01:38:32.674Z"
+      },
+      "createdAt": "2026-07-02T01:38:32.674Z"
+    },
+    {
+      "id": "P1_M1_T2_S1_1782956313054_validation-gate-2_c3a8c8b0",
+      "taskId": "P1_M1_T2_S1",
+      "label": "After validation gate 2",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M1_T2_S1.md",
+        "stage": "validation-gate-2",
+        "coderResponse": "All validation gates pass and scope boundaries are respected. Implementation complete.\n\n## Summary\n\nImplemented **P1.M1.T2.S1** — the canonical exit-code constants for stagehand per PRD §15.4.\n\n**Files created:**\n- `internal/ui/exitcode.go` — `package ui` with the `// Package ui` doc comment (the first ui file), five exported typed `int` constants with explicit literals and per-const doc comments: `ExitSuccess=0`, `ExitError=1`, `ExitNothingToCommit=2`, `ExitRescue=3`, `ExitTimeout=124`. No imports, no functions, no iota.\n- `internal/ui/exitcode_test.go` — `package ui` (white-box), stdlib `testing` only, table-driven `TestExitCodes` asserting all five exact ints (golden regression guard).\n\n**Validation gates (all pass):**\n- ✅ Level 1: `go build ./internal/ui/` clean, `go vet ./internal/ui/` clean, `gofmt -l` empty\n- ✅ Level 2: `go test ./internal/ui/` PASS (5/5 subtests), `go test ./...` exits 0\n- Level 3: N/A (pure constants, no runtime behavior)\n\n**Scope verification:** `internal/ui/` contains exactly the two intended files; go.mod/go.sum unchanged (empty git diff); no iota; no imports in exitcode.go; no output.go/README/docs created.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/ui/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/ui/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/ui/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/ui/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T01:38:33.053Z"
+      },
+      "createdAt": "2026-07-02T01:38:33.054Z"
+    },
+    {
+      "id": "P1_M1_T2_S1_1782956313055_complete_43c616b7",
+      "taskId": "P1_M1_T2_S1",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M1_T2_S1.md",
+        "stage": "complete",
+        "coderResponse": "All validation gates pass and scope boundaries are respected. Implementation complete.\n\n## Summary\n\nImplemented **P1.M1.T2.S1** — the canonical exit-code constants for stagehand per PRD §15.4.\n\n**Files created:**\n- `internal/ui/exitcode.go` — `package ui` with the `// Package ui` doc comment (the first ui file), five exported typed `int` constants with explicit literals and per-const doc comments: `ExitSuccess=0`, `ExitError=1`, `ExitNothingToCommit=2`, `ExitRescue=3`, `ExitTimeout=124`. No imports, no functions, no iota.\n- `internal/ui/exitcode_test.go` — `package ui` (white-box), stdlib `testing` only, table-driven `TestExitCodes` asserting all five exact ints (golden regression guard).\n\n**Validation gates (all pass):**\n- ✅ Level 1: `go build ./internal/ui/` clean, `go vet ./internal/ui/` clean, `gofmt -l` empty\n- ✅ Level 2: `go test ./internal/ui/` PASS (5/5 subtests), `go test ./...` exits 0\n- Level 3: N/A (pure constants, no runtime behavior)\n\n**Scope verification:** `internal/ui/` contains exactly the two intended files; go.mod/go.sum unchanged (empty git diff); no iota; no imports in exitcode.go; no output.go/README/docs created.\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Created internal/ui/exitcode.go (package ui, five exported typed int constants with explicit literals matching PRD §15.4: ExitSuccess=0, ExitError=1, ExitNothingToCommit=2, ExitRescue=3, ExitTimeout=124; no imports, no iota, no logic) and internal/ui/exitcode_test.go (table-driven golden test, stdlib testing only). All validation gates pass: go build/vet clean, gofmt empty, go test ./internal/ui/ PASS (5/5 subtests), go test ./... exits 0. Scope respected: only two files added, go.mod/go.sum unchanged, no output.go/README/docs."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./internal/ui/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/ui/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/ui/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/ui/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "?   \tgithub.com/dustin/stagehand/cmd/stagehand\t[no test files]\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-02T01:38:33.055Z"
+      },
+      "createdAt": "2026-07-02T01:38:33.055Z"
+    }
+  ],
+  "lastModified": "2026-07-02T01:38:33.055Z"
+}

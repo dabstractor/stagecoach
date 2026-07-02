@@ -43,7 +43,7 @@
                   "id": "P1.M1.T2.S1",
                   "type": "Subtask",
                   "title": "internal/ui/exitcode.go — canonical exit codes",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD §15.4 defines a fixed code table; decisions.md §3 / rescue paths depend on these constants.\n2. INPUT: None.\n3. LOGIC: Define named constants: Success=0, Error=1, NothingToCommit=2, Rescue=3, Timeout=124. Pure constants (no logic). Test: assert exact integer values (golden) so downstream exit-code mapping never drifts.\n4. OUTPUT: `ui.Exit*` consts consumed by cmd/stagehand error mapping (M7.T2.S1) and rescue/timeout paths."
