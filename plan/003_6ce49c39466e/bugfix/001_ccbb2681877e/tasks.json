@@ -59,7 +59,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Issue 2 — Resolve message role on the single-commit path",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Per-role message overrides (--message-model / --message-provider / --message-reasoning, [role.message]) are silently ignored on the single-commit path. Both entry points (generate.CommitStaged at generate.go:196 and pkg/stagehand.runPipeline at stagehand.go:467) pass the global cfg.Model/cfg.Reasoning directly to Render, bypassing config.ResolveRoleModel(\"message\"). Additionally, buildDeps (stagehand.go:316) selects the manifest from the global cfg.Provider, so --message-provider picks the wrong manifest. The multi-commit path resolves correctly (message.go:103). Fix all three fields (provider, model, reasoning) on the single path.",
           "tasks": [
             {
@@ -90,14 +90,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Resolve message provider for manifest selection on the single path",
-              "status": "Ready",
+              "status": "Complete",
               "description": "buildDeps (stagehand.go:316) selects the provider manifest from the global cfg.Provider, so --message-provider (and [role.message] provider) selects the wrong manifest. Since buildDeps is called ONLY from GenerateCommit (the single-commit entry point, confirmed by grep), resolve the message role's provider there for manifest selection. When no message-provider override, ResolveRoleModel returns cfg.Provider — back-compatible.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Use message role's provider in buildDeps for manifest selection",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

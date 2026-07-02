@@ -1223,3 +1223,44 @@ func TestGenerateCommit_NoMessageOverride_Regression(t *testing.T) {
 		t.Errorf("Result.Model = %q, want %q (global model, no override)", res.Model, "openrouter/gpt-5.4")
 	}
 }
+
+// TestBuildDeps_MessageProviderOverride proves buildDeps honors the message role's provider
+// override (--message-provider / [role.message] provider) for manifest selection.
+func TestBuildDeps_MessageProviderOverride(t *testing.T) {
+	bin := stubtest.Build(t)
+	cfg := config.Defaults()
+	cfg.Providers = map[string]map[string]any{
+		"alpha": {"command": bin, "prompt_delivery": "stdin", "print_flag": "-p", "output": "raw", "strip_code_fence": true},
+		"beta":  {"command": bin, "prompt_delivery": "stdin", "print_flag": "-p", "output": "raw", "strip_code_fence": true},
+	}
+	cfg.Provider = "alpha"
+	cfg.Roles = map[string]config.RoleConfig{"message": {Provider: "beta"}}
+
+	deps, err := buildDeps(cfg, t.TempDir())
+	if err != nil {
+		t.Fatalf("buildDeps: %v", err)
+	}
+	if deps.Manifest.Name != "beta" {
+		t.Errorf("message provider override lost: Manifest.Name = %q, want %q", deps.Manifest.Name, "beta")
+	}
+}
+
+// TestBuildDeps_NoMessageOverride_InheritsGlobal proves the back-compatible path: with no
+// message-role provider override, buildDeps selects the global provider manifest.
+func TestBuildDeps_NoMessageOverride_InheritsGlobal(t *testing.T) {
+	bin := stubtest.Build(t)
+	cfg := config.Defaults()
+	cfg.Providers = map[string]map[string]any{
+		"alpha": {"command": bin, "prompt_delivery": "stdin", "print_flag": "-p", "output": "raw", "strip_code_fence": true},
+		"beta":  {"command": bin, "prompt_delivery": "stdin", "print_flag": "-p", "output": "raw", "strip_code_fence": true},
+	}
+	cfg.Provider = "alpha"
+
+	deps, err := buildDeps(cfg, t.TempDir())
+	if err != nil {
+		t.Fatalf("buildDeps: %v", err)
+	}
+	if deps.Manifest.Name != "alpha" {
+		t.Errorf("no-override regression: Manifest.Name = %q, want %q (global)", deps.Manifest.Name, "alpha")
+	}
+}

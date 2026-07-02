@@ -321,7 +321,12 @@ func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
 
 	reg := provider.NewRegistry(overrides)
 
-	name := cfg.Provider
+	// FR-R3: resolve the message role's provider so --message-provider / [role.message]
+	// selects the manifest. No message override ⇒ cfg.Provider (back-compatible).
+	// Model/reasoning are resolved at the Render call sites (CommitStaged / runPipeline);
+	// buildDeps selects only the provider/manifest.
+	msgProvider, _, _ := config.ResolveRoleModel("message", cfg)
+	name := msgProvider
 	if name == "" {
 		var installed []string
 		for _, m := range reg.List() {
