@@ -190,9 +190,9 @@ func TestBuildPlannerUserPayload_NormalCanonicalExact(t *testing.T) {
 	const want = "Decompose these un-staged changes into commits:\n\n" + diff
 
 	for _, fc := range []int{0, -1, -5} {
-		got := BuildPlannerUserPayload(diff, fc)
+		got := BuildPlannerUserPayload(diff, "", fc)
 		if got != want {
-			t.Errorf("BuildPlannerUserPayload(diff, %d) mismatch:\n--- got ---\n%q\n--- want ---\n%q", fc, got, want)
+			t.Errorf("BuildPlannerUserPayload(diff, \"\", %d) mismatch:\n--- got ---\n%q\n--- want ---\n%q", fc, got, want)
 		}
 	}
 }
@@ -204,7 +204,7 @@ func TestBuildPlannerUserPayload_ForcedCanonicalExact(t *testing.T) {
 	const want = "Produce EXACTLY 3 commits from these changes (do not reconsider the count):\n" +
 		"Decompose these un-staged changes into commits:\n\n" + diff
 
-	got := BuildPlannerUserPayload(diff, 3)
+	got := BuildPlannerUserPayload(diff, "", 3)
 	if got != want {
 		t.Errorf("BuildPlannerUserPayload forced mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
 	}
@@ -278,7 +278,7 @@ func TestBuildPlannerUserPayload_Properties(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.check(t, BuildPlannerUserPayload(tc.diff, tc.fc))
+			tc.check(t, BuildPlannerUserPayload(tc.diff, "", tc.fc))
 		})
 	}
 }

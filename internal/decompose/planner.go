@@ -82,7 +82,7 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 		return prompt.PlannerOutput{}, fmt.Errorf("%w: recent messages: %w", ErrPlannerFailed, err)
 	}
 	sysPrompt := prompt.BuildPlannerSystemPrompt(examples, deps.Config.Format, deps.Config.Locale)
-	basePayload := prompt.BuildPlannerUserPayload(diff, forcedCount)
+	basePayload := prompt.BuildPlannerUserPayload(diff, deps.Config.Context, forcedCount)
 
 	// 4. The retry loop (≤2 attempts: 1 initial + 1 retry on parse/contract failure).
 	const maxAttempts = 2

@@ -101,27 +101,36 @@ func BuildPlannerSystemPrompt(examples []string, format, locale string) string {
 }
 
 // BuildPlannerUserPayload assembles the §17.5 user payload: the instruction + blank line + the diff.
-// When forcedCount > 0, a forced-count directive is prepended (§17.5 forced-count mode).
+// When forcedCount > 0, a forced-count directive is prepended (§17.5 forced-count mode). `context` is the
+// §9.19 FR-F7 `--context` flag text ("" when unset); when non-empty, the same contextBlock (payload.go)
+// is inserted after the instruction line and before the diff (§17.8) — after the forced-count directive
+// in forced mode.
 //
-// ASSEMBLY (§17.5, exact):
+// ASSEMBLY (§17.5/§17.8, exact):
 //
 //	NORMAL (forcedCount <= 0):
-//	  plannerUserInstruction + "\n\n" + diff
+//	  plannerUserInstruction + "\n\n" + [contextBlock(context) + "\n\n" if context != ""] + diff
 //	    → "Decompose these un-staged changes into commits:\n\n<diff>"
 //
 //	FORCED (forcedCount > 0):
 //	  "Produce EXACTLY N commits from these changes (do not reconsider the count):\n"
-//	  + plannerUserInstruction + "\n\n" + diff
-//	    → the two colon-ending instructions on consecutive lines, then ONE blank line, then the diff.
+//	  + plannerUserInstruction + "\n\n" + [contextBlock(context) + "\n\n" if context != ""] + diff
+//	    → the two colon-ending instructions on consecutive lines, then ONE blank line, then
+//	      (optionally) the context block, then the diff.
 //
 // forcedCount <= 0 (incl. negative) ⇒ normal path. The diff is appended VERBATIM (no normalization;
-// mirrors payload.go's "diff is the exact tail").
-func BuildPlannerUserPayload(diff string, forcedCount int) string {
+// mirrors payload.go's "diff is the exact tail"). context=="" ⇒ BYTE-IDENTICAL to the pre-FR-F7 payload
+// in both normal and forced modes.
+func BuildPlannerUserPayload(diff, context string, forcedCount int) string {
+	block := ""
+	if context != "" {
+		block = contextBlock(context) + "\n\n" // shared helper (payload.go, same package)
+	}
 	if forcedCount <= 0 {
-		return plannerUserInstruction + "\n\n" + diff // §17.5 normal (fast path; diff verbatim as tail)
+		return plannerUserInstruction + "\n\n" + block + diff // §17.5 normal (diff verbatim as tail)
 	}
 	forced := fmt.Sprintf("Produce EXACTLY %d commits from these changes (do not reconsider the count):", forcedCount)
-	return forced + "\n" + plannerUserInstruction + "\n\n" + diff // §17.5 forced-count prepend
+	return forced + "\n" + plannerUserInstruction + "\n\n" + block + diff // §17.5 forced-count prepend
 }
 
 // ParsePlannerOutput parses the planner agent's raw JSON output into a typed PlannerOutput. It first

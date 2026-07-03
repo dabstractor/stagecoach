@@ -37,6 +37,7 @@ With no subcommand, `stagehand` runs the **default action**. The routing depends
 | `--exclude <glob>`, `-x` | string (repeatable) | — | — | — | Exclude matching files from the agent payload (placeholder line instead of the diff; never excluded from the commit itself). Unions with `.stagehandignore` and `[generation].exclude` — repeat the flag to add more than one glob; it does not override the config-file set |
 | `--format <mode>` | string | `auto` | `STAGEHAND_FORMAT` | `stagehand.format` | Message format: `auto` (style learning) \| `conventional` \| `gitmoji` \| `plain`. An unknown mode is a hard error (exit 1). Also `[generation].format`. |
 | `--locale <lang>` | string | "" | `STAGEHAND_LOCALE` | `stagehand.locale` | Write the message in this language (free-form name or BCP-47 tag; never validated). Also `[generation].locale`. |
+| `--context <text>` | string | "" | — | — | Extra authoritative context appended to the message and planner payloads (e.g. `"hotfix for #812"`). Flag only — per-invocation; no env var, git-config, or config-file key. |
 | `--planner-provider <name>` | string | "" | `STAGEHAND_PLANNER_PROVIDER` | — | Per-role provider override for the decomposition planner |
 | `--planner-model <name>` | string | "" | `STAGEHAND_PLANNER_MODEL` | — | Per-role model override for the decomposition planner |
 | `--stager-provider <name>` | string | "" | `STAGEHAND_STAGER_PROVIDER` | — | Per-role provider override for the (tooled) staging agent |

@@ -98,6 +98,11 @@ type Config struct {
 	// quoting trap). Consumed by S2's :(exclude,glob) pathspec translator. nil ⇒ none.
 	Exclude []string `toml:"exclude"`
 
+	// Context is the §9.19 FR-F7 per-invocation context text. FLAG-ONLY: no env, no git key, no
+	// config-file key (per-invocation by nature). Injected into the message + planner USER payloads
+	// (§17.8), after the instruction line and before the diff. Empty = no context block.
+	Context string `toml:"-"`
+
 	// [provider.<name>] user-defined / override provider definitions (PRD §16.2, §12.8).
 	// Carried as a RAW map: the provider MANIFEST type lives in internal/provider, so config must not import
 	// it (import-cycle risk). The registry (P1.M2.T3) consumes this map — for each name it re-encodes the
@@ -155,6 +160,7 @@ func Defaults() Config {
 		MaxCommits:          12,     // §9.14 FR-M4 default safety cap on auto-decompose
 		BinaryExtensions:    nil,    // nil ⇒ built-in denylist only (§9.1 FR3a)
 		Exclude:             nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
+		Context:             "",     // §9.19 FR-F7 default (empty = no context block)
 		Providers:           nil,
 		Roles:               nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:       0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved

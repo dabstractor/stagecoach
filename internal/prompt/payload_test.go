@@ -15,8 +15,8 @@ func TestBuildUserPayload_NormalCanonicalExact(t *testing.T) {
 		diff
 
 	for _, rej := range [][]string{nil, {}} { // nil and empty are equivalent → normal path
-		if got := BuildUserPayload(diff, rej); got != want {
-			t.Errorf("BuildUserPayload(diff, %v) mismatch:\n--- got ---\n%q\n--- want ---\n%q", rej, got, want)
+		if got := BuildUserPayload(diff, "", rej); got != want {
+			t.Errorf("BuildUserPayload(diff, \"\", %v) mismatch:\n--- got ---\n%q\n--- want ---\n%q", rej, got, want)
 		}
 	}
 }
@@ -28,7 +28,7 @@ func TestBuildUserPayload_NormalCanonicalExact(t *testing.T) {
 func TestBuildUserPayload_RejectionCanonicalExact(t *testing.T) {
 	const diff = "diff --git a/foo.go b/foo.go\n@@ -1,3 +1,4 @@"
 	rejected := []string{"fix: handle null user", "feat: add bar"}
-	got := BuildUserPayload(diff, rejected)
+	got := BuildUserPayload(diff, "", rejected)
 
 	want := "Generate a commit message for these changes.\n" + // PERIOD
 		"\n" +
@@ -153,7 +153,7 @@ func TestBuildUserPayload_Properties(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.check(t, BuildUserPayload(tc.diff, tc.rejected))
+			tc.check(t, BuildUserPayload(tc.diff, "", tc.rejected))
 		})
 	}
 }
@@ -167,7 +167,7 @@ func TestBuildUserPayload_EdgeCases(t *testing.T) {
 				t.Fatalf("BuildUserPayload(\"\", nil) panicked: %v", r)
 			}
 		}()
-		got := BuildUserPayload("", nil)
+		got := BuildUserPayload("", "", nil)
 		const want = "Generate a commit message for these changes:\n\n"
 		if got != want {
 			t.Errorf("empty-diff normal payload = %q, want %q", got, want)
@@ -176,16 +176,149 @@ func TestBuildUserPayload_EdgeCases(t *testing.T) {
 
 	t.Run("nil and empty rejected produce identical output", func(t *testing.T) {
 		const diff = "D"
-		if BuildUserPayload(diff, nil) != BuildUserPayload(diff, []string{}) {
+		if BuildUserPayload(diff, "", nil) != BuildUserPayload(diff, "", []string{}) {
 			t.Error("nil and []string{} rejected must produce identical normal payloads")
 		}
 	})
 
 	t.Run("rejection: exactly two blank lines separate epilogue from diff and list from epilogue", func(t *testing.T) {
-		p := BuildUserPayload("DIFF", []string{"a"})
+		p := BuildUserPayload("DIFF", "", []string{"a"})
 		// list item '- a\n' then '\n' (blank) then epilogue then '\n\n' (blank) then diff
 		if !strings.Contains(p, "- a\n\nCreate an entirely new message with different wording.\n\nDIFF") {
 			t.Errorf("rejection blank-line topology wrong around list/epilogue/diff; got %q", near(p, "Create an"))
+		}
+	})
+}
+
+// TestBuildUserPayload_ContextNormalCanonicalExact asserts the FULL assembled NORMAL payload with
+// --context set is byte-for-byte: colon instruction + blank + context block + blank + diff (§9.19
+// FR-F7 / §17.8). Independently derived from the PRD, not the implementation.
+func TestBuildUserPayload_ContextNormalCanonicalExact(t *testing.T) {
+	const diff = "diff --git a/foo.go b/foo.go\n@@ -1,3 +1,4 @@"
+	const context = "hotfix for #812"
+	want := "Generate a commit message for these changes:\n" +
+		"\n" +
+		"Additional context from the user (treat as authoritative):\n" +
+		context +
+		"\n" +
+		"\n" +
+		diff
+
+	if got := BuildUserPayload(diff, context, nil); got != want {
+		t.Errorf("BuildUserPayload context-normal mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	}
+}
+
+// TestBuildUserPayload_ContextRejectionCanonicalExact asserts the context block, when both --context and
+// a rejection list are present, lands AFTER the period-instruction and BEFORE the "IMPORTANT:" preamble
+// (ordering: instruction → context → rejection → diff, §17.8); the instruction still ends with a PERIOD.
+func TestBuildUserPayload_ContextRejectionCanonicalExact(t *testing.T) {
+	const diff = "diff --git a/foo.go b/foo.go\n@@ -1,3 +1,4 @@"
+	const context = "hotfix for #812"
+	rejected := []string{"fix: handle null user"}
+	got := BuildUserPayload(diff, context, rejected)
+
+	want := "Generate a commit message for these changes.\n" + // PERIOD (unchanged by context)
+		"\n" +
+		"Additional context from the user (treat as authoritative):\n" +
+		context +
+		"\n" +
+		"\n" +
+		"IMPORTANT: The following messages were REJECTED because they already exist\n" +
+		"in git history. You MUST generate something COMPLETELY DIFFERENT:\n" +
+		"- fix: handle null user\n" +
+		"\n" +
+		"Create an entirely new message with different wording.\n" +
+		"\n" +
+		diff
+
+	if got != want {
+		t.Errorf("BuildUserPayload context+rejection mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	}
+}
+
+// TestBuildUserPayload_ContextProperties guards the ordering/presence invariants for --context across
+// both paths, including the load-bearing empty-context byte-identity and the ordering contract
+// instruction → context → rejection → diff.
+func TestBuildUserPayload_ContextProperties(t *testing.T) {
+	const diff = "DIFFCONTENT"
+	const contextHeader = "Additional context from the user (treat as authoritative):"
+
+	t.Run("context=='' omits the block entirely (normal)", func(t *testing.T) {
+		p := BuildUserPayload(diff, "", nil)
+		if strings.Contains(p, contextHeader) {
+			t.Error("empty context must not emit the context block")
+		}
+	})
+
+	t.Run("context=='' omits the block entirely (rejection)", func(t *testing.T) {
+		p := BuildUserPayload(diff, "", []string{"a"})
+		if strings.Contains(p, contextHeader) {
+			t.Error("empty context must not emit the context block")
+		}
+	})
+
+	t.Run("context!='' header exact and text on the next line", func(t *testing.T) {
+		p := BuildUserPayload(diff, "my context text", nil)
+		if !strings.Contains(p, contextHeader+"\nmy context text") {
+			t.Errorf("expected exact header + single-newline + text; got %q", near(p, "Additional"))
+		}
+	})
+
+	t.Run("ordering: instruction < context < rejection < diff", func(t *testing.T) {
+		p := BuildUserPayload(diff, "ctx", []string{"rej"})
+		iInstr := strings.Index(p, "Generate a commit message for these changes.")
+		iCtx := strings.Index(p, contextHeader)
+		iRej := strings.Index(p, "IMPORTANT:")
+		iDiff := strings.Index(p, diff)
+		if !(iInstr >= 0 && iInstr < iCtx && iCtx < iRej && iRej < iDiff) {
+			t.Errorf("ordering violated: instr@%d ctx@%d rej@%d diff@%d", iInstr, iCtx, iRej, iDiff)
+		}
+	})
+}
+
+// TestBuildPlannerUserPayload_Context_CanonicalExact pins the §9.19 FR-F7 / §17.8 context insertion for
+// the planner user payload in both normal and forced modes: the block lands after plannerUserInstruction
+// (after the forced-count directive in forced mode) and before the diff.
+func TestBuildPlannerUserPayload_Context_CanonicalExact(t *testing.T) {
+	const diff = "diff --git a/foo.go b/foo.go\n@@ -1,3 +1,4 @@"
+	const context = "hotfix for #812"
+
+	t.Run("normal", func(t *testing.T) {
+		want := "Decompose these un-staged changes into commits:\n" +
+			"\n" +
+			"Additional context from the user (treat as authoritative):\n" +
+			context +
+			"\n" +
+			"\n" +
+			diff
+		if got := BuildPlannerUserPayload(diff, context, 0); got != want {
+			t.Errorf("BuildPlannerUserPayload normal+context mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+		}
+	})
+
+	t.Run("forced", func(t *testing.T) {
+		want := "Produce EXACTLY 3 commits from these changes (do not reconsider the count):\n" +
+			"Decompose these un-staged changes into commits:\n" +
+			"\n" +
+			"Additional context from the user (treat as authoritative):\n" +
+			context +
+			"\n" +
+			"\n" +
+			diff
+		if got := BuildPlannerUserPayload(diff, context, 3); got != want {
+			t.Errorf("BuildPlannerUserPayload forced+context mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+		}
+	})
+
+	t.Run("context=='' byte-identical to today (normal + forced)", func(t *testing.T) {
+		if got, want := BuildPlannerUserPayload(diff, "", 0), "Decompose these un-staged changes into commits:\n\n"+diff; got != want {
+			t.Errorf("empty-context normal mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+		}
+		wantForced := "Produce EXACTLY 2 commits from these changes (do not reconsider the count):\n" +
+			"Decompose these un-staged changes into commits:\n\n" + diff
+		if got := BuildPlannerUserPayload(diff, "", 2); got != wantForced {
+			t.Errorf("empty-context forced mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, wantForced)
 		}
 	})
 }

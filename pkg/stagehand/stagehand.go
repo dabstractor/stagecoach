@@ -478,7 +478,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	var lastCause error
 
 	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
-		payload := prompt.BuildUserPayload(diff, rejected)
+		payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload
 		}

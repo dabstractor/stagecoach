@@ -116,7 +116,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 	success := false
 
 	for attempt := 0; attempt <= deps.Config.MaxDuplicateRetries; attempt++ {
-		payload := prompt.BuildUserPayload(diff, rejected)
+		payload := prompt.BuildUserPayload(diff, deps.Config.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}

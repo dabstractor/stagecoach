@@ -343,6 +343,14 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.Locale = v
 		}
 	}
+
+	// §9.19 FR-F7 — context via CLI flag ONLY (no env/git/file source; per-invocation). Mirrors --exclude's
+	// flag-only discipline (there is no STAGEHAND_CONTEXT / stagehand.context / [generation].context).
+	if fs.Changed("context") {
+		if v, err := fs.GetString("context"); err == nil {
+			cfg.Context = v
+		}
+	}
 }
 
 // validFormats is the closed set of --format modes (PRD §9.19 FR-F1). Validation-only; S3 builds the

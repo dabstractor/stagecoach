@@ -75,6 +75,10 @@ var (
 	flagLocale string
 )
 
+// §9.19 FR-F7 — context flag (flag-only; resolved by config.Load via fs.Changed). No env/git/config-file
+// counterpart — read only via fs.Changed/fs.GetString in loadFlags (same discipline as flagExclude).
+var flagContext string
+
 // loadedCfg holds the config resolved in PersistentPreRunE; nil until then. Read by Config().
 var loadedCfg *config.Config
 
@@ -153,6 +157,9 @@ func init() {
 	pf.StringVar(&flagLocale, "locale", "",
 		"Write the message in this language (free-form name or BCP-47 tag; env STAGEHAND_LOCALE; "+
 			"git stagehand.locale; [generation].locale; default empty)")
+	pf.StringVar(&flagContext, "context", "",
+		"Extra context appended to the message+planner payload, e.g. \"hotfix for #812\" "+
+			"(flag only; per-invocation — no env/git/config key)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")
