@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/dustin/stagehand/internal/provider"
 )
@@ -245,5 +247,123 @@ func TestProvidersCmd_Registered(t *testing.T) {
 		if err != nil || c == nil {
 			t.Errorf("providers subcommand %q not found: err=%v", sub, err)
 		}
+	}
+}
+
+// The regression tests below drive the REAL list/show RunE closures end-to-end
+// (BUG-003). They do NOT target the pure render helpers: the bug was that the
+// RunE closures called config.Load(config.Flags{}, "") with an EMPTY Flags
+// struct, so the persistent --config / --provider / --model flags and every
+// STAGEHAND_* env var (FR34 layers 6-7) were silently ignored. The fix rewires
+// both closures to buildFlags(cmd) -> config.Load(flags, ".") (the runDefault
+// pattern), and these tests prove the --config flag, the STAGEHAND_CONFIG env
+// var, and `providers show` now honor the explicit config file. They mirror
+// the newTestCmd/registerPersistentFlags + cmd.Execute() pattern from
+// run_test.go (TestVersionShortCircuit) rather than the pure-helper style.
+
+// newProvidersRoot builds a fresh stagehand root *cobra.Command carrying the
+// real PRD §15.2 persistent flag set (via registerPersistentFlags) and the
+// providers subcommand tree, so a regression test can drive the REAL list/show
+// RunE closures via SetArgs + Execute without touching the package-global
+// rootCmd (whose flag-parse state would leak across tests). Mirrors newTestCmd
+// in run_test.go.
+func newProvidersRoot(t *testing.T) *cobra.Command {
+	t.Helper()
+	root := &cobra.Command{Use: "stagehand"}
+	registerPersistentFlags(root)
+	root.AddCommand(newProvidersCmd())
+	return root
+}
+
+// writeCustomProviderConfig writes a temp TOML config file defining a single
+// custom provider [provider.customagent] and returns its path. The command and
+// detect tokens are deliberately a non-existent binary so the provider shows
+// "not detected" but is still LISTED — the regression assertion is that the
+// name APPEARS at all (BUG-003: it was absent because the RunE ignored
+// --config / STAGEHAND_CONFIG). default_model gives `providers show` a token
+// to assert on.
+func writeCustomProviderConfig(t *testing.T) string {
+	t.Helper()
+	const conf = `[provider.customagent]
+command = "customagent-bin"
+detect = "customagent-bin"
+default_model = "custom-model-x"
+`
+	dir := t.TempDir()
+	path := dir + "/myconf.toml"
+	if err := os.WriteFile(path, []byte(conf), 0o600); err != nil {
+		t.Fatalf("write temp config: %v", err)
+	}
+	return path
+}
+
+// TestProvidersList_HonorsConfigFlag asserts BUG-003 is fixed for the --config
+// flag (PRD §15.2, FR34 layer 7): `providers list --config <path>` where <path>
+// defines [provider.customagent] now LISTS customagent — it was MISSING before
+// the fix (the RunE called config.Load(config.Flags{}, "") with an empty Flags
+// struct, so the persistent --config flag was ignored). Drives the REAL list
+// RunE via cmd.Execute. Hermetic: an explicit --config path REPLACES the
+// global+repo file layers in config.Load, so the fabricated provider is the
+// only [provider.*] source regardless of the host's ~/.config/stagehand file.
+func TestProvidersList_HonorsConfigFlag(t *testing.T) {
+	path := writeCustomProviderConfig(t)
+
+	root := newProvidersRoot(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"providers", "list", "--config", path})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "customagent") {
+		t.Errorf("output missing %q (BUG-003 regressed via --config)\noutput:\n%s", "customagent", out)
+	}
+}
+
+// TestProvidersList_HonorsConfigEnv asserts BUG-003 is fixed for the
+// STAGEHAND_CONFIG env var (FR34 layer 6): `STAGEHAND_CONFIG=<path> providers
+// list` (with NO --config flag) now LISTS customagent. Before the fix the env
+// layer was ignored for the same reason (empty Flags struct). t.Setenv scopes
+// the var to this test only; buildFlags reads it during Execute.
+func TestProvidersList_HonorsConfigEnv(t *testing.T) {
+	path := writeCustomProviderConfig(t)
+	t.Setenv("STAGEHAND_CONFIG", path)
+
+	root := newProvidersRoot(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"providers", "list"}) // NO --config flag
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "customagent") {
+		t.Errorf("output missing %q (BUG-003 regressed via STAGEHAND_CONFIG)\noutput:\n%s", "customagent", out)
+	}
+}
+
+// TestProvidersShow_HonorsConfigFlag asserts BUG-003 is fixed for `providers
+// show` (FR47): `providers show <name> --config <path>` loads the override
+// manifest from the explicit config file and prints it as TOML. Before the
+// fix the show RunE ignored --config (same empty-Flags-struct bug), so a
+// provider defined ONLY in the --config file was "unknown". The assertion
+// checks the override command token ("customagent-bin") reaches the output.
+func TestProvidersShow_HonorsConfigFlag(t *testing.T) {
+	path := writeCustomProviderConfig(t)
+
+	root := newProvidersRoot(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"providers", "show", "customagent", "--config", path})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "customagent-bin") {
+		t.Errorf("output missing override command %q (BUG-003 regressed for show)\noutput:\n%s", "customagent-bin", out)
 	}
 }

@@ -62,12 +62,17 @@ func newProvidersCmd() *cobra.Command {
 	return parent
 }
 
-// newProvidersListCmd builds the `providers list` subcommand (FR46). It resolves
-// cfg+reg via config.Load (defaults→global file→repo file→repo git-config; the
-// flags layer is empty because the persistent flags are not yet wired by
-// P1.M7.T2.S1), detects installed providers via reg.Detect, resolves the
-// default provider+model (Default() leaves both empty, so auto-resolution is
-// the common path), and delegates rendering to the pure renderProvidersList.
+// newProvidersListCmd builds the `providers list` subcommand (FR46). It
+// resolves cfg+reg via buildFlags(cmd) → config.Load(flags, ".") — the exact
+// runDefault pattern — so the FULL FR34 precedence chain (defaults→global
+// file→repo file→repo git-config→env layer→CLI-flag layer, incl. an explicit
+// --config / STAGEHAND_CONFIG that overrides discovery) is applied to the
+// listing (BUG-003: the closures previously called config.Load(config.Flags{},
+// "") with an empty Flags struct, which silently ignored --config/--provider/
+// --model and every STAGEHAND_* env var). It then detects installed providers
+// via reg.Detect, resolves the default provider+model (Default() leaves both
+// empty, so auto-resolution is the common path), and delegates rendering to
+// the pure renderProvidersList.
 func newProvidersListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -77,7 +82,11 @@ func newProvidersListCmd() *cobra.Command {
 			"resolved default provider and model (FR46).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, reg, _, err := config.Load(config.Flags{}, "")
+			flags, err := buildFlags(cmd)
+			if err != nil {
+				return err
+			}
+			cfg, reg, _, err := config.Load(flags, ".")
 			if err != nil {
 				return err
 			}
@@ -103,7 +112,11 @@ func newProvidersShowCmd() *cobra.Command {
 			"the exact command stagehand will render (FR47).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, reg, _, err := config.Load(config.Flags{}, "")
+			flags, err := buildFlags(cmd)
+			if err != nil {
+				return err
+			}
+			_, reg, _, err := config.Load(flags, ".")
 			if err != nil {
 				return err
 			}
