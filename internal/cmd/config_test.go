@@ -491,6 +491,39 @@ func TestConfigInit_TemplateIsInert(t *testing.T) {
 	}
 }
 
+// TestConfigInit_TemplateFlag_CollisionSafe verifies the §9.19 FR-F8 cobra collision analysis:
+// `config init` keeps its LOCAL bool `--template` (v1 inert-reference-config behavior); the root
+// PERSISTENT string `--template` (message template) is skipped for `config init` by pflag's
+// AddFlagSet (local name already present) and is unaffected — no panic, no type clash.
+func TestConfigInit_TemplateFlag_CollisionSafe(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--template"})
+
+	err := Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	// The LOCAL bool won: it wrote the inert reference config (v1 behavior), not a value-taking flag.
+	got, err := configInitCmd.Flags().GetBool("template")
+	if err != nil {
+		t.Fatalf("config init --template did not parse as a bool: %v", err)
+	}
+	if !got {
+		t.Error("config init --template bool = false, want true")
+	}
+
+	// The root persistent string --template is untouched (still its zero value) — no collision.
+	if flagTemplate != "" {
+		t.Errorf("flagTemplate = %q, want empty (config init's local bool must not leak into the global string)", flagTemplate)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // config init tests -- --force
 // ---------------------------------------------------------------------------

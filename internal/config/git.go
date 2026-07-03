@@ -137,6 +137,11 @@ func loadGitConfig(repoDir string) (*Config, error) {
 	} else if found {
 		c.Locale = v
 	}
+	if v, found, err := gitConfigGet(repoDir, "stagehand.template"); err != nil {
+		return nil, err
+	} else if found {
+		c.Template = v
+	}
 
 	// --- timeout: accepts both "90" (seconds) and "90s" (Go duration) forms. ---
 	if v, found, err := gitConfigGet(repoDir, "stagehand.timeout"); err != nil {

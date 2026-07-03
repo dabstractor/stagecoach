@@ -69,10 +69,11 @@ var (
 // discipline as flagProvider/flagModel); the &flagExclude address here is its use.
 var flagExclude []string
 
-// §9.19 FR-F1/FR-F6 — format/locale flags (resolved by config.Load via fs.Changed).
+// §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags (resolved by config.Load via fs.Changed).
 var (
-	flagFormat string
-	flagLocale string
+	flagFormat   string
+	flagLocale   string
+	flagTemplate string
 )
 
 // §9.19 FR-F7 — context flag (flag-only; resolved by config.Load via fs.Changed). No env/git/config-file
@@ -157,6 +158,12 @@ func init() {
 	pf.StringVar(&flagLocale, "locale", "",
 		"Write the message in this language (free-form name or BCP-47 tag; env STAGEHAND_LOCALE; "+
 			"git stagehand.locale; [generation].locale; default empty)")
+	// §9.19 FR-F8 — message template (distinct from the LOCAL `config init --template` bool: pflag's
+	// AddFlagSet skips this inherited persistent flag on `config init` since a local name already exists).
+	pf.StringVar(&flagTemplate, "template", "",
+		"Wrap every commit message: the literal $msg is replaced with the generated message, e.g. "+
+			"\"$msg (#205)\" (env STAGEHAND_TEMPLATE; git stagehand.template; [generation].template; "+
+			"default empty). Must contain $msg. (Distinct from 'config init --template'.)")
 	pf.StringVar(&flagContext, "context", "",
 		"Extra context appended to the message+planner payload, e.g. \"hotfix for #812\" "+
 			"(flag only; per-invocation — no env/git/config key)")

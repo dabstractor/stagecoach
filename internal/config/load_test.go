@@ -70,9 +70,10 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 	fs.Int("max-commits", 0, "")
 	// §9.18 FR-X1 — repeatable exclude flag (StringArray; each Set call appends one literal value).
 	fs.StringArray("exclude", nil, "")
-	// §9.19 FR-F1/FR-F6 — format/locale flags.
+	// §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags.
 	fs.String("format", "", "")
 	fs.String("locale", "", "")
+	fs.String("template", "", "")
 	return fs
 }
 
@@ -1068,6 +1069,102 @@ func TestValidateFormat(t *testing.T) {
 				t.Errorf("error %q does not contain valid set", err.Error())
 			}
 		})
+	}
+}
+
+func TestValidateTemplate(t *testing.T) {
+	validTemplates := []string{"", "$msg", "$msg (#205)", "[skip ci] $msg"}
+	for _, tpl := range validTemplates {
+		t.Run("valid_"+tpl, func(t *testing.T) {
+			if err := validateTemplate(tpl); err != nil {
+				t.Errorf("validateTemplate(%q) = %v, want nil", tpl, err)
+			}
+		})
+	}
+	invalidTemplates := []string{"(#205)", "${msg}", "msg"}
+	for _, tpl := range invalidTemplates {
+		t.Run("invalid_"+tpl, func(t *testing.T) {
+			err := validateTemplate(tpl)
+			if err == nil {
+				t.Fatalf("validateTemplate(%q) = nil, want error", tpl)
+			}
+			if !strings.Contains(err.Error(), tpl) {
+				t.Errorf("error %q does not contain %q", err.Error(), tpl)
+			}
+			if !strings.Contains(err.Error(), "$msg") {
+				t.Errorf("error %q does not contain '$msg'", err.Error())
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — template precedence (file < git < env < flag) + hard $msg error
+// ---------------------------------------------------------------------------
+
+func TestLoad_TemplatePrecedence(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+
+	// Layer 2/3: file sets template
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\ntemplate = \"$msg (file)\"\n")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (file)" {
+		t.Errorf("Template=%q want %q (from [generation].template)", cfg.Template, "$msg (file)")
+	}
+
+	// Layer 4: git overrides
+	setGitConfig(t, repo, "stagehand.template", "$msg (git)")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (git)" {
+		t.Errorf("Template=%q want %q (git > file)", cfg.Template, "$msg (git)")
+	}
+
+	// Layer 5: env overrides
+	t.Setenv("STAGEHAND_TEMPLATE", "$msg (env)")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (env)" {
+		t.Errorf("Template=%q want %q (env > git)", cfg.Template, "$msg (env)")
+	}
+
+	// Layer 7: CLI flag overrides
+	fs := newFlagSet(t)
+	if err := fs.Set("template", "$msg (flag)"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (flag)" {
+		t.Errorf("Template=%q want %q (flag > env)", cfg.Template, "$msg (flag)")
+	}
+}
+
+func TestLoad_TemplateNoMsg_HardError(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGEHAND_TEMPLATE", "(#205)")
+
+	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err == nil {
+		t.Fatal("Load err=nil, want error for a resolved template lacking $msg")
+	}
+	if !strings.Contains(err.Error(), "template: invalid template") {
+		t.Errorf("err=%v, want it to contain 'template: invalid template'", err)
+	}
+	if !strings.Contains(err.Error(), "$msg") {
+		t.Errorf("err=%v, want it to mention '$msg'", err)
 	}
 }
 

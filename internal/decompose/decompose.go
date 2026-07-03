@@ -318,9 +318,11 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 	// captured the working-tree change set; a live AddAll would pick up concurrent changes.
 	treePrime := tStart
 
-	// Dup-check the planner's message. Fallback to the message agent ONLY on a duplicate (FR-M11).
-	msg := plannerMsg
-	if dupCheckMessage(ctx, deps, plannerMsg, isUnborn) {
+	// Dup-check the TEMPLATED planner's message (§9.19 FR-F8 seam — before dedupe, §9.7 judges the final
+	// subject). Fallback to the message agent ONLY on a duplicate (FR-M11); it templates internally
+	// (generateMessage → call site #3) so msg is NOT re-templated here.
+	msg := generate.FinalizeMessage(plannerMsg, deps.Config)
+	if dupCheckMessage(ctx, deps, msg, isUnborn) {
 		var err error
 		msg, err = generateMessage(ctx, deps, baseTree, tStart) // the message agent regenerates from baseTree→tStart
 		if err != nil {

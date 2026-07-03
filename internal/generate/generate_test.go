@@ -146,6 +146,63 @@ func TestCommitStaged_DedupeRetryThenSuccess(t *testing.T) {
 	}
 }
 
+// TestCommitStaged_TemplateApplied verifies the §9.19 FR-F8 seam: with cfg.Template set, the
+// generated message is templated before it becomes Result.Message/Subject.
+func TestCommitStaged_TemplateApplied(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello world")
+	stageFile(t, repo, "new.txt")
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+	cfg := config.Defaults()
+	cfg.Template = "$msg (#205)"
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	want := "feat: add login (#205)"
+	if res.Message != want {
+		t.Errorf("Message = %q, want %q (templated)", res.Message, want)
+	}
+	if res.Subject != want {
+		t.Errorf("Subject = %q, want %q (templated)", res.Subject, want)
+	}
+	logMsg := gitOut(t, repo, "log", "--format=%B", "-n1", res.CommitSHA)
+	if logMsg != want {
+		t.Errorf("git log message = %q, want %q", logMsg, want)
+	}
+}
+
+// TestCommitStaged_TemplateSeenByDedupe verifies the §9.7/FR-F8 ordering contract: the duplicate
+// check compares the TEMPLATED subject, not the bare generated one. HEAD's subject is already in
+// the templated shape ("feat: dup (#205)"); the stub's first bare output templates to that same
+// subject and must be rejected, forcing a retry to the second scripted output.
+func TestCommitStaged_TemplateSeenByDedupe(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "feat: dup (#205)") // HEAD subject already carries the template shape
+	writeFile(t, repo, "a.txt", "data")
+	stageFile(t, repo, "a.txt")
+
+	m := stubtest.NewScript(t, bin, []string{"feat: dup", "feat: new"})
+	cfg := config.Defaults()
+	cfg.Template = "$msg (#205)"
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	want := "feat: new (#205)"
+	if res.Subject != want {
+		t.Errorf("Subject = %q, want %q (templated bare-duplicate rejected, fresh accepted)", res.Subject, want)
+	}
+}
+
 // TestCommitStaged_ParseFailRescue verifies that an empty stub output (ok=false)
 // with MaxDuplicateRetries=0 triggers a *RescueError{Kind:ErrRescue}. Asserts
 // HEAD + index are unchanged (idempotent-index invariant, §20.2).

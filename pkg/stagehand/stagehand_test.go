@@ -261,6 +261,54 @@ func TestGenerateCommit_DryRun(t *testing.T) {
 	}
 }
 
+// TestGenerateCommit_TemplateApplied verifies the §9.19 FR-F8 seam reaches runPipeline (call site
+// #2): an injected config.Config with Template set templates the generated message end-to-end.
+func TestGenerateCommit_TemplateApplied(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello world")
+	stageFile(t, repo, "new.txt")
+
+	injected := &config.Config{
+		Provider: "stub",
+		Template: "$msg (#205)",
+		Providers: map[string]map[string]any{
+			"stub": {
+				"command":          bin,
+				"prompt_delivery":  "stdin",
+				"output":           "raw",
+				"strip_code_fence": true,
+				"env":              map[string]any{"STAGEHAND_STUB_OUT": "feat: add x"},
+			},
+		},
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	ctx := context.Background()
+	res, err := GenerateCommit(ctx, Options{Config: injected})
+	if err != nil {
+		t.Fatalf("GenerateCommit: %v", err)
+	}
+
+	want := "feat: add x (#205)"
+	if res.Message != want {
+		t.Errorf("Message = %q, want %q (templated)", res.Message, want)
+	}
+	if res.Subject != want {
+		t.Errorf("Subject = %q, want %q (templated)", res.Subject, want)
+	}
+}
+
 // TestGenerateCommit_NothingStaged verifies that nothing staged returns ErrNothingToCommit.
 func TestGenerateCommit_NothingStaged(t *testing.T) {
 	setupTestRepo(t, stubtest.Options{Out: "feat: x"})

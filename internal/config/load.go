@@ -169,6 +169,9 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	if err := validateFormat(cfg.Format); err != nil {
 		return nil, fmt.Errorf("format: %w", err)
 	}
+	if err := validateTemplate(cfg.Template); err != nil {
+		return nil, fmt.Errorf("template: %w", err)
+	}
 
 	return &cfg, nil
 }
@@ -244,6 +247,9 @@ func loadEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("STAGEHAND_LOCALE"); ok && v != "" {
 		cfg.Locale = v
+	}
+	if v, ok := os.LookupEnv("STAGEHAND_TEMPLATE"); ok && v != "" {
+		cfg.Template = v
 	}
 
 	return nil
@@ -343,6 +349,11 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.Locale = v
 		}
 	}
+	if fs.Changed("template") {
+		if v, err := fs.GetString("template"); err == nil {
+			cfg.Template = v
+		}
+	}
 
 	// §9.19 FR-F7 — context via CLI flag ONLY (no env/git/file source; per-invocation). Mirrors --exclude's
 	// flag-only discipline (there is no STAGEHAND_CONTEXT / stagehand.context / [generation].context).
@@ -368,6 +379,17 @@ func validateFormat(format string) error {
 		}
 	}
 	return fmt.Errorf("invalid format %q (valid: %s)", format, strings.Join(validFormats, ", "))
+}
+
+// validateTemplate returns nil iff tpl is empty or contains the literal "$msg" substring, else an error
+// (PRD §9.19 FR-F8: "must contain the literal $msg", hard configuration error otherwise). PURE (no I/O) so
+// it is unit-testable; called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Template (not per-layer —
+// a low-layer template overridden by a valid higher layer is not an error).
+func validateTemplate(tpl string) error {
+	if tpl == "" || strings.Contains(tpl, "$msg") {
+		return nil
+	}
+	return fmt.Errorf("invalid template %q: must contain the literal $msg (e.g. %q)", tpl, "$msg (#205)")
 }
 
 // configVersionNotice returns the PRD §9.17 FR-B4 advisory text when a loaded config file's schema version

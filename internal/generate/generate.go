@@ -235,7 +235,8 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
-		signal.SetCandidate(m) // keep the §18.3 candidate note current
+		m = FinalizeMessage(m, cfg) // §9.19 FR-F8 seam — template BEFORE dedupe (§9.7 judges the final subject)
+		signal.SetCandidate(m)      // keep the §18.3 candidate note current
 
 		subject := ExtractSubject(m) // same package — no prefix
 		if IsDuplicate(subject, recent) {

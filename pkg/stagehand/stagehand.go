@@ -516,7 +516,8 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			continue
 		}
 		parseFail = false
-		signal.SetCandidate(m) // keep the §18.3 candidate note current
+		m = generate.FinalizeMessage(m, cfg) // §9.19 FR-F8 seam — template BEFORE dedupe (§9.7 judges the final subject)
+		signal.SetCandidate(m)               // keep the §18.3 candidate note current
 
 		subject := generate.ExtractSubject(m)
 		if generate.IsDuplicate(subject, recent) {

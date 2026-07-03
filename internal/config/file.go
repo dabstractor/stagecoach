@@ -58,6 +58,7 @@ type fileGeneration struct {
 	Exclude             []string `toml:"exclude"`           // V2.1 — §9.18 FR-X1 exclusion globs; UNION-merged in overlay()
 	Format              string   `toml:"format"`            // V2.1 — §9.19 FR-F1 message format (validated at Load)
 	Locale              string   `toml:"locale"`            // V2.1 — §9.19 FR-F6 message locale (free-form, never validated)
+	Template            string   `toml:"template"`          // V2.1 — §9.19 FR-F8 message template (validated at Load)
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +243,9 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if g.Locale != "" {
 		c.Locale = g.Locale
 	}
+	if g.Template != "" {
+		c.Template = g.Template
+	}
 	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
@@ -372,6 +376,9 @@ func overlay(dst, src *Config) {
 	}
 	if src.Locale != "" {
 		dst.Locale = src.Locale
+	}
+	if src.Template != "" {
+		dst.Template = src.Template
 	}
 }
 

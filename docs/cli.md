@@ -37,6 +37,7 @@ With no subcommand, `stagehand` runs the **default action**. The routing depends
 | `--exclude <glob>`, `-x` | string (repeatable) | — | — | — | Exclude matching files from the agent payload (placeholder line instead of the diff; never excluded from the commit itself). Unions with `.stagehandignore` and `[generation].exclude` — repeat the flag to add more than one glob; it does not override the config-file set |
 | `--format <mode>` | string | `auto` | `STAGEHAND_FORMAT` | `stagehand.format` | Message format: `auto` (style learning) \| `conventional` \| `gitmoji` \| `plain`. An unknown mode is a hard error (exit 1). Also `[generation].format`. |
 | `--locale <lang>` | string | "" | `STAGEHAND_LOCALE` | `stagehand.locale` | Write the message in this language (free-form name or BCP-47 tag; never validated). Also `[generation].locale`. |
+| `--template <tpl>` | string | "" | `STAGEHAND_TEMPLATE` | `stagehand.template` | Wrap every commit message: `$msg` is replaced with the generated message, e.g. `"$msg (#205)"`. Must contain the literal `$msg` (else hard error, exit 1). Applies to every commit in a run. Also `[generation].template`. Distinct from `config init --template`. |
 | `--context <text>` | string | "" | — | — | Extra authoritative context appended to the message and planner payloads (e.g. `"hotfix for #812"`). Flag only — per-invocation; no env var, git-config, or config-file key. |
 | `--planner-provider <name>` | string | "" | `STAGEHAND_PLANNER_PROVIDER` | — | Per-role provider override for the decomposition planner |
 | `--planner-model <name>` | string | "" | `STAGEHAND_PLANNER_MODEL` | — | Per-role model override for the decomposition planner |
@@ -168,6 +169,7 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--arbiter-model` | `STAGEHAND_ARBITER_MODEL` | — |
 | `--format` | `STAGEHAND_FORMAT` | `stagehand.format` |
 | `--locale` | `STAGEHAND_LOCALE` | `stagehand.locale` |
+| `--template` | `STAGEHAND_TEMPLATE` | `stagehand.template` |
 | `--reasoning` | `STAGEHAND_REASONING` | `stagehand.reasoning` |
 | `--planner-reasoning` | `STAGEHAND_PLANNER_REASONING` | — |
 | `--stager-reasoning` | `STAGEHAND_STAGER_REASONING` | — |

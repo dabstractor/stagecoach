@@ -159,6 +159,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
+		m = generate.FinalizeMessage(m, deps.Config) // §9.19 FR-F8 seam — before dedupe
 
 		subject := generate.ExtractSubject(m)
 		if generate.IsDuplicate(subject, recent) {

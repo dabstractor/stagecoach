@@ -86,7 +86,11 @@ type Config struct {
 	// Locale is a free-form language name or BCP-47 tag appended to the system prompt (PRD §9.19
 	// FR-F6). Resolved through the standard 5-layer precedence; NEVER validated, passed verbatim
 	// (no i18n tables). Empty = no locale instruction. Consumed by S3.
-	Locale         string  `toml:"locale"`
+	Locale string `toml:"locale"`
+	// Template is the §9.19 FR-F8 message template. When non-empty it MUST contain the literal `$msg`
+	// (validated at Load — hard error otherwise); the substituted message lands AFTER parse/cleanup and
+	// BEFORE the duplicate check (§9.7). Standard 5-layer precedence (file→git→env→flag). Empty = no template.
+	Template       string  `toml:"template"`
 	Output         *string `toml:"output"`           // nil ⇒ honor manifest (S2 bridge); non-nil ⇒ override
 	StripCodeFence *bool   `toml:"strip_code_fence"` // strip ``` fences from agent output; nil ⇒ true
 	// V2 generation tuning (PRD §16.2, §9.1 FR3a, §9.14 FR-M4) — decoded from [generation] in S2.
@@ -157,6 +161,7 @@ func Defaults() Config {
 		StripCodeFence:      nil,
 		Format:              "auto", // §9.19 FR-F1 default (NON-empty; validateFormat would reject "" — must be set here)
 		Locale:              "",     // §9.19 FR-F6 default (empty = no locale instruction)
+		Template:            "",     // §9.19 FR-F8 default (empty = no template; validateTemplate accepts "")
 		MaxCommits:          12,     // §9.14 FR-M4 default safety cap on auto-decompose
 		BinaryExtensions:    nil,    // nil ⇒ built-in denylist only (§9.1 FR3a)
 		Exclude:             nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
