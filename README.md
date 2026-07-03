@@ -3,7 +3,7 @@
 > **Stagehand writes your commit messages using the AI agent you already pay for.**
 > No API key. No per-token billing. It shells out to Claude Code, Codex, Gemini CLI, pi, opencode, agy, qwen-code, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
-A snapshot-based AI commit message generator that uses YOUR local CLI agent.
+A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery — see [Features](#features) below.
 
 <!-- TODO: add LICENSE file and badge -->
 
@@ -52,6 +52,22 @@ Net: almost every provider cares about keeping you on their harness, whether by 
 Antigravity, Cursor, gemini-cli) or by incentive (Z.ai). Opencode is the outlier.
 
 </details>
+
+> [!NOTE]
+> What we deliberately didn't build is tracked in [FUTURE_SPEC.md](FUTURE_SPEC.md).
+
+## Features
+
+Stagehand does one thing — commit messages — and a few things around them.
+
+| Capability | Description |
+|---|---|
+| Payload exclusions | `.stagehandignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
+| Message shaping | `--format` (auto, conventional, gitmoji, plain), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
+| Git hook mode | `stagehand hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
+| Tool integrations | `stagehand integrate install git-alias lazygit` wires `git stagehand` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
+| `--edit` / `--push` | Review in `$EDITOR` before the atomic commit; push after a clean run ([docs](docs/cli.md)). |
+| Discovery | `stagehand models` and `config init --interactive` for guided setup ([docs](docs/cli.md#models-provider)). |
 
 ## Install
 
@@ -109,6 +125,17 @@ stagehand --dry-run
 > [!NOTE]
 > If generation fails, `--dry-run` exits 1 with a short message — not the full recovery recipe or exit 3/124 — since no commit was ever intended.
 
+### More options
+
+```bash
+stagehand --push                 # commit + push after a clean run
+stagehand --edit                 # review in $EDITOR before the atomic commit
+stagehand --format conventional  # force conventional-commit style
+stagehand --exclude '*.snap'     # hide snapshot diffs from the model (still committed)
+```
+
+See [Features](#features) above and the [CLI reference](docs/cli.md) for the rest.
+
 ### Multi-commit decomposition
 
 With a dirty working tree and nothing staged, `stagehand` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagehand owns every commit via git plumbing.
@@ -140,16 +167,33 @@ stagehand --single
 
 See [How Stagehand works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
 
-### lazygit binding
+### lazygit & git alias
+
+```bash
+stagehand integrate install lazygit      # default key <c-a>; --key '<c-s>' to customize
+stagehand integrate install git-alias     # enables `git stagehand` everywhere
+stagehand integrate list                  # see what's installed / detected
+```
+
+> [!NOTE]
+> gitui isn't supported — see [FUTURE_SPEC.md](FUTURE_SPEC.md) §1.2.
+
+<details>
+<summary><em>Manual install (no <code>stagehand integrate</code>)</em></summary>
+
+If you prefer to paste the YAML yourself, add this to your lazygit `config.yml` (see [docs/cli.md#lazygit-target](docs/cli.md#lazygit-target) for the canonical block):
 
 ```yaml
-# From lazygit config.yml:
-#   customCommands:
-#     - key: '<c-a>'
-#       command: 'stagehand'
-#       loadingText: 'Generating commit message…'
-#       output: 'none'
+customCommands:
+  - key: '<c-a>'                       # stagehand-integration
+    context: 'files'
+    command: 'stagehand'
+    loadingText: 'Generating commit message…'
+    output: 'none'
+    description: 'stagehand: AI commit'
 ```
+
+</details>
 
 ## Configure your agent
 
@@ -304,6 +348,22 @@ stagehand --verbose
 ```
 
 This prints the resolved provider command, raw agent output, and retry attempts.
+
+### Does it run my pre-commit hooks?
+
+The default `stagehand` command builds commits via **git plumbing** (`write-tree` / `commit-tree` / `update-ref`) for atomicity and stage-while-generating. Because the commit never flows through `git commit`, **pre-commit hooks do not run** — tools like husky, lint-staged, and `.pre-commit-config.yaml` are bypassed.
+
+For day-to-day commits where pre-commit hooks must run, install **hook mode**:
+
+```bash
+stagehand hook install
+```
+
+Then use plain `git commit` — generation fills the message and never blocks the commit. The two modes compose: hook mode for `git commit`, the snapshot-based flow for the atomic path. See the full trade-off in [How Stagehand works — Trade-off inversion (FR-H7)](docs/how-it-works.md#trade-off-inversion-fr-h7).
+
+### What about PR generation, editor extensions, a GitHub Action, API-key providers?
+
+Stagehand writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, self-update, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md).
 
 ---
 
