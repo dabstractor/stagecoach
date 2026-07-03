@@ -200,6 +200,55 @@ stagehand config path
 # ~/.config/stagehand/config.toml
 ```
 
+### `integrate list`
+
+List all integration targets with detection status, integration state, and config path:
+
+```text
+TARGET      DETECTED  STATUS         CONFIG
+git-alias   ✓         installed      ~/.gitconfig
+lazygit     ✓         not installed  —
+```
+
+- **TARGET**: the integration name (the `<target>` argument for install/remove)
+- **DETECTED**: ✓ if the tool is on `$PATH`, ✗ otherwise
+- **STATUS**: `not installed`, `installed`, or `foreign` (a conflicting entry exists)
+- **CONFIG**: the resolved config file path the integration edits (— if the tool is absent or the path cannot be determined)
+
+Supported targets are `git-alias` and `lazygit`. (gitui is blocked upstream — see FUTURE_SPEC.md.)
+
+Detection gating (FR-I2): a target whose tool is absent is still listed (DETECTED=✗) but `install`/`remove` for it prints a note and exits 1.
+
+### `integrate install <target>…`
+
+Install one or more stagehand integrations. Targets are explicit (at least one required; there is no "install all" default). Each target runs the no-mangle protocol (see below) independently. Multiple targets may be named; if any target fails (detection gate, install error, or unknown target), the remaining targets are still attempted (best-effort), and the command exits 1.
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip the y/N confirmation prompt and apply changes directly (for scripts and CI) |
+
+Detection gating (FR-I2): if a named target's tool is not on `$PATH`, the target is skipped with a note to stderr and marked as failed. `git-alias` requires only `git` (always present for stagehand); `lazygit` requires `lazygit` on `$PATH`.
+
+Decline and no-change outcomes (user answered N, or the integration is already applied) are reported on stdout and are NOT errors (exit 0).
+
+```bash
+stagehand integrate install git-alias lazygit    # install both
+stagehand integrate install --yes git-alias     # skip confirmation
+```
+
+### `integrate remove <target>…`
+
+Remove one or more stagehand integrations. Same semantics as `install`: explicit targets, detection gating, best-effort batch, and `--yes` to skip confirmation.
+
+```bash
+stagehand integrate remove lazygit     # remove lazygit integration
+stagehand integrate remove --yes git-alias lazygit
+```
+
+#### No-mangle protocol
+
+Every file edit by an integration runs the no-mangle protocol (PRD §9.21 FR-I3): a unified-diff preview is shown, the user is asked to confirm (`y/N`; use `--yes` to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently.
+
 ## Exit codes
 
 | Code | Meaning |

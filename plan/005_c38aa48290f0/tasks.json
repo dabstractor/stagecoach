@@ -319,7 +319,7 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "No-mangle protocol and command surface",
-              "status": "Ready",
+              "status": "Complete",
               "description": "The reusable parse→preview→confirm→backup→validate engine (FR-I3) and the integrate command group (FR-I1, FR-I2).",
               "subtasks": [
                 {
@@ -341,7 +341,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "`integrate list|install|remove` command surface with detection gating",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -367,7 +367,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "git-alias target",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S2"
