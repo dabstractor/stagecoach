@@ -522,14 +522,14 @@
               "id": "P1.M7.T1",
               "type": "Task",
               "title": "Public library API (pkg/stagehand)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "The tiny, stable public surface (PRD §14.1): GenerateCommit + Options + Result, delegating to internal/generate.CommitStaged.",
               "subtasks": [
                 {
                   "id": "P1.M7.T1.S1",
                   "type": "Subtask",
                   "title": "pkg/stagehand/stagehand.go — GenerateCommit(ctx, opts) (Result, error)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M6.T1.S1"

@@ -118,6 +118,21 @@ type Deps struct {
 	// Output is the *ui.Output: Resultf→stdout (FR42 success), Progressf→stderr
 	// always (rescue + head-moved), Verbosef→stderr gated.
 	Output *ui.Output
+
+	// DryRun (PRD FR49) runs the full pipeline (diff→snapshot→generate→
+	// parse→dedupe) but short-circuits BEFORE commit-tree/update-ref,
+	// returning Result{CommitSHA:""} with the generated message and leaving
+	// HEAD unchanged. Additive seam added by P1.M7.T1.S1 for the public
+	// stagehand.GenerateCommit wrapper; the zero value (false) is the M6.T1.S1
+	// behavior (commit is created) — byte-identical when unset.
+	DryRun bool
+
+	// SystemExtra is appended to the built system prompt (after
+	// prompt.BuildSystemPrompt) so a caller can inject extra guidance (a
+	// project convention, a style nudge) without re-implementing the prompt
+	// builders. Additive seam added by P1.M7.T1.S1; the zero value ("") is a
+	// no-op — byte-identical to M6.T1.S1 when unset.
+	SystemExtra string
 }
 
 // Result is the successful-commit return value: the new commit's full SHA, its
@@ -233,6 +248,11 @@ func CommitStaged(ctx context.Context, deps Deps) (Result, error) {
 		return Result{}, ErrRescue
 	}
 	sys := prompt.BuildSystemPrompt(examples, hasMultiline, count <= 1, cfg.SubjectTargetChars)
+	// SystemExtra seam (P1.M7.T1.S1): append caller-supplied guidance after
+	// the built system prompt. Empty ⇒ no-op (byte-identical M6.T1.S1).
+	if deps.SystemExtra != "" {
+		sys += "\n\n" + deps.SystemExtra
+	}
 	subjects, err := deps.Git.RecentSubjects(50)
 	if err != nil {
 		Rescue(out, treeSHA, parentSHA, "")
@@ -302,6 +322,19 @@ outer:
 	if !committed {
 		Rescue(out, treeSHA, parentSHA, msg)
 		return Result{}, ErrRescue
+	}
+
+	// DryRun short-circuit (PRD FR49, P1.M7.T1.S1): the full pipeline ran
+	// (diff→snapshot→generate→parse→dedupe) and produced a UNIQUE message, but
+	// we stop BEFORE commit-tree/update-ref. restoreSignalHandler disarms the
+	// post-snapshot handler (a late Ctrl-C must NOT be mistaken for a
+	// generation failure), the message is printed to stdout (byte-clean for
+	// `| tee`), and Result.CommitSHA is "" (no commit/ref mutation). The zero
+	// value (DryRun=false) skips this block entirely — byte-identical M6.T1.S1.
+	if deps.DryRun {
+		restoreSignalHandler()
+		out.Resultf("%s\n", msg)
+		return Result{CommitSHA: "", Subject: firstLine(msg), Message: msg}, nil
 	}
 
 	// (6) COMMIT block. CommitTree builds a (dangling) commit object; its

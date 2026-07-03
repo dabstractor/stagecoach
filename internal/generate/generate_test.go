@@ -67,12 +67,14 @@ type stubRunner struct {
 	runCalls   int
 	parseCalls int
 	payloads   []string
+	lastSys    string // the system prompt delivered to the most recent Run (SystemExtra assertion)
 }
 
-func (r *stubRunner) Run(_ context.Context, _ provider.Manifest, _, _, _ string, payload string) (string, error) {
+func (r *stubRunner) Run(_ context.Context, _ provider.Manifest, _, _, sys string, payload string) (string, error) {
 	i := r.runCalls
 	r.runCalls++
 	r.payloads = append(r.payloads, payload)
+	r.lastSys = sys
 	resp := r.response(i)
 	return resp.stdout, resp.err
 }
@@ -615,5 +617,81 @@ func TestCommitStaged_RootCommit(t *testing.T) {
 	// FR42 success print still fires for the root commit.
 	if !strings.Contains(stdout.String(), "[newsha0] feat: initial commit") {
 		t.Errorf("stdout missing the FR42 success line for root commit\n--got--\n%s", stdout.String())
+	}
+}
+
+// TestCommitStaged_DryRun proves the FR49 dry-run seam (P1.M7.T1.S1): with
+// deps.DryRun=true the full pipeline runs (diff→snapshot→generate→parse→
+// dedupe) and yields a UNIQUE message, but CommitStaged short-circuits BEFORE
+// commit-tree/update-ref. Asserts: Result.CommitSHA=="" (no commit/ref
+// mutation), Subject+Message carry the generated message, the message is
+// printed to stdout, and crucially CommitTree + UpdateRefCAS are NEVER called
+// (the dangling tree would be unreachable, but the refs must not move) and NO
+// rescue is rendered (the run succeeded). The zero-value (DryRun=false) path
+// is covered by TestCommitStaged_HappyPath above, so this test isolates the
+// seam behavior.
+func TestCommitStaged_DryRun(t *testing.T) {
+	g := &stubGit{}
+	r := &stubRunner{responses: []stubResponse{{stdout: "feat: dry-run change", msg: "feat: dry-run change", ok: true}}}
+	deps := baseDeps(g, r, 3)
+	deps.DryRun = true // FR49: run the pipeline, skip the commit
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	deps.Output = newTestOutput(stdout, stderr)
+
+	res, err := CommitStaged(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("CommitStaged returned error %v; want nil (dry-run succeeds)", err)
+	}
+	// ★ CommitSHA must be empty — NO commit/ref mutation.
+	if res.CommitSHA != "" {
+		t.Errorf("Result.CommitSHA = %q; want \"\" (dry-run must NOT commit)", res.CommitSHA)
+	}
+	if res.Subject != "feat: dry-run change" || res.Message != "feat: dry-run change" {
+		t.Errorf("Result = {%q,%q}; want the generated message in Subject+Message", res.Subject, res.Message)
+	}
+	// ★ The defining assertion: the commit plumbing is NEVER reached.
+	if g.commitTreeCalls != 0 {
+		t.Errorf("CommitTree call count = %d; want 0 (dry-run short-circuits before commit-tree)", g.commitTreeCalls)
+	}
+	if g.casCalls != 0 {
+		t.Errorf("UpdateRefCAS call count = %d; want 0 (dry-run short-circuits before update-ref)", g.casCalls)
+	}
+	// The message is printed to stdout (byte-clean for `| tee`).
+	if !strings.Contains(stdout.String(), "feat: dry-run change") {
+		t.Errorf("stdout must contain the dry-run message\n--got--\n%s", stdout.String())
+	}
+	// Dry-run is a SUCCESS path: NO rescue.
+	if rescueRendered(stderr) {
+		t.Errorf("stderr must NOT rescue on dry-run (success path)\n--got--\n%s", stderr.String())
+	}
+}
+
+// TestCommitStaged_SystemExtra proves the SystemExtra seam (P1.M7.T1.S1): when
+// deps.SystemExtra is non-empty it is appended to the built system prompt and
+// delivered to the agent's Run call. Asserts r.lastSys CONTAINS the extra
+// text (the rest of the prompt is exercised by the prompt-builder tests).
+// Empty SystemExtra (the M6.T1.S1 default) is a no-op, covered by every other
+// test in this file.
+func TestCommitStaged_SystemExtra(t *testing.T) {
+	g := &stubGit{}
+	r := &stubRunner{responses: []stubResponse{{stdout: "feat: thing", msg: "feat: thing", ok: true}}}
+	deps := baseDeps(g, r, 3)
+	deps.SystemExtra = "X-TRA-PROJECT-CONVENTION"
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	deps.Output = newTestOutput(stdout, stderr)
+
+	res, err := CommitStaged(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("CommitStaged returned error %v; want nil", err)
+	}
+	if res.CommitSHA != g.newSHA {
+		t.Errorf("Result.CommitSHA = %q; want %q (SystemExtra must not block the commit)", res.CommitSHA, g.newSHA)
+	}
+	// ★ The extra guidance reached the agent's system prompt.
+	if !strings.Contains(r.lastSys, "X-TRA-PROJECT-CONVENTION") {
+		t.Errorf("delivered system prompt = %q; want it to contain the SystemExtra text", r.lastSys)
+	}
+	if rescueRendered(stderr) {
+		t.Errorf("stderr must NOT rescue on success\n--got--\n%s", stderr.String())
 	}
 }
