@@ -164,6 +164,43 @@ func TestAddAll_StagesNewModifiedDeleted(t *testing.T) {
 	}
 }
 
+// TestStagedFileCount_ZeroOnClean proves the (0, nil) clean contract: with
+// HEAD present and the index matching HEAD, `git diff --cached --name-only`
+// exits 0 with EMPTY stdout, which StagedFileCount parses to 0 (NOT an error).
+// This is the FR18 count primitive's empty floor.
+func TestStagedFileCount_ZeroOnClean(t *testing.T) {
+	g := newTempRepo(t)
+	seedCommits(t, g, []string{"init"}) // HEAD exists, index clean
+
+	got, err := g.StagedFileCount()
+	if err != nil {
+		t.Fatalf("StagedFileCount on clean index returned error %v; want nil", err)
+	}
+	if got != 0 {
+		t.Errorf("StagedFileCount = %d on clean index; want 0", got)
+	}
+}
+
+// TestStagedFileCount_AfterStagingFiles proves the count reflects the staged
+// set: with HEAD present and THREE distinct files staged, StagedFileCount
+// returns (3, nil). This is the FR18 "(N files)" count the CLI auto-stage
+// notice prints.
+func TestStagedFileCount_AfterStagingFiles(t *testing.T) {
+	g := newTempRepo(t)
+	seedCommits(t, g, []string{"init"}) // HEAD exists, index starts clean
+	writeFileStage(t, g, "one.txt", "1\n")
+	writeFileStage(t, g, "two.txt", "2\n")
+	writeFileStage(t, g, "three.txt", "3\n")
+
+	got, err := g.StagedFileCount()
+	if err != nil {
+		t.Fatalf("StagedFileCount after staging returned error %v; want nil", err)
+	}
+	if got != 3 {
+		t.Errorf("StagedFileCount = %d after staging 3 files; want 3", got)
+	}
+}
+
 // TestAddAll_CleanRepoReturnsNoError proves `git add -A` exits 0 (returns nil)
 // even when there is nothing to stage — "nothing to add" is NOT an error — and
 // leaves HasStagedChanges at (false, nil).

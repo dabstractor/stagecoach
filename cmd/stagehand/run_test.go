@@ -17,14 +17,14 @@ import (
 )
 
 // These white-box tests cover the MOCKING contract for the stagehand default
-// action (PRD §15.1/§15.2/§15.4, FR16–FR20/FR42/FR49–FR51). They mirror the
-// repo's testing conventions: white-box package main, stdlib + cobra +
-// internal/* + pkg/stagehand only, NO testify. The hermetic targets are the
-// pure helpers in run.go (buildFlags / resolveAndCheckProvider /
-// maybeAutoStagePolicy / mapErrorToExitCode / buildOptions), driven with a
-// freshly-constructed *cobra.Command (via registerPersistentFlags) and
-// t.Setenv for the STAGEHAND_* env — never the package-global rootCmd, so
-// each test's flag-parse state is independent.
+// action (PRD §15.1/§15.2/§15.4, FR42/FR49–FR51). They mirror the repo's
+// testing conventions: white-box package main, stdlib + cobra + internal/* +
+// pkg/stagehand only, NO testify. The hermetic targets are the pure helpers in
+// run.go (buildFlags / resolveAndCheckProvider / mapErrorToExitCode /
+// buildOptions), driven with a freshly-constructed *cobra.Command (via
+// registerPersistentFlags) and t.Setenv for the STAGEHAND_* env — never the
+// package-global rootCmd, so each test's flag-parse state is independent. The
+// FR16–FR20 staging-policy tests (maybeAutoStage) live in stage_test.go.
 
 // newTestCmd returns a fresh *cobra.Command carrying the exact PRD §15.2
 // persistent flag set (via the same registerPersistentFlags rootCmd uses).
@@ -35,23 +35,6 @@ func newTestCmd(t *testing.T) *cobra.Command {
 	cmd := &cobra.Command{Use: "stagehand"}
 	registerPersistentFlags(cmd)
 	return cmd
-}
-
-// fakeStager is an in-process stager stub: HasStagedChanges/AddAll return
-// canned values and record that AddAll was called. *git.Git satisfies the
-// real stager interface; this stub lets the FR16–FR20 policy tests run without
-// a real git binary or a temp repo.
-type fakeStager struct {
-	staged    bool
-	stageErr  error
-	addErr    error
-	addCalled bool
-}
-
-func (f *fakeStager) HasStagedChanges() (bool, error) { return f.staged, f.stageErr }
-func (f *fakeStager) AddAll() error {
-	f.addCalled = true
-	return f.addErr
 }
 
 // TestBuildFlags_FlagOverEnv asserts the FR34 precedence MOCKING contract: a
@@ -271,6 +254,7 @@ func TestMapErrorToExitCode(t *testing.T) {
 	}{
 		{"nil", nil, ui.ExitSuccess},
 		{"ErrNothingToCommit", stagehand.ErrNothingToCommit, ui.ExitNothingToCommit},
+		{"ErrNothingStaged", ErrNothingStaged, ui.ExitNothingToCommit},
 		{"ErrRescue", stagehand.ErrRescue, ui.ExitRescue},
 		{"ErrHeadMoved", stagehand.ErrHeadMoved, ui.ExitError},
 		{"arbitrary", arbitrary, ui.ExitError},
@@ -282,79 +266,6 @@ func TestMapErrorToExitCode(t *testing.T) {
 				t.Errorf("mapErrorToExitCode(%v) = %d, want %d", tc.err, got, tc.want)
 			}
 		})
-	}
-}
-
-// TestMaybeAutoStage_NothingStagedNoAutoStageExit2 asserts FR19: nothing staged
-// + --no-auto-stage → exit 2 (ExitNothingToCommit), without touching AddAll.
-func TestMaybeAutoStage_NothingStagedNoAutoStageExit2(t *testing.T) {
-	g := &fakeStager{staged: false}
-	var stderr bytes.Buffer
-	out := ui.NewOutput(&bytes.Buffer{}, &stderr, false, false)
-
-	cfg := config.Config{AutoStageAll: true} // auto-stage IS on, but --no-auto-stage overrides
-	code := maybeAutoStagePolicy(g, out, cfg, false /*all*/, true /*noAutoStage*/)
-
-	if code != ui.ExitNothingToCommit {
-		t.Errorf("code = %d, want %d", code, ui.ExitNothingToCommit)
-	}
-	if g.addCalled {
-		t.Error("AddAll was called, want it NOT called under --no-auto-stage")
-	}
-	if !strings.Contains(stderr.String(), "nothing to commit") {
-		t.Errorf("stderr = %q, want it to mention a nothing-to-commit notice", stderr.String())
-	}
-}
-
-// TestMaybeAutoStage_AutoStagesThenClean asserts FR16/FR17/FR18: nothing staged
-// + auto-staging on → AddAll runs, the staging notice prints, and a still-clean
-// index (the stub stays false) yields exit 2.
-func TestMaybeAutoStage_AutoStagesThenClean(t *testing.T) {
-	g := &fakeStager{staged: false}
-	var stderr bytes.Buffer
-	out := ui.NewOutput(&bytes.Buffer{}, &stderr, false, false)
-
-	cfg := config.Config{AutoStageAll: true}
-	code := maybeAutoStagePolicy(g, out, cfg, false, false)
-
-	if code != ui.ExitNothingToCommit {
-		t.Errorf("code = %d, want %d (still clean after auto-stage)", code, ui.ExitNothingToCommit)
-	}
-	if !g.addCalled {
-		t.Error("AddAll was not called, want it called under auto_stage_all")
-	}
-	if !strings.Contains(stderr.String(), "staging all changes") {
-		t.Errorf("stderr = %q, want the FR18 \"staging all changes\" notice", stderr.String())
-	}
-}
-
-// TestMaybeAutoStage_AllFlagForcesAdd asserts FR20: --all/-a forces AddAll even
-// when something is already staged.
-func TestMaybeAutoStage_AllFlagForcesAdd(t *testing.T) {
-	g := &fakeStager{staged: true}
-	out := ui.NewOutput(&bytes.Buffer{}, &bytes.Buffer{}, false, false)
-
-	code := maybeAutoStagePolicy(g, out, config.Config{AutoStageAll: true}, true, false)
-	if code != ui.ExitSuccess {
-		t.Errorf("code = %d, want %d", code, ui.ExitSuccess)
-	}
-	if !g.addCalled {
-		t.Error("AddAll was not called, want it called under --all with staged changes")
-	}
-}
-
-// TestMaybeAutoStage_StagedNoAllProceeds asserts the common path: something
-// already staged, no --all → proceed (0) WITHOUT calling AddAll.
-func TestMaybeAutoStage_StagedNoAllProceeds(t *testing.T) {
-	g := &fakeStager{staged: true}
-	out := ui.NewOutput(&bytes.Buffer{}, &bytes.Buffer{}, false, false)
-
-	code := maybeAutoStagePolicy(g, out, config.Config{AutoStageAll: true}, false, false)
-	if code != ui.ExitSuccess {
-		t.Errorf("code = %d, want %d", code, ui.ExitSuccess)
-	}
-	if g.addCalled {
-		t.Error("AddAll was called, want it NOT called when staged and no --all")
 	}
 }
 

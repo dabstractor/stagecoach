@@ -515,7 +515,7 @@
           "id": "P1.M7",
           "type": "Milestone",
           "title": "CLI & Public Library API",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Wire the public pkg/stagehand.GenerateCommit (thin wrapper over CommitStaged, v2-stable seam) and the cmd/stagehand cobra CLI: global flags, the default action (maybeAutoStage → GenerateCommit → exit codes), the auto-stage CLI path, and the providers/config subcommands. Staging policy lives ONLY here, preserving the v2 seam.",
           "tasks": [
             {
@@ -542,7 +542,7 @@
               "id": "P1.M7.T2",
               "type": "Task",
               "title": "CLI root command, global flags & default action",
-              "status": "Planned",
+              "status": "Complete",
               "description": "The cobra root command with all global flags (PRD §15.2), precedence loading, the default action (auto-stage → GenerateCommit → print → exit codes), verbosity/color.",
               "subtasks": [
                 {
@@ -564,7 +564,7 @@
                   "id": "P1.M7.T2.S2",
                   "type": "Subtask",
                   "title": "maybeAutoStage — auto-stage-all & nothing-staged CLI path",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M7.T2.S1",

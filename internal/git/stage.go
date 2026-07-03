@@ -16,7 +16,10 @@
 // policy is decided in main = maybeAutoStage(); CommitStaged()).
 package git
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // HasStagedChanges reports whether the index holds staged (index-vs-HEAD)
 // changes — the empty-check primitive the CLI layer's auto-stage path and the
@@ -64,6 +67,43 @@ func (g *Git) HasStagedChanges() (bool, error) {
 	// Any other non-zero exit (e.g. not-a-repo): a genuine failure — surface
 	// the typed *ExitError as-is.
 	return false, err
+}
+
+// StagedFileCount counts the files currently staged (index-vs-HEAD) — the
+// file-count primitive the CLI layer's auto-stage path consumes for the FR18
+// "(N files)" notice on the "Nothing staged — staging all changes." line
+// (PRD §22.3: shell out to the real git binary, no go-git; §19: no sh -c — the
+// --cached/--name-only flags are passed as literal args; FR18: the
+// "(N files)" count on the auto-stage notice; decisions.md §1: primitive
+// only — the CLI layer decides WHEN to call this and what to do with the
+// count).
+//
+// It runs `git diff --cached --name-only` (the --cached/--name-only flags are
+// literal args — PRD §19), which lists one staged file path per line. Unlike
+// HasStagedChanges it does NOT use --quiet/--exit-code, so there is NO
+// exit-status-as-boolean convention to route here: a clean index exits 0 with
+// EMPTY stdout, which is parsed to 0 (NOT an error). Only a genuine failure
+// (e.g. "not a git repository", a non-zero exit that is not the clean/staged
+// signal) surfaces as the typed *[ExitError].
+//
+// Counting splits the stdout on '\n' and skips empty lines. Each line is
+// trimmed of a trailing '\r' ONLY (NOT strings.TrimSpace) so a staged file
+// whose name CONTAINS leading/trailing spaces is counted correctly — TrimSpace
+// would collapse a legitimate "my file.txt" entry and corrupt the count. An
+// unborn repo needs no special handling: `git diff --cached --name-only` exits
+// 0 with empty stdout when nothing is staged, mirroring HasStagedChanges.
+func (g *Git) StagedFileCount() (int, error) {
+	out, err := g.run("diff", "--cached", "--name-only")
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimRight(line, "\r") != "" {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // AddAll stages new + modified + deleted files across the whole worktree —

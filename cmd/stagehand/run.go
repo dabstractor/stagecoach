@@ -14,11 +14,12 @@
 // Using Run + os.Exit (NOT RunE) is mandatory because cobra's RunE maps every
 // non-nil error to exit 1, which cannot carry the §15.4 codes 2/3/124.
 //
-// Staging POLICY lives HERE and ONLY here (decisions.md §1: the v2 seam —
-// CommitStaged/generate assume the index is already staged; staging decisions
-// are a CLI concern). maybeAutoStagePolicy takes a minimal `stager` interface
-// so *git.Git satisfies it in production AND a stub satisfies it in tests,
-// keeping the FR16–FR20 logic hermetic.
+// Staging POLICY lives in the sibling stage.go and ONLY there (decisions.md §1:
+// the v2 seam — CommitStaged/generate assume the index is already staged;
+// staging decisions are a CLI concern). maybeAutoStage takes a minimal `stager`
+// interface so *git.Git satisfies it in production AND a stub satisfies it in
+// tests, keeping the FR16–FR20 logic hermetic. runDefault calls it here and
+// routes its result through mapErrorToExitCode.
 //
 // This file is a plain `package main` sibling of main.go (which OWNS the
 // // Package doc comment), mirroring how providers.go/config.go defer the
@@ -41,22 +42,6 @@ import (
 	"github.com/dustin/stagehand/internal/ui"
 	"github.com/dustin/stagehand/pkg/stagehand"
 )
-
-// stager is the minimal staging-primitive surface maybeAutoStagePolicy needs
-// (HasStagedChanges + AddAll, both shipped on *git.Git in internal/git/stage.go).
-// Defining it as an interface — rather than taking *git.Git directly — lets the
-// staging-POLICY tests run hermetically against an in-process stub instead of a
-// real git binary, while *git.Git still satisfies it in production. This is the
-// same testability seam as the generate package's function-typed deps.
-type stager interface {
-	// HasStagedChanges reports whether the index holds staged changes (git
-	// diff --cached --quiet → exit0=false/exit1=true).
-	HasStagedChanges() (bool, error)
-	// AddAll runs `git add -A` (stages new + modified + deleted across the
-	// worktree). It is a PRIMITIVE — the WHEN/WHY is decided by
-	// maybeAutoStagePolicy.
-	AddAll() error
-}
 
 // buildFlags translates the resolved env+CLI-flag sources into the two
 // FlagsLayer structs config.Load consumes (FR34 layers 6 and 7). It is the
@@ -202,67 +187,6 @@ func resolveAndCheckProvider(cfg config.Config, reg *provider.Registry) (string,
 	return name, ui.ExitSuccess, ""
 }
 
-// maybeAutoStagePolicy implements the FR16–FR20 staging policy: the decision of
-// WHEN to run `git add -A` and what to do on a still-clean index. It is owned
-// HERE (never inside CommitStaged/generate — decisions.md §1 v2 seam), and is
-// pure except for the staging side effects routed through the injected stager
-// and the human-facing notices routed to out.Progressf (stderr, FR51).
-//
-// Policy:
-//   - Something already staged: proceed (0), unless --all forces an additional
-//     `git add -A` first (FR20).
-//   - Nothing staged + (--no-auto-stage OR auto_stage_all disabled): exit 2
-//     with a friendly "nothing to commit" notice (FR17/FR19) — never stage.
-//   - Nothing staged + auto-staging allowed: run `git add -A` (FR16), print the
-//     "Nothing staged — staging all changes." notice (FR18), re-check, and if
-//     STILL clean (an empty worktree) exit 2 (FR17); otherwise proceed (0).
-//
-// Returns the exit code: ui.ExitSuccess to proceed to generation, or
-// ui.ExitNothingToCommit (2) / ui.ExitError (1) to short-circuit runDefault.
-func maybeAutoStagePolicy(g stager, out *ui.Output, cfg config.Config, allFlag, noAutoStage bool) int {
-	staged, err := g.HasStagedChanges()
-	if err != nil {
-		out.Progressf("stagehand: %s\n", err)
-		return ui.ExitError
-	}
-
-	if staged {
-		if allFlag {
-			// FR20: force `git add -A` even though something is already staged.
-			if err := g.AddAll(); err != nil {
-				out.Progressf("stagehand: %s\n", err)
-				return ui.ExitError
-			}
-		}
-		return ui.ExitSuccess
-	}
-
-	// Nothing staged. FR19/--no-auto-stage OR config auto_stage_all=false → exit 2.
-	if noAutoStage || !cfg.AutoStageAll {
-		out.Progressf("Nothing staged; nothing to commit.\n")
-		return ui.ExitNothingToCommit
-	}
-
-	// FR16/FR18: auto-stage all, then re-check.
-	if err := g.AddAll(); err != nil {
-		out.Progressf("stagehand: %s\n", err)
-		return ui.ExitError
-	}
-	out.Progressf("Nothing staged — staging all changes.\n") // FR18
-
-	staged, err = g.HasStagedChanges()
-	if err != nil {
-		out.Progressf("stagehand: %s\n", err)
-		return ui.ExitError
-	}
-	if !staged {
-		// FR17: clean worktree even after `git add -A`.
-		out.Progressf("Nothing to commit.\n")
-		return ui.ExitNothingToCommit
-	}
-	return ui.ExitSuccess
-}
-
 // buildOptions is the pure cfg+dryRun → stagehand.Options translation. It exists
 // as a seam so the dry-run wiring (FR49) is unit-testable without driving the
 // full GenerateCommit pipeline. opts.Provider/Model/Timeout carry the resolved
@@ -278,11 +202,12 @@ func buildOptions(cfg config.Config, dryRun bool) stagehand.Options {
 	}
 }
 
-// mapErrorToExitCode maps a GenerateCommit return error to the PRD §15.4 exit
-// code via the shipped sentinel aliases. It uses ui.Exit* constants — NEVER
-// hardcoded ints. Resolution:
+// mapErrorToExitCode maps a staging or GenerateCommit return error to the PRD
+// §15.4 exit code via the shipped sentinel aliases. It uses ui.Exit* constants
+// — NEVER hardcoded ints. Resolution:
 //   - nil                                  → ui.ExitSuccess (0)
 //   - stagehand.ErrNothingToCommit         → ui.ExitNothingToCommit (2)
+//   - ErrNothingStaged (FR19, CLI-layer)   → ui.ExitNothingToCommit (2)
 //   - stagehand.ErrRescue                  → ui.ExitRescue (3)
 //   - anything else (ErrHeadMoved, etc.)   → ui.ExitError (1)
 //
@@ -301,6 +226,11 @@ func mapErrorToExitCode(err error) int {
 	}
 	if errors.Is(err, stagehand.ErrRescue) {
 		return ui.ExitRescue
+	}
+	if errors.Is(err, ErrNothingStaged) {
+		// FR19: nothing staged + auto-stage declined (same exit code as the FR17
+		// clean-after-add path; the distinction is the sentinel for errors.Is).
+		return ui.ExitNothingToCommit
 	}
 	return ui.ExitError
 }
@@ -356,8 +286,8 @@ func runDefault(cmd *cobra.Command) int {
 	}
 	allFlag, _ := cmd.Flags().GetBool("all")
 	noAutoStage, _ := cmd.Flags().GetBool("no-auto-stage")
-	if code := maybeAutoStagePolicy(g, out, cfg, allFlag, noAutoStage); code != ui.ExitSuccess {
-		return code
+	if err := maybeAutoStage(g, out, cfg, allFlag, noAutoStage); err != nil {
+		return mapErrorToExitCode(err)
 	}
 
 	// Generate (and, unless --dry-run, commit). GenerateCommit owns stdout
