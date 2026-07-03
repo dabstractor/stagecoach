@@ -84,6 +84,38 @@ func TestMaybeAutoStage(t *testing.T) {
 		}
 	})
 
+	// Case 1b (BUG-005, n==1 singular): same proceed-after-auto-stage happy path
+	// as Case 1 but with EXACTLY ONE staged file → the FR18 notice must print
+	// the singular noun "(1 file)" (NOT the buggy plural "(1 files)").
+	t.Run("AutoStagesSingularFileNotice", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		out := ui.NewOutput(&stdout, &stderr, false, false)
+		// stagedAfterAdd=true models "git add -A staged exactly 1 file".
+		g := &fakeStager{staged: false, stagedAfterAdd: true, fileCount: 1}
+		cfg := config.Config{AutoStageAll: true}
+
+		err := maybeAutoStage(g, out, cfg, false /*all*/, false /*noAutoStage*/)
+
+		if err != nil {
+			t.Fatalf("maybeAutoStage = %v, want nil (proceed after auto-stage)", err)
+		}
+		if !g.addCalled {
+			t.Error("AddAll was not called, want it called under auto_stage_all")
+		}
+		// BUG-005 fix: singular noun when n==1.
+		if !strings.Contains(stderr.String(), "(1 file)") {
+			t.Errorf("stderr = %q, want the FR18 singular \"(1 file)\" notice", stderr.String())
+		}
+		// The buggy plural literal must be GONE for n==1.
+		if strings.Contains(stderr.String(), "(1 files)") {
+			t.Errorf("stderr = %q, must NOT contain the buggy plural \"(1 files)\"", stderr.String())
+		}
+		// FR51: staging notices go to stderr only; stdout must stay byte-clean.
+		if stdout.Len() != 0 {
+			t.Errorf("stdout = %q, want empty (FR51 byte-clean)", stdout.String())
+		}
+	})
+
 	// Case 2 (FR17): nothing staged + auto-staging on, but the worktree is
 	// STILL clean after `git add -A` (an empty worktree) → errors.Is
 	// ErrNothingToCommit + the "Nothing to commit." notice.

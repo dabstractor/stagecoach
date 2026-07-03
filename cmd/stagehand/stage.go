@@ -136,7 +136,11 @@ func maybeAutoStage(g stager, out *ui.Output, cfg config.Config, allFlag, noAuto
 	if err != nil {
 		return fmt.Errorf("stage: %w", err)
 	}
-	out.Progressf("Nothing staged — staging all changes (%d files).\n", n) // FR18
+	noun := "files"
+	if n == 1 {
+		noun = "file"
+	}
+	out.Progressf("Nothing staged — staging all changes (%d %s).\n", n, noun) // FR18
 
 	staged, err = g.HasStagedChanges()
 	if err != nil {

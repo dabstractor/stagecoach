@@ -1,0 +1,190 @@
+# PRP for PFIX_M1_T005_S1
+
+## Objective
+
+Fix BUG-005 (cosmetic): the FR18 auto-stage notice 'Nothing staged — staging all changes (N files).' in cmd/stagehand/stage.go maybeAutoStage hardcodes the plural noun 'files', so when exactly one file is staged it prints the grammatically incorrect '(1 files).' Make the noun singular when n==1 and plural otherwise, with a regression test, touching only the single call site and its white-box test.
+
+## Context
+
+# PRP — BUG-005: Auto-stage notice pluralization (PFIX_M1_T005_S1)
+
+## Goal
+
+**Feature Goal**: The FR18 auto-stage notice prints a grammatically correct file-count noun — '(1 file)' when exactly one file is staged and '(N files)' when N != 1 — so the empirical repro 'staging all changes (1 files).' no longer occurs.
+
+**Deliverable**: A one-call-site edit to `cmd/stagehand/stage.go` (the `maybeAutoStage` FR18 `out.Progressf` line) that switches the hardcoded noun 'files' to a singular/plural conditional, plus one new white-box subtest in `cmd/stagehand/stage_test.go` that pins the n==1 and n>1 forms.
+
+**Success Definition**: `go test ./cmd/stagehand/` passes; the new n==1 subtest asserts stderr contains '(1 file)' and does NOT contain '(1 files)'; the existing n==3 subtest still passes ('(3 files)'); `go vet ./cmd/stagehand/` is clean; `gofmt -l cmd/stagehand/stage.go cmd/stagehand/stage_test.go` prints nothing.
+
+## Why
+
+- BUG-005 (severity: cosmetic). The FR18 notice is the ONLY user-visible transparency signal that auto-staging ran; a grammatical error there erodes trust in a tool whose entire purpose is safe, transparent git automation.
+- It is a regression introduced when the '(N files)' count was added (the count is correct; only the noun was hardcoded). The count plumbing (`StagedFileCount`, the `stager` interface, the `fakeStager` stub) is already correct and must NOT be touched.
+- Scope is intentionally tiny: one format string + one test. Resist the urge to add a shared `pluralize` helper — there is exactly one call site in the whole repo (`grep -rn 'plural'` returns zero Go hits), so a helper would be unused-over-engineering.
+
+## What
+
+**User-visible behavior**: Running `stagehand` against a worktree with exactly one untracked/modified file now prints to stderr:
+`Nothing staged — staging all changes (1 file).`
+For N != 1 it is unchanged: `... (N files).`
+
+**Non-goals**: Do NOT change the notice wording, the em-dash, the count value, the stream (stderr/FR51), the `// FR18` tag, the `maybeAutoStage` control flow, or any other notice (FR17 'Nothing to commit.', FR19 'Nothing staged; nothing to commit.'). Do NOT add a pluralize util package. Do NOT edit the PRD, README, or docs (PRD.md FR18 example '(3 files)' is already plural-correct and unaffected).
+
+### Success Criteria
+- [ ] n==1 path prints '(1 file)' (singular) and does NOT print '(1 files)'.
+- [ ] n>1 path still prints '(N files)' (plural) — the existing AutoStagesThenProceeds (n=3) subtest still passes unchanged.
+- [ ] n==0 path is unaffected (it never reaches this line; FR17 short-circuits first — but the fix must not regress that).
+- [ ] Change confined to cmd/stagehand/stage.go (1 line → small block) and cmd/stagehand/stage_test.go (1 new subtest).
+
+## All Needed Context
+
+### Context Completeness Check
+A developer who knows nothing about this repo can implement this from: the exact file + line, the exact current statement, the idiomatic Go fix (no ternary → local noun var), the exact test seam (the stateful `fakeStager` already exposes `fileCount int`), and the exact validation commands. All provided below.
+
+### Documentation & References
+```yaml
+- file: cmd/stagehand/stage.go
+  why: Contains the SOLE call site — maybeAutoStage, the FR18 out.Progressf line (~line 139).
+  pattern: fmt-style Progressf(format, args...); the 
+  gotcha: Go has NO ternary operator — compute the noun in a local var or via an if, never `cond ? a : b`.
+- file: cmd/stagehand/stage_test.go
+  why: White-box `package main` MOCKING tests for maybeAutoStage. The `fakeStager{fileCount: int}` stub already drives the count, so an n==1 case is ONE constructor literal away.
+  pattern: t.Run subtest + bytes.Buffer stderr + strings.Contains assertion (see AutoStagesThenProceeds). Mirror it exactly.
+  gotcha: The existing n==3 subtest asserts strings.Contains(stderr, '(3 files)') — your format change (literal noun → %s noun) keeps that output identical for n=3, so that assertion stays GREEN without edits.
+- file: internal/ui/output.go
+  why: Confirms Progressf delegates to fmt.Fprintf(stderr, format, args...). %d and %s compose correctly; the format string owns its trailing newline (do not add one).
+- docfile: plan/001_f1f80943ac34/prps/research/PFIX_M1_T005_S1_notes.md
+  why: Curated research: root cause, idiomatic fix, test seam, validation tools, scope boundary, docs-impact rationale.
+
+```
+
+### Current codebase tree (relevant slice)
+```
+cmd/stagehand/
+  stage.go          # maybeAutoStage — THE fix target (line ~139)
+  stage_test.go     # TestMaybeAutoStage — ADD one n==1 subtest
+  run.go            # calls maybeAutoStage; DO NOT TOUCH
+internal/ui/output.go    # Progressf (fmt.Fprintf sink) — DO NOT TOUCH
+internal/git/stage.go    # StagedFileCount primitive — DO NOT TOUCH
+PRD.md                   # FR18 example '(3 files)' — DO NOT TOUCH
+
+```
+
+### Desired tree (files modified)
+```
+cmd/stagehand/stage.go        # MODIFIED: noun conditional at the FR18 line
+cmd/stagehand/stage_test.go   # MODIFIED: +1 subtest AutoStagesSingularFileNotice
+
+```
+No new files.
+
+### Known Gotchas
+```go
+
+```
+
+## Implementation Blueprint
+
+### The fix (cmd/stagehand/stage.go, inside maybeAutoStage, ~line 139)
+Current:
+```go
+out.Progressf("Nothing staged — staging all changes (%d files).\n", n) 
+
+```
+Fixed:
+```go
+noun := "files"
+if n == 1 {
+    noun = "file"
+}
+out.Progressf("Nothing staged — staging all changes (%d %s).\n", n, noun) 
+
+```
+
+### Implementation Tasks (ordered by dependencies)
+```yaml
+Task 1: MODIFY cmd/stagehand/stage.go (maybeAutoStage, FR18 notice line)
+  - REPLACE the single out.Progressf("...(%d files).\n", n) line with the noun-conditional block above.
+  - PRESERVE: the literal em-dash '—', the trailing '\n', the 'Nothing staged — staging all changes (' wording, the closing ').', and the '// FR18' comment.
+  - DO NOT: change maybeAutoStage control flow, the StagedFileCount call, the n variable, or any other notice.
+  - PLACEMENT: same location, immediately after `n, err := g.StagedFileCount()` and its err check.
+Task 2: MODIFY cmd/stagehand/stage_test.go (add one subtest inside TestMaybeAutoStage)
+  - ADD a t.Run subtest mirroring AutoStagesThenProceeds but with fileCount: 1.
+  - ASSERT: strings.Contains(stderr.String(), '(1 file)') is true.
+  - ASSERT: !strings.Contains(stderr.String(), '(1 files)') (the bug literal must be gone).
+  - ASSERT: err == nil and g.addCalled == true (same as the plural happy path).
+  - ASSERT: stdout.Len() == 0 (FR51 byte-clean stderr routing).
+  - NAMING: t.Run("AutoStagesSingularFileNotice", func(t *testing.T) { ... }).
+  - DO NOT: modify the existing AutoStagesThenProceeds (n=3) subtest — it must stay green unchanged.
+
+```
+
+### Integration Points
+None. This is a pure string-format fix with no config, DB, route, or API surface. The `stager` interface, `StagedFileCount`, `mapErrorToExitCode`, and exit codes are all unchanged.
+
+## Docs Impact
+None required. The runtime notice changes only for N==1. PRD.md FR18 cites the example 'Nothing staged — staging all changes (3 files).' which is already plural-correct and unaffected. Internal code comments that mention the '(N files)' notice (stage.go, internal/ui/output.go, internal/git/stage.go) describe it generically and stay accurate. No README/CONFIGURATION/PROVIDERS doc edits. (Work item declares no per-item DOCS line → Mode B: no changeset-level doc sync needed for a cosmetic one-liner.)
+
+## Final Validation Checklist
+- [ ] gofmt clean on the two touched files.
+- [ ] go vet clean on ./cmd/stagehand/.
+- [ ] New n==1 subtest passes (asserts '(1 file)', rejects '(1 files)').
+- [ ] Existing n==3 subtest still passes ('(3 files)').
+- [ ] Full `go test ./cmd/stagehand/` green.
+- [ ] Diff confined to stage.go + stage_test.go (scope boundary respected).
+
+## Anti-Patterns to Avoid
+- Do NOT add a shared pluralize/i18n helper — one call site does not justify it.
+- Do NOT rewrite maybeAutoStage or 'refactor while here'.
+- Do NOT use a Go ternary (it does not exist).
+- Do NOT drop the '// FR18' requirement tag or the literal em-dash.
+- Do NOT touch run.go, internal/git/stage.go, internal/ui/output.go, PRD.md, or docs.
+
+## Confidence Score
+10/10 — single-line format fix at a known line, with an existing hermetic test seam (fakeStager.fileCount) that makes the regression test trivial. No external research needed; the Go formatting semantics and the repo's test conventions are fully captured above.
+
+## Implementation Steps
+
+1. MODIFY cmd/stagehand/stage.go: in maybeAutoStage, replace the single line `out.Progressf("Nothing staged — staging all changes (%d files).\n", n) // FR18` with a noun-conditional block: `noun := "files"; if n == 1 { noun = "file" }; out.Progressf("Nothing staged — staging all changes (%d %s).\n", n, noun) // FR18`. Keep the literal em-dash, trailing newline, wording, and the `// FR18` comment. Use a local var because Go has no ternary. Do not change control flow, the `n` variable, or any other notice.
+2. MODIFY cmd/stagehand/stage_test.go: inside TestMaybeAutoStage, add a t.Run subtest named `AutoStagesSingularFileNotice` mirroring AutoStagesThenProceeds but with `fakeStager{staged: false, stagedAfterAdd: true, fileCount: 1}` and config.AutoStageAll=true. Assert err==nil, g.addCalled==true, stdout.Len()==0, strings.Contains(stderr, '(1 file)') is true, and !strings.Contains(stderr, '(1 files)'). Leave the existing n==3 subtest unchanged.
+
+## Validation Gates
+
+### Level 1: 1
+
+go build ./cmd/stagehand/
+
+### Level 2: 1
+
+test -z "$(gofmt -l cmd/stagehand/stage.go cmd/stagehand/stage_test.go)"
+
+### Level 3: 1
+
+go vet ./cmd/stagehand/
+
+### Level 4: 2
+
+go test ./cmd/stagehand/ -run TestMaybeAutoStage -v
+
+### Level 5: 2
+
+go test ./cmd/stagehand/
+
+### Level 6: 3
+
+go test ./...
+
+## Success Criteria
+
+- [ ] go test ./cmd/stagehand/ passes, including the new AutoStagesSingularFileNotice subtest that asserts stderr contains '(1 file)' and does NOT contain '(1 files)'.
+- [ ] The pre-existing AutoStagesThenProceeds (n=3) subtest still passes unchanged, confirming '(3 files)' plural output is preserved for N!=1.
+- [ ] go vet ./cmd/stagehand/ reports no issues and gofmt -l shows the two touched files are already formatted.
+- [ ] The diff is confined to cmd/stagehand/stage.go (the FR18 Progressf line) and cmd/stagehand/stage_test.go (one added subtest); no other files, no new pluralize helper, no PRD/docs changes.
+
+## References
+
+- cmd/stagehand/stage.go (maybeAutoStage — the FR18 out.Progressf line at ~line 139, the sole fix target)
+- cmd/stagehand/stage_test.go (white-box package main tests; fakeStager.fileCount drives the count; AutoStagesThenProceeds is the pattern to mirror for the new n==1 subtest)
+- internal/ui/output.go (Progressf → fmt.Fprintf(stderr, format, args...); confirms %d + %s compose correctly and the format string owns its newline)
+- PRD.md §FR18 (line 259: example notice 'Nothing staged — staging all changes (3 files).' — already plural-correct, unaffected by the fix)
+- plan/001_f1f80943ac34/prps/research/PFIX_M1_T005_S1_notes.md (curated research: root cause, idiomatic Go no-ternary fix, test seam, validation tools, scope boundary, docs-impact rationale)

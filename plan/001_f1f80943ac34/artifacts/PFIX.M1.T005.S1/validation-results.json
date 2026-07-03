@@ -1,0 +1,62 @@
+[
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go build ./cmd/stagehand/",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "test -z \"$(gofmt -l cmd/stagehand/stage.go cmd/stagehand/stage_test.go)\"",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go vet ./cmd/stagehand/",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 2,
+    "description": "Level 2 gate",
+    "success": true,
+    "command": "go test ./cmd/stagehand/ -run TestMaybeAutoStage -v",
+    "stdout": "=== RUN   TestMaybeAutoStage\n=== RUN   TestMaybeAutoStage/AutoStagesThenProceeds\n=== RUN   TestMaybeAutoStage/AutoStagesSingularFileNotice\n=== RUN   TestMaybeAutoStage/AutoStagesThenClean\n=== RUN   TestMaybeAutoStage/NoAutoStageFlagReturnsNothingStaged\n=== RUN   TestMaybeAutoStage/AutoStageAllFalseReturnsNothingStaged\n=== RUN   TestMaybeAutoStage/AllFlagForcesAddOnStaged\n=== RUN   TestMaybeAutoStage/StagedNoAllProceeds\n--- PASS: TestMaybeAutoStage (0.00s)\n    --- PASS: TestMaybeAutoStage/AutoStagesThenProceeds (0.00s)\n    --- PASS: TestMaybeAutoStage/AutoStagesSingularFileNotice (0.00s)\n    --- PASS: TestMaybeAutoStage/AutoStagesThenClean (0.00s)\n    --- PASS: TestMaybeAutoStage/NoAutoStageFlagReturnsNothingStaged (0.00s)\n    --- PASS: TestMaybeAutoStage/AutoStageAllFalseReturnsNothingStaged (0.00s)\n    --- PASS: TestMaybeAutoStage/AllFlagForcesAddOnStaged (0.00s)\n    --- PASS: TestMaybeAutoStage/StagedNoAllProceeds (0.00s)\nPASS\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 2,
+    "description": "Level 2 gate",
+    "success": true,
+    "command": "go test ./cmd/stagehand/",
+    "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "go test ./...",
+    "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false
+  }
+]
