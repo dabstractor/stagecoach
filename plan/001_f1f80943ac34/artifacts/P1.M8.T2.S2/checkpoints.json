@@ -1,0 +1,191 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M8.T2.S2_1783056884382_pre-execution_f5eec669",
+      "taskId": "P1.M8.T2.S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T2_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-03T05:34:44.382Z"
+      },
+      "createdAt": "2026-07-03T05:34:44.382Z"
+    },
+    {
+      "id": "P1.M8.T2.S2_1783057042686_coder-response_c829cc32",
+      "taskId": "P1.M8.T2.S2",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T2_S2.md",
+        "stage": "coder-response",
+        "coderResponse": "The diff matches the PRP contract exactly. All validation gates have passed.\n\n## Summary\n\nThe PRP is fully implemented. The repo-root `Makefile` was finalized with surgical precision — exactly three additions on top of the M1.T1.S1 skeleton:\n\n1. **Header comment expanded** — documents `make build test lint` (contributor loop), the 3 release targets, and the version-injection parity with goreleaser.\n2. **`.PHONY` line** — appended `release release-snapshot cross-build`.\n3. **Three new TAB-indented targets** after `clean`:\n   - `release:` → `goreleaser release --clean` (maintainer publish step; needs tag + tokens)\n   - `release-snapshot:` → `goreleaser release --snapshot --clean` (MOCKING gate #2)\n   - `cross-build:` → `goreleaser build --snapshot --clean` (lightest cross-compile sanity)\n\nThe existing `VERSION := $(shell git describe --tags --always --dirty)` line and all 7 original targets were preserved byte-for-byte.\n\n### Validation Gate Results\n| Level | Gate | Result |\n|-------|------|--------|\n| 1 | `make build` | ✅ exit 0 → `./bin/stagehand` |\n| 2 | `--version` | ✅ prints `7674f34-dirty` (matches `git describe`, NOT `dev`) |\n| 3 | `make test` | ✅ all 8 packages green |\n| 4 | `make cross-build` | ✅ all 6 OS/arch binaries built (linux/darwin/windows × amd64/arm64) |\n| 5 | `make release-snapshot` | ✅ `dist/` = 6 archives + checksums.txt + homebrew/scoop/aur manifests |\n| 6 | `make -n release release-snapshot cross-build` | ✅ all 3 resolve to exact goreleaser commands |\n| — | `make clean` | ✅ removes bin/, coverage.out, dist/ |\n\nScope verified: **only `Makefile` modified** (the `??` untracked entries are pre-existing plan/PRP infra files). No Go source, `.goreleaser.yaml`, `install.sh`, `go.mod`, or README/docs touched. goreleaser confirmed at v2.9.0 (the `brews` Formula block is hard-deprecated ≥ v2.10). DOCS Mode B honored — header comment is the inline doc surface; README sync deferred to P1.M8.T4.S1.\n\nAll anti-patterns avoided (no `--snapshot` on `release`, no goreleaser upgrade, TABs not spaces, no redundant aggregate target).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-03T05:37:22.686Z"
+      },
+      "createdAt": "2026-07-03T05:37:22.686Z"
+    },
+    {
+      "id": "P1.M8.T2.S2_1783057043888_validation-gate-5_aae5c2ac",
+      "taskId": "P1.M8.T2.S2",
+      "label": "After validation gate 5",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T2_S2.md",
+        "stage": "validation-gate-5",
+        "coderResponse": "The diff matches the PRP contract exactly. All validation gates have passed.\n\n## Summary\n\nThe PRP is fully implemented. The repo-root `Makefile` was finalized with surgical precision — exactly three additions on top of the M1.T1.S1 skeleton:\n\n1. **Header comment expanded** — documents `make build test lint` (contributor loop), the 3 release targets, and the version-injection parity with goreleaser.\n2. **`.PHONY` line** — appended `release release-snapshot cross-build`.\n3. **Three new TAB-indented targets** after `clean`:\n   - `release:` → `goreleaser release --clean` (maintainer publish step; needs tag + tokens)\n   - `release-snapshot:` → `goreleaser release --snapshot --clean` (MOCKING gate #2)\n   - `cross-build:` → `goreleaser build --snapshot --clean` (lightest cross-compile sanity)\n\nThe existing `VERSION := $(shell git describe --tags --always --dirty)` line and all 7 original targets were preserved byte-for-byte.\n\n### Validation Gate Results\n| Level | Gate | Result |\n|-------|------|--------|\n| 1 | `make build` | ✅ exit 0 → `./bin/stagehand` |\n| 2 | `--version` | ✅ prints `7674f34-dirty` (matches `git describe`, NOT `dev`) |\n| 3 | `make test` | ✅ all 8 packages green |\n| 4 | `make cross-build` | ✅ all 6 OS/arch binaries built (linux/darwin/windows × amd64/arm64) |\n| 5 | `make release-snapshot` | ✅ `dist/` = 6 archives + checksums.txt + homebrew/scoop/aur manifests |\n| 6 | `make -n release release-snapshot cross-build` | ✅ all 3 resolve to exact goreleaser commands |\n| — | `make clean` | ✅ removes bin/, coverage.out, dist/ |\n\nScope verified: **only `Makefile` modified** (the `??` untracked entries are pre-existing plan/PRP infra files). No Go source, `.goreleaser.yaml`, `install.sh`, `go.mod`, or README/docs touched. goreleaser confirmed at v2.9.0 (the `brews` Formula block is hard-deprecated ≥ v2.10). DOCS Mode B honored — header comment is the inline doc surface; README sync deferred to P1.M8.T4.S1.\n\nAll anti-patterns avoided (no `--snapshot` on `release`, no goreleaser upgrade, TABs not spaces, no redundant aggregate target).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "make build",
+            "stdout": "go build -ldflags \"-X main.version=7674f34-dirty\" -o bin/stagehand ./cmd/stagehand\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "./bin/stagehand --version",
+            "stdout": "stagehand version 7674f34-dirty\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "make test",
+            "stdout": "go test ./...\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "make cross-build",
+            "stdout": "goreleaser build --snapshot --clean\n",
+            "stderr": "  • skipping validate...\n  • cleaning distribution directory\n  • loading environment variables\n  • getting and validating git state\n    • ignoring errors because this is a snapshot     error=git doesn't contain any tags - either add a tag or use --snapshot\n    • git state                                      commit=7674f345a644e074b1e79efb9bd09ee3e6ee1765 branch=hack current_tag=v0.0.0 previous_tag=<unknown> dirty=false\n    • pipe skipped or partially skipped              reason=disabled during snapshot mode\n  • parsing tag\n  • setting defaults\n  • snapshotting\n    • building snapshot...                           version=0.0.1-dev\n  • running before hooks\n    • running                                        hook=go mod tidy\n  • ensuring distribution directory\n  • setting up metadata\n  • writing release metadata\n  • loading go mod information\n  • build prerequisites\n  • building binaries\n    • building                                       binary=dist/stagehand_windows_arm64_v8.0/stagehand.exe\n    • building                                       binary=dist/stagehand_linux_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_windows_amd64_v1/stagehand.exe\n    • building                                       binary=dist/stagehand_linux_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_darwin_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_darwin_amd64_v1/stagehand\n  • writing artifacts metadata\n  • build succeeded after 0s\n  • thanks for using GoReleaser!\n",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "make release-snapshot",
+            "stdout": "goreleaser release --snapshot --clean\n",
+            "stderr": "  • skipping announce, publish, and validate...\n  • cleaning distribution directory\n  • loading environment variables\n  • getting and validating git state\n    • ignoring errors because this is a snapshot     error=git doesn't contain any tags - either add a tag or use --snapshot\n    • git state                                      commit=7674f345a644e074b1e79efb9bd09ee3e6ee1765 branch=hack current_tag=v0.0.0 previous_tag=<unknown> dirty=false\n    • pipe skipped or partially skipped              reason=disabled during snapshot mode\n  • parsing tag\n  • setting defaults\n  • snapshotting\n    • building snapshot...                           version=0.0.1-dev\n  • running before hooks\n    • running                                        hook=go mod tidy\n  • ensuring distribution directory\n  • setting up metadata\n  • writing release metadata\n  • loading go mod information\n  • build prerequisites\n  • building binaries\n    • building                                       binary=dist/stagehand_windows_arm64_v8.0/stagehand.exe\n    • building                                       binary=dist/stagehand_darwin_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_linux_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_linux_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_darwin_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_windows_amd64_v1/stagehand.exe\n  • archives\n    • archiving                                      name=dist/stagehand_0.0.1-dev_macos_arm64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_linux_amd64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_windows_amd64.zip\n    • archiving                                      name=dist/stagehand_0.0.1-dev_linux_arm64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_macos_amd64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_windows_arm64.zip\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n  • calculating checksums\n  • arch user repositories\n    • guessing package to be \"install -Dm755 \\\"./stagehand\\\" \\\"${pkgdir}/usr/bin/stagehand\\\"\"\n    • writing                                        file=dist/aur/stagehand-bin.pkgbuild\n    • writing                                        file=dist/aur/stagehand-bin.srcinfo\n  • homebrew tap formula\n    • writing                                        formula=dist/homebrew/Formula/stagehand.rb\n  • scoop manifests\n    • writing                                        manifest=dist/scoop/stagehand.json\n  • writing artifacts metadata\n  • release succeeded after 0s\n  • thanks for using GoReleaser!\n",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 5,
+            "description": "Level 5 gate",
+            "success": true,
+            "command": "make -n release release-snapshot cross-build",
+            "stdout": "goreleaser release --clean\ngoreleaser release --snapshot --clean\ngoreleaser build --snapshot --clean\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T05:37:23.888Z"
+      },
+      "createdAt": "2026-07-03T05:37:23.888Z"
+    },
+    {
+      "id": "P1.M8.T2.S2_1783057043889_complete_2d680860",
+      "taskId": "P1.M8.T2.S2",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T2_S2.md",
+        "stage": "complete",
+        "coderResponse": "The diff matches the PRP contract exactly. All validation gates have passed.\n\n## Summary\n\nThe PRP is fully implemented. The repo-root `Makefile` was finalized with surgical precision — exactly three additions on top of the M1.T1.S1 skeleton:\n\n1. **Header comment expanded** — documents `make build test lint` (contributor loop), the 3 release targets, and the version-injection parity with goreleaser.\n2. **`.PHONY` line** — appended `release release-snapshot cross-build`.\n3. **Three new TAB-indented targets** after `clean`:\n   - `release:` → `goreleaser release --clean` (maintainer publish step; needs tag + tokens)\n   - `release-snapshot:` → `goreleaser release --snapshot --clean` (MOCKING gate #2)\n   - `cross-build:` → `goreleaser build --snapshot --clean` (lightest cross-compile sanity)\n\nThe existing `VERSION := $(shell git describe --tags --always --dirty)` line and all 7 original targets were preserved byte-for-byte.\n\n### Validation Gate Results\n| Level | Gate | Result |\n|-------|------|--------|\n| 1 | `make build` | ✅ exit 0 → `./bin/stagehand` |\n| 2 | `--version` | ✅ prints `7674f34-dirty` (matches `git describe`, NOT `dev`) |\n| 3 | `make test` | ✅ all 8 packages green |\n| 4 | `make cross-build` | ✅ all 6 OS/arch binaries built (linux/darwin/windows × amd64/arm64) |\n| 5 | `make release-snapshot` | ✅ `dist/` = 6 archives + checksums.txt + homebrew/scoop/aur manifests |\n| 6 | `make -n release release-snapshot cross-build` | ✅ all 3 resolve to exact goreleaser commands |\n| — | `make clean` | ✅ removes bin/, coverage.out, dist/ |\n\nScope verified: **only `Makefile` modified** (the `??` untracked entries are pre-existing plan/PRP infra files). No Go source, `.goreleaser.yaml`, `install.sh`, `go.mod`, or README/docs touched. goreleaser confirmed at v2.9.0 (the `brews` Formula block is hard-deprecated ≥ v2.10). DOCS Mode B honored — header comment is the inline doc surface; README sync deferred to P1.M8.T4.S1.\n\nAll anti-patterns avoided (no `--snapshot` on `release`, no goreleaser upgrade, TABs not spaces, no redundant aggregate target).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Finalized the repo-root Makefile per P1.M8.T2.S2. Added three .PHONY targets — release (goreleaser release --clean), release-snapshot (goreleaser release --snapshot --clean), cross-build (goreleaser build --snapshot --clean) — appended after the 7 preserved build/test/coverage/lint/vet/fmt/clean targets, with an expanded header comment documenting the contributor loop and release flow. All 6 validation gates pass: make build (exit 0, ./bin/stagehand --version prints the git-describe value 7674f34-dirty, not dev, proving -X main.version ldflags injection); make test (all 8 packages green); make cross-build (all 6 OS/arch binaries compiled); make release-snapshot (dist/ regenerated with 6 archives + checksums.txt + homebrew Formula + scoop + aur pkgbuild); make -n release release-snapshot cross-build (all three resolve to exact goreleaser commands); make clean (removes bin/coverage.out/dist). Scope surgical: only Makefile modified — no Go source, .goreleaser.yaml, install.sh, go.mod, or README/docs touched. goreleaser v2.9.0 confirmed (brews Formula block hard-deprecated >= v2.10). DOCS Mode B honored (header comment is inline doc surface; README sync deferred to P1.M8.T4.S1). All anti-patterns avoided."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "make build",
+            "stdout": "go build -ldflags \"-X main.version=7674f34-dirty\" -o bin/stagehand ./cmd/stagehand\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "./bin/stagehand --version",
+            "stdout": "stagehand version 7674f34-dirty\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "make test",
+            "stdout": "go test ./...\nok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "make cross-build",
+            "stdout": "goreleaser build --snapshot --clean\n",
+            "stderr": "  • skipping validate...\n  • cleaning distribution directory\n  • loading environment variables\n  • getting and validating git state\n    • ignoring errors because this is a snapshot     error=git doesn't contain any tags - either add a tag or use --snapshot\n    • git state                                      commit=7674f345a644e074b1e79efb9bd09ee3e6ee1765 branch=hack current_tag=v0.0.0 previous_tag=<unknown> dirty=false\n    • pipe skipped or partially skipped              reason=disabled during snapshot mode\n  • parsing tag\n  • setting defaults\n  • snapshotting\n    • building snapshot...                           version=0.0.1-dev\n  • running before hooks\n    • running                                        hook=go mod tidy\n  • ensuring distribution directory\n  • setting up metadata\n  • writing release metadata\n  • loading go mod information\n  • build prerequisites\n  • building binaries\n    • building                                       binary=dist/stagehand_windows_arm64_v8.0/stagehand.exe\n    • building                                       binary=dist/stagehand_linux_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_windows_amd64_v1/stagehand.exe\n    • building                                       binary=dist/stagehand_linux_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_darwin_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_darwin_amd64_v1/stagehand\n  • writing artifacts metadata\n  • build succeeded after 0s\n  • thanks for using GoReleaser!\n",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "make release-snapshot",
+            "stdout": "goreleaser release --snapshot --clean\n",
+            "stderr": "  • skipping announce, publish, and validate...\n  • cleaning distribution directory\n  • loading environment variables\n  • getting and validating git state\n    • ignoring errors because this is a snapshot     error=git doesn't contain any tags - either add a tag or use --snapshot\n    • git state                                      commit=7674f345a644e074b1e79efb9bd09ee3e6ee1765 branch=hack current_tag=v0.0.0 previous_tag=<unknown> dirty=false\n    • pipe skipped or partially skipped              reason=disabled during snapshot mode\n  • parsing tag\n  • setting defaults\n  • snapshotting\n    • building snapshot...                           version=0.0.1-dev\n  • running before hooks\n    • running                                        hook=go mod tidy\n  • ensuring distribution directory\n  • setting up metadata\n  • writing release metadata\n  • loading go mod information\n  • build prerequisites\n  • building binaries\n    • building                                       binary=dist/stagehand_windows_arm64_v8.0/stagehand.exe\n    • building                                       binary=dist/stagehand_darwin_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_linux_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_linux_amd64_v1/stagehand\n    • building                                       binary=dist/stagehand_darwin_arm64_v8.0/stagehand\n    • building                                       binary=dist/stagehand_windows_amd64_v1/stagehand.exe\n  • archives\n    • archiving                                      name=dist/stagehand_0.0.1-dev_macos_arm64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_linux_amd64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_windows_amd64.zip\n    • archiving                                      name=dist/stagehand_0.0.1-dev_linux_arm64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_macos_amd64.tar.gz\n    • archiving                                      name=dist/stagehand_0.0.1-dev_windows_arm64.zip\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=LICENSE*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n    • no files matched                               glob=README*\n  • calculating checksums\n  • arch user repositories\n    • guessing package to be \"install -Dm755 \\\"./stagehand\\\" \\\"${pkgdir}/usr/bin/stagehand\\\"\"\n    • writing                                        file=dist/aur/stagehand-bin.pkgbuild\n    • writing                                        file=dist/aur/stagehand-bin.srcinfo\n  • homebrew tap formula\n    • writing                                        formula=dist/homebrew/Formula/stagehand.rb\n  • scoop manifests\n    • writing                                        manifest=dist/scoop/stagehand.json\n  • writing artifacts metadata\n  • release succeeded after 0s\n  • thanks for using GoReleaser!\n",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 5,
+            "description": "Level 5 gate",
+            "success": true,
+            "command": "make -n release release-snapshot cross-build",
+            "stdout": "goreleaser release --clean\ngoreleaser release --snapshot --clean\ngoreleaser build --snapshot --clean\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T05:37:23.889Z"
+      },
+      "createdAt": "2026-07-03T05:37:23.889Z"
+    }
+  ],
+  "lastModified": "2026-07-03T05:37:23.889Z"
+}

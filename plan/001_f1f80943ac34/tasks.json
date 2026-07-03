@@ -639,7 +639,7 @@
               "id": "P1.M8.T2",
               "type": "Task",
               "title": "Distribution & release",
-              "status": "Planned",
+              "status": "Complete",
               "description": "goreleaser config (cross-compile, Homebrew/Scoop/AUR, checksums), install.sh, and Makefile finalization (G9).",
               "subtasks": [
                 {
@@ -657,7 +657,7 @@
                   "id": "P1.M8.T2.S2",
                   "type": "Subtask",
                   "title": "Makefile finalize + release target",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P1.M1.T1.S1",
