@@ -276,7 +276,57 @@ stagehand integrate remove git-alias --yes --alias-name ci  # remove `git ci`
 
 #### No-mangle protocol
 
-Every file edit by an integration runs the no-mangle protocol (PRD §9.21 FR-I3): a unified-diff preview is shown, the user is asked to confirm (`y/N`; use `--yes` to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently. The `git-alias` target does **not** use this protocol (it delegates the write to `git config`).
+Every file edit by an integration runs the no-mangle protocol (PRD §9.21 FR-I3): a unified-diff preview is shown, the user is asked to confirm (`y/N`; use `--yes` to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently. The `git-alias` target does **not** use this protocol (it delegates the write to `git config`). The `lazygit` target uses it for all edits.
+
+#### `lazygit` target
+
+Adds a `customCommands` entry to lazygit's `config.yml` via a **comment-preserving YAML round-trip** (`gopkg.in/yaml.v3` Node API). Press `<c-a>` in lazygit's files panel to run `stagehand` and generate an AI commit message — `output: 'none'` keeps you in the UI (US8).
+
+```yaml
+customCommands:
+  - key: '<c-a>'                       # stagehand-integration
+    context: 'files'
+    command: 'stagehand'
+    loadingText: 'Generating commit message…'
+    output: 'none'
+    description: 'stagehand: AI commit'
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `key` | `<c-a>` | Key binding in lazygit |
+| `context` | `files` | Panel context (files panel) |
+| `command` | `stagehand` | Command to run |
+| `loadingText` | `Generating commit message…` | Spinner text while running |
+| `output` | `none` | Suppress output (stay in UI) |
+| `description` | `stagehand: AI commit` | Menu description |
+
+| Flag | On | Description |
+|------|----|-------------|
+| `--key <k>` | `install`, `remove` | Override the key binding (default: `<c-a>`). Remove targets the **marked stagehand entry** (by the `# stagehand-integration` marker), not by key — so you can install with `--key '<c-s>'` and remove with the default. |
+
+**Config discovery order:**
+
+1. `lazygit --print-config-dir` output + `/config.yml` (when lazygit is installed)
+2. Platform default: `$XDG_CONFIG_HOME/lazygit/config.yml` (Linux), `~/Library/Application Support/lazygit/config.yml` (macOS), `%AppData%/lazygit/config.yml` (Windows)
+
+**No-mangle behavior:** The full protocol applies: a unified-diff preview is shown before writing, a timestamped backup (`.stagehand-backup.<ts>`) is created for existing files, and the output is re-parsed after writing with automatic restore on validation failure. A corrupt `config.yml` is **hard-refused** — nothing is written, and the error is surfaced. Hand-maintained comments, other `customCommands` entries, and all other config blocks are preserved.
+
+**Idempotency:** The entry is identified by its `# stagehand-integration` marker comment (not the key binding). Re-running `install` on an already-installed entry reports "No changes" (replace, never duplicate). `remove` deletes only the stagehand entry — other entries and config blocks are untouched.
+
+**`integrate list` shows:**
+
+- **DETECTED:** ✓ if `lazygit` is on `$PATH`, ✗ otherwise
+- **STATUS:** `not installed` / `installed` / `foreign` (an unmarked entry binds our key)
+- **CONFIG:** the resolved `config.yml` path
+
+```bash
+stagehand integrate install lazygit              # install with default key (<c-a>)
+stagehand integrate install lazygit --yes        # skip confirmation
+stagehand integrate install lazygit --key '<c-s>' # custom binding
+stagehand integrate remove lazygit               # remove stagehand entry
+stagehand integrate remove lazygit --yes          # skip confirmation
+```
 
 ## Exit codes
 

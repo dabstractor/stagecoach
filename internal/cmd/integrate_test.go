@@ -35,6 +35,13 @@ func resetIntegrateFlags(t *testing.T) {
 			f.Changed = false
 		}
 	}
+	// T2.S2: reset --key flag on install and remove
+	flagLazygitKey = ""
+	for _, c := range []*cobra.Command{integrateInstallCmd, integrateRemoveCmd} {
+		if f := c.Flags().Lookup("key"); f != nil && f.Changed {
+			f.Changed = false
+		}
+	}
 }
 
 // fakeEntry is a test Entry implementation with configurable behavior and a call log.
