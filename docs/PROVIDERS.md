@@ -146,8 +146,55 @@ bare_flags = ['--no-tools', '--no-extensions', '--no-skills', '--no-prompt-templ
 Slices and maps (`subcommand`, `bare_flags`, `env`) are replaced **wholesale**
 when an override sets them — they are not appended or deep-merged. A
 `[provider.<name>]` entry whose name does not match a built-in is added as a
-brand-new provider used as-is. See [CONFIGURATION.md](./CONFIGURATION.md) §5 for
-the override table syntax and the full precedence chain.
+brand-new provider used as-is. To define a brand-new agent stagehand does not
+ship — the worked `[provider.myagent]` recipe — see
+[CONFIGURATION.md](./CONFIGURATION.md) §4 / PRD §12.8 (the TOML is documented
+there, not duplicated here). For the override table syntax and the full
+precedence chain, see [CONFIGURATION.md](./CONFIGURATION.md) §5.
+
+## How the six built-ins become bare (§12.7.1 tools-disable asymmetry)
+
+The six built-ins do **not** all reach a "bare" (tool-less, non-mutating,
+non-interactive) profile by the same mechanism. There is a real architectural
+split — honestly documented (PRD §12.7.1), not papered over — in how each agent
+gets there:
+
+- **Explicit tool-disable flags (a literal off switch).** These agents expose a
+  flag that simply turns tools off, so the call is a pure text-in / text-out with
+  no agent loop at all — fast and clean.
+  - `pi` → `--no-tools`
+  - `claude` → `--tools ""`
+
+- **Read-only constraint instead (no global tool-off switch).** These agents have
+  **no** "disable all tools" flag — tools are intrinsic to their loop. We
+  constrain them to a read-only, never-ask profile so they *cannot* mutate the
+  repo or block waiting for a prompt, but the model may still internally reason
+  with tools.
+  - `codex` → `--sandbox read-only` (plus `--ephemeral`)
+  - `cursor` → `--mode ask --trust`
+  - `gemini` → `--approval-mode default`
+
+- **Already bare by design.** `opencode`'s `run` subcommand is inherently
+  non-interactive and prints the final message to stdout, so it ships with an
+  empty `bare_flags` list — there is no tool surface to disable in the `run` form
+  (PRD §12.6).
+
+The `bare_flags` field exists precisely so each provider expresses "bare" in its
+own idiom — this is design, not a defect. To see the exact tokens for any
+provider, run `stagehand providers show <name>` (e.g. `providers show codex`
+prints `bare_flags = ['--sandbox', 'read-only', '--ephemeral']`).
+
+### Consequences, stated plainly
+
+1. **Safety is preserved either way.** Read-only sandbox/mode plus never-ask
+   means no provider in the default set can touch the working tree. The
+   repo-integrity invariant (PRD §18.1) holds for all six.
+2. **Latency may vary.** The read-only-constrained agents may be slightly slower,
+   because they still run an agent loop the model can choose to use. Acceptable
+   for a one-shot commit message.
+3. **The output is still just the message.** Whichever path the model takes, the
+   final assistant text is what stagehand parses — a model that "reads a file"
+   before answering still ends with a commit message on stdout.
 
 ## Built-in providers
 

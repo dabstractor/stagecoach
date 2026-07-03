@@ -1,0 +1,311 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M8.T4.S2_1783063460364_pre-execution_ed10df9a",
+      "taskId": "P1.M8.T4.S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T4_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-03T07:24:20.364Z"
+      },
+      "createdAt": "2026-07-03T07:24:20.364Z"
+    },
+    {
+      "id": "P1.M8.T4.S2_1783063978282_coder-response_f7c7159b",
+      "taskId": "P1.M8.T4.S2",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T4_S2.md",
+        "stage": "coder-response",
+        "coderResponse": "All validation gates pass and the implementation is complete. Here's my summary.\n\n## Result\n\nThe PRP's Mode B consolidation of `docs/CONFIGURATION.md` and `docs/PROVIDERS.md` is complete. The edits were surgical (no wholesale rewrite), behavior-accurate, and verified against the live binary + PRD before applying.\n\n### What changed\n\n**`docs/PROVIDERS.md`** (primary edit target):\n1. **Added the §12.7.1 tools-disable asymmetry section** (`## How the six built-ins become bare (§12.7.1 tools-disable asymmetry)`) — the one confirmed gap. It honestly documents the architectural split into three honest groups:\n   - *Explicit tool-disable flags*: `pi` (`--no-tools`), `claude` (`--tools \"\"`)\n   - *Read-only constraint* (no global off-switch): `codex` (`--sandbox read-only` + `--ephemeral`), `cursor` (`--mode ask --trust`), `gemini` (`--approval-mode default`)\n   - *Already bare by design*: `opencode` (`run` is non-interactive, empty `bare_flags`)\n   - Plus the three PRD §12.7.1 consequences (safety preserved/§18.1; latency may vary; output still just the message) and the \"design, not defect\" framing, with a pointer to `providers show <name>` for concrete tokens. Notably, codex's bare_flags correctly omit `--ask-for-approval` per the §C correction gotcha.\n2. **Tightened the §12.8 pointer** in the field-merge section so a reader landing on PROVIDERS.md to add a new agent is sent to CONFIGURATION.md §4 / PRD §12.8 without duplicating the TOML recipe.\n\n**`docs/CONFIGURATION.md` §5** (consistency pass):\n3. Added the verbatim \"slices and maps replaced wholesale, not deep-merged\" sentence so §5 and PROVIDERS.md now agree verbatim on **all four** binding points of the field-merge rule, and added the cross-link to PROVIDERS.md (the show-output lens) — the reverse link already existed.\n\n### Verification\n- Confirmed every value against the implementation: defaults table (`defaults.go`), six built-ins (`builtin.go`, codex=stdin, cursor=`agent`), trust-notice string (`load.go`), exit constants (`exitcode.go`), and the live `providers list`/`show` output (byte-for-byte in substance).\n- README linkage (lines 117/146/147) and blurbs are accurate; left untouched since they already summarize the finalized content and README is owned by the sibling task.\n- No `.go` file modified — only the two docs touched.\n\n### Validation gates — all 12 PASS\nLevels 1–8 (existence + content greps incl. `tools-disable`, `read-only`, `opencode`, both README links, `STAGEHAND_NO_COLOR`); Level 9 (`go build ./...`); Level 10 (`go test ./...` — all 8 packages green); Levels 11–12 (`providers show pi` and `providers list` exit 0, listing all six built-ins).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \\\"\\\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \"\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-03T07:32:58.282Z"
+      },
+      "createdAt": "2026-07-03T07:32:58.282Z"
+    },
+    {
+      "id": "P1.M8.T4.S2_1783063978751_validation-gate-3_b15978de",
+      "taskId": "P1.M8.T4.S2",
+      "label": "After validation gate 3",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T4_S2.md",
+        "stage": "validation-gate-3",
+        "coderResponse": "All validation gates pass and the implementation is complete. Here's my summary.\n\n## Result\n\nThe PRP's Mode B consolidation of `docs/CONFIGURATION.md` and `docs/PROVIDERS.md` is complete. The edits were surgical (no wholesale rewrite), behavior-accurate, and verified against the live binary + PRD before applying.\n\n### What changed\n\n**`docs/PROVIDERS.md`** (primary edit target):\n1. **Added the §12.7.1 tools-disable asymmetry section** (`## How the six built-ins become bare (§12.7.1 tools-disable asymmetry)`) — the one confirmed gap. It honestly documents the architectural split into three honest groups:\n   - *Explicit tool-disable flags*: `pi` (`--no-tools`), `claude` (`--tools \"\"`)\n   - *Read-only constraint* (no global off-switch): `codex` (`--sandbox read-only` + `--ephemeral`), `cursor` (`--mode ask --trust`), `gemini` (`--approval-mode default`)\n   - *Already bare by design*: `opencode` (`run` is non-interactive, empty `bare_flags`)\n   - Plus the three PRD §12.7.1 consequences (safety preserved/§18.1; latency may vary; output still just the message) and the \"design, not defect\" framing, with a pointer to `providers show <name>` for concrete tokens. Notably, codex's bare_flags correctly omit `--ask-for-approval` per the §C correction gotcha.\n2. **Tightened the §12.8 pointer** in the field-merge section so a reader landing on PROVIDERS.md to add a new agent is sent to CONFIGURATION.md §4 / PRD §12.8 without duplicating the TOML recipe.\n\n**`docs/CONFIGURATION.md` §5** (consistency pass):\n3. Added the verbatim \"slices and maps replaced wholesale, not deep-merged\" sentence so §5 and PROVIDERS.md now agree verbatim on **all four** binding points of the field-merge rule, and added the cross-link to PROVIDERS.md (the show-output lens) — the reverse link already existed.\n\n### Verification\n- Confirmed every value against the implementation: defaults table (`defaults.go`), six built-ins (`builtin.go`, codex=stdin, cursor=`agent`), trust-notice string (`load.go`), exit constants (`exitcode.go`), and the live `providers list`/`show` output (byte-for-byte in substance).\n- README linkage (lines 117/146/147) and blurbs are accurate; left untouched since they already summarize the finalized content and README is owned by the sibling task.\n- No `.go` file modified — only the two docs touched.\n\n### Validation gates — all 12 PASS\nLevels 1–8 (existence + content greps incl. `tools-disable`, `read-only`, `opencode`, both README links, `STAGEHAND_NO_COLOR`); Level 9 (`go build ./...`); Level 10 (`go test ./...` — all 8 packages green); Levels 11–12 (`providers show pi` and `providers list` exit 0, listing all six built-ins).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \\\"\\\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \"\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -f docs/CONFIGURATION.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -f docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'tools-disable' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'read-only' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'opencode' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'docs/PROVIDERS.md' README.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'docs/CONFIGURATION.md' README.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'STAGEHAND_NO_COLOR' docs/CONFIGURATION.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand providers show pi > /dev/null",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand providers list > /dev/null",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T07:32:58.751Z"
+      },
+      "createdAt": "2026-07-03T07:32:58.751Z"
+    },
+    {
+      "id": "P1.M8.T4.S2_1783063978753_complete_cb75b60e",
+      "taskId": "P1.M8.T4.S2",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T4_S2.md",
+        "stage": "complete",
+        "coderResponse": "All validation gates pass and the implementation is complete. Here's my summary.\n\n## Result\n\nThe PRP's Mode B consolidation of `docs/CONFIGURATION.md` and `docs/PROVIDERS.md` is complete. The edits were surgical (no wholesale rewrite), behavior-accurate, and verified against the live binary + PRD before applying.\n\n### What changed\n\n**`docs/PROVIDERS.md`** (primary edit target):\n1. **Added the §12.7.1 tools-disable asymmetry section** (`## How the six built-ins become bare (§12.7.1 tools-disable asymmetry)`) — the one confirmed gap. It honestly documents the architectural split into three honest groups:\n   - *Explicit tool-disable flags*: `pi` (`--no-tools`), `claude` (`--tools \"\"`)\n   - *Read-only constraint* (no global off-switch): `codex` (`--sandbox read-only` + `--ephemeral`), `cursor` (`--mode ask --trust`), `gemini` (`--approval-mode default`)\n   - *Already bare by design*: `opencode` (`run` is non-interactive, empty `bare_flags`)\n   - Plus the three PRD §12.7.1 consequences (safety preserved/§18.1; latency may vary; output still just the message) and the \"design, not defect\" framing, with a pointer to `providers show <name>` for concrete tokens. Notably, codex's bare_flags correctly omit `--ask-for-approval` per the §C correction gotcha.\n2. **Tightened the §12.8 pointer** in the field-merge section so a reader landing on PROVIDERS.md to add a new agent is sent to CONFIGURATION.md §4 / PRD §12.8 without duplicating the TOML recipe.\n\n**`docs/CONFIGURATION.md` §5** (consistency pass):\n3. Added the verbatim \"slices and maps replaced wholesale, not deep-merged\" sentence so §5 and PROVIDERS.md now agree verbatim on **all four** binding points of the field-merge rule, and added the cross-link to PROVIDERS.md (the show-output lens) — the reverse link already existed.\n\n### Verification\n- Confirmed every value against the implementation: defaults table (`defaults.go`), six built-ins (`builtin.go`, codex=stdin, cursor=`agent`), trust-notice string (`load.go`), exit constants (`exitcode.go`), and the live `providers list`/`show` output (byte-for-byte in substance).\n- README linkage (lines 117/146/147) and blurbs are accurate; left untouched since they already summarize the finalized content and README is owned by the sibling task.\n- No `.go` file modified — only the two docs touched.\n\n### Validation gates — all 12 PASS\nLevels 1–8 (existence + content greps incl. `tools-disable`, `read-only`, `opencode`, both README links, `STAGEHAND_NO_COLOR`); Level 9 (`go build ./...`); Level 10 (`go test ./...` — all 8 packages green); Levels 11–12 (`providers show pi` and `providers list` exit 0, listing all six built-ins).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \\\"\\\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "Mode B consolidation complete. Added the §12.7.1 tools-disable asymmetry section to docs/PROVIDERS.md (the one confirmed gap), documenting the two camps (explicit tool-disable: pi --no-tools, claude --tools \"\"; read-only constraint: codex --sandbox read-only + --ephemeral, cursor --mode ask --trust, gemini --approval-mode default; opencode already-bare) with the three PRD consequences and design-not-defect framing; tightened the §12.8 pointer to CONFIGURATION.md §4 without duplicating the TOML; reconciled the field-merge rule to agree verbatim on all four binding points across both docs with cross-links in both directions; and verified every documented value against defaults.go/builtin.go/load.go/exitcode.go and the live binary. README links both docs (lines 117/146/147) with accurate blurbs. All 12 validation gates pass: existence+grep checks (tools-disable/read-only/opencode/both README links/STAGEHAND_NO_COLOR), go build ./..., go test ./... (8 packages green), and providers show pi / providers list (exit 0, six built-ins). No .go files modified — surgical docs-only edits."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -f docs/CONFIGURATION.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -f docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'tools-disable' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'read-only' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'opencode' docs/PROVIDERS.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'docs/PROVIDERS.md' README.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'docs/CONFIGURATION.md' README.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "grep -q 'STAGEHAND_NO_COLOR' docs/CONFIGURATION.md",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand providers show pi > /dev/null",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go run ./cmd/stagehand providers list > /dev/null",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T07:32:58.753Z"
+      },
+      "createdAt": "2026-07-03T07:32:58.753Z"
+    }
+  ],
+  "lastModified": "2026-07-03T07:32:58.753Z"
+}

@@ -4,7 +4,7 @@
       "id": "P1",
       "type": "Phase",
       "title": "Stagehand v1.0 — agent-agnostic, snapshot-based commit-message generator",
-      "status": "Ready",
+      "status": "Complete",
       "description": "Ship the v1.0 product per PRD §10.1: a single static Go binary that generates git commit messages by shelling out to the user's installed coding-agent CLI (spending their existing coding-plan quota), commits atomically via git plumbing (write-tree / commit-tree / update-ref CAS) so the index can be staged concurrently with generation, learns repo commit-message style with an anti-duplicate guarantee, supports six built-in agent providers via a config-overridable manifest system, and is distributed via Homebrew/go install/Releases. Research is complete (architecture/ dir); this phase decomposes the ship list into an acyclic, dependency-true build DAG. Multi-commit decomposition is explicitly v2 and out of scope, but the v1 architecture must not preclude it (v2-readiness seam: CommitStaged assumes the index is already staged).",
       "milestones": [
         {
@@ -612,7 +612,7 @@
           "id": "P1.M8",
           "type": "Milestone",
           "title": "Manifests, Distribution, Docs & Release",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Ship the reference providers/*.toml, goreleaser distribution (Homebrew/go install/Releases/Scoop/AUR), Makefile finalization, the real-agent progressive verification suite (resolving PRD Appendix E open questions against live agents), and the changeset-level documentation (README + docs/ consolidation, Mode B).",
           "tasks": [
             {
@@ -692,7 +692,7 @@
               "id": "P1.M8.T4",
               "type": "Task",
               "title": "Changeset-level documentation sync (Mode B)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "The whole-feature/overview docs that only make sense once everything lands: the README marketing surface (§21.5) and the docs/ cross-cutting consolidation of the per-file Mode A slices written throughout.",
               "subtasks": [
                 {
@@ -712,7 +712,7 @@
                   "id": "P1.M8.T4.S2",
                   "type": "Subtask",
                   "title": "docs/ cross-cutting reference consolidation",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M8.T4.S1",

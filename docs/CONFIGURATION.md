@@ -197,10 +197,15 @@ repo `[provider.pi]` replaces a global `[provider.pi]`.
 Each surviving override is then **field-merged onto its matching built-in
 manifest** inside the registry (`NewRegistry`): an override that sets only
 `default_model` leaves the built-in `command`, `bare_flags`, `print_flag`,
-`model_flag`, `prompt_delivery`, etc. intact. An override naming a provider that
-is not built-in is added as a brand-new provider, used as-is (§12.8). This
-field-merge happens exactly once, over the built-in — two user overrides are
-never field-merged together.
+`model_flag`, `prompt_delivery`, etc. intact. Slices and maps (`subcommand`,
+`bare_flags`, `env`) are replaced **wholesale** when an override sets them — they
+are not appended or deep-merged. An override naming a provider that is not
+built-in is added as a brand-new provider, used as-is (§12.8). This field-merge
+happens exactly once, over the built-in — two user overrides are never
+field-merged together. To see the resulting manifest after the merge (the
+`providers show <name>` output), see [PROVIDERS.md](./PROVIDERS.md); this §5 is
+the config-syntax + precedence lens, while PROVIDERS.md is the show-output lens
+on the same rule.
 
 ## 6. Repo-local config trust notice (§19)
 
