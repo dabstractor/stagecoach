@@ -223,8 +223,12 @@ func TestCommitStaged_CASFailure(t *testing.T) {
 	// Let the orchestrator snapshot + enter generation (stub sleeping 400ms).
 	time.Sleep(150 * time.Millisecond)
 
-	// Move HEAD mid-generation.
-	commitRaw(t, repo, "concurrent commit")
+	// Move HEAD mid-generation with a commit whose tree DIFFERS from the snapshot (add c.txt on
+	// top of the still-staged b.txt), so the CAS error takes the generic "HEAD moved" path rather
+	// than the already-committed fast path (covered by TestCommitStaged_CASFailure_AlreadyCommitted).
+	writeFile(t, repo, "c.txt", "concurrent change")
+	stageFile(t, repo, "c.txt")
+	gitOut(t, repo, "commit", "-m", "concurrent commit")
 	concurrent := headSHA(t, repo)
 
 	err := <-done
@@ -251,6 +255,12 @@ func TestCommitStaged_CASFailure(t *testing.T) {
 	if ce.TreeSHA == "" {
 		t.Error("CASError.TreeSHA is empty, want non-empty")
 	}
+	if ce.ActualTree == "" {
+		t.Error("CASError.ActualTree is empty, want non-empty (Actual^{tree} re-read on CAS failure)")
+	}
+	if ce.ActualTree == ce.TreeSHA {
+		t.Errorf("ActualTree == TreeSHA (%q) — the concurrent --allow-empty commit must have a DIFFERENT tree than the b.txt snapshot", ce.TreeSHA)
+	}
 	if !strings.Contains(ce.Error(), "HEAD moved") {
 		t.Errorf("CASError.Error() does not contain 'HEAD moved': %s", ce.Error())
 	}
@@ -258,6 +268,58 @@ func TestCommitStaged_CASFailure(t *testing.T) {
 	// Atomic HEAD invariant (§20.2): HEAD is the concurrent commit, NOT the orchestrator's.
 	if got := headSHA(t, repo); got != concurrent {
 		t.Errorf("HEAD = %q, want %q (concurrent commit, orchestrator's should NOT have landed)", got, concurrent)
+	}
+}
+
+// TestCommitStaged_CASFailure_AlreadyCommitted verifies the friendly fast path: when the commit
+// that wins the CAS race carries the SAME tree as our frozen snapshot (the common duplicate-run
+// case), CASError.Error() must say "already committed … Nothing to do" and must NOT print the
+// manual commit-tree recipe (which would create a DUPLICATE commit). The race is a non-empty
+// commit of the same staged b.txt, so its tree == the snapshot tree.
+func TestCommitStaged_CASFailure_AlreadyCommitted(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "b.txt", "data")
+	stageFile(t, repo, "b.txt")
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: x", SleepMS: 400})
+	cfg := config.Defaults()
+
+	done := make(chan error, 1)
+	go func() {
+		_, e := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		done <- e
+	}()
+
+	// Let the orchestrator snapshot (freeze b.txt into tree T) + enter generation.
+	time.Sleep(150 * time.Millisecond)
+
+	// Race a NON-empty commit of the SAME staged b.txt → a commit whose tree == the snapshot tree T.
+	gitOut(t, repo, "commit", "-m", "concurrent same-tree")
+	concurrent := headSHA(t, repo)
+
+	err := <-done
+	if err == nil {
+		t.Fatal("expected error on CAS failure, got nil")
+	}
+	var ce *CASError
+	if !errors.As(err, &ce) {
+		t.Fatalf("error type = %T, want *CASError", err)
+	}
+	if ce.Actual != concurrent {
+		t.Errorf("CASError.Actual = %q, want %q", ce.Actual, concurrent)
+	}
+	if ce.ActualTree != ce.TreeSHA {
+		t.Errorf("CASError.ActualTree (%q) != TreeSHA (%q) — the concurrent commit must carry the snapshot tree", ce.ActualTree, ce.TreeSHA)
+	}
+	// Friendly message: "already committed … Nothing to do"; must NOT offer the duplicate-creating recipe.
+	if !strings.Contains(ce.Error(), "already committed") || !strings.Contains(ce.Error(), "Nothing to do") {
+		t.Errorf("CASError.Error() = %q, want to contain 'already committed' and 'Nothing to do'", ce.Error())
+	}
+	if strings.Contains(ce.Error(), "commit-tree") {
+		t.Errorf("CASError.Error() must NOT contain the manual commit-tree recipe (would duplicate): %s", ce.Error())
 	}
 }
 

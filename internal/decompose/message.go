@@ -210,8 +210,12 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		if errors.Is(err, git.ErrCASFailed) {
 			actual, _, _ := deps.Git.RevParseHEAD(ctx) // re-read for the §13.5 message's Actual (D5)
+			actualTree := ""                           // + Actual^{tree} for the already-committed fast path
+			if actual != "" {
+				actualTree, _ = deps.Git.RevParseTree(ctx, actual)
+			}
 			return "", &generate.CASError{
-				TreeSHA: tree, Expected: expectedOld, Actual: actual, Message: msg,
+				TreeSHA: tree, Expected: expectedOld, Actual: actual, ActualTree: actualTree, Message: msg,
 			}
 		}
 		return "", err // non-CAS infra — propagate verbatim (matches CommitStaged)

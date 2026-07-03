@@ -17,7 +17,7 @@ func TestDefaultModelsForProvider_PerProvider(t *testing.T) {
 			"planner": "gemini-3.1-pro", "stager": "", "message": "gemini-3.1-flash-lite", "arbiter": "gemini-3.5-flash",
 		},
 		"agy": {
-			"planner": "gemini-3.1-pro", "stager": "", "message": "gemini-3.1-flash-lite", "arbiter": "gemini-3.5-flash",
+			"planner": "Gemini 3.5 Flash (High)", "stager": "", "message": "Gemini 3.5 Flash (Low)", "arbiter": "Gemini 3.5 Flash (Medium)",
 		},
 		"opencode": {
 			"planner": "openai/gpt-5.4", "stager": "", "message": "openai/gpt-5.4-nano", "arbiter": "openai/gpt-5.4-mini",

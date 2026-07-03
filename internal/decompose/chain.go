@@ -257,7 +257,11 @@ func leftoverPaths(status string) []string {
 func handleUpdateRefErr(ctx context.Context, deps Deps, tree, expectedOld, msg string, err error) error {
 	if errors.Is(err, git.ErrCASFailed) {
 		actual, _, _ := deps.Git.RevParseHEAD(ctx) // re-read for the §13.5 message's Actual (D5)
-		return &generate.CASError{TreeSHA: tree, Expected: expectedOld, Actual: actual, Message: msg}
+		actualTree := ""                           // + Actual^{tree} for the already-committed fast path
+		if actual != "" {
+			actualTree, _ = deps.Git.RevParseTree(ctx, actual)
+		}
+		return &generate.CASError{TreeSHA: tree, Expected: expectedOld, Actual: actual, ActualTree: actualTree, Message: msg}
 	}
 	return fmt.Errorf("%w: update-ref: %w", ErrArbiterResolutionFailed, err)
 }

@@ -18,8 +18,10 @@ package config
 //   opencode — openai/gpt-5.4 / -mini / -nano — PRD baseline 2026-07 (provider-prefixed; verify upstream).
 //   cursor   — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — UNVERIFIED: PRD gives tier names (flagship/mid/
 //              nano); resolved to best-guess OpenAI tokens (cursor is OpenAI-backed). VERIFY `agent --help`.
-//   agy      — gemini-3.1-pro / gemini-3.5-flash / gemini-3.1-flash-lite — refreshed 2026-07-02 per FR-D5
-//              (was gemini-3.5-pro planner).
+//   agy      — "Gemini 3.5 Flash (High)" / "Gemini 3.5 Flash (Medium)" / "Gemini 3.5 Flash (Low)" —
+//              refreshed 2026-07-03 per FR-D5 vs live `agy models` + -p runs. agy's --model takes the
+//              DISPLAY LABEL verbatim (reasoning baked into the "(Low/Medium/High)" suffix, NOT a separate
+//              flag); API-style ids (gemini-3.5-flash) are silently ignored → fallback to agy's default.
 //   gemini   — gemini-3.1-pro / gemini-3.5-flash / gemini-3.1-flash-lite — refreshed 2026-07-02 per FR-D5
 //              (was gemini-3.5-pro planner).
 //   qwen-code — qwen3-coder-plus / "" (cannot stager) / qwen3-coder-flash / qwen3-coder-plus — # TO CONFIRM
@@ -64,10 +66,12 @@ var roleDefaults = RoleModelDefaults{
 		"arbiter": "gemini-3.5-flash",
 	},
 	"agy": {
-		"planner": "gemini-3.1-pro", // refreshed 2026-07-02 per FR-D5 (was gemini-3.5-pro)
-		"stager":  "",               // NOT stager-capable (TooledFlags nil)
-		"message": "gemini-3.1-flash-lite",
-		"arbiter": "gemini-3.5-flash",
+		// agy --model takes the `agy models` display label VERBATIM (spaces + reasoning suffix included);
+		// API-style ids silently fall back to agy's default. Refreshed 2026-07-03 per FR-D5.
+		"planner": "Gemini 3.5 Flash (High)",   // flagship/smart tier = flash with high thinking
+		"stager":  "",                          // NOT stager-capable (TooledFlags nil)
+		"message": "Gemini 3.5 Flash (Low)",    // fast/cheapest tier = flash with low thinking
+		"arbiter": "Gemini 3.5 Flash (Medium)", // mid tier
 	},
 	"qwen-code": {
 		"planner": "qwen3-coder-plus",  // flagship/smart (FR-D3). # TO CONFIRM per FR-D5

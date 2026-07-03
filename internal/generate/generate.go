@@ -94,18 +94,32 @@ func (e *RescueError) Unwrap() error { return e.Kind }
 
 // CASError carries the §13.5 "HEAD moved" context. The orchestrator RE-READS HEAD
 // via RevParseHEAD on CAS failure (git.ErrCASFailed docstring, decision D5) to
-// obtain Actual. The CLI does:
+// obtain Actual, and reads Actual^{tree} into ActualTree. The CLI does:
 //
 //	var ce *generate.CASError
 //	if errors.As(err, &ce) { print(ce.Error()); exit = 1 }
+//
+// Error() branches on ActualTree == TreeSHA: when the commit that beat us to HEAD carries the
+// SAME tree as our frozen snapshot, our staged changes are already committed (the common case:
+// a duplicate stagehand run). It then says so plainly instead of printing a manual commit-tree
+// recipe that would create a DUPLICATE commit.
 type CASError struct {
-	TreeSHA  string // the snapshot tree (for the manual commit-tree recovery command)
-	Expected string // the parentSHA captured at step 1 (the CAS expected-old)
-	Actual   string // HEAD re-read after the CAS failed ("" if the re-read itself errored)
-	Message  string // the generated commit message (for the manual commit-tree -m)
+	TreeSHA    string // the snapshot tree (for the manual commit-tree recovery command)
+	Expected   string // the parentSHA captured at step 1 (the CAS expected-old)
+	Actual     string // HEAD re-read after the CAS failed ("" if the re-read itself errored)
+	ActualTree string // tree of Actual (Actual^{tree}); "" if unknown. == TreeSHA ⇒ already committed
+	Message    string // the generated commit message (for the manual commit-tree -m)
 }
 
 func (e *CASError) Error() string {
+	// Already-committed fast path: the commit that won the CAS race has the same tree as our
+	// frozen snapshot, so our exact staged changes are already landed — a duplicate run. Printing
+	// the manual commit-tree recipe here would invite the user to create a DUPLICATE commit.
+	if e.TreeSHA != "" && e.ActualTree != "" && e.ActualTree == e.TreeSHA {
+		return fmt.Sprintf("HEAD advanced to %s while generating — that commit's tree matches this "+
+			"snapshot, so your staged changes are already committed (another stagehand run landed "+
+			"them). Nothing to do.", e.Actual)
+	}
 	return fmt.Sprintf("HEAD moved from %s to %s while generating; aborting to avoid a non-fast-forward. "+
 		"Your generated message was: %s. To commit the snapshot manually: "+
 		"git commit-tree -p %s -m %q %s | xargs git update-ref HEAD",
@@ -272,11 +286,16 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	}
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		if errors.Is(err, git.ErrCASFailed) {
-			// Re-read HEAD for the §13.5 message (D5).
+			// Re-read HEAD for the §13.5 message (D5), and its tree to detect the already-committed
+			// fast path (another stagehand run landed the same snapshot → duplicate-run race).
 			actual, _, _ := deps.Git.RevParseHEAD(ctx)
+			actualTree := ""
+			if actual != "" {
+				actualTree, _ = deps.Git.RevParseTree(ctx, actual)
+			}
 			return Result{}, &CASError{
 				TreeSHA: treeSHA, Expected: parentSHA,
-				Actual: actual, Message: msg,
+				Actual: actual, ActualTree: actualTree, Message: msg,
 			}
 		}
 		return Result{}, err // non-CAS infra error — propagate

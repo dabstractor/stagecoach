@@ -1138,6 +1138,58 @@ func TestRouting_DecomposeEntered(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestRouting_StagedCommitsOnlyStaged_NoDecompose — THE BASELINE CONTRACT: when ANY file is
+// staged, stagehand generates ONE commit message for EXACTLY the staged content and leaves the
+// rest of the working tree untouched. It must NOT decompose, and must NOT pull in unstaged files.
+// (This is the contract a prior change violated by decomposing staged+unstaged trees.)
+// ---------------------------------------------------------------------------
+func TestRouting_StagedCommitsOnlyStaged_NoDecompose(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	repo := setupStubRepo(t, "feat: staged slice only")
+	writeFile(t, repo, "staged.txt", "a")
+	writeFile(t, repo, "untracked.txt", "b")
+	stageFile(t, repo, "staged.txt") // one staged, one untracked; NO --single, NO --no-auto-stage
+
+	before := len(strings.Split(gitOut(t, repo, "log", "--oneline"), "\n"))
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"--provider", "stub"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil (one commit of the staged slice)", err)
+	}
+
+	// Exactly ONE commit landed — not a decomposition.
+	after := len(strings.Split(gitOut(t, repo, "log", "--oneline"), "\n"))
+	if after != before+1 {
+		t.Errorf("commit count = %d, want %d (+1, single commit of the staged slice)", after, before+1)
+	}
+
+	// The commit contains ONLY the staged file.
+	files := gitOut(t, repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+	if !strings.Contains(files, "staged.txt") {
+		t.Errorf("HEAD diff-tree = %q, want staged.txt", files)
+	}
+	if strings.Contains(files, "untracked.txt") {
+		t.Errorf("HEAD diff-tree = %q; untracked.txt must NOT be committed (staged-slice contract)", files)
+	}
+
+	// The untracked file must remain untouched in the working tree.
+	if got := gitOut(t, repo, "status", "--porcelain"); !strings.Contains(got, "untracked.txt") {
+		t.Errorf("status = %q, want untracked.txt still present (must not be swept in)", got)
+	}
+
+	// It took the SINGLE path, not decompose.
+	if got := errBuf.String(); strings.Contains(got, "Decomposing") {
+		t.Errorf("stderr = %q; must NOT decompose when files are staged", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestRunDefault_RepoLocalNoticeOnce_Issue5 proves Issue 5 is fixed: a repo-local .stagehand.toml
 // that sets provider prints the §19 notice "repo-local config (.stagehand.toml) sets provider to"
 // EXACTLY ONCE (strings.Count == 1; was 2 before S1/S2's single-Load fix).
