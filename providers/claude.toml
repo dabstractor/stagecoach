@@ -6,7 +6,13 @@
 # because the built-in is the source of truth; this file is for reference and
 # copy-paste when authoring a [provider.claude] override (PRD §12.8).
 #
-# TO-CONFIRM: none.
+# TO-CONFIRM (Appendix E.2, real run 2026-07-03): whether `--tools ""` alone
+# suppresses ALL tool use is NOT yet confirmed — the host's `claude` did not
+# return a usable message in the integration_real suite flow (~195 s → ErrRescue;
+# the `--disallowed-tools "*"` fallback behaved identically). Host-side, not a
+# manifest defect. KEEP `--tools ""`; if a functional claude later proves it
+# insufficient, append `--disallowed-tools "*"` (host `--help` confirms the
+# syntax). See external_deps §B.2.
 # Note (§C.1): the bare set encodes 5 logical flags as a 7-element slice because
 # --setting-sources and --tools each take an empty-string value; both empty
 # elements are significant and MUST be kept. `--system-prompt` REPLACES the

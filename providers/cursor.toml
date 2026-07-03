@@ -7,9 +7,13 @@
 # copy-paste when authoring a [provider.cursor] override (PRD §12.8).
 #
 # TO-CONFIRM (Appendix E.4b / PRD §12.7.2): `--mode ask` is read-only (strongly
-# indicated); the executable is `agent` (some installs expose it as
-# `cursor agent`). There is no system_prompt_flag (system prompt is prepended to
-# the payload).
+# indicated by `agent --help`); the executable is `agent` (some installs expose
+# it as `cursor agent`). Real run 2026-07-03: the host's `agent` is NOT
+# AUTHENTICATED (exit 1, "run 'agent login' first, or set CURSOR_API_KEY"), so
+# the read-only working-tree invariant could not be asserted. KEEP `--mode ask
+# --trust`; confirm in an authenticated environment (`agent login` /
+# CURSOR_API_KEY). See external_deps §B.6. There is no system_prompt_flag
+# (system prompt is prepended to the payload).
 name = "cursor"
 detect = "agent"                 # §C.4: executable is `agent`, not `cursor`
 command = "agent"                # §C.4: executable is `agent`, not `cursor`

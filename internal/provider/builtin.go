@@ -102,9 +102,14 @@ func Builtins() map[string]Manifest {
 			DefaultModel:     "",
 			SystemPromptFlag: "", // none → prepend to payload
 			ProviderFlag:     "",
+			// BareFlags: --ask-for-approval is intentionally ABSENT — the real-agent
+			// integration_real suite (P1.M8.T3.S1, run 2026-07-03) proved `codex exec`
+			// exits 2 "unexpected argument '--ask-for-approval'" on codex-cli 0.142.4;
+			// that flag is interactive-`codex`-only (top-level `codex --help`), NOT a
+			// `codex exec` option. exec is non-interactive by definition, so sandbox
+			// read-only + --ephemeral is the correct minimal set.
 			BareFlags: []string{
 				"--sandbox", "read-only",
-				"--ask-for-approval", "never",
 				"--ephemeral", // §C correction #2: added
 			},
 			Output:         OutputRaw,

@@ -671,14 +671,14 @@
               "id": "P1.M8.T3",
               "type": "Task",
               "title": "Real-agent progressive verification",
-              "status": "Planned",
+              "status": "Complete",
               "description": "A gated //go:build integration_real suite that invokes the actual installed agents end-to-end and resolves the PRD Appendix E open questions (§12.7.2 progressive verification). Run manually pre-release; skipped in CI.",
               "subtasks": [
                 {
                   "id": "P1.M8.T3.S1",
                   "type": "Subtask",
                   "title": "integration_real suite + resolve Appendix E confirmations",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M6.T1.S1",

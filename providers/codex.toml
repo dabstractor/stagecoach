@@ -6,22 +6,32 @@
 # because the built-in is the source of truth; this file is for reference and
 # copy-paste when authoring a [provider.codex] override (PRD §12.8).
 #
-# TO-CONFIRM (Appendix E.4a / PRD §12.7.2): prompt delivery is stdin (NOT
-# positional) and the call includes --ephemeral (both are §C.2 corrections).
-# There is no system_prompt_flag (system prompt is prepended to the payload).
+# RESOLVED (Appendix E.4a / PRD §12.7.2, real run 2026-07-03): prompt delivery is
+# stdin (NOT positional) and the call includes --ephemeral — both are §C.2
+# corrections and both are real-run-confirmed valid (codex exec parses them and
+# reaches model invocation on codex-cli 0.142.4). The --ask-for-approval flag was
+# REMOVED (see the inline note below): it is interactive-`codex`-only and
+# `codex exec` exits 2 on it. The full E.4a end-to-end confirmation (codex exec
+# writes the answer to stdout + exit 0) is BLOCKED on the verification host by
+# codex 401 auth (no OpenAI/ChatGPT credential); it remains TO CONFIRM in an
+# authenticated environment. There is no system_prompt_flag (system prompt is
+# prepended to the payload).
 name = "codex"
 detect = "codex"
 command = "codex"
 subcommand = [
   "exec",                        # inserted between command and flags
 ]
-prompt_delivery = "stdin"        # §C.2 correction: positional→stdin
+prompt_delivery = "stdin"        # §C.2 correction: positional→stdin (real-run-confirmed valid)
 model_flag = "-m"
 bare_flags = [
   "--sandbox",
   "read-only",
-  "--ask-for-approval",
-  "never",
+  # --ask-for-approval was REMOVED on 2026-07-03: the integration_real suite
+  # proved `codex exec` exits 2 "unexpected argument '--ask-for-approval'" on
+  # codex-cli 0.142.4. That flag is interactive-`codex`-only (top-level
+  # `codex --help`), NOT a `codex exec` option. exec is non-interactive, so
+  # sandbox read-only + --ephemeral is the correct minimal set.
   "--ephemeral",                 # §C.2 correction: added
 ]
 output = "raw"

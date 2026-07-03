@@ -92,9 +92,11 @@ func TestRender_GoldenProviders(t *testing.T) {
 			name: "codex stdin (CORRECTED), subcommand, prepend", manifest: "codex",
 			model: "gpt-5", provider: "", sys: "SYS", user: "BODY",
 			// effUser="SYS\n\nBODY" delivered via stdin (codex reads stdin).
+			// NOTE: --ask-for-approval was removed (real-run-confirmed invalid for
+			// `codex exec` 0.142.4; it is interactive-`codex`-only).
 			wantArgs: []string{
 				"exec", "-m", "gpt-5",
-				"--sandbox", "read-only", "--ask-for-approval", "never", "--ephemeral",
+				"--sandbox", "read-only", "--ephemeral",
 			},
 			wantStdin: "SYS\n\nBODY", wantVia: true,
 		},

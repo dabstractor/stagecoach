@@ -6,10 +6,15 @@
 # because the built-in is the source of truth; this file is for reference and
 # copy-paste when authoring a [provider.gemini] override (PRD §12.8).
 #
-# TO-CONFIRM (Appendix E.1): prompt delivery — positional is the current
-# default; stdin is preferred-if-verified at integration time. The `-p` flag is
-# DEPRECATED and must NOT be used, so print_flag is omitted. There is no
-# system_prompt_flag: the system prompt is prepended to the payload instead.
+# TO-CONFIRM (Appendix E.1, real run 2026-07-03): prompt delivery — positional is
+# the current default; stdin is preferred-if-verified at integration time. The
+# host's `gemini` CLI is DEPRECATED (exit 55, "migrate to Antigravity") and
+# refuses headless runs (untrusted directory), so the stdin-vs-positional
+# question could NOT be exercised. KEEP `positional` + the 300 KB diff cap
+# (FR3); confirm in an environment with a functional, trusted gemini CLI. The
+# `-p` flag is DEPRECATED and must NOT be used, so print_flag is omitted. There
+# is no system_prompt_flag: the system prompt is prepended to the payload
+# instead. See external_deps §B.3.
 name = "gemini"
 detect = "gemini"
 command = "gemini"

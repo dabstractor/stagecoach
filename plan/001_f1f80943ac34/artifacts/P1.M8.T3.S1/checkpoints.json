@@ -1,0 +1,231 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M8.T3.S1_1783057726325_pre-execution_c8746991",
+      "taskId": "P1.M8.T3.S1",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T3_S1.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-07-03T05:48:46.325Z"
+      },
+      "createdAt": "2026-07-03T05:48:46.325Z"
+    },
+    {
+      "id": "P1.M8.T3.S1_1783060952689_coder-response_62389ee2",
+      "taskId": "P1.M8.T3.S1",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T3_S1.md",
+        "stage": "coder-response",
+        "coderResponse": "The codex manifest is correct: `BareFlags: [\"--sandbox\", \"read-only\", \"--ephemeral\"]` with a citing comment — `--ask-for-approval` is fully removed from the slice (the 2 grep hits are the explanatory comment). All checks pass.\n\n## Execution Summary\n\nThe PRP is fully implemented and all validation gates pass. Here's the complete picture:\n\n**State discovered on entry:** A prior/concurrent agent had already created `integration_real_test.go`, applied the codex `--ask-for-approval` removal to `builtin.go`/`codex.toml`/tests, and (during my session) updated `external_deps.md` + the other three tomls. I independently verified everything, filled gaps, fixed a stale docstring, and reconciled duplicate notes from the concurrent edit.\n\n**What I did (independently verified):**\n1. **Re-confirmed the deterministic codex finding directly**: `codex exec --ask-for-approval never` → `error: unexpected argument '--ask-for-approval' found` (exit 2); `codex exec --help` shows no such option. The manifest removal is real-verified.\n2. **Ran the real suite through the harness** (`STAGEHAND_RUN_REAL=1 -tags integration_real`):\n   - `TestIntegrationReal_Pi` → **PASS** (real commit `[257c703] feat(x): add new feature stub` landed end-to-end)\n   - codex/cursor/gemini/opencode → blocked by host auth/tier/trust (401, 403, exit-55, CURSOR_API_KEY) — captured authoritatively\n   - claude → confirmed hanging via harness panic-stack (`Executor.Run` blocked in `select` on `cmd.Wait`)\n3. **Fixed** the stale docstring in `TestIntegrationReal_CodexExecStdoutExit0` (removed the `--ask-for-approval` reference, added the 401-auth-block note).\n4. **Reconciled** `external_deps.md` (removed my redundant duplicate §B.1/§B.2 notes, deferring to the more complete narrative).\n\n**Honest Appendix E outcomes (per PRD §12.7.2 — flip only on real-run confirmation, else keep safe default + `# TO CONFIRM`):**\n- **E.1 (gemini stdin ~300KB)**: BLOCKED (CLI deprecated/exit-55 + headless-untrusted) → keep positional + 300KB cap. *Also discovered: gemini needs `--skip-trust`/`GEMINI_CLI_TRUST_WORKSPACE` for headless* (flagged as follow-up).\n- **E.2 (claude `--tools \"\"`)**: BLOCKED (hangs ~195s → ErrRescue; fallback identical) → keep `--tools \"\"`.\n- **E.4a (codex exec stdout+exit0)**: PARTIAL — manifest bug **FOUND + FIXED** (`--ask-for-approval` removed); corrected invocation parses + reaches model call, then 401. stdin/`--ephemeral`/`--sandbox` confirmed valid.\n- **E.4b (cursor `--mode ask` read-only)**: BLOCKED (not authenticated) → keep `--mode ask --trust`.\n\n**Net manifest change:** codex `BareFlags` drops `--ask-for-approval`,`never` (the only real-run-confirmed change). Schema unchanged; all unconfirmed fields keep safe defaults.\n\n**Validation gates:** L1 gofmt clean · L2 `go build ./...` · L3 `go vet -tags integration_real` · L4 tagged binary compiles · L5 `go test ./internal/generate/` · L6 `go test ./...` (all green, no real agent in CI) · L8 `grep \"Appendix E resolved\"` ✓. Scope respected (stub/e2e/invariant suites untouched; not wired into Makefile `test`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume."
+        },
+        "validationResults": [],
+        "timestamp": "2026-07-03T06:42:32.689Z"
+      },
+      "createdAt": "2026-07-03T06:42:32.689Z"
+    },
+    {
+      "id": "P1.M8.T3.S1_1783060953492_validation-gate-4_961846b8",
+      "taskId": "P1.M8.T3.S1",
+      "label": "After validation gate 4",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T3_S1.md",
+        "stage": "validation-gate-4",
+        "coderResponse": "The codex manifest is correct: `BareFlags: [\"--sandbox\", \"read-only\", \"--ephemeral\"]` with a citing comment — `--ask-for-approval` is fully removed from the slice (the 2 grep hits are the explanatory comment). All checks pass.\n\n## Execution Summary\n\nThe PRP is fully implemented and all validation gates pass. Here's the complete picture:\n\n**State discovered on entry:** A prior/concurrent agent had already created `integration_real_test.go`, applied the codex `--ask-for-approval` removal to `builtin.go`/`codex.toml`/tests, and (during my session) updated `external_deps.md` + the other three tomls. I independently verified everything, filled gaps, fixed a stale docstring, and reconciled duplicate notes from the concurrent edit.\n\n**What I did (independently verified):**\n1. **Re-confirmed the deterministic codex finding directly**: `codex exec --ask-for-approval never` → `error: unexpected argument '--ask-for-approval' found` (exit 2); `codex exec --help` shows no such option. The manifest removal is real-verified.\n2. **Ran the real suite through the harness** (`STAGEHAND_RUN_REAL=1 -tags integration_real`):\n   - `TestIntegrationReal_Pi` → **PASS** (real commit `[257c703] feat(x): add new feature stub` landed end-to-end)\n   - codex/cursor/gemini/opencode → blocked by host auth/tier/trust (401, 403, exit-55, CURSOR_API_KEY) — captured authoritatively\n   - claude → confirmed hanging via harness panic-stack (`Executor.Run` blocked in `select` on `cmd.Wait`)\n3. **Fixed** the stale docstring in `TestIntegrationReal_CodexExecStdoutExit0` (removed the `--ask-for-approval` reference, added the 401-auth-block note).\n4. **Reconciled** `external_deps.md` (removed my redundant duplicate §B.1/§B.2 notes, deferring to the more complete narrative).\n\n**Honest Appendix E outcomes (per PRD §12.7.2 — flip only on real-run confirmation, else keep safe default + `# TO CONFIRM`):**\n- **E.1 (gemini stdin ~300KB)**: BLOCKED (CLI deprecated/exit-55 + headless-untrusted) → keep positional + 300KB cap. *Also discovered: gemini needs `--skip-trust`/`GEMINI_CLI_TRUST_WORKSPACE` for headless* (flagged as follow-up).\n- **E.2 (claude `--tools \"\"`)**: BLOCKED (hangs ~195s → ErrRescue; fallback identical) → keep `--tools \"\"`.\n- **E.4a (codex exec stdout+exit0)**: PARTIAL — manifest bug **FOUND + FIXED** (`--ask-for-approval` removed); corrected invocation parses + reaches model call, then 401. stdin/`--ephemeral`/`--sandbox` confirmed valid.\n- **E.4b (cursor `--mode ask` read-only)**: BLOCKED (not authenticated) → keep `--mode ask --trust`.\n\n**Net manifest change:** codex `BareFlags` drops `--ask-for-approval`,`never` (the only real-run-confirmed change). Schema unchanged; all unconfirmed fields keep safe defaults.\n\n**Validation gates:** L1 gofmt clean · L2 `go build ./...` · L3 `go vet -tags integration_real` · L4 tagged binary compiles · L5 `go test ./internal/generate/` · L6 `go test ./...` (all green, no real agent in CI) · L8 `grep \"Appendix E resolved\"` ✓. Scope respected (stub/e2e/invariant suites untouched; not wired into Makefile `test`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/generate/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet -tags integration_real ./internal/generate/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test -tags integration_real -run '^$' ./internal/generate/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/generate\t(cached) [no tests to run]\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/generate/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "STAGEHAND_RUN_REAL=1 go test -tags integration_real -run '^IntegrationReal' -timeout 60m -v ./internal/generate/",
+            "stdout": "testing: warning: no tests to run\nPASS\nok  \tgithub.com/dustin/stagehand/internal/generate\t0.002s [no tests to run]\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "grep -n 'Appendix E resolved' plan/001_f1f80943ac34/architecture/external_deps.md",
+            "stdout": "124:## Appendix E resolved (real-agent run, 2026-07-03)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T06:42:33.492Z"
+      },
+      "createdAt": "2026-07-03T06:42:33.492Z"
+    },
+    {
+      "id": "P1.M8.T3.S1_1783060953493_complete_c07a04b6",
+      "taskId": "P1.M8.T3.S1",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagehand-hack/plan/001_f1f80943ac34/prps/P1_M8_T3_S1.md",
+        "stage": "complete",
+        "coderResponse": "The codex manifest is correct: `BareFlags: [\"--sandbox\", \"read-only\", \"--ephemeral\"]` with a citing comment — `--ask-for-approval` is fully removed from the slice (the 2 grep hits are the explanatory comment). All checks pass.\n\n## Execution Summary\n\nThe PRP is fully implemented and all validation gates pass. Here's the complete picture:\n\n**State discovered on entry:** A prior/concurrent agent had already created `integration_real_test.go`, applied the codex `--ask-for-approval` removal to `builtin.go`/`codex.toml`/tests, and (during my session) updated `external_deps.md` + the other three tomls. I independently verified everything, filled gaps, fixed a stale docstring, and reconciled duplicate notes from the concurrent edit.\n\n**What I did (independently verified):**\n1. **Re-confirmed the deterministic codex finding directly**: `codex exec --ask-for-approval never` → `error: unexpected argument '--ask-for-approval' found` (exit 2); `codex exec --help` shows no such option. The manifest removal is real-verified.\n2. **Ran the real suite through the harness** (`STAGEHAND_RUN_REAL=1 -tags integration_real`):\n   - `TestIntegrationReal_Pi` → **PASS** (real commit `[257c703] feat(x): add new feature stub` landed end-to-end)\n   - codex/cursor/gemini/opencode → blocked by host auth/tier/trust (401, 403, exit-55, CURSOR_API_KEY) — captured authoritatively\n   - claude → confirmed hanging via harness panic-stack (`Executor.Run` blocked in `select` on `cmd.Wait`)\n3. **Fixed** the stale docstring in `TestIntegrationReal_CodexExecStdoutExit0` (removed the `--ask-for-approval` reference, added the 401-auth-block note).\n4. **Reconciled** `external_deps.md` (removed my redundant duplicate §B.1/§B.2 notes, deferring to the more complete narrative).\n\n**Honest Appendix E outcomes (per PRD §12.7.2 — flip only on real-run confirmation, else keep safe default + `# TO CONFIRM`):**\n- **E.1 (gemini stdin ~300KB)**: BLOCKED (CLI deprecated/exit-55 + headless-untrusted) → keep positional + 300KB cap. *Also discovered: gemini needs `--skip-trust`/`GEMINI_CLI_TRUST_WORKSPACE` for headless* (flagged as follow-up).\n- **E.2 (claude `--tools \"\"`)**: BLOCKED (hangs ~195s → ErrRescue; fallback identical) → keep `--tools \"\"`.\n- **E.4a (codex exec stdout+exit0)**: PARTIAL — manifest bug **FOUND + FIXED** (`--ask-for-approval` removed); corrected invocation parses + reaches model call, then 401. stdin/`--ephemeral`/`--sandbox` confirmed valid.\n- **E.4b (cursor `--mode ask` read-only)**: BLOCKED (not authenticated) → keep `--mode ask --trust`.\n\n**Net manifest change:** codex `BareFlags` drops `--ask-for-approval`,`never` (the only real-run-confirmed change). Schema unchanged; all unconfirmed fields keep safe defaults.\n\n**Validation gates:** L1 gofmt clean · L2 `go build ./...` · L3 `go vet -tags integration_real` · L4 tagged binary compiles · L5 `go test ./internal/generate/` · L6 `go test ./...` (all green, no real agent in CI) · L8 `grep \"Appendix E resolved\"` ✓. Scope respected (stub/e2e/invariant suites untouched; not wired into Makefile `test`).\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "PRP P1.M8.T3.S1 fully executed. integration_real_test.go is delivered (white-box package generate, //go:build integration_real + // +build integration_real first two lines, requireReal/requireInstalled gates on every test, six per-agent e2e tests + four Appendix-E confirmation tests) and proven working: TestIntegrationReal_Pi landed a REAL end-to-end commit ([257c703]) through generate.CommitStaged + the real *provider.Executor + real git. The one real-run-confirmed manifest change (codex BareFlags drops --ask-for-approval,never — verified directly: `codex exec --ask-for-approval never` exits 2 'unexpected argument') is applied to builtin.go + mirrored in codex.toml/builtin_test.go/manifest_test.go with citing comments. The four Appendix-E items are resolved HONESTLY per PRD §12.7.2: E.1/E.2/E.4b are BLOCKED on this verification host by environment (gemini CLI deprecated+headless-untrusted; claude hangs ~195s→ErrRescue; cursor/`agent` not authenticated) so their shipped safe defaults are RETAINED with accurate # TO CONFIRM notes; E.4a is PARTIAL (manifest bug found+fixed, then 401 auth block). All findings persisted in external_deps.md (§B.2/B.3/B.5/B.6 + §C + a dated 'Appendix E resolved' table) and providers/{codex,claude,gemini,cursor}.toml TO-CONFIRM comments flipped consistently. NOTE: a concurrent agent was executing this same PRP in parallel (it produced the bulk of the external_deps.md/toml edits and ran the full claude harness suite ~195s); I reconciled the resulting duplicate notes to leave a single coherent narrative, and independently re-verified the codex finding + the pi e2e. All deterministic validation gates pass (gofmt clean, go build ./..., go vet -tags integration_real, tagged binary compiles, go test ./internal/generate/ and go test ./... green — CI-opt-in intact, no real agent in default CI), and scope is respected (stub/e2e/invariant suites unmodified; suite not in Makefile test). The suite compiles and runs; only pi is fully confirmable on this host — the other five agents are auth/tier/trust-blocked, which the suite + docs record honestly rather than silently assume."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/generate/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet -tags integration_real ./internal/generate/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go test -tags integration_real -run '^$' ./internal/generate/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/generate\t(cached) [no tests to run]\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/generate/",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./...",
+            "stdout": "ok  \tgithub.com/dustin/stagehand/cmd/stagehand\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/config\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/generate\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/git\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/prompt\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/provider\t(cached)\nok  \tgithub.com/dustin/stagehand/internal/ui\t(cached)\nok  \tgithub.com/dustin/stagehand/pkg/stagehand\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "STAGEHAND_RUN_REAL=1 go test -tags integration_real -run '^IntegrationReal' -timeout 60m -v ./internal/generate/",
+            "stdout": "testing: warning: no tests to run\nPASS\nok  \tgithub.com/dustin/stagehand/internal/generate\t0.002s [no tests to run]\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "grep -n 'Appendix E resolved' plan/001_f1f80943ac34/architecture/external_deps.md",
+            "stdout": "124:## Appendix E resolved (real-agent run, 2026-07-03)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false
+          }
+        ],
+        "timestamp": "2026-07-03T06:42:33.493Z"
+      },
+      "createdAt": "2026-07-03T06:42:33.493Z"
+    }
+  ],
+  "lastModified": "2026-07-03T06:42:33.493Z"
+}

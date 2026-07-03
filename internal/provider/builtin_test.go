@@ -164,8 +164,7 @@ func TestBuiltins_MatchesOracle(t *testing.T) {
 			ProviderFlag:     "",
 			BareFlags: []string{
 				"--sandbox", "read-only",
-				"--ask-for-approval", "never",
-				"--ephemeral", // §C.2 correction
+				"--ephemeral", // §C correction #2: added (--ask-for-approval removed: real-run-confirmed invalid for `codex exec`)
 			},
 			Output:         "raw",
 			StripCodeFence: true,
