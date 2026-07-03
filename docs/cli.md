@@ -325,6 +325,8 @@ customCommands:
 
 **Idempotency:** The entry is identified by its `# stagehand-integration` marker comment (not the key binding). Re-running `install` on an already-installed entry reports "No changes" (replace, never duplicate). `remove` deletes only the stagehand entry — other entries and config blocks are untouched.
 
+**Conflicting key behavior:** Because `customCommands` is a YAML *sequence*, lazygit permits two entries to share a key binding. If an **unmarked** entry already binds your target key (e.g. `<c-a>`), `install` prints a `WARNING` to stderr noting that a duplicate `customCommands` entry will be created, then proceeds through the normal no-mangle preview/confirm flow (outcome: *Updated*). Use `--key '<other>'` to install under a different binding instead. (`integrate list` reports this pre-existing state as `foreign`.) Unlike the `git-alias` target — where a foreign alias is **overwritten** — the lazygit target cannot overwrite (a sequence key is not unique), so it **appends** and surfaces the resulting duplicate for you to resolve.
+
 **`integrate list` shows:**
 
 - **DETECTED:** ✓ if `lazygit` is on `$PATH`, ✗ otherwise

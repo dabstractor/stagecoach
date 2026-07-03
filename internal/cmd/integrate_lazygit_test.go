@@ -602,6 +602,97 @@ func TestLazygitEntry_Install_ConfirmReceivesDiff(t *testing.T) {
 	}
 }
 
+func TestLazygitEntry_Install_ForeignKeyWarning(t *testing.T) {
+	e := newIsolatedLazygitEntry(t, "") // key defaults to <c-a>
+	foreignYAML := `customCommands:
+  - key: '<c-a>'
+    command: 'other-tool'
+    context: 'files'
+`
+	if err := os.WriteFile(e.configPath, []byte(foreignYAML), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var buf bytes.Buffer
+	res, err := e.Install(context.Background(), integrate.InstallOptions{Yes: true, Out: &buf})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if !strings.Contains(buf.String(), "WARNING") {
+		t.Errorf("output missing WARNING; got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "duplicate") {
+		t.Errorf("output missing 'duplicate'; got %q", buf.String())
+	}
+	// CONTRACT CORRECTION: Apply reports an existing-file modification as Updated, NOT Created
+	// (OutcomeCreated is reserved for the missing-file path — protocol.go:228-235).
+	if res.Outcome != integrate.OutcomeUpdated {
+		t.Errorf("Outcome = %v, want Updated", res.Outcome)
+	}
+
+	// The config must contain exactly TWO <c-a> entries: the foreign (unmarked) + stagehand's marked one.
+	data, err := os.ReadFile(e.configPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if n := strings.Count(string(data), "key: '<c-a>'"); n != 2 {
+		t.Errorf("want exactly 2 customCommands entries with key '<c-a>', got %d.\nconfig:\n%s", n, data)
+	}
+	if !strings.Contains(string(data), "stagehand-integration") {
+		t.Error("config missing stagehand-integration marker")
+	}
+}
+
+func TestLazygitEntry_Install_NoForeignNoWarning(t *testing.T) {
+	e := newIsolatedLazygitEntry(t, "")
+	// golden_input.yml's only customCommands key is 'b' — no <c-a> conflict.
+	if err := os.WriteFile(e.configPath, readFixture(t, "golden_input.yml"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var buf bytes.Buffer
+	_, err := e.Install(context.Background(), integrate.InstallOptions{Yes: true, Out: &buf})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if strings.Contains(buf.String(), "WARNING") {
+		t.Errorf("output should NOT contain WARNING for a clean config; got %q", buf.String())
+	}
+}
+
+func TestLazygitEntry_Install_ForeignKeyWarningInteractiveConfirm(t *testing.T) {
+	e := newIsolatedLazygitEntry(t, "")
+	foreignYAML := `customCommands:
+  - key: '<c-a>'
+    command: 'other-tool'
+    context: 'files'
+`
+	if err := os.WriteFile(e.configPath, []byte(foreignYAML), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var buf bytes.Buffer
+	var gotDiff string
+	_, err := e.Install(context.Background(), integrate.InstallOptions{
+		Yes: false,
+		Out: &buf,
+		Confirm: func(_ io.Writer, _ string, diff string) bool {
+			gotDiff = diff
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	// WARNING surfaces on opts.Out (our buf); Apply's diff surfaces in the Confirm func's diff arg.
+	if !strings.Contains(buf.String(), "WARNING") {
+		t.Errorf("opts.Out missing WARNING; got %q", buf.String())
+	}
+	if !strings.Contains(gotDiff, "stagehand-integration") {
+		t.Errorf("confirm diff missing stagehand entry; got %q", gotDiff)
+	}
+}
+
 func TestLazygitEntry_Install_CorruptRefuses(t *testing.T) {
 	e := newIsolatedLazygitEntry(t, "")
 	// Pre-write corrupt content.

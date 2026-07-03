@@ -300,6 +300,24 @@ func (e *lazygitEntry) Status(_ context.Context) (integrate.Status, error) {
 
 // Install — FR-I5: drive the no-mangle protocol (integrate.Apply) to upsert the marker entry.
 func (e *lazygitEntry) Install(ctx context.Context, opts integrate.InstallOptions) (integrate.InstallResult, error) {
+	// FR-I4 / §9.21 parity: best-effort foreign-key probe BEFORE Apply. lazygitTarget.Upsert keys on the
+	// MARKER; an UNMARKED entry already bound to our key is invisible to it and would be DUPLICATED
+	// (customCommands is a YAML sequence — two entries can legally share a key). Surface it as a WARNING so
+	// the user can pick --key. Mirrors gitAliasEntry.Install's foreign-conflict surfacing. Best-effort:
+	// any read/parse failure simply skips the probe and falls through to Apply (Apply owns those paths).
+	out := opts.Out
+	if out == nil {
+		out = os.Stderr
+	}
+	if data, rerr := os.ReadFile(e.resolvedPath()); rerr == nil {
+		probe := &lazygitTarget{key: e.key} // throwaway — separate state from Apply's tgt
+		if perr := probe.Parse(data); perr == nil {
+			if probe.findKeyItem(e.key) != nil {
+				fmt.Fprintf(out, "WARNING: a %s binding already exists (not managed by stagehand); installing will create a duplicate customCommands entry — use --key to choose a different binding.\n", e.key)
+			}
+		}
+	}
+
 	tgt := &lazygitTarget{key: e.key}
 	res, err := integrate.Apply(ctx, integrate.ApplyOptions{
 		Path:    e.resolvedPath(),
