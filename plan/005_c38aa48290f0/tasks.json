@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "v2.1 — Competitor Feature Parity + Tool Integrations",
-      "status": "Ready",
+      "status": "Complete",
       "description": "Add the six v2.1 feature areas (PRD §9.18–§9.23: payload exclusions, message shaping, git hook mode, tool-integrations exporter, --edit/--push, discovery) as compositions over the fully-implemented v2.0/v3 core, then sweep changeset-level docs. Purely additive; no re-architecture. Grounded in plan/005_c38aa48290f0/architecture/{system_context.md,external_deps.md}.",
       "milestones": [
         {
@@ -554,14 +554,14 @@
           "type": "Milestone",
           "id": "P1.M7",
           "title": "Changeset documentation sync",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Mode-B final sweep: README/hero/FAQ and docs index reflect all six v2.1 capabilities; stale references purged. Runs after every implementing subtask.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M7.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Ready",
+              "status": "Complete",
               "description": "The Mode-B catch-all: update changeset-level docs (README.md, docs/README.md index) once the whole delta is in place, and verify no stale claims survive. Depends on every implementing subtask.",
               "subtasks": [
                 {
@@ -609,7 +609,7 @@
                   "type": "Subtask",
                   "id": "P1.M7.T1.S2",
                   "title": "Stale-reference sweep and known-stale string fix",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P1.M7.T1.S1"
