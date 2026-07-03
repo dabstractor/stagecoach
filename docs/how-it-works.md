@@ -100,6 +100,8 @@ Decompose activates when **nothing is staged**, **auto-stage-all is on** (the de
 
 **Overlapped staging and generation.** `stager[i+1]` runs in parallel with `message[i]` — the stager prepares the next concept's index while the message agent generates the current commit message. This 1-deep overlap keeps latency low.
 
+**Stage-while-editing (FR-E2).** With `--edit`, the snapshot is frozen *before* the editor opens. You can `git add` in another pane during the edit session — the in-flight commit is unaffected. This is the same stage-while-generating property, extended through the editor. This is the one thing `git commit -e`-style flows cannot offer on top of generation.
+
 **Frozen tree snapshots.** After each stager returns, `write-tree` freezes the accumulated index into an immutable tree object (`tree[i]`). This is the SAME snapshot mechanism as the single-commit path, composed N times.
 
 **Tree-to-tree diffs.** `message[i]` reasons over `diff(tree[i-1], tree[i])` — never `index-vs-HEAD`. This makes each concept diff immune to concurrent staging and to earlier commits landing.

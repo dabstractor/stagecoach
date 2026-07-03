@@ -538,6 +538,20 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		}
 	}
 
+	// §9.22 FR-E1: post-dedupe editor gate (EditMessage). AFTER the dedupe loop accepts a message
+	// and BEFORE CommitTree. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	parentTree := git.EmptyTreeSHA
+	if !isUnborn {
+		if pt, perr := deps.Git.RevParseTree(ctx, "HEAD"); perr == nil {
+			parentTree = pt
+		}
+	}
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, parentTree, treeSHA) // best-effort; "" on err
+	msg, err = generate.EditMessage(ctx, msg, cfg, generate.EditContext{Git: deps.Git, TreeSHA: treeSHA, NameStatus: nameStatus})
+	if err != nil {
+		return Result{}, err // ErrEmptyMessage propagates BARE → exitcode.For() → exit 1
+	}
+
 	// ---- Dry-run success: skip commit-tree/update-ref. ----
 	if dryRun {
 		signal.ClearSnapshot() // disarm — no rescue on dry-run success

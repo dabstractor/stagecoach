@@ -52,6 +52,12 @@ func runHookExec(cmd *cobra.Command, args []string) error {
 		return exitcode.New(exitcode.Error, fmt.Errorf("stagehand: getwd: %w", err))
 	}
 
+	// §9.22 FR-E4: --edit on hook exec is a usage error (git already opens the editor).
+	if cmd.Flags().Changed("edit") {
+		fmt.Fprintln(stderr, "stagehand: --edit is not valid with hook exec (git already opens the editor)")
+		return exitcode.New(exitcode.Error, nil)
+	}
+
 	g := git.New(repoDir)
 	msgFile := args[0]
 	source := ""

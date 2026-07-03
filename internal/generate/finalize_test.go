@@ -54,3 +54,44 @@ func TestFinalizeMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestStripCommentsAndTrim(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no comments", "line1\nline2", "line1\nline2"},
+		{"strip comment lines", "keep\n# comment\nkeep2", "keep\nkeep2"},
+		{"trim trailing whitespace", "keep   \t\nkeep2", "keep\nkeep2"},
+		{"all comments returns empty", "# only comments\n# more", ""},
+		{"mixed comments and whitespace", "# header\n\nkeep \t \n# footer\n", "keep"},
+		{"empty input", "", ""},
+		{"only whitespace lines", "   \n\t\n", ""},
+		{"comment not inside kept line", "keep # inline\nkeep2", "keep # inline\nkeep2"},
+		{"trailing newline", "keep\n", "keep"},
+		{"carriage return trim", "keep\r\nkeep2\r", "keep\nkeep2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := stripCommentsAndTrim(tc.input)
+			if got != tc.want {
+				t.Errorf("stripCommentsAndTrim(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEditMessageNoop(t *testing.T) {
+	t.Run("cfg.Edit==false is identity", func(t *testing.T) {
+		cfg := config.Defaults() // Edit defaults to false
+		msg := "Fix parser\n\nBody text"
+		got, err := EditMessage(nil, msg, cfg, EditContext{})
+		if err != nil {
+			t.Fatalf("EditMessage(nop) unexpected error: %v", err)
+		}
+		if got != msg {
+			t.Errorf("EditMessage(nop) = %q, want %q (byte-identity)", got, msg)
+		}
+	})
+}

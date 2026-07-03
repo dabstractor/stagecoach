@@ -708,3 +708,73 @@ func TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt(t *testing.T) {
 		t.Errorf("gitmoji mode must NOT contain the auto-mode style-examples intro, got:\n%s", payload)
 	}
 }
+
+// TestCommitStaged_EditGate verifies the --edit integration (§9.22 FR-E1).
+// Uses a fake editor script (via GIT_EDITOR env) to rewrite the commit message.
+func TestCommitStaged_EditGate(t *testing.T) {
+	t.Run("fake editor rewrites message", func(t *testing.T) {
+		bin := stubtest.Build(t)
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "new.txt", "hello world")
+		stageFile(t, repo, "new.txt")
+
+		// Create a fake editor script that rewrites the message.
+		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'edited subject' > \"$1\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_EDITOR", script)
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+		cfg := config.Defaults()
+		cfg.Edit = true // enable the editor gate
+
+		res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err != nil {
+			t.Fatalf("CommitStaged with --edit: %v", err)
+		}
+		if res.Message != "edited subject" {
+			t.Errorf("Message = %q, want 'edited subject' (editor overwrote)", res.Message)
+		}
+		// Verify it landed in git.
+		logMsg := gitOut(t, repo, "log", "--format=%B", "-n1", res.CommitSHA)
+		if logMsg != "edited subject" {
+			t.Errorf("git log message = %q, want 'edited subject'", logMsg)
+		}
+	})
+
+	t.Run("fake editor empties message → ErrEmptyMessage", func(t *testing.T) {
+		bin := stubtest.Build(t)
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "new.txt", "hello world")
+		stageFile(t, repo, "new.txt")
+
+		// Create a fake editor that truncates the file (empty → abort).
+		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\n: > \"$1\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_EDITOR", script)
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+		cfg := config.Defaults()
+		cfg.Edit = true
+
+		headBefore := headSHA(t, repo)
+		_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err == nil {
+			t.Fatal("CommitStaged with empty editor: expected error, got nil")
+		}
+		if !errors.Is(err, ErrEmptyMessage) {
+			t.Fatalf("CommitStaged error = %v, want ErrEmptyMessage", err)
+		}
+		// HEAD and index MUST be untouched (abort, not rescue).
+		if got := headSHA(t, repo); got != headBefore {
+			t.Errorf("HEAD moved from %s to %s — abort must NOT create a commit", headBefore, got)
+		}
+	})
+}

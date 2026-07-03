@@ -257,6 +257,21 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		}
 	}
 
+	// §9.22 FR-E1: post-dedupe editor gate (EditMessage). AFTER the dedupe loop accepts a message
+	// and BEFORE CommitTree. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	// The template was already applied by FinalizeMessage (pre-dedupe, FR-F8).
+	parentTree := git.EmptyTreeSHA
+	if !isUnborn {
+		if pt, perr := deps.Git.RevParseTree(ctx, "HEAD"); perr == nil {
+			parentTree = pt
+		}
+	}
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, parentTree, treeSHA) // best-effort; "" on err
+	msg, err = EditMessage(ctx, msg, cfg, EditContext{Git: deps.Git, TreeSHA: treeSHA, NameStatus: nameStatus})
+	if err != nil {
+		return Result{}, err // ErrEmptyMessage propagates BARE → exitcode.For() → exit 1 (NOT rescue)
+	}
+
 	// Step 7: commit-tree — build the DANGLING commit object from the FROZEN tree.
 	var parents []string
 	if !isUnborn {

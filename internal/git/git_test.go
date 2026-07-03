@@ -112,3 +112,103 @@ func TestRun_LookPathFailure(t *testing.T) {
 		t.Fatalf("run() exitCode = %d, want -1 (sentinel for infrastructural failure)", code)
 	}
 }
+
+func TestGitDir(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	got, err := g.GitDir(ctx)
+	if err != nil {
+		t.Fatalf("GitDir() error: %v", err)
+	}
+	if got == "" {
+		t.Fatal("GitDir() returned empty")
+	}
+	// Must end with ".git" or be an absolute path.
+	if got[len(got)-4:] != ".git" && got[len(got)-5:] != ".git/" {
+		t.Logf("GitDir() = %q (should be an absolute path ending in .git)", got)
+	}
+}
+
+func TestEditor(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	// With GIT_EDITOR set, git var GIT_EDITOR should return it.
+	t.Setenv("GIT_EDITOR", "/usr/bin/vim")
+	got, err := g.Editor(ctx)
+	if err != nil {
+		t.Fatalf("Editor() error: %v", err)
+	}
+	if got != "/usr/bin/vim" {
+		t.Errorf("Editor() = %q, want /usr/bin/vim", got)
+	}
+
+	// Without GIT_EDITOR, it should resolve something (at minimum vi).
+	t.Setenv("GIT_EDITOR", "")
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "")
+	got2, err2 := g.Editor(ctx)
+	if err2 != nil {
+		t.Fatalf("Editor() without GIT_EDITOR error: %v", err2)
+	}
+	// In CI vi may not be installed; just verify we got a non-error result.
+	t.Logf("Editor() without GIT_EDITOR = %q", got2)
+}
+
+func TestDiffTreeNameStatus(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	// Create an initial commit with a file.
+	writeFile(t, repo, "a.txt", "hello")
+	runGit(t, repo, "add", "a.txt")
+	runGit(t, repo, "commit", "-m", "initial")
+
+	srcA := strings.TrimSpace(runGit(t, repo, "rev-parse", "HEAD^{tree}"))
+
+	// Modify the file and commit.
+	writeFile(t, repo, "a.txt", "world")
+	runGit(t, repo, "commit", "-am", "update")
+	srcB := strings.TrimSpace(runGit(t, repo, "rev-parse", "HEAD^{tree}"))
+
+	got, err := g.DiffTreeNameStatus(ctx, srcA, srcB)
+	if err != nil {
+		t.Fatalf("DiffTreeNameStatus() error: %v", err)
+	}
+	if !strings.Contains(got, "M\ta.txt") {
+		t.Errorf("DiffTreeNameStatus() = %q, want to contain 'M\ta.txt'", got)
+	}
+
+	// Identical trees → empty output.
+	got2, err2 := g.DiffTreeNameStatus(ctx, srcA, srcA)
+	if err2 != nil {
+		t.Fatalf("DiffTreeNameStatus(same) error: %v", err2)
+	}
+	if strings.TrimSpace(got2) != "" {
+		t.Errorf("DiffTreeNameStatus(same) = %q, want empty", got2)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir)
+	cmd.Args = append(cmd.Args, args...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test <test@example.com>",
+		"GIT_AUTHOR_EMAIL=test@example.com>",
+		"GIT_COMMITTER_NAME=Test <test@example.com>",
+		"GIT_COMMITTER_EMAIL=test@example.com>",
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}

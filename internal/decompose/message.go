@@ -180,6 +180,15 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		}
 	}
 
+	// §9.22 FR-E1: post-dedupe editor gate. AFTER the dedupe loop accepts a message and BEFORE
+	// the caller publishes. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	// This site ALSO covers the arbiter N+1 (chain.go resolveNewCommit reuses generateMessage — transitively).
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, treeA, treeB) // best-effort; "" on err
+	msg, err = generate.EditMessage(ctx, msg, deps.Config, generate.EditContext{Git: deps.Git, TreeSHA: treeB, NameStatus: nameStatus})
+	if err != nil {
+		return "", err // ErrEmptyMessage → propagates to runLoop's FR-M12 handling
+	}
+
 	return msg, nil
 }
 

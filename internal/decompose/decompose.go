@@ -330,6 +330,15 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 		}
 	}
 
+	// §9.22 FR-E1: post-dedupe editor gate. AFTER the dup-check and BEFORE publishCommit.
+	// The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, baseTree, treePrime) // best-effort; "" on err
+	var editErr error
+	msg, editErr = generate.EditMessage(ctx, msg, deps.Config, generate.EditContext{Git: deps.Git, TreeSHA: treePrime, NameStatus: nameStatus})
+	if editErr != nil {
+		return DecomposeResult{}, editErr // ErrEmptyMessage → per-concept abort (FR-E4)
+	}
+
 	// Publish (parentSHA = preRunHEAD; root if unborn). publishCommit returns *CASError DIRECTLY on CAS.
 	newSHA, err := publishCommit(ctx, deps, treePrime, preRunHEAD, msg)
 	if err != nil {

@@ -107,6 +107,11 @@ type Config struct {
 	// (§17.8), after the instruction line and before the diff. Empty = no context block.
 	Context string `toml:"-"`
 
+	// Edit is the §9.22 FR-E1 --edit flag (FLAG-ONLY: no env, no git key, no config-file key — mirrors
+	// Context). When true, an editor round-trip gates each commit message before publication (post-dedupe,
+	// pre-CommitTree). Default false (non-interactive). See generate.EditMessage.
+	Edit bool `toml:"-"`
+
 	// [provider.<name>] user-defined / override provider definitions (PRD §16.2, §12.8).
 	// Carried as a RAW map: the provider MANIFEST type lives in internal/provider, so config must not import
 	// it (import-cycle risk). The registry (P1.M2.T3) consumes this map — for each name it re-encodes the
@@ -166,6 +171,7 @@ func Defaults() Config {
 		BinaryExtensions:    nil,    // nil ⇒ built-in denylist only (§9.1 FR3a)
 		Exclude:             nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
 		Context:             "",     // §9.19 FR-F7 default (empty = no context block)
+		Edit:                false,  // §9.22 FR-E1 default (false = non-interactive; no editor gate)
 		Providers:           nil,
 		Roles:               nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:       0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved

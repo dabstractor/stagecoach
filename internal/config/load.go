@@ -362,6 +362,14 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.Context = v
 		}
 	}
+
+	// §9.22 FR-E1 — --edit flag (flag-only; no env/git/file source; per-invocation). Mirrors --context's
+	// flag-only discipline (there is no STAGEHAND_EDIT / stagehand.edit / [generation].edit).
+	if fs.Changed("edit") {
+		if v, err := fs.GetBool("edit"); err == nil {
+			cfg.Edit = v
+		}
+	}
 }
 
 // validFormats is the closed set of --format modes (PRD §9.19 FR-F1). Validation-only; S3 builds the

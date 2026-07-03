@@ -289,6 +289,25 @@ type Git interface {
 	// the runner's workDir. Exit 128 (non-repo/corrupt) is a REAL error (this call works on unborn repos,
 	// so there is NO 128-as-non-error convention here — like StatusPorcelain). Read-only (PRD §18.1).
 	HooksPath(ctx context.Context) (string, error)
+
+	// GitDir returns the absolute path to the repository's .git directory via `git rev-parse
+	// --absolute-git-dir` (honors worktrees + commondir; git 2.13+, universally available). Used by the
+	// --edit editor gate (§9.22 FR-E1) to locate .git/STAGEHAND_EDITMSG. `--absolute-git-dir` succeeds on
+	// an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) — mirror HooksPath's convention
+	// (branch on code != 0, NOT on code == 128). Read-only w.r.t. refs and the index (PRD §18.1).
+	GitDir(ctx context.Context) (dir string, err error)
+
+	// Editor returns the user's resolved editor command via `git var GIT_EDITOR` (the exact chain
+	// GIT_EDITOR → core.editor → $VISUAL → $EDITOR → vi — external_deps.md §6, VERIFIED). The returned
+	// string is SHELL-INTERPRETED (may contain args/quotes); callers invoke it via `sh -c '<editor> "$@"'
+	// -- <file>`, NEVER a bare exec. Read-only w.r.t. refs and the index (PRD §18.1).
+	Editor(ctx context.Context) (editor string, err error)
+
+	// DiffTreeNameStatus returns the raw `git diff-tree --no-commit-id --name-status -r <treeA> <treeB>`
+	// output — the A/M/D/<status>\t<path> lines for the --edit EDITMSG summary (§9.22 FR-E1). It is the
+	// tree-to-tree name-status analogue of DiffTree (which diffs a commit vs its parent). Empty output
+	// when treeA == treeB. Read-only w.r.t. refs and the index.
+	DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (nameStatus string, err error)
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -1444,4 +1463,52 @@ func (g *gitRunner) HooksPath(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("resolve hooks path %q against %q: %w", raw, g.workDir, aerr)
 	}
 	return abs, nil
+}
+
+// GitDir returns the absolute path to the repository's .git directory (§9.22 FR-E1). It runs
+// `git rev-parse --absolute-git-dir` (honors worktrees + commondir; git 2.13+). The output is
+// already absolute (no cwd-relative resolution needed). Exit 128 here is a REAL error (non-repo/corrupt)
+// — the call works on unborn repos, so there is NO 128-as-non-error convention (mirror HooksPath).
+// Read-only w.r.t. refs and the index (PRD §18.1).
+func (g *gitRunner) GitDir(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		// 128 = non-repo/corrupt — a REAL error (this call works on unborn repos; no 128-as-non-error here).
+		return "", fmt.Errorf("git rev-parse --absolute-git-dir: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// Editor returns the user's resolved editor command (§9.22 FR-E1). It runs `git var GIT_EDITOR`
+// (the exact chain GIT_EDITOR → core.editor → $VISUAL → $EDITOR → vi; external_deps.md §6,
+// VERIFIED). The returned string is shell-interpreted (may contain args/quotes); callers MUST
+// invoke it via `sh -c '<editor> "$@"' -- <file>`, NEVER a bare exec. Read-only w.r.t. refs/index.
+func (g *gitRunner) Editor(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "var", "GIT_EDITOR")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git var GIT_EDITOR: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// DiffTreeNameStatus returns the raw `git diff-tree --no-commit-id --name-status -r <treeA> <treeB>`
+// output (§9.22 FR-E1) — the A/M/D/<status>\t<path> lines for the EDITMSG summary. Empty output
+// when treeA == treeB (identical trees). `git diff-tree` exits 0 whether or not there are changes;
+// exit 128 means a bad/unresolvable tree SHA — a REAL error (NOT an unborn signal: branch on
+// code != 0, never on code == 128; never use --quiet). Read-only w.r.t. refs and the index.
+func (g *gitRunner) DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "diff-tree", "--no-commit-id", "--name-status", "-r", treeA, treeB)
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff-tree --name-status: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return stdout, nil // raw A/M/D lines; caller prefixes with "# " for the EDITMSG
 }

@@ -69,6 +69,10 @@ var (
 // discipline as flagProvider/flagModel); the &flagExclude address here is its use.
 var flagExclude []string
 
+// §9.22 FR-E1 — --edit flag (flag-only; resolved by config.Load via fs.Changed). No env/git/config-file
+// counterpart — read only via fs.Changed/fs.GetBool in loadFlags (same discipline as flagContext).
+var flagEdit bool
+
 // §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags (resolved by config.Load via fs.Changed).
 var (
 	flagFormat   string
@@ -167,6 +171,12 @@ func init() {
 	pf.StringVar(&flagContext, "context", "",
 		"Extra context appended to the message+planner payload, e.g. \"hotfix for #812\" "+
 			"(flag only; per-invocation — no env/git/config key)")
+	pf.BoolVar(&flagEdit, "edit", false,
+		"Open your editor on the generated message before committing (resolved via `git var GIT_EDITOR`). "+
+			"The message file includes the tree SHA + a diff-tree name-status summary; comment lines ('#') "+
+			"are stripped on close. An empty message aborts (exit 1, not a rescue). The edited message "+
+			"bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored "+
+			"with --dry-run; not valid with hook exec. (§9.22 FR-E1)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")

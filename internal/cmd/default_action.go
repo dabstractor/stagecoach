@@ -52,6 +52,12 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	g := git.New(repoDir)
 
 	// ---- §9.4 auto-stage-all state machine (FR16–FR20) ----
+	// §9.22 FR-E4: --dry-run + --edit → warn + skip the editor (nothing to commit).
+	if flagDryRun && cfg.Edit {
+		fmt.Fprintln(stderr, "stagehand: --edit ignored in --dry-run mode (nothing to commit)")
+		cfg.Edit = false
+	}
+
 	// FR20: --all/-a forces `git add -A` BEFORE the staged check, even if something is already staged.
 	if flagAll {
 		if err := g.AddAll(ctx); err != nil {

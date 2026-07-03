@@ -407,21 +407,21 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Workflow conveniences: --edit and --push (§9.22)",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Review-in-$EDITOR before the atomic commit (per-commit in decompose, staging stays safe) and plain `git push` after fully-clean runs only.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M5.T1",
               "title": "--edit editor gate",
-              "status": "Researching",
+              "status": "Complete",
               "description": "FR-E1–E4: $EDITOR gate on the finalized message before commit-tree, across single and decompose paths.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T1.S1",
                   "title": "--edit: EDITMSG round-trip inserted at the message-finalization seam",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T2.S2",
@@ -446,14 +446,14 @@
               "type": "Task",
               "id": "P1.M5.T2",
               "title": "--push after clean runs",
-              "status": "Planned",
+              "status": "Ready",
               "description": "FR-P1–P3: plain `git push` only after a fully-successful run; push failure never taints the commits.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T2.S1",
                   "title": "--push plumbing, streaming push, and skip conditions",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/external_deps.md §8 (empirically verified, git 2.54) — a no-upstream push fails with exit 128 and stderr containing `has no upstream branch` + the `--set-upstream` hint; `push.autoSetupRemote=true` (present in the developer's real global config) masks this, so tests MUST run git with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null` and assert on stable substrings, not full text. stagehand never auto-sets upstream (FR-P2).\n2. INPUT: run-outcome points in `internal/cmd/default_action.go` (`runDefault` single-path success, `runDecompose` full-run success incl. arbiter resolution); `internal/exitcode`; `internal/git` (which currently only CAPTURES output — a streaming exec variant is net-new).\n3. LOGIC: add `Push` config surface (`[generation].push`, `--push`, `STAGEHAND_PUSH`, `stagehand.push`, default false); after the ENTIRE run publishes cleanly, run plain `git push` (no arguments) streaming stdout/stderr verbatim to the user (new streaming method on the git runner); never prompts (FR-P1); on push failure the commits stand — show git's stderr verbatim, print the closing note \"commits created; push failed\", exit 1 (FR-P2); skip entirely on --dry-run, on the zero-commits exit-2 path, and on any rescue/CAS abort (FR-P3). E2E scenarios: clean push to a temp bare remote; no-upstream failure; skip-on-dry-run.\n4. OUTPUT: `--push` semantics on both single and decompose paths; exit-code behavior documented.\n5. DOCS: [Mode A] docs/cli.md (`--push` row + failure semantics incl. the no-auto---set-upstream stance), docs/configuration.md (`push` key).",
@@ -488,7 +488,7 @@
                   "type": "Subtask",
                   "id": "P1.M6.T1.S1",
                   "title": "Manifest field list_models_command across schema, built-ins, and reference TOMLs",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/system_context.md §3 — Manifest lives in `internal/provider/manifest.go`; ANY field addition must also touch `merge.go` (MergeManifest), `registry.go` (MarshalTOML), `builtin.go` (all 8 built-ins), and `providers/*.toml`, whose parity is asserted by `referencefiles_test.go`. external_deps.md §9: only opencode's `opencode models` is the known listing CLI — populate ONLY where verified against the live CLI in-task (Appendix E #17), record the verification date in a source comment.\n2. INPUT: none — schema change at the root of this milestone.\n3. LOGIC: add optional `ListModelsCommand []string` (`list_models_command`, default empty) to the Manifest struct with override-if-set merge semantics matching the other slice fields; extend MarshalTOML so `providers show` displays it; update all 8 built-ins (empty by default) and the reference TOMLs; verify per-provider listing support against each installed CLI's --help and populate only confirmed entries (expected: opencode → [\"opencode\", \"models\"]).\n4. OUTPUT: `Manifest.ListModelsCommand` consumed by P1.M6.T1.S2; user-defined providers can set it via [provider.<name>] blocks for free (existing DecodeUserOverrides path).\n5. DOCS: [Mode A] docs/providers.md — manifest field reference (field, default, semantics: never an HTTP call).",
