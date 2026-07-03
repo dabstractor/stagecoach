@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -243,8 +244,10 @@ func TestResolveAndCheckProvider_NoneDetected(t *testing.T) {
 
 // TestMapErrorToExitCode asserts the exact PRD §15.4 sentinel→exit-code mapping
 // via a table. ErrHeadMoved and an arbitrary error both collapse to ExitError
-// (1); timeout is NOT a separate branch (it collapses to ErrRescue→3 inside
-// CommitStaged, so 124 is reserved/unused in v1).
+// (1). A generation timeout is now detected: a wrapped *provider.TimeoutError
+// (carried in CommitStaged's wrapped ErrRescue) → ui.ExitTimeout (124), and a
+// bare *provider.TimeoutError → 124 too. Only NON-timeout rescues collapse to
+// 3 (a wrapped ErrRescue with no timeout cause stays 3); BUG-004 / PRD §15.4.
 func TestMapErrorToExitCode(t *testing.T) {
 	arbitrary := errors.New("something exploded")
 	cases := []struct {
@@ -259,6 +262,13 @@ func TestMapErrorToExitCode(t *testing.T) {
 		{"ErrHeadMoved", stagehand.ErrHeadMoved, ui.ExitError},
 		{"arbitrary", arbitrary, ui.ExitError},
 		{"wrapped-rescue", fmt.Errorf("outer: %w", stagehand.ErrRescue), ui.ExitRescue},
+		// BUG-004: a generation timeout carried in CommitStaged's wrapped
+		// ErrRescue (fmt.Errorf("%w: %w", ErrRescue, &TimeoutError{})) → 124.
+		{"timeout-wrapped-in-rescue", fmt.Errorf("%w: %w", stagehand.ErrRescue, &provider.TimeoutError{Deadline: time.Now()}), ui.ExitTimeout},
+		// A bare typed timeout (no rescue wrap) is also 124.
+		{"timeout-bare", &provider.TimeoutError{Deadline: time.Now()}, ui.ExitTimeout},
+		// A NON-timeout rescue (agent-error) wrapped in ErrRescue still exits 3.
+		{"agenterror-wrapped-in-rescue", fmt.Errorf("%w: %w", stagehand.ErrRescue, &provider.AgentError{Name: "stub"}), ui.ExitRescue},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

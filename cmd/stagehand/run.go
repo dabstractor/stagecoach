@@ -212,21 +212,34 @@ func buildOptions(cfg config.Config, dryRun bool) stagehand.Options {
 //   - nil                                  → ui.ExitSuccess (0)
 //   - stagehand.ErrNothingToCommit         → ui.ExitNothingToCommit (2)
 //   - ErrNothingStaged (FR19, CLI-layer)   → ui.ExitNothingToCommit (2)
+//   - *provider.TimeoutError in a wrapped  → ui.ExitTimeout (124)
+//     stagehand.ErrRescue (a generation timeout — BUG-004 / PRD §15.4). The
+//     rescue block is STILL printed by generate.Rescue before CommitStaged
+//     returns; only the exit-code selection changes (124 vs 3).
 //   - stagehand.ErrRescue                  → ui.ExitRescue (3)
 //   - anything else (ErrHeadMoved, etc.)   → ui.ExitError (1)
 //
-// Timeout note (research §2): a per-invocation timeout is enforced INSIDE
-// generate.CommitStaged via its own context.WithTimeout, which collapses to
-// ErrRescue → exit 3 on expiry (the snapshot-rescue contract, decisions.md §3 /
-// PRD §18.2). ui.ExitTimeout (124) is therefore RESERVED for a future
-// CLI-level deadline and is not returned in v1; documenting 124 as a possible
-// code without this branch ever firing today keeps the §15.4 table honest.
+// The timeout branch MUST precede the ErrRescue branch: a wrapped timeout
+// error satisfies BOTH errors.Is(err, ErrRescue) AND errors.As(err,
+// &provider.TimeoutError{}), so timeout (124) must win over rescue (3). A
+// NON-timeout rescue (agent-error / parse-fail / dup-exhaustion / post-snapshot
+// git error / signal-cancel) carries no *provider.TimeoutError, so it falls
+// through to the ErrRescue branch and still exits 3. The typed *provider.TimeoutError
+// is detected via errors.As (NOT errors.Is(err, context.DeadlineExceeded)) for
+// precision (research §2).
 func mapErrorToExitCode(err error) int {
 	if err == nil {
 		return ui.ExitSuccess
 	}
 	if errors.Is(err, stagehand.ErrNothingToCommit) {
 		return ui.ExitNothingToCommit
+	}
+	// Generation timeout (BUG-004 / PRD §15.4): a *provider.TimeoutError carried
+	// in the wrapped ErrRescue CommitStaged returns -> 124. Checked BEFORE the
+	// ErrRescue branch because a wrapped timeout satisfies both; timeout wins.
+	var timeoutErr *provider.TimeoutError
+	if errors.As(err, &timeoutErr) {
+		return ui.ExitTimeout
 	}
 	if errors.Is(err, stagehand.ErrRescue) {
 		return ui.ExitRescue

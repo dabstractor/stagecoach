@@ -32,6 +32,7 @@ package generate
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
@@ -294,7 +295,11 @@ outer:
 					return Result{}, ErrRescue
 				}
 				Rescue(out, treeSHA, parentSHA, "")
-				return Result{}, ErrRescue
+				// Preserve the run-error cause (BUG-004 / PRD §15.4): multi-wrap
+				// so the CLI can errors.As into *provider.TimeoutError and return
+				// 124 (ui.ExitTimeout) for a generation timeout, while
+				// errors.Is(err, ErrRescue) stays true (Go 1.20+ multi-%w wrap).
+				return Result{}, fmt.Errorf("%w: %w", ErrRescue, runErr)
 			}
 			msg, ok = deps.Runner.Parse(stdout, deps.Manifest)
 			if ok {

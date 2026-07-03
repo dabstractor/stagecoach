@@ -498,6 +498,13 @@ func TestCommitStaged_Timeout(t *testing.T) {
 	if !errors.Is(err, ErrRescue) {
 		t.Fatalf("CommitStaged error = %v; want ErrRescue", err)
 	}
+	// BUG-004: the timeout TYPE must survive the wrap so the CLI can detect it
+	// via errors.As and return 124 (ui.ExitTimeout). errors.Is(err, ErrRescue)
+	// above stays true (multi-%w wrap preserves BOTH).
+	var te *provider.TimeoutError
+	if !errors.As(err, &te) {
+		t.Errorf("CommitStaged timeout error must carry *provider.TimeoutError for CLI detection (BUG-004); got %v", err)
+	}
 	if !rescueRendered(stderr) {
 		t.Errorf("stderr must contain the rescue block on timeout\n--got--\n%s", stderr.String())
 	}
