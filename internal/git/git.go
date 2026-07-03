@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -256,6 +257,13 @@ type Git interface {
 	// unresolvable tree SHA — a REAL error (NOT an unborn signal: branch on code != 0, never on code ==
 	// 128; never use --quiet). Read-only with respect to refs and the index (PRD §18.1).
 	DiffTreeNames(ctx context.Context, treeA, treeB string) (paths []string, err error)
+
+	// HooksPath returns the ABSOLUTE path to this repo's hooks directory via
+	// `git rev-parse --git-path hooks` (honors core.hooksPath and linked worktrees — architecture §3).
+	// git may return a cwd-relative path (notably from a subdirectory); it is resolved to absolute against
+	// the runner's workDir. Exit 128 (non-repo/corrupt) is a REAL error (this call works on unborn repos,
+	// so there is NO 128-as-non-error convention here — like StatusPorcelain). Read-only (PRD §18.1).
+	HooksPath(ctx context.Context) (string, error)
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -675,7 +683,7 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 	// ALWAYS appended (structural — prevents the double-count trap, G1).
 	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
 	excludes = append(excludes, defaultExcludes...) // FR3/FR-X1 source (a) — ALWAYS
-	excludes = append(excludes, opts.Excludes...)    // user union, FR-X1 sources (b)+(c)+(d)
+	excludes = append(excludes, opts.Excludes...)   // user union, FR-X1 sources (b)+(c)+(d)
 
 	nmArgs := []string{"diff", "--cached", "--"}
 	nmArgs = append(nmArgs, excludes...)
@@ -1318,4 +1326,37 @@ func (g *gitRunner) DiffTreeNames(ctx context.Context, treeA, treeB string) ([]s
 		}
 	}
 	return out, nil // nil if stdout was empty (identical trees); out aliases paths (same backing array)
+}
+
+// HooksPath returns the ABSOLUTE path to this repo's hooks directory (PRD §9.20 FR-H1). It runs
+// `git rev-parse --git-path hooks`, which honors core.hooksPath and resolves to the common dir from a
+// linked worktree (architecture §3, verified git 2.54.0). Because run() execs `git -C g.workDir …`, any
+// relative output is relative to g.workDir (notably `.git/hooks` from the repo root, or `../.git/hooks`
+// from a subdirectory) — it is resolved to absolute here so callers never see a cwd-relative path.
+//
+// `--git-path hooks` succeeds on an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) —
+// mirror StatusPorcelain's convention (branch on code != 0, NOT on code == 128; do NOT reuse
+// RevParseHEAD's 128-as-unborn special-case). Read-only with respect to refs and the index (PRD §18.1).
+func (g *gitRunner) HooksPath(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		// 128 = non-repo/corrupt — a REAL error (this call works on unborn repos; no 128-as-non-error here).
+		return "", fmt.Errorf("git rev-parse --git-path hooks: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	raw := strings.TrimSpace(stdout)
+	if raw == "" { // defensive: never observed on a valid repo
+		return "", fmt.Errorf("git rev-parse --git-path hooks: empty output")
+	}
+	if filepath.IsAbs(raw) {
+		return filepath.Clean(raw), nil // core.hooksPath=abs, or a worktree returning an absolute common path
+	}
+	// Relative output (default `.git/hooks`, or `../.git/hooks` from a subdirectory) is relative to the -C dir.
+	abs, aerr := filepath.Abs(filepath.Join(g.workDir, raw))
+	if aerr != nil {
+		return "", fmt.Errorf("resolve hooks path %q against %q: %w", raw, g.workDir, aerr)
+	}
+	return abs, nil
 }

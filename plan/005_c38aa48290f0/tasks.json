@@ -238,7 +238,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Git.HooksPath() helper + POSIX hook-script template with marker",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/external_deps.md §3 (verified, git 2.54) — `git rev-parse --git-path hooks` honors core.hooksPath and linked worktrees but returns a cwd-RELATIVE path (must resolve to absolute); the prepare-commit-msg hook is NOT suppressed by `--no-verify`. Script must be strict POSIX sh for git-for-windows compatibility (Appendix E #15 — verify in-task; no bashisms).\n2. INPUT: `internal/git/git.go` runner seam (`run`); no other dependencies.\n3. LOGIC: add `HooksPath() (string, error)` to the Git interface wrapping `rev-parse --git-path hooks` with absolute-path resolution; temp-repo tests per existing internal/git conventions covering: default layout, core.hooksPath set, invocation from a subdirectory, linked worktree. Define the hook-script template: marker line `# stagehand prepare-commit-msg hook v1`, body `exec stagehand hook exec \"$@\"` (strict variant appends `--strict`), shebang `#!/bin/sh`, mode 0755.\n4. OUTPUT: `HooksPath()` + `hookScript(strict bool) string` consumed by P1.M3.T1.S2.\n5. DOCS: [Mode A] none — no user-facing surface yet; docs ride with P1.M3.T1.S2.",
