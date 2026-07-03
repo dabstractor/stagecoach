@@ -571,6 +571,11 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # strip_code_fence      = true    # strip ` + "`" + ` fences from agent output (all providers)
 # max_commits           = 12      # safety cap on auto-decompose (PRD §9.14 FR-M4); default 12
 # binary_extensions     = []      # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
+# exclude               = []      # gitignore-style globs; UNION across global+repo+flag (§9.18 FR-X1)
+# format                = "auto"  # auto|conventional|gitmoji|plain; unknown = hard error (exit 1) (§9.19 FR-F1)
+# locale                = ""      # free-form language name or BCP-47 tag; never validated (§9.19 FR-F6)
+# template              = ""      # wrap every message; must contain literal $msg, e.g. "$msg (#205)" (§9.19 FR-F8)
+# push                  = false   # run ` + "`git push`" + ` after a fully-successful run; on failure commits stand (§9.22 FR-P1)
 # NOTE: [generation] output/strip_code_fence override any per-provider [provider.<name>] values.
 
 # ---------------------------------------------------------------------------

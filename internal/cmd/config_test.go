@@ -491,6 +491,40 @@ func TestConfigInit_TemplateIsInert(t *testing.T) {
 	}
 }
 
+func TestConfigInit_Template_GenerationKeys(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	tmp := filepath.Join(t.TempDir(), "ref.toml")
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--template", "--config", tmp})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	data, err := os.ReadFile(tmp)
+	if err != nil {
+		t.Fatalf("cannot read template at %s: %v", tmp, err)
+	}
+	content := string(data)
+
+	// All 5 v2.1 keys must render as commented documentation lines in the [generation] section.
+	for _, key := range []string{"exclude", "format", "locale", "template", "push"} {
+		needle := "# " + key
+		if !strings.Contains(content, needle) {
+			t.Errorf("template [generation] missing commented key %q (needle %q not found)", key, needle)
+		}
+	}
+
+	// The push line's `git push` code span must render correctly (validates the backtick-split concatenation).
+	if !strings.Contains(content, "`git push`") {
+		t.Errorf("template push line did not render the `git push` code span (backtick split mis-wired)")
+	}
+}
+
 // TestConfigInit_TemplateFlag_CollisionSafe verifies the §9.19 FR-F8 cobra collision analysis:
 // `config init` keeps its LOCAL bool `--template` (v1 inert-reference-config behavior); the root
 // PERSISTENT string `--template` (message template) is skipped for `config init` by pflag's
