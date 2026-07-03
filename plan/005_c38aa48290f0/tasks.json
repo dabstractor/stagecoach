@@ -319,14 +319,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "No-mangle protocol and command surface",
-              "status": "Planned",
+              "status": "Ready",
               "description": "The reusable parse→preview→confirm→backup→validate engine (FR-I3) and the integrate command group (FR-I1, FR-I2).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "No-mangle write protocol engine (internal/integrate/protocol.go)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/external_deps.md §2 (empirically verified) — yaml.v3 CANNOT guarantee byte-identity outside the edited node (whole-document re-encode normalizes blank lines/comment spacing), so the protocol IS the no-mangle guarantee, not the serializer. For the unified-diff preview, prefer shelling to `git diff --no-index -- <old> <new>` (zero new dependencies, matches the repo's shell-out-to-git ethos) over vendoring a diff library.\n2. INPUT: none (foundational); `internal/ui` for preview output and the y/N confirm; TTY-detection precedent in internal/ui.\n3. LOGIC: `internal/integrate/protocol.go` — a format-agnostic engine over a Target interface (roughly: Parse([]byte) error; Upsert/Remove returning new []byte; Validate([]byte) error; Marker identity), implementing FR-I3 (a)–(g) in order: (a) read + Parse, unparseable file → hard refusal printing the parse error, never written; (b) marker-identified idempotent upsert — replace, never duplicate; (c) unified-diff preview + y/N per file, `--yes` bypass for scripts; (d) backup `<file>.stagehand-backup.<unix-ts>` before modifying; (e) atomic write (temp + rename), re-Parse the written file, on failure restore the backup automatically and report; (f) surgical scope — only the marker-identified entry changes semantically; (g) create-if-missing (file and parent dirs) through the same preview+confirm flow. Remove runs the same protocol deleting only the marker-identified entry. Tests: golden-file round-trips, corrupt-input refusal, backup/restore on injected validation failure, idempotent double-install.\n4. OUTPUT: `protocol.Apply(...)` engine + Target interface consumed by P1.M4.T1.S2 (dispatch) and P1.M4.T2.S1/S2 (targets).\n5. DOCS: [Mode A] none directly — user-facing protocol behavior documented with P1.M4.T1.S2.",
@@ -341,7 +341,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "`integrate list|install|remove` command surface with detection gating",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -367,7 +367,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "git-alias target",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S2"
