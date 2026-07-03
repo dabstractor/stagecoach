@@ -215,8 +215,10 @@ func TestGitAlias_Install_ForeignConflictInPreview(t *testing.T) {
 	}
 
 	var gotDiff string
+	var outBuf bytes.Buffer
 	res, err := e.Install(ctx, integrate.InstallOptions{
 		Yes: false,
+		Out: &outBuf,
 		Confirm: func(_ io.Writer, path string, diff string) bool {
 			gotDiff = diff
 			return true
@@ -229,9 +231,17 @@ func TestGitAlias_Install_ForeignConflictInPreview(t *testing.T) {
 		t.Errorf("Outcome = %v, want Updated", res.Outcome)
 	}
 
-	// Preview must contain the conflict warning with the foreign value.
-	if !strings.Contains(gotDiff, "WARNING") {
-		t.Errorf("preview missing WARNING; got %q", gotDiff)
+	// WARNING must be printed to out (fires in both interactive and --yes modes).
+	outStr := outBuf.String()
+	if !strings.Contains(outStr, "WARNING") {
+		t.Errorf("out missing WARNING; got %q", outStr)
+	}
+	if !strings.Contains(outStr, "!foreign-cmd") {
+		t.Errorf("out missing foreign value; got %q", outStr)
+	}
+	// Preview contains a NOTE (the WARNING is now on out, not inside the preview).
+	if !strings.Contains(gotDiff, "NOTE") {
+		t.Errorf("preview missing NOTE; got %q", gotDiff)
 	}
 	if !strings.Contains(gotDiff, "!foreign-cmd") {
 		t.Errorf("preview missing foreign value; got %q", gotDiff)

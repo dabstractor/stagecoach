@@ -359,14 +359,24 @@ func (e *lazygitEntry) resolvedPath() string {
 }
 
 // resolveLazygitConfigPath discovers lazygit's config dir via `lazygit --print-config-dir`
-// (short -cd; NO --config-dir), else falls back to the platform default
+// (short -cd; NO --config-dir), else falls back to XDG_CONFIG_HOME or the platform default
 // (<userConfigDir>/lazygit/config.yml). Best-effort; never fatal.
+//
+// NOTE: when `lazygit` is on PATH, `--print-config-dir` resolves the config dir itself and
+// ignores HOME/XDG_CONFIG_HOME. For scripting isolation, set XDG_CONFIG_HOME OR use a lazygit
+// shim on PATH (validate.sh uses the shim approach). Without lazygit on PATH, this function
+// correctly honors XDG_CONFIG_HOME → os.UserConfigDir → HOME/.config.
 // external_deps.md §1 (VERIFIED 2026-07-02 v0.62.2).
 func resolveLazygitConfigPath() string {
 	if out, err := exec.Command("lazygit", "--print-config-dir").Output(); err == nil {
 		if dir := strings.TrimSpace(string(out)); dir != "" {
 			return filepath.Join(dir, "config.yml")
 		}
+	}
+	// Fallback: honor XDG_CONFIG_HOME explicitly (os.UserConfigDir checks it on Linux,
+	// but being explicit here ensures consistent behavior across platforms).
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "lazygit", "config.yml")
 	}
 	if ucd, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(ucd, "lazygit", "config.yml")

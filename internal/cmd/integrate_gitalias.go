@@ -117,11 +117,18 @@ func (e *gitAliasEntry) Install(ctx context.Context, opts integrate.InstallOptio
 		return res, nil
 	}
 
-	// Build the preview (command + usage + conflict warning if foreign).
+	// FR-I4: surface the WARNING about foreign conflicts to stderr BEFORE the confirm step
+	// so it fires in both interactive and --yes modes (mirrors lazygitEntry.Install pattern).
+	if found { // foreign (not ours) — warn before overwriting
+		fmt.Fprintf(out, "WARNING: %s is currently set to %q (not stagehand) — it will be overwritten.\n",
+			e.aliasKey(), cur)
+	}
+
+	// Build the preview (command + usage + conflict note if foreign).
 	preview := fmt.Sprintf("Command:  git config --global %s '%s'\nResult:   git %s  →  stagehand\n",
 		e.aliasKey(), stagehandAliasValue, e.aliasName)
-	if found { // foreign (not ours) — surface before overwriting (FR-I4)
-		preview += fmt.Sprintf("\nWARNING: %s is currently set to %q (not stagehand) — it will be overwritten.\n",
+	if found { // foreign (not ours) — include in preview for interactive confirmation
+		preview += fmt.Sprintf("\nNOTE: %s is currently set to %q (not stagehand) — it will be overwritten.\n",
 			e.aliasKey(), cur)
 	}
 

@@ -139,9 +139,11 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	}
 	reg := provider.NewRegistry(overrides)
 
-	// FR51b: resolve the message role's provider (auto-detect mirrors pkg/stagehand.buildDeps) so
-	// the label names the resolved invocation even when --provider is unset.
-	labelProvider := cfg.Provider
+	// FR51b: resolve the message role's provider+model (mirrors hookexec.go) so the label
+	// names the resolved invocation even when --provider is unset and when the role is pinned
+	// to a different provider than the global default.
+	roleProvider, roleModel, _ := config.ResolveRoleModel("message", *cfg)
+	labelProvider := roleProvider
 	if labelProvider == "" {
 		var installed []string
 		for _, m := range reg.List() {
@@ -151,13 +153,17 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		}
 		labelProvider = reg.DefaultProvider(installed)
 	}
+	labelModel := roleModel
+	if labelModel == "" {
+		labelModel = cfg.Model
+	}
 	// Validate an EXPLICIT provider (autodetect is validated inside GenerateCommit/buildDeps).
 	if cfg.Provider != "" {
 		if _, ok := reg.Get(cfg.Provider); !ok {
 			return exitcode.New(exitcode.Error, fmt.Errorf("unknown provider %q", cfg.Provider))
 		}
 	}
-	u.Progress(ui.ProgressLabel("Generating", cfg.Model, labelProvider))
+	u.Progress(ui.ProgressLabel("Generating", labelModel, labelProvider))
 
 	res, err := stagehand.GenerateCommit(ctx, stagehand.Options{
 		Config:    cfg,
