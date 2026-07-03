@@ -150,3 +150,29 @@ func (g *Git) UpdateRefCAS(ref, newSHA, expected string) error {
 	_, err := g.run(args...)
 	return err
 }
+
+// DiffTreeNameStatus returns the raw stdout of
+// `git diff-tree --no-commit-id --name-status -r <sha>` — the FR42
+// success-print query the generate step (P1.M6.T1.S1) emits AFTER a
+// successful commit (immediately after the `[<short-sha>] <subject>` line):
+// one "X\t<path>" line per file changed by the commit, where X is the
+// status letter (A/M/D/...). It is the proven reference's
+// `git diff-tree --no-commit-id --name-status -r $NEW_SHA` (reference_impl.md
+// §1 step COMMIT) ported faithfully.
+//
+// It is READ-ONLY: it touches NO ref and NO index (diff-tree is a pure
+// read over the object database), and the commit SHA is passed as a LITERAL
+// arg (never via sh -c — PRD §19; never interpolated into a shell string).
+// On a non-zero exit it surfaces the typed *[ExitError] exactly like
+// [CommitTree]/[UpdateRefCAS] (the g.run seam already errors.As's into
+// *[ExitError]); the raw stdout (with its trailing newline intact) is
+// returned verbatim so the caller prints it unchanged via out.Resultf. An
+// empty result (e.g. a root commit with no diffable parent and no --root)
+// is NOT an error and is printed as nothing — matching the reference.
+func (g *Git) DiffTreeNameStatus(sha string) (string, error) {
+	out, err := g.run("diff-tree", "--no-commit-id", "--name-status", "-r", sha)
+	if err != nil {
+		return "", err
+	}
+	return out, nil // RAW — trailing newline intact; caller prints verbatim (FR42)
+}

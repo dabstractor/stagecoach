@@ -145,6 +145,20 @@ func (e *Executor) Run(ctx context.Context, m Manifest, model, provider, sys, pa
 	}
 }
 
+// Parse exposes the package-private parseOutput pipeline (P1.M2.T2.S1) to the
+// cross-package generate orchestrator (P1.M6.T1.S1), which otherwise COULD
+// NOT name it: parseOutput is deliberately package-private so parse_test.go
+// stays a white-box `package provider` test that exercises the parser's
+// internals directly. The generate layer needs only the two-step shape the
+// work-item contract names (`stdout, err = Run(...); msg, ok = Parse(...)`),
+// so this is a one-line pass-through: it forwards to parseOutput and returns
+// its (cleaned message, ok) pair verbatim. Keeping parseOutput unexported AND
+// thin here means parse_test.go's white-box coverage is unaffected and the
+// runner interface (internal/generate/generate.go) can carry BOTH Run and
+// Parse — so a stub runner in unit tests fakes Parse while the REAL
+// *Executor satisfies the interface structurally for the integration suite.
+func (e *Executor) Parse(raw string, m Manifest) (string, bool) { return parseOutput(raw, m) }
+
 // exitCodeOf extracts the child's exit code from a cmd.Wait error, returning
 // -1 when the process was killed by an unexpected signal (not a clean exit
 // nor the ctx-driven group kill, which never reaches this path).

@@ -325,3 +325,75 @@ func TestUpdateRefCAS_FailsWhenHEADMoved(t *testing.T) {
 		t.Errorf("ExitError.Code = %d; want 128", ee.Code)
 	}
 }
+
+// TestDiffTreeNameStatus_ReturnsNameStatusLines proves the FR42 success-print
+// query (P1.M6.T1.S1): after a child commit created via CommitTree against an
+// established parent, DiffTreeNameStatus(sha) returns the raw
+// `git diff-tree --no-commit-id --name-status -r <sha>` stdout — one
+// "X\t<path>" line per changed file (A for the newly added file), with a
+// trailing newline intact. It is read-only (no ref/index touched) and the SHA
+// is a literal arg. The output is cross-checked against the equivalent raw
+// git invocation so a git-version formatting drift surfaces here.
+func TestDiffTreeNameStatus_ReturnsNameStatusLines(t *testing.T) {
+	g := newTempRepo(t)
+	seedCommits(t, g, []string{"first"}) // establish history so the commit has a parent
+	parent, has, err := g.RevParseHEAD()
+	if err != nil || !has {
+		t.Fatalf("setup RevParseHEAD = (%q,%v,%v); want a parent SHA", parent, has, err)
+	}
+	writeFileStage(t, g, "feature.go", "package main\n")
+	tree, err := g.WriteTree()
+	if err != nil {
+		t.Fatalf("WriteTree returned error %v; want nil", err)
+	}
+	sha, err := g.CommitTree(parent, "add feature", tree)
+	if err != nil {
+		t.Fatalf("CommitTree returned error %v; want nil", err)
+	}
+
+	got, err := g.DiffTreeNameStatus(sha)
+	if err != nil {
+		t.Fatalf("DiffTreeNameStatus returned error %v; want nil", err)
+	}
+
+	// The new file (added relative to the parent tree) is reported with the
+	// 'A' status letter + a tab + the path, trailing newline intact.
+	if !strings.Contains(got, "A\tfeature.go") {
+		t.Errorf("DiffTreeNameStatus = %q; want it to contain the added-file line %q", got, "A\tfeature.go")
+	}
+
+	// Byte-exact cross-check against the raw g.run output (NOT runOut, which
+	// trims the trailing newline): the method must return the raw stdout
+	// verbatim so the caller prints it unchanged (FR42).
+	rawWant, runErr := g.run("diff-tree", "--no-commit-id", "--name-status", "-r", sha)
+	if runErr != nil {
+		t.Fatalf("raw diff-tree cross-check: %v", runErr)
+	}
+	if got != rawWant {
+		t.Errorf("DiffTreeNameStatus = %q; raw diff-tree = %q (must be byte-identical, trailing newline intact)", got, rawWant)
+	}
+}
+
+// TestDiffTreeNameStatus_IsReadOnly proves DiffTreeNameStatus touches no ref
+// and no index (§18.1): HEAD and the staged index are byte-for-byte unchanged
+// across the call, since diff-tree is a pure read over the object database.
+func TestDiffTreeNameStatus_IsReadOnly(t *testing.T) {
+	g := newTempRepo(t)
+	seedCommits(t, g, []string{"first"})
+	parent, _, _ := g.RevParseHEAD()
+	writeFileStage(t, g, "a.txt", "a\n")
+	tree, _ := g.WriteTree()
+	sha, _ := g.CommitTree(parent, "x", tree)
+
+	headBefore := runOut(t, g, "rev-parse", "HEAD")
+	idxBefore := runOut(t, g, "diff", "--cached", "--name-only")
+	if _, err := g.DiffTreeNameStatus(sha); err != nil {
+		t.Fatalf("DiffTreeNameStatus returned error %v; want nil", err)
+	}
+	if got := runOut(t, g, "rev-parse", "HEAD"); got != headBefore {
+		t.Errorf("HEAD changed across DiffTreeNameStatus (§18.1): before=%q after=%q", headBefore, got)
+	}
+	if got := runOut(t, g, "diff", "--cached", "--name-only"); got != idxBefore {
+		t.Errorf("index changed across DiffTreeNameStatus: before=%q after=%q", idxBefore, got)
+	}
+}
