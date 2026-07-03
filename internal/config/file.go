@@ -59,6 +59,7 @@ type fileGeneration struct {
 	Format              string   `toml:"format"`            // V2.1 — §9.19 FR-F1 message format (validated at Load)
 	Locale              string   `toml:"locale"`            // V2.1 — §9.19 FR-F6 message locale (free-form, never validated)
 	Template            string   `toml:"template"`          // V2.1 — §9.19 FR-F8 message template (validated at Load)
+	Push                bool     `toml:"push"`              // §9.22 FR-P1 — push after clean run (default false)
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +247,10 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if g.Template != "" {
 		c.Template = g.Template
 	}
+	// §9.22 FR-P1 — push from file (mirrors AutoStageAll/Verbose bool pattern).
+	if g.Push {
+		c.Push = true
+	}
 	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
@@ -295,6 +300,13 @@ func overlay(dst, src *Config) {
 	}
 	if src.Verbose {
 		dst.Verbose = true
+	}
+	if src.Edit {
+		dst.Edit = true
+	}
+	// §9.22 FR-P1 — push
+	if src.Push {
+		dst.Push = true
 	}
 	// [generation]
 	if src.MaxDiffBytes != 0 {

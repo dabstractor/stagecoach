@@ -170,6 +170,12 @@ func loadGitConfig(repoDir string) (*Config, error) {
 	} else if found {
 		c.StripCodeFence = &v
 	}
+	// §9.22 FR-P1 — push via git config (lowercase single-word key — no camelCase needed).
+	if v, found, err := gitConfigBool(repoDir, "stagehand.push"); err != nil {
+		return nil, err
+	} else if found {
+		c.Push = v
+	}
 
 	// --- ints (plain --get -> Atoi) ---
 	if v, found, err := gitConfigGet(repoDir, "stagehand.maxDiffBytes"); err != nil { // camelCase!

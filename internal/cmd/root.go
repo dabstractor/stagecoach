@@ -73,6 +73,9 @@ var flagExclude []string
 // counterpart — read only via fs.Changed/fs.GetBool in loadFlags (same discipline as flagContext).
 var flagEdit bool
 
+// §9.22 FR-P1 — --push flag (full 5-layer precedence; resolved by config.Load via fs.Changed).
+var flagPush bool
+
 // §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags (resolved by config.Load via fs.Changed).
 var (
 	flagFormat   string
@@ -177,6 +180,12 @@ func init() {
 			"are stripped on close. An empty message aborts (exit 1, not a rescue). The edited message "+
 			"bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored "+
 			"with --dry-run; not valid with hook exec. (§9.22 FR-E1)")
+	pf.BoolVar(&flagPush, "push", false,
+		"Run plain `git push` (streaming) after a fully-successful run. Never prompts; never auto-sets "+
+			"upstream. On push failure the commits stand — git's stderr is shown verbatim (including the "+
+			"no-upstream hint), \"commits created; push failed\" prints, and stagehand exits 1. Skipped "+
+			"on --dry-run, the nothing-to-commit exit, and any rescue/CAS abort. (env STAGEHAND_PUSH, "+
+			"git stagehand.push, config [generation].push; default false.) (§9.22 FR-P1)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")

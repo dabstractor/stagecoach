@@ -189,7 +189,26 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		changes = nil // report without the file list; do NOT fail the success
 	}
 	printCommitReport(stdout, res, changes)
+	if err := runPush(ctx, stderr, g, *cfg); err != nil { // §9.22 FR-P1/P2 — no-op unless cfg.Push
+		return exitcode.New(exitcode.Error, err) // exit 1; commits already stand (FR-P2)
+	}
 	return nil // exit 0
+}
+
+// runPush runs `git push` (plain, streaming) after a fully-clean run, iff cfg.Push is true (§9.22
+// FR-P1). It is a no-op when push is disabled (the default — byte-identical to the pre-feature path).
+// On push failure the COMMITS STAND (FR-P2): git's stderr was already streamed verbatim by Push, so
+// print the closing note "commits created; push failed" to stderr and return a wrapped error (the
+// caller maps it to exit 1 via exitcode.For's default tail). Never prompts; never auto-sets upstream.
+func runPush(ctx context.Context, stderr io.Writer, g git.Git, cfg config.Config) error {
+	if !cfg.Push {
+		return nil // THE no-op guard — the byte-identity regression invariant
+	}
+	if err := g.Push(ctx, os.Stdout, stderr); err != nil { // stream git's stdout/stderr verbatim
+		fmt.Fprintln(stderr, "commits created; push failed") // FR-P2 closing note (stderr; BEFORE the err)
+		return fmt.Errorf("git push: %w", err)
+	}
+	return nil
 }
 
 // handleGenError maps a GenerateCommit error to the §15.4 outcome WITH the right user-facing output. It
@@ -322,6 +341,9 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 	}
 	if derr != nil {
 		return handleDecomposeError(derr) // suppress re-print; map exit code
+	}
+	if err := runPush(ctx, stderr, g, *cfg); err != nil { // §9.22 FR-P1/P2
+		return exitcode.New(exitcode.Error, err)
 	}
 	return nil
 }

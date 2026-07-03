@@ -252,6 +252,15 @@ func loadEnv(cfg *Config) error {
 		cfg.Template = v
 	}
 
+	// §9.22 FR-P1 — push via env (presence-semantic, mirrors STAGEHAND_VERBOSE).
+	if v, ok := os.LookupEnv("STAGEHAND_PUSH"); ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("STAGEHAND_PUSH: %w", err)
+		}
+		cfg.Push = b // DIRECT set — can be false (escape hatch)
+	}
+
 	return nil
 }
 
@@ -368,6 +377,13 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	if fs.Changed("edit") {
 		if v, err := fs.GetBool("edit"); err == nil {
 			cfg.Edit = v
+		}
+	}
+
+	// §9.22 FR-P1 — --push flag (full 5-layer precedence; mirrors --verbose/--template).
+	if fs.Changed("push") {
+		if v, err := fs.GetBool("push"); err == nil {
+			cfg.Push = v // DIRECT set
 		}
 	}
 }

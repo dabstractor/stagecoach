@@ -112,6 +112,13 @@ type Config struct {
 	// pre-CommitTree). Default false (non-interactive). See generate.EditMessage.
 	Edit bool `toml:"-"`
 
+	// Push is the §9.22 FR-P1 --push workflow convenience (full 5-layer precedence: --push /
+	// STAGEHAND_PUSH / stagehand.push / [generation].push, default false). When true, a plain `git push`
+	// (no args, streaming) runs AFTER a fully-clean run. Push failure does NOT roll back commits (FR-P2):
+	// git's stderr is streamed verbatim, "commits created; push failed" prints, exit 1. Skipped on
+	// --dry-run, the exit-2 path, and any rescue/CAS abort (FR-P3). See cmd.runPush + git.Git.Push.
+	Push bool `toml:"push"`
+
 	// [provider.<name>] user-defined / override provider definitions (PRD §16.2, §12.8).
 	// Carried as a RAW map: the provider MANIFEST type lives in internal/provider, so config must not import
 	// it (import-cycle risk). The registry (P1.M2.T3) consumes this map — for each name it re-encodes the
@@ -172,6 +179,7 @@ func Defaults() Config {
 		Exclude:             nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
 		Context:             "",     // §9.19 FR-F7 default (empty = no context block)
 		Edit:                false,  // §9.22 FR-E1 default (false = non-interactive; no editor gate)
+		Push:                false,  // §9.22 FR-P1 default (false = no auto-push)
 		Providers:           nil,
 		Roles:               nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:       0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved

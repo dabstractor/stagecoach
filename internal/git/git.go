@@ -308,6 +308,17 @@ type Git interface {
 	// tree-to-tree name-status analogue of DiffTree (which diffs a commit vs its parent). Empty output
 	// when treeA == treeB. Read-only w.r.t. refs and the index.
 	DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (nameStatus string, err error)
+
+	// Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
+	// passed writers (the CLI passes os.Stdout/os.Stderr so the user sees git's real output: progress,
+	// the no-upstream hint, rejected non-fast-forwards, etc.). It NEVER adds `--set-upstream` (FR-P2:
+	// publishing a new branch is the user's call — stagehand surfaces git's own hint verbatim instead).
+	// On a non-zero exit (128 = no upstream / rejected; 1 = network) it returns a wrapped error carrying
+	// git's exit code; the COMMITS STAND (push failure does not roll back local commits — push moves the
+	// REMOTE, not local HEAD; the caller prints "commits created; push failed" and exits 1). ctx-aware
+	// (timeout/signal cancel the push). Targets the repo via -C (the goroutine-safe convention). Push is
+	// the ONLY method on Git that runs a network-mutating command and the ONLY one taking io.Writer params.
+	Push(ctx context.Context, stdout, stderr io.Writer) error
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -1511,4 +1522,36 @@ func (g *gitRunner) DiffTreeNameStatus(ctx context.Context, treeA, treeB string)
 		return "", fmt.Errorf("git diff-tree --name-status: failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return stdout, nil // raw A/M/D lines; caller prefixes with "# " for the EDITMSG
+}
+
+// Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
+// passed writers. It wires cmd.Stdout/cmd.Stderr directly to the passed io.Writers (the CLI passes
+// os.Stdout/os.Stderr → verbatim streaming; the existing run()/runWithInput() helpers both CAPTURE into
+// bytes.Buffer and CANNOT stream). It NEVER adds --set-upstream (FR-P2: publishing a new branch is the
+// user's call). On a non-zero exit (128 = no upstream / rejected; 1 = network) it returns a wrapped error
+// carrying git's exit code; the COMMITS STAND (push failure does not roll back local commits — push moves
+// the REMOTE, not local HEAD; the caller prints "commits created; push failed" and exits 1). ctx-aware
+// (timeout/signal cancel the push). Targets the repo via -C (the goroutine-safe convention every method
+// uses via g.workDir).
+func (g *gitRunner) Push(ctx context.Context, stdout, stderr io.Writer) error {
+	gitPath, lerr := exec.LookPath("git")
+	if lerr != nil {
+		return fmt.Errorf("git binary not found in PATH: %w", lerr)
+	}
+	// `git -C <repo> push` — NO args after `push` (plain push, FR-P1); NEVER --set-upstream (FR-P2).
+	cmd := exec.CommandContext(ctx, gitPath, "-C", g.workDir, "push")
+	cmd.Stdout = stdout // STREAM VERBATIM (not a bytes.Buffer)
+	cmd.Stderr = stderr // STREAM VERBATIM
+	runErr := cmd.Run()
+	if runErr == nil {
+		return nil
+	}
+	if cerr := ctx.Err(); cerr != nil { // context cancelled (timeout/signal) — not a git exit
+		return cerr
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) { // non-zero git exit → wrapped error (code carried for diagnostics)
+		return fmt.Errorf("git push failed (exit %d)", exitErr.ExitCode())
+	}
+	return fmt.Errorf("git push: %w", runErr) // start / I/O failure
 }

@@ -1169,6 +1169,103 @@ func TestLoad_TemplateNoMsg_HardError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Load — push precedence (§9.22 FR-P1: flag > env > git-config > file > default false)
+// ---------------------------------------------------------------------------
+
+func TestLoadEnv_Push(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_PUSH", "true")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (STAGEHAND_PUSH=true)")
+	}
+
+	// DIRECT-set escape hatch: STAGEHAND_PUSH=false
+	cfg2 := Config{Push: true}
+	t.Setenv("STAGEHAND_PUSH", "false")
+	if err := loadEnv(&cfg2); err != nil {
+		t.Fatalf("loadEnv escape err=%v", err)
+	}
+	if cfg2.Push {
+		t.Errorf("Push=true want false (STAGEHAND_PUSH=false DIRECT set escape)")
+	}
+}
+
+func TestLoadFlags_Push(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	// Register --push flag (newFlagSet does NOT register it by default yet)
+	fs.Bool("push", false, "")
+	if err := fs.Set("push", "true"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if !cfg.Push {
+		t.Errorf("Push=false want true (--push set)")
+	}
+
+	// Not changed → no-op
+	cfg2 := Defaults()
+	fs2 := newFlagSet(t)
+	fs2.Bool("push", false, "")
+	loadFlags(&cfg2, fs2)
+	if cfg2.Push {
+		t.Errorf("Push=true want false (--push not changed)")
+	}
+}
+
+func TestLoad_PushPrecedence(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+
+	// Layer 2/3: file sets push=true
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\npush = true\n")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (from [generation].push)")
+	}
+
+	// Layer 4: git overrides (NOTE: git-config false is a no-op with overlay — same as
+	// AutoStageAll/Verbose. DIRECT-set escape via env or flag.)
+	setGitConfig(t, repo, "stagehand.push", "false")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (git-config false is no-op; file true stands)")
+	}
+
+	// Layer 5: env overrides
+	t.Setenv("STAGEHAND_PUSH", "true")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (env > git)")
+	}
+}
+
+func TestLoad_PushDefaultFalse(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Push {
+		t.Errorf("Push=true want false (default)")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Load — ctx cancellation
 // ---------------------------------------------------------------------------
 
