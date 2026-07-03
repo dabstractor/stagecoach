@@ -69,6 +69,12 @@ var (
 // discipline as flagProvider/flagModel); the &flagExclude address here is its use.
 var flagExclude []string
 
+// §9.19 FR-F1/FR-F6 — format/locale flags (resolved by config.Load via fs.Changed).
+var (
+	flagFormat string
+	flagLocale string
+)
+
 // loadedCfg holds the config resolved in PersistentPreRunE; nil until then. Read by Config().
 var loadedCfg *config.Config
 
@@ -140,6 +146,13 @@ func init() {
 		"Per-role provider override for the leftover arbiter (env STAGEHAND_ARBITER_PROVIDER; git stagehand.role.arbiter)")
 	pf.StringVar(&flagArbiterModel, "arbiter-model", "",
 		"Per-role model override for the leftover arbiter (env STAGEHAND_ARBITER_MODEL; git stagehand.role.arbiter)")
+	// §9.19 FR-F1/FR-F6 — message format + locale flags (zero default; loadFlags reads via fs.Changed).
+	pf.StringVar(&flagFormat, "format", "",
+		"Message format: auto|conventional|gitmoji|plain (env STAGEHAND_FORMAT; git stagehand.format; "+
+			"[generation].format; default auto). Unknown mode is a hard error.")
+	pf.StringVar(&flagLocale, "locale", "",
+		"Write the message in this language (free-form name or BCP-47 tag; env STAGEHAND_LOCALE; "+
+			"git stagehand.locale; [generation].locale; default empty)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")

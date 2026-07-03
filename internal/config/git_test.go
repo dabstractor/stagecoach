@@ -79,6 +79,9 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	setGitConfig(t, repo, "stagehand.maxDiffBytes", "12345")
 	setGitConfig(t, repo, "stagehand.stripCodeFence", "1") // "1" -> true
 	setGitConfig(t, repo, "stagehand.output", "json")
+	// §9.19 FR-F1/FR-F6
+	setGitConfig(t, repo, "stagehand.format", "gitmoji")
+	setGitConfig(t, repo, "stagehand.locale", "de")
 
 	cfg, err := loadGitConfig(repo)
 	if err != nil {
@@ -110,6 +113,13 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	}
 	if cfg.Output == nil || *cfg.Output != "json" {
 		t.Errorf("Output=%v want strPtr(json)", cfg.Output)
+	}
+	// §9.19 FR-F1/FR-F6 — format/locale via git config
+	if cfg.Format != "gitmoji" {
+		t.Errorf("Format=%q want gitmoji", cfg.Format)
+	}
+	if cfg.Locale != "de" {
+		t.Errorf("Locale=%q want de", cfg.Locale)
 	}
 }
 

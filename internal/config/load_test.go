@@ -70,6 +70,9 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 	fs.Int("max-commits", 0, "")
 	// §9.18 FR-X1 — repeatable exclude flag (StringArray; each Set call appends one literal value).
 	fs.StringArray("exclude", nil, "")
+	// §9.19 FR-F1/FR-F6 — format/locale flags.
+	fs.String("format", "", "")
+	fs.String("locale", "", "")
 	return fs
 }
 
@@ -1035,6 +1038,36 @@ func TestLoad_NilFlagsSkipped(t *testing.T) {
 	}
 	if cfg.Provider != "pi" {
 		t.Errorf("Provider=%q want pi (nil Flags should not panic, env still applies)", cfg.Provider)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validateFormat tests (§9.19 FR-F1)
+// ---------------------------------------------------------------------------
+
+func TestValidateFormat(t *testing.T) {
+	validModes := []string{"auto", "conventional", "gitmoji", "plain"}
+	for _, mode := range validModes {
+		t.Run("valid_"+mode, func(t *testing.T) {
+			if err := validateFormat(mode); err != nil {
+				t.Errorf("validateFormat(%q) = %v, want nil", mode, err)
+			}
+		})
+	}
+	invalidModes := []string{"", "emoji", "Conventional", "AUTO", "gitmojii", " auto"}
+	for _, mode := range invalidModes {
+		t.Run("invalid_"+mode, func(t *testing.T) {
+			err := validateFormat(mode)
+			if err == nil {
+				t.Fatalf("validateFormat(%q) = nil, want error", mode)
+			}
+			if !strings.Contains(err.Error(), mode) {
+				t.Errorf("error %q does not contain %q", err.Error(), mode)
+			}
+			if !strings.Contains(err.Error(), "auto, conventional, gitmoji, plain") {
+				t.Errorf("error %q does not contain valid set", err.Error())
+			}
+		})
 	}
 }
 

@@ -65,6 +65,13 @@ func TestDefaults(t *testing.T) {
 	if c.Roles != nil {
 		t.Errorf("Roles = %v, want nil (no per-role overrides)", c.Roles)
 	}
+	// §9.19 FR-F1/FR-F6
+	if c.Format != "auto" {
+		t.Errorf("Format = %q, want %q (FR-F1 default)", c.Format, "auto")
+	}
+	if c.Locale != "" {
+		t.Errorf("Locale = %q, want %q (FR-F6 default)", c.Locale, "")
+	}
 	if c.ConfigVersion != 0 {
 		t.Errorf("ConfigVersion = %d, want 0 (Defaults leaves it unset; the advisory compares it)", c.ConfigVersion)
 	}

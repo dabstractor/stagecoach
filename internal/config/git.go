@@ -126,6 +126,17 @@ func loadGitConfig(repoDir string) (*Config, error) {
 	} else if found {
 		c.Output = &v
 	}
+	// §9.19 FR-F1/FR-F6 — format/locale: single-word string keys, raw copy (no validation here).
+	if v, found, err := gitConfigGet(repoDir, "stagehand.format"); err != nil {
+		return nil, err
+	} else if found {
+		c.Format = v
+	}
+	if v, found, err := gitConfigGet(repoDir, "stagehand.locale"); err != nil {
+		return nil, err
+	} else if found {
+		c.Locale = v
+	}
 
 	// --- timeout: accepts both "90" (seconds) and "90s" (Go duration) forms. ---
 	if v, found, err := gitConfigGet(repoDir, "stagehand.timeout"); err != nil {

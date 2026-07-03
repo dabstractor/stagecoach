@@ -35,6 +35,8 @@ With no subcommand, `stagehand` runs the **default action**. The routing depends
 | `--no-decompose` | bool | false | — | — | Alias for `--single` |
 | `--max-commits <N>` | int | 12 | — | — | Safety cap on auto-decompose commit count (also `[generation].max_commits` in config) |
 | `--exclude <glob>`, `-x` | string (repeatable) | — | — | — | Exclude matching files from the agent payload (placeholder line instead of the diff; never excluded from the commit itself). Unions with `.stagehandignore` and `[generation].exclude` — repeat the flag to add more than one glob; it does not override the config-file set |
+| `--format <mode>` | string | `auto` | `STAGEHAND_FORMAT` | `stagehand.format` | Message format: `auto` (style learning) \| `conventional` \| `gitmoji` \| `plain`. An unknown mode is a hard error (exit 1). Also `[generation].format`. |
+| `--locale <lang>` | string | "" | `STAGEHAND_LOCALE` | `stagehand.locale` | Write the message in this language (free-form name or BCP-47 tag; never validated). Also `[generation].locale`. |
 | `--planner-provider <name>` | string | "" | `STAGEHAND_PLANNER_PROVIDER` | — | Per-role provider override for the decomposition planner |
 | `--planner-model <name>` | string | "" | `STAGEHAND_PLANNER_MODEL` | — | Per-role model override for the decomposition planner |
 | `--stager-provider <name>` | string | "" | `STAGEHAND_STAGER_PROVIDER` | — | Per-role provider override for the (tooled) staging agent |
@@ -163,6 +165,8 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--stager-model` | `STAGEHAND_STAGER_MODEL` | — |
 | `--arbiter-provider` | `STAGEHAND_ARBITER_PROVIDER` | — |
 | `--arbiter-model` | `STAGEHAND_ARBITER_MODEL` | — |
+| `--format` | `STAGEHAND_FORMAT` | `stagehand.format` |
+| `--locale` | `STAGEHAND_LOCALE` | `stagehand.locale` |
 | `--reasoning` | `STAGEHAND_REASONING` | `stagehand.reasoning` |
 | `--planner-reasoning` | `STAGEHAND_PLANNER_REASONING` | — |
 | `--stager-reasoning` | `STAGEHAND_STAGER_REASONING` | — |

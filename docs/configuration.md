@@ -101,6 +101,8 @@ model = "sonnet"
 # [generation]
 # max_diff_bytes        = 300000
 # exclude               = []   # UNIONS across layers — see "Exclusion globs" below
+# format                = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
+# locale                = ""       # free-form language name or BCP-47 tag; never validated
 # ...
 ```
 
@@ -123,6 +125,8 @@ These are the values when no config file, env var, git-config key, or flag sets 
 | `subject_target_chars` | `50` | `config.Defaults()` |
 | `output` | `"raw"` | provider manifest (§12.1) |
 | `strip_code_fence` | `true` | provider manifest (§12.1) |
+| `format` | `"auto"` | `config.Defaults()` (§9.19 FR-F1) |
+| `locale` | `""` | `config.Defaults()` (§9.19 FR-F6) |
 
 `NoColor` is TTY-aware at runtime (set by the UI layer); it is not a file field and has no config-file key.
 
@@ -155,6 +159,8 @@ All `STAGEHAND_*` variables override the config file and are overridden by CLI f
 | `STAGEHAND_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGEHAND_STAGER_REASONING=low stagehand` |
 | `STAGEHAND_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGEHAND_MESSAGE_REASONING=low stagehand` |
 | `STAGEHAND_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGEHAND_ARBITER_REASONING=low stagehand` |
+| `STAGEHAND_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGEHAND_FORMAT=conventional stagehand` |
+| `STAGEHAND_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGEHAND_LOCALE=ja stagehand` |
 
 ## Git-config keys
 
@@ -176,6 +182,8 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | `stagehand.auto_stage_all` | bool | `git config --get --bool stagehand.auto_stage_all` | Auto-stage all when nothing staged |
 | `stagehand.output` | string | `git config --get stagehand.output` | Agent output mode: `raw` \| `json` (overrides per-provider default) |
 | `stagehand.stripCodeFence` | bool | `git config --get --bool stagehand.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
+| `stagehand.format` | string | `git config --get stagehand.format` | Message format: `auto` \| `conventional` \| `gitmoji` \| `plain`. Unknown = hard error (exit 1). |
+| `stagehand.locale` | string | `git config --get stagehand.locale` | Message language (free-form name or BCP-47 tag; never validated). |
 
 > [!NOTE]
 > The git-config layer has **no** per-role keys (`stagehand.role.*`), no `stagehand.commits`, and no `stagehand.max_commits`. Per-role configuration is available via CLI flags (`--planner-provider`, etc.), env vars (`STAGEHAND_PLANNER_*`), and config-file `[role.*]` blocks only. Decompose settings (`--commits`, `--single`, `--no-decompose`) are flag/env only; `--max-commits` also reads from the `[generation]` config-file section. There is also no `stagehand.exclude` git-config key and no `STAGEHAND_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.

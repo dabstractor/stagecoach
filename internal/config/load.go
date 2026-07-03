@@ -163,6 +163,13 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		fmt.Fprint(noticeOut, msg)
 	}
 
+	// PRD §9.19 FR-F1: an unknown format mode is a HARD configuration error. Validate the RESOLVED
+	// value once (not per-layer — a low-layer typo overridden higher is not an error). Locale is
+	// deliberately NOT validated (FR-F6: free-form, verbatim, no i18n tables).
+	if err := validateFormat(cfg.Format); err != nil {
+		return nil, fmt.Errorf("format: %w", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -230,6 +237,14 @@ func loadEnv(cfg *Config) error {
 	// No STAGEHAND_EXCLUDE: deliberately omitted (§9.18 FR-X1) — a colon/comma-joined env list is a
 	// documented quoting trap for glob patterns. Do NOT "helpfully" add one; [generation].exclude and
 	// --exclude/-x already cover the persistent and ad-hoc cases.
+
+	// §9.19 FR-F1/FR-F6 — format/locale via env (presence-semantic, mirrors STAGEHAND_PROVIDER).
+	if v, ok := os.LookupEnv("STAGEHAND_FORMAT"); ok && v != "" {
+		cfg.Format = v
+	}
+	if v, ok := os.LookupEnv("STAGEHAND_LOCALE"); ok && v != "" {
+		cfg.Locale = v
+	}
 
 	return nil
 }
@@ -316,6 +331,35 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.Exclude = append(cfg.Exclude, vals...)
 		}
 	}
+
+	// §9.19 FR-F1/FR-F6 — format/locale via CLI flags (gated on fs.Changed, mirrors provider).
+	if fs.Changed("format") {
+		if v, err := fs.GetString("format"); err == nil {
+			cfg.Format = v
+		}
+	}
+	if fs.Changed("locale") {
+		if v, err := fs.GetString("locale"); err == nil {
+			cfg.Locale = v
+		}
+	}
+}
+
+// validFormats is the closed set of --format modes (PRD §9.19 FR-F1). Validation-only; S3 builds the
+// prompt scaffolds from static strings, not this slice.
+var validFormats = []string{"auto", "conventional", "gitmoji", "plain"}
+
+// validateFormat returns nil iff format is one of validFormats, else an error naming the offending value
+// and the valid set (PRD §9.19 FR-F1: "An unknown mode is a hard configuration error"). PURE (no I/O) so it
+// is unit-testable; called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Format (not per-layer — a
+// low-layer typo overridden by a higher layer is not an error). Locale is deliberately NOT validated (FR-F6).
+func validateFormat(format string) error {
+	for _, m := range validFormats {
+		if format == m {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid format %q (valid: %s)", format, strings.Join(validFormats, ", "))
 }
 
 // configVersionNotice returns the PRD §9.17 FR-B4 advisory text when a loaded config file's schema version

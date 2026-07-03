@@ -56,6 +56,8 @@ type fileGeneration struct {
 	MaxCommits          int      `toml:"max_commits"`       // V2 — safety cap on auto-decompose (§9.14 FR-M4)
 	BinaryExtensions    []string `toml:"binary_extensions"` // V2 — extra non-text exts to filter (§9.1 FR3a)
 	Exclude             []string `toml:"exclude"`           // V2.1 — §9.18 FR-X1 exclusion globs; UNION-merged in overlay()
+	Format              string   `toml:"format"`            // V2.1 — §9.19 FR-F1 message format (validated at Load)
+	Locale              string   `toml:"locale"`            // V2.1 — §9.19 FR-F6 message locale (free-form, never validated)
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +235,13 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if len(g.Exclude) > 0 {
 		c.Exclude = g.Exclude
 	}
+	// §9.19 FR-F1/FR-F6 — format/locale are SCALARS: non-zero/non-empty copy.
+	if g.Format != "" {
+		c.Format = g.Format
+	}
+	if g.Locale != "" {
+		c.Locale = g.Locale
+	}
 	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
@@ -355,6 +364,14 @@ func overlay(dst, src *Config) {
 	// a DELIBERATE exception to the REPLACE pattern used by BinaryExtensions above.
 	if len(src.Exclude) > 0 {
 		dst.Exclude = append(dst.Exclude, src.Exclude...)
+	}
+	// §9.19 FR-F1/FR-F6 — format/locale are SCALARS: standard non-zero REPLACE (the rule), NOT union
+	// (only Exclude unions, FR-X1). overlay is called global→repo→gitconfig; highest non-empty layer wins.
+	if src.Format != "" {
+		dst.Format = src.Format
+	}
+	if src.Locale != "" {
+		dst.Locale = src.Locale
 	}
 }
 
