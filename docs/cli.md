@@ -330,6 +330,28 @@ stagehand integrate remove lazygit               # remove stagehand entry
 stagehand integrate remove lazygit --yes          # skip confirmation
 ```
 
+### `models [<provider>]`
+
+List the models reachable by a provider's CLI. Source of truth, in order:
+
+1.  **(a) Live list** — if the provider manifest defines a `list_models_command`, it is run as a subprocess (inherited env, bounded timeout) and its stdout is printed under a provider heading.
+2.  **(b) Curated table** — if the `list_models_command` is absent **or** the command fails (non-zero exit, timeout, or not found), Stagehand's curated per-role tier table (FR-D4) is printed, annotated with its verification date and a "consult `<command> --help`" hint.
+
+Stagehand never makes an HTTP call to list models (§6.2 N2) — the agent CLI is the only model authority.
+
+With no argument, the **resolved default provider** is shown. With `--all`, every **detected** provider (command on `$PATH`) is shown, one block at a time. An unknown or undetected named provider exits 1.
+
+```bash
+stagehand models                # show the default provider's models
+stagehand models claude         # show claude's models
+stagehand models --all          # show all detected providers
+stagehand models --help          # see the models-scoped --all text
+```
+
+| Flag | Description |
+|------|-------------|
+| `--all`, `-a` | List models for every detected provider (default: the resolved default provider) |
+
 ## Exit codes
 
 | Code | Meaning |
