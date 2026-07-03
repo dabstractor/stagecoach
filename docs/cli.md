@@ -59,6 +59,51 @@ The `--config` flag is a path override for config-file discovery — it is not i
 
 ## Subcommands
 
+### `hook install`
+
+Install stagehand's `prepare-commit-msg` hook in the current repo. Writes an executable (0755) script containing the marker `# stagehand prepare-commit-msg hook v1` at the repo's hooks directory. Re-running overwrites an existing stagehand hook (idempotent — reports "Installed" on first run, "Updated" on subsequent).
+
+The hook script calls `stagehand hook exec "$@"` (runtime lands in P1.M3.T2.S1 — not yet shipped).
+
+```bash
+stagehand hook install              # write the hook
+stagehand hook install              # → "Updated stagehand prepare-commit-msg hook." (idempotent)
+stagehand hook install --strict    # bake --strict into the script body
+stagehand hook install --print     # print the script to stdout, no disk write (works outside a repo)
+```
+
+| Flag | Description |
+|------|-------------|
+| `--strict` | Bake `--strict` into the hook so generation failures abort the commit (default: never block) |
+| `--print` | Write the hook script to stdout instead of installing it |
+
+**Foreign-hook policy (never-clobber, FR-H2):** If a `prepare-commit-msg` already exists WITHOUT stagehand's marker, `install` refuses (exit 1) and prints the one-line manual invocation you can add to your existing hook. There is **no `--force`** — this is by design. Stagehand will never overwrite someone else's hook.
+
+### `hook uninstall`
+
+Remove stagehand's `prepare-commit-msg` hook. Only removes the file when the marker is present. If no hook exists, prints an informational note and exits 0 (idempotent). A foreign hook is refused (exit 1, untouched).
+
+```bash
+stagehand hook uninstall            # → "Removed stagehand prepare-commit-msg hook."
+stagehand hook uninstall            # (no hook) → "No stagehand prepare-commit-msg hook to remove." (exit 0)
+```
+
+### `hook status`
+
+Report the current state of the repo's `prepare-commit-msg` hook. Prints exactly one line:
+
+| Output | Meaning |
+|--------|---------|
+| `none` | No `prepare-commit-msg` file exists |
+| `stagehand (v1)` | A stagehand-owned hook is installed (marker present) |
+| `foreign` | A `prepare-commit-msg` exists WITHOUT stagehand's marker (never touched by install/uninstall) |
+
+```bash
+stagehand hook status              # → "none"
+stagehand hook install
+stagehand hook status              # → "stagehand (v1)"
+```
+
 ### `providers list`
 
 List all known providers with detection status:
