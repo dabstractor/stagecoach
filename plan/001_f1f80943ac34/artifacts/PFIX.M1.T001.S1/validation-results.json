@@ -54,7 +54,7 @@
     "description": "Level 3 gate",
     "success": true,
     "command": "grep -rn 'Verbosef(' internal/provider internal/generate pkg/stagehand cmd/stagehand | grep -v _test.go",
-    "stdout": "internal/provider/executor.go:112:\t\te.Output.Verbosef(\"stagehand: resolved command: %s %s%s\\n\",\ninternal/provider/executor.go:150:\t\t\t\te.Output.Verbosef(\"stagehand: raw agent stdout:\\n%s\", stdout.String())\ninternal/generate/generate.go:284:\t\t\tout.Verbosef(\"stagehand: generation attempt (duplicate=%d parse=%d)\\n\", dupAttempt, parseAttempt)\ninternal/generate/generate.go:305:\t\t\tout.Verbosef(\"stagehand: parse produced no usable message; retrying with correction\\n\")\ninternal/generate/generate.go:324:\t\tout.Verbosef(\"stagehand: duplicate subject %q; retrying (duplicate attempt %d)\\n\", subject, dupAttempt)\n",
+    "stdout": "internal/provider/executor.go:112:\t\te.Output.Verbosef(\"stagehand: resolved command: %s %s%s\\n\",\ninternal/provider/executor.go:150:\t\t\t\te.Output.Verbosef(\"stagehand: raw agent stdout:\\n%s\", stdout.String())\ninternal/generate/generate.go:285:\t\t\tout.Verbosef(\"stagehand: generation attempt (duplicate=%d parse=%d)\\n\", dupAttempt, parseAttempt)\ninternal/generate/generate.go:310:\t\t\tout.Verbosef(\"stagehand: parse produced no usable message; retrying with correction\\n\")\ninternal/generate/generate.go:329:\t\tout.Verbosef(\"stagehand: duplicate subject %q; retrying (duplicate attempt %d)\\n\", subject, dupAttempt)\n",
     "stderr": "",
     "exitCode": 0,
     "skipped": false
