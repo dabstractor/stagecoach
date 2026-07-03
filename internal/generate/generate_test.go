@@ -596,3 +596,58 @@ func TestCommitStaged_ExcludedPayloadCapture(t *testing.T) {
 		t.Fatalf("expected feature.go present in payload, got:\n%s", payload)
 	}
 }
+
+// TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt is the stub-agent integration check for
+// PRD §9.19 FR-F3/F5/F6 / §17.8: with cfg.Format="gitmoji" and cfg.Locale="French", the REAL rendered
+// system prompt (via provider.Render) must contain the gitmoji scaffold instruction, a compiled-in
+// RenderGitmojiTable() row, and the locale line — and must NOT contain the auto-mode style-examples
+// intro. The stub uses stdin delivery with no system_prompt_flag, so provider.Render prepends the
+// system prompt to the payload with a "\n\n" delimiter (render.go) — the captured stdin therefore
+// contains the rendered system prompt (mirrors TestCommitStaged_ExcludedPayloadCapture).
+func TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "feat: first")
+	commitRaw(t, repo, "fix: second") // ≥2 commits → mature path (BuildSystemPrompt, not the fallback)
+	writeFile(t, repo, "auth.go", "package main\n")
+	stageFile(t, repo, "auth.go")
+
+	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
+	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	bin := stubtest.Build(t)
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "🎨 refactor auth flow"})
+
+	cfg := config.Defaults()
+	cfg.Provider = "stub"
+	cfg.Model = "stub"
+	cfg.Format = "gitmoji"
+	cfg.Locale = "French"
+
+	deps := Deps{Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(io.Discard, false)}
+	res, err := CommitStaged(context.Background(), deps, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	if res.CommitSHA == "" {
+		t.Fatal("expected a commit SHA")
+	}
+
+	data, err := os.ReadFile(stdinFile)
+	if err != nil {
+		t.Fatalf("read stdin capture: %v", err)
+	}
+	payload := string(data)
+
+	if !strings.Contains(payload, "Begin the subject with exactly ONE emoji") {
+		t.Errorf("expected the gitmoji scaffold instruction in the rendered system prompt, got:\n%s", payload)
+	}
+	if !strings.Contains(payload, "🎨 - ") {
+		t.Errorf("expected a RenderGitmojiTable() row in the rendered system prompt, got:\n%s", payload)
+	}
+	if !strings.Contains(payload, "Write the commit message in French.") {
+		t.Errorf("expected the FR-F6 locale line in the rendered system prompt, got:\n%s", payload)
+	}
+	if strings.Contains(payload, "Match the tone and style") {
+		t.Errorf("gitmoji mode must NOT contain the auto-mode style-examples intro, got:\n%s", payload)
+	}
+}

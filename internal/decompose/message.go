@@ -226,20 +226,20 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 // fallback (§17.2); else → mature (§17.1) with recent messages + multiline detection.
 func messageSystemPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // messageRecentSubjects returns recent commit subjects for dedupe checking, or nil on an unborn

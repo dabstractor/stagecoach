@@ -311,20 +311,20 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 // recent messages + multiline detection.
 func buildSystemPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // recentSubjects returns recent commit subjects for dedupe checking, or nil on

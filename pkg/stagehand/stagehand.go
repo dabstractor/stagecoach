@@ -392,20 +392,20 @@ func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
 // builders; NOT IP duplication.
 func buildSysPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // runPipeline is the self-contained path for DryRun/SystemExtra. It mirrors generate.CommitStaged

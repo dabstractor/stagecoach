@@ -98,14 +98,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Message shaping: format, locale, context, template (§9.19)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Opt-in `--format` (conventional/gitmoji/plain replacing style learning per §17.8), `--locale`, `--context`, and `--template '$msg …'` with a new message-finalization seam shared by all three commit paths. Lands before M3 (hook mode reuses format-aware prompts) and M5 (--edit reuses the finalization seam).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Format modes and locale",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Config surface, the compiled-in gitmoji table, and format-aware prompt scaffolds applied everywhere a message is produced (FR-F1–F6).",
               "subtasks": [
                 {
@@ -146,7 +146,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S3",
                   "title": "Format-mode prompt scaffolds + locale line, applied everywhere a message is produced",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1",
@@ -173,14 +173,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Context injection and message template",
-              "status": "Planned",
+              "status": "Researching",
               "description": "--context payload block and --template '$msg' substitution via a new shared message-finalization seam (FR-F7, FR-F8).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "--context user-payload injection (message + planner roles)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/system_context.md §3 — `internal/prompt/payload.go` `BuildUserPayload(diff, rejected []string)` owns the §17.3 payload; §17.8 places the context block after the instruction line, before the diff, and BEFORE the duplicate-rejection block when both are present. Flag-only by spec (FR-F7: per-invocation by nature) — no env, no config key, no git key.\n2. INPUT: existing payload builders (`BuildUserPayload`, `BuildPlannerUserPayload` in planner.go); root.go flag seam.\n3. LOGIC: add `--context <text>`; extend both builders to insert the exact block `Additional context from the user (treat as authoritative):\\n<text>` when non-empty; thread through the generate and decompose call sites — message and planner roles ONLY (stager and arbiter payloads unchanged). Hook exec takes no --context (git invokes the hook; there is no flag surface at commit time) — note as N/A in its docs.\n4. OUTPUT: context-aware payload builders with an explicit ordering contract (instruction → context → rejection → diff) covered by unit tests.\n5. DOCS: [Mode A] docs/cli.md (`--context` row).",
@@ -197,7 +197,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S2",
                   "title": "--template with mandatory $msg + shared message-finalization seam in all three commit paths",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"

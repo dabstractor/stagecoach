@@ -195,6 +195,19 @@ For repos with more than one commit, Stagehand builds a system prompt from the l
 
 For repos with zero or one commit (including unborn repos), Stagehand falls back to a **conventional-commit** system prompt (PRD §17.2): "Use Conventional Commits format (type: description)."
 
+### Format modes and locale
+
+`--format` (default `auto`) controls how the system prompt shapes the commit message, and applies everywhere a message is produced: the message role, the planner's single-commit shortcut, and the arbiter's leftover-commit message.
+
+- **`auto`** — the default described above: learn style from recent commit history.
+- **`conventional`** — replaces the learned-style examples with an explicit `type(scope): description` contract (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`).
+- **`gitmoji`** — replaces the examples with an instruction to begin the subject with one [gitmoji](https://gitmoji.dev) emoji, followed by the compiled-in emoji reference table (no network fetch).
+- **`plain`** — replaces the examples with nothing: no learned style, no format contract, just the essence of the change.
+
+For any mode other than `auto`, the recent-commit history examples are omitted entirely — useful for repos with an idiosyncratic or empty history. The multi-line rule and subject-length target still apply in every mode.
+
+`--locale` (e.g. `--locale French`, `--locale ja`) appends one line — "Write the commit message in `<locale>`." — to the system prompt in every format mode. The value is passed through as-is with no translation or validation.
+
 ### User payload
 
 The user payload combines the staged diff with the rejection list (previously rejected subjects). On a parse-failure retry, the retry instruction ("Output ONLY the commit message. No preamble, no markdown, no quotes.") is prepended as a corrective preamble.

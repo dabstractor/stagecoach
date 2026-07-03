@@ -65,29 +65,39 @@ type PlannerOutput struct {
 }
 
 // BuildPlannerSystemPrompt assembles the planner system prompt from the verbatim §17.5 constant
-// followed by a blank line and the style examples in "---\n<msg>\n" format (identical to
-// system.go's BuildSystemPrompt example loop). The examples are the SAME RecentMessages-based
-// format as system.go. §17.5 has neither a hasMultiline rule nor a subjectTarget line.
+// followed by a blank line and EITHER the style examples in "---\n<msg>\n" format (format=="auto",
+// identical to system.go's BuildSystemPrompt example loop) OR the §17.8 format scaffold body
+// (formatScaffoldBody — shared with the message builders, FR-F5: the planner's single-call-shortcut
+// message obeys the same substitution). The PARTITIONING contract (plannerSystemPrompt) itself is
+// UNCHANGED in every mode (FR-F5); only the trailing style-examples-vs-scaffold block varies. locale,
+// when non-empty, appends the FR-F6 one-line language instruction (withLocale — a no-op when
+// locale=="", preserving FR-F1 byte-identity for format=="auto" && locale=="").
 //
-// ASSEMBLY TOPOLOGY (§17.5, exact):
+// ASSEMBLY TOPOLOGY (§17.5/§17.8, exact):
 //
 //	plannerSystemPrompt              // "…find the exact changes." (no trailing \n)
-//	'\n' '\n'                        // one blank line before the style examples
-//	for each ex: "---\n" + ex + '\n' // one "---" BEFORE each message (same as system.go)
+//	'\n' '\n'                        // one blank line before the style examples / scaffold
+//	auto: for each ex: "---\n" + ex + '\n'   // one "---" BEFORE each message (same as system.go)
+//	non-auto: formatScaffoldBody(format)     // "" for "plain" — contract + (locale) only
+//	<withLocale>
 //
-// Defensive: nil/empty examples ⇒ no "---" lines and no panic. The result is
+// Defensive: nil/empty examples ⇒ no "---" lines and no panic. The auto result is
 // plannerSystemPrompt + "\n\n" (a trailing blank line where the examples section is simply empty).
-func BuildPlannerSystemPrompt(examples []string) string {
+func BuildPlannerSystemPrompt(examples []string, format, locale string) string {
 	var b strings.Builder
 	b.WriteString(plannerSystemPrompt)
 	b.WriteByte('\n')
-	b.WriteByte('\n') // one blank line between the JSON contract and the style examples
-	for _, ex := range examples {
-		b.WriteString("---\n") // one "---" BEFORE each message (same format as system.go)
-		b.WriteString(ex)      // examples are pre-trimmed by RecentMessages
-		b.WriteByte('\n')
+	b.WriteByte('\n') // one blank line between the JSON contract and the style examples/scaffold
+	if format == "auto" {
+		for _, ex := range examples {
+			b.WriteString("---\n") // one "---" BEFORE each message (same format as system.go)
+			b.WriteString(ex)      // examples are pre-trimmed by RecentMessages
+			b.WriteByte('\n')
+		}
+	} else {
+		b.WriteString(formatScaffoldBody(format)) // scaffold REPLACES the examples (FR-F5)
 	}
-	return b.String()
+	return withLocale(b.String(), locale)
 }
 
 // BuildPlannerUserPayload assembles the §17.5 user payload: the instruction + blank line + the diff.

@@ -11,7 +11,7 @@ import (
 // (not from the implementation) so a match is meaningful.
 func TestBuildPlannerSystemPrompt_CanonicalExact(t *testing.T) {
 	examples := []string{"feat: a", "fix: b\n\nBody."}
-	got := BuildPlannerSystemPrompt(examples)
+	got := BuildPlannerSystemPrompt(examples, "auto", "")
 
 	const want = "You are a commit-planning assistant. Given a diff of un-staged changes, decide whether they\n" +
 		"form ONE coherent commit or SEVERAL, and partition them into logical units.\n" +
@@ -45,7 +45,7 @@ func TestBuildPlannerSystemPrompt_CanonicalExact(t *testing.T) {
 // including anti-copy-paste guards that pin §17.1 mature-prompt elements are ABSENT (the #1 risk).
 func TestBuildPlannerSystemPrompt_Properties(t *testing.T) {
 	examples := []string{"ALPHA", "BETA", "GAMMA"}
-	p := BuildPlannerSystemPrompt(examples)
+	p := BuildPlannerSystemPrompt(examples, "auto", "")
 
 	cases := []struct {
 		name      string
@@ -96,7 +96,7 @@ func TestBuildPlannerSystemPrompt_Properties(t *testing.T) {
 // panic and must omit all "---" lines while keeping the header.
 func TestBuildPlannerSystemPrompt_EmptyExamples(t *testing.T) {
 	for _, ex := range [][]string{nil, {}} {
-		p := BuildPlannerSystemPrompt(ex) // must not panic
+		p := BuildPlannerSystemPrompt(ex, "auto", "") // must not panic
 		if strings.Contains(p, "---") {
 			t.Errorf("empty examples must emit no '---' lines; got %q", p)
 		}
@@ -106,6 +106,80 @@ func TestBuildPlannerSystemPrompt_EmptyExamples(t *testing.T) {
 		if !strings.Contains(p, "find the exact changes.") {
 			t.Error("empty-examples prompt missing the JSON contract section")
 		}
+	}
+}
+
+// TestBuildPlannerSystemPrompt_FormatModes_CanonicalExact pins the exact §17.5/§17.8 assembly when
+// format != "auto": the PARTITIONING contract (plannerSystemPrompt) is unchanged, but the trailing
+// style-examples block is REPLACED by the format scaffold body (FR-F5), and locale appends its line
+// (FR-F6). This is the FR-M11 single-call-shortcut prompt's system half.
+func TestBuildPlannerSystemPrompt_FormatModes_CanonicalExact(t *testing.T) {
+	examples := []string{"feat: a", "fix: b"} // IGNORED in non-auto modes
+
+	cases := []struct {
+		name   string
+		format string
+		locale string
+		want   string
+	}{
+		{
+			name: "conventional, no locale", format: "conventional", locale: "",
+			want: plannerSystemPrompt + "\n\n" + conventionalScaffold,
+		},
+		{
+			name: "conventional, locale French", format: "conventional", locale: "French",
+			want: plannerSystemPrompt + "\n\n" + conventionalScaffold + "\nWrite the commit message in French.",
+		},
+		{
+			name: "gitmoji, no locale", format: "gitmoji", locale: "",
+			want: plannerSystemPrompt + "\n\n" + gitmojiScaffoldInstruction + "\n\n" + RenderGitmojiTable(),
+		},
+		{
+			name: "plain, no locale", format: "plain", locale: "",
+			want: plannerSystemPrompt + "\n\n", // scaffold body is "" for plain
+		},
+		{
+			name: "plain, locale ja", format: "plain", locale: "ja",
+			want: plannerSystemPrompt + "\nWrite the commit message in ja.", // withLocale trims the trailing "\n\n" to "\n"
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := BuildPlannerSystemPrompt(examples, tc.format, tc.locale)
+			if got != tc.want {
+				t.Errorf("BuildPlannerSystemPrompt(%q, %q) mismatch:\n--- got ---\n%q\n--- want ---\n%q", tc.format, tc.locale, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildPlannerSystemPrompt_FormatModes_Properties asserts the partitioning contract survives verbatim
+// in every mode (FR-F5) while the examples/scaffold swap behaves per §17.8.
+func TestBuildPlannerSystemPrompt_FormatModes_Properties(t *testing.T) {
+	examples := []string{"feat: a", "fix: b"}
+	for _, format := range []string{"conventional", "gitmoji", "plain"} {
+		t.Run(format, func(t *testing.T) {
+			p := BuildPlannerSystemPrompt(examples, format, "")
+
+			if !strings.Contains(p, "You are a commit-planning assistant.") {
+				t.Error("partitioning contract role line must survive unchanged (FR-F5)")
+			}
+			if !strings.Contains(p, `{"count": <int>, "single": <bool>`) {
+				t.Error("partitioning JSON contract must survive unchanged (FR-F5)")
+			}
+			if strings.Contains(p, "---") {
+				t.Error("non-auto planner prompt must not embed '---' example markers")
+			}
+			if strings.Contains(p, "feat: a") || strings.Contains(p, "fix: b") {
+				t.Error("history examples must NOT be embedded in non-auto planner modes")
+			}
+		})
+	}
+
+	// auto path unaffected by the new params (regression: identical to the pre-existing behavior).
+	autoGot := BuildPlannerSystemPrompt(examples, "auto", "")
+	if !strings.Contains(autoGot, "---\nfeat: a") {
+		t.Error("auto mode must still embed the style examples")
 	}
 }
 
