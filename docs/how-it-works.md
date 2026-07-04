@@ -152,7 +152,7 @@ Stagehand uses a **two-stage defense** against concurrent runs on the same repo:
 
 **Never-in-repo location.** The lock file lives in a per-user runtime/cache directory (resolved via `XDG_RUNTIME_DIR` → `XDG_CACHE_HOME` → `~/.cache/stagehand/locks`), keyed by a sha256 hash of the repo's canonical absolute path. It is **never inside the repo** — an in-repo lock would pollute `git status`, be committable, be ambiguous across worktrees, and be lost on clone.
 
-**No-op fast path.** When a lock is held, the holder publishes its frozen tree SHA via `SetSnapshot()`. A contender with nothing new staged since that snapshot can exit 0 immediately (no-op fast path).
+**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot()`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.
 
 **Auto-release.** The lock uses POSIX `flock` — it releases when the file descriptor or process closes. No stale locks, no PID-liveness checks, no reaping. On Windows, `flock` is a no-op stub; the §13.5 CAS is the guarantee there.
 

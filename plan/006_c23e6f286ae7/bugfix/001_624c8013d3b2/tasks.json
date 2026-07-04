@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Correct the decompose-path no-op fast path claim (Issue 1 — Major)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The no-op fast path (exit 0 on accidental double-run) is structurally impossible on the decompose path: the holder publishes a working-tree snapshot (T_start) while the contender can only reproduce an index-derived tree (baseTree) without the lock, so they can never be byte-identical. The PRD-recommended fix is Option 1 (lowest-risk, makes the docs honest): qualify the documentation to scope the exit-0 promise to the single-commit (staged) path, state that decompose accidental double-runs exit Busy(5), and add an e2e regression scenario that pins the documented behavior so it cannot regress silently. PRD.md §18.5 is NOT edited (read-only spec, owned by humans).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Qualify the no-op fast path documentation to the single-commit (staged) path",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Three user-facing/spec documents make an unconditional 'if nothing new is staged it exits 0' claim that is false on the decompose path. Edit each to scope the exit-0 no-op fast path to the single-commit (staged) path and state that decompose accidental double-runs exit Busy(5). Use consistent language across all three. Do NOT edit PRD.md (read-only).",
               "subtasks": [
                 {
@@ -54,7 +54,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S3",
                   "title": "Qualify the docs/how-it-works.md 'No-op fast path' subsection (line 155)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 1). docs/how-it-works.md:155 (the '**No-op fast path.**' paragraph under '### Per-repo run lock (FR52)' at line 144) states: 'A contender with nothing new staged since that snapshot can exit 0 immediately (no-op fast path).' — unconditional. This is false on the decompose path. NOTE: the how-it-works.md 'Failure modes and exit codes' table (lines 165-173) does NOT list code 5/Busy at all — that is a pre-existing gap unrelated to this bug; do NOT expand scope to fix it.\n2. INPUT: The current docs/how-it-works.md:155 paragraph.\n3. LOGIC: Rewrite the 'No-op fast path.' paragraph to scope exit-0 to the single-commit (staged) path and note decompose double-runs exit Busy(5). Keep it concise to match the subsection's style. Suggested phrasing: '**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot()`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.' Do NOT edit PRD.md.\n4. OUTPUT: Updated docs/how-it-works.md with the qualified subsection. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for docs/how-it-works.md:155.",
@@ -70,14 +70,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Add e2e regression scenario for the decompose accidental double-run (assert Busy)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The e2e suite covers the no-op fast path ONLY on the single-commit path (scenario B). There is no scenario for decompose contention — exactly where Issue 1 hid. Add scenario F to internal/e2e/lock_scenarios_test.go that reproduces the decompose accidental double-run and asserts exit 5 (Busy), pinning the documented behavior so it cannot regress silently.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add scenario F (decompose accidental double-run → Busy) to lock_scenarios_test.go",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/e2e_test_strategy.md (full scenario design + skeleton + feasibility analysis) and architecture/system_context.md. KEY INSIGHT: the contention scenario only needs the holder to reach lock.SetSnapshot(tStart) (decompose.go:169) and then SLEEP — it does NOT need to complete the decompose. With EXACTLY ONE untracked file and auto mode (Commits=0, the default), Decompose takes the FR-M2b one-file shortcut (runOneFileShortcut, decompose.go:187) which uses ONLY the MESSAGE role — the stub's single-response STAGEHAND_STUB_OUT satisfies it. SetSnapshot(tStart) runs BEFORE the message-role agent call, so when the stub writes the readiness marker (during message generation) the snapshot T_start is ALREADY published. The base writeStubConfig config defaults enable decompose (AutoStageAll=true, Commits=0, Single=false per internal/config/config.go:163-167) — no extras needed for activation. Reuse the scenario-B two-process skeleton (goroutine + waitForMarker + drain channel) verbatim from internal/e2e/lock_scenarios_test.go.\n2. INPUT: The existing harness helpers in internal/e2e/harness_test.go (buildStagehand, buildStub, newRepo, seedCommit, writeFile, writeStubConfig, stubEnv, runStagehand, waitForMarker, commitCount) and the scenario-B skeleton in internal/e2e/lock_scenarios_test.go (the canonical two-process contention coordination pattern). Test runs under build tag 'e2e' (line-1 '//go:build e2e').\n3. LOGIC: Add a new subtest 'F_DecomposeAccidentalDoubleRun_Busy' to TestE2ELockContention in internal/e2e/lock_scenarios_test.go. Setup: newRepo + seedCommit('readme.md','init') + writeFile('feature.txt','new work') (ONE untracked file, NOT staged → decompose activates). Holder env: STAGEHAND_STUB_OUT='feat: add feature', STAGEHAND_STUB_MARKER=readiness, STAGEHAND_STUB_SLEEP_MS='4000'. Launch holder in a goroutine; waitForMarker(readiness, 10s). Contender: same repo (same dirty tree, still nothing staged), STAGEHAND_STUB_OUT='feat: add feature', run synchronously. ASSERTIONS on contender: ExitCode == 5 (Busy); stderr contains 'already in progress'; stderr must NOT contain 'nothing to do' (the no-op fast path must not fire on the decompose path). Drain holder via the channel; assert holder ExitCode == 0. The assertion ExitCode==5 is robust regardless of snapshot timing: if snapshot published (T_start) → WriteTree returns baseTree != T_start → Busy; if snapshot empty (race) → snap=='' skips the no-op arm → Busy. Either way → 5. MOCKING: the stub agent (cmd/stubagent) mocks the LLM provider; no real agent needed (one-file shortcut uses only the message role).\n4. OUTPUT: New scenario F subtest in internal/e2e/lock_scenarios_test.go. Verified by 'go test -tags e2e -run TestE2ELockContention/F_DecomposeAccidentalDoubleRun_Busy ./internal/e2e/...'.\n5. DOCS: none — no user-facing/config/API surface change (test-only). If scenario F surfaces that the base config does NOT default AutoStageAll=true when the TOML omits it, add 'auto_stage_all = true' to the writeStubConfig extras for this scenario (verify the loaded config first).\n6. RISK: If the holder errors before sleeping (e.g. ResolveRoles fails with stub-only config, or the one-file shortcut is not reached), the contention window never opens and the holder goroutine result will show the error. If this happens, inspect the holder's stderr and adjust the config extras (see internal/e2e/scenarios_test.go S2 for the [role.planner] extras pattern) — but the one-file shortcut path should NOT require the planner role to be invoked.",
