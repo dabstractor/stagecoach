@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Qualify the no-op fast path documentation to the single-commit (staged) path",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Three user-facing/spec documents make an unconditional 'if nothing new is staged it exits 0' claim that is false on the decompose path. Edit each to scope the exit-0 no-op fast path to the single-commit (staged) path and state that decompose accidental double-runs exit Busy(5). Use consistent language across all three. Do NOT edit PRD.md (read-only).",
               "subtasks": [
                 {
@@ -40,7 +40,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Qualify the docs/cli.md contention-behavior prose (line 379)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 1) and architecture/system_context.md. docs/cli.md:379 currently states the no-op fast path generically: 'if a contending run's staged changes are already covered by the in-progress run's published snapshot, it exits 0'. This is false on the decompose path (the published snapshot is a working-tree tree, not reproducible by the contender's index write-tree). The exit-code TABLE (lines 368-375) is generic and does NOT overclaim — do NOT edit the table, only the prose at line 379.\n2. INPUT: The current docs/cli.md:379 paragraph (the 'Code 5 (Busy) is distinct...' sentence under the '## Exit codes' section).\n3. LOGIC: Rewrite line 379's prose to scope the exit-0 no-op fast path to the single-commit (staged) path and add that decompose accidental double-runs exit Busy(5). Keep the 'Code 5 is distinct from commit-failure codes' framing and the 'Stagehand never force-breaks the lock' sentence. Suggested phrasing: 'Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell \"busy, retry\" from \"failed.\" Contention on the per-repo run lock (FR52) has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** (\"nothing to do — an in-progress run already covers your staged changes\"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagehand never force-breaks the lock.' Do NOT edit PRD.md.\n4. OUTPUT: Updated docs/cli.md with the qualified prose. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for docs/cli.md:379.",
@@ -54,7 +54,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S3",
                   "title": "Qualify the docs/how-it-works.md 'No-op fast path' subsection (line 155)",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 1). docs/how-it-works.md:155 (the '**No-op fast path.**' paragraph under '### Per-repo run lock (FR52)' at line 144) states: 'A contender with nothing new staged since that snapshot can exit 0 immediately (no-op fast path).' — unconditional. This is false on the decompose path. NOTE: the how-it-works.md 'Failure modes and exit codes' table (lines 165-173) does NOT list code 5/Busy at all — that is a pre-existing gap unrelated to this bug; do NOT expand scope to fix it.\n2. INPUT: The current docs/how-it-works.md:155 paragraph.\n3. LOGIC: Rewrite the 'No-op fast path.' paragraph to scope exit-0 to the single-commit (staged) path and note decompose double-runs exit Busy(5). Keep it concise to match the subsection's style. Suggested phrasing: '**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot()`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.' Do NOT edit PRD.md.\n4. OUTPUT: Updated docs/how-it-works.md with the qualified subsection. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for docs/how-it-works.md:155.",
