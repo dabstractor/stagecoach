@@ -391,3 +391,92 @@ func TestWorkingTreeDiff_ExcludedBinaryPrecedence(t *testing.T) {
 		t.Fatalf("expected code.go present, got:\n%s", out)
 	}
 }
+
+// TestWorkingTreeDiff_OrderingInvariant_SkeletonPlaceholdersMdCode pins the FR3g ordering invariant
+// for the working-tree domain (PRD §9.1 FR3g / system_context §7): skeleton → [binary]/[excluded]
+// placeholders → markdown bodies → non-markdown bodies, with strictly increasing indices.
+func TestWorkingTreeDiff_OrderingInvariant_SkeletonPlaceholdersMdCode(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	// Tracked baseline (committed) so the working-tree delta shows as modifications.
+	writeFile(t, repo, "code.go", "package main\n")
+	writeFile(t, repo, "README.md", "# base\n")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "code.go")
+	stageFile(t, repo, "README.md")
+	stageFile(t, repo, "logo.png")
+	execGit(t, repo, "commit", "-qm", "init")
+
+	// Working-tree changes (NOT staged): modify each tracked file.
+	writeFile(t, repo, "code.go", "package main\nfunc main() {}\n")
+	writeFile(t, repo, "README.md", "# Title\n\nbody\n")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x01\x00\x00")
+
+	out, err := New(repo).WorkingTreeDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("WorkingTreeDiff: %v", err)
+	}
+	iSkeleton := strings.Index(out, "Change summary (numstat:")
+	iBinary := strings.Index(out, "[binary] logo.png")
+	iMd := strings.Index(out, "diff --git a/README.md")
+	iCode := strings.Index(out, "diff --git a/code.go")
+	for _, idx := range []struct {
+		name string
+		i    int
+	}{
+		{"skeleton", iSkeleton},
+		{"binary placeholder", iBinary},
+		{"markdown body", iMd},
+		{"code body", iCode},
+	} {
+		if idx.i < 0 {
+			t.Fatalf("%s section not found in output:\n%s", idx.name, out)
+		}
+	}
+	if !(iSkeleton < iBinary && iBinary < iMd && iMd < iCode) {
+		t.Fatalf("ordering invariant violated: skeleton@%d binary@%d md@%d code@%d "+
+			"(want skeleton < binary < md < code)\n%s", iSkeleton, iBinary, iMd, iCode, out)
+	}
+}
+
+// TestWorkingTreeDiff_SkeletonCompleteUnderBodyCap pins the FR3g completeness floor for the
+// working-tree domain: the skeleton lists EVERY changed file (including binary) even when a body is
+// byte-capped.
+func TestWorkingTreeDiff_SkeletonCompleteUnderBodyCap(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	// Tracked baseline (committed).
+	writeFile(t, repo, "big.go", "package main\n")
+	writeFile(t, repo, "small.go", "package main\n")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "big.go")
+	stageFile(t, repo, "small.go")
+	stageFile(t, repo, "logo.png")
+	execGit(t, repo, "commit", "-qm", "init")
+
+	// Working-tree changes (NOT staged): grow big.go (will be byte-capped), tweak the others.
+	writeFile(t, repo, "big.go", strings.Repeat("// line\n", 300))
+	writeFile(t, repo, "small.go", "package main\n// extra\n")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x01\x00\x00")
+
+	out, err := New(repo).WorkingTreeDiff(context.Background(), StagedDiffOptions{MaxDiffBytes: 50})
+	if err != nil {
+		t.Fatalf("WorkingTreeDiff: %v", err)
+	}
+	skeleton := out
+	if strings.HasPrefix(out, "Change summary (numstat:") {
+		if i := strings.Index(out, "\n\n"); i >= 0 {
+			skeleton = out[:i]
+		}
+	} else {
+		t.Fatalf("payload does not begin with the skeleton header:\n%s", out)
+	}
+	for _, path := range []string{"big.go", "small.go", "logo.png"} {
+		if !strings.Contains(skeleton, path) {
+			t.Errorf("skeleton missing changed file %s (FR3g completeness floor):\nskeleton:\n%s\nfull:\n%s",
+				path, skeleton, out)
+		}
+	}
+}

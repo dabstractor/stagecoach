@@ -231,14 +231,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Compact numstat change skeleton (FR3g)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Prepend a compact per-file skeleton (`git diff --numstat`: one `added\\tdeleted\\tpath` line per changed file, binary as `-\\t-`) to the payload BEFORE any diff body, so the model always sees the full shape of the change even when bodies are truncated. This is dual-use: the skeleton is also the per-file size input to FR3i's water-fill (M4). Always-on. Facts in git_diff_semantics.md §3.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Numstat capture + skeleton prepend",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Capture `git diff --numstat` per diff path, parse it (handling the `=>` rename notation and binary `-` rows), and emit a compact skeleton block prepended to the payload. The parsed numstat rows are also returned/stored for M4's water-fill sizing.",
               "subtasks": [
                 {
@@ -262,7 +262,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Prepend compact skeleton block; ordering invariance",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
@@ -289,14 +289,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Token estimator utility + prompt-reserve plumbing",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Add the model-agnostic chars/4 token estimator (the single source of truth for both the prompt-reserve measurement and the per-file numstat sizing), and wire PromptReserveTokens at the call sites by measuring the stable prompt portion upstream.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "estimateTokens (chars/4) shared utility",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -311,7 +311,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Measure PromptReserveTokens upstream at the 6 call sites",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1",

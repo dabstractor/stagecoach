@@ -110,11 +110,12 @@ func TestStagedDiff_MarkdownLineCap(t *testing.T) {
 	if !strings.Contains(out, "... [diff truncated at 10 lines]") {
 		t.Fatalf("expected markdown line-cap sentinel, got:\n%s", out)
 	}
-	// With only markdown staged, the entire output is the md hunk. The cap keeps 10 lines
-	// plus the sentinel, so the total newline count should be bounded.
+	// With only markdown staged, the markdown body is the md hunk. The cap keeps 10 lines plus the
+	// sentinel. The payload is led by the FR3g skeleton (header + one numstat row + blank line = 3
+	// lines), so the total newline count is bounded by 11 (md) + 3 (skeleton) = 14.
 	lineCount := strings.Count(out, "\n")
-	if lineCount > 11 {
-		t.Fatalf("expected ≤ 11 lines (10 cap + sentinel), got %d lines\n%s", lineCount, out)
+	if lineCount > 14 {
+		t.Fatalf("expected ≤ 14 lines (10 md cap + sentinel + 3 skeleton), got %d lines\n%s", lineCount, out)
 	}
 }
 
@@ -678,5 +679,87 @@ func TestStagedDiff_IndexLineStripped(t *testing.T) {
 	}
 	if !strings.Contains(out, "+++ b/a.go") {
 		t.Errorf("+++ header missing (should be KEPT):\n%s", out)
+	}
+}
+
+// TestStagedDiff_OrderingInvariant_SkeletonPlaceholdersMdCode pins the FR3g ordering invariant
+// (PRD §9.1 FR3g / system_context §7): the payload sections appear in the canonical order
+// skeleton → [binary]/[excluded] placeholders → markdown bodies → non-markdown bodies. With a
+// staged change spanning a code file, a markdown file, and a binary file, every section is present
+// and the indices are strictly increasing. (The contract's "Ordering invariant — test it".)
+func TestStagedDiff_OrderingInvariant_SkeletonPlaceholdersMdCode(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "code.go", "package main\nfunc main() {}\n") // non-markdown body
+	writeFile(t, repo, "README.md", "# Title\n\nbody\n")            // markdown body
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00") // binary placeholder
+	stageFile(t, repo, "code.go")
+	stageFile(t, repo, "README.md")
+	stageFile(t, repo, "logo.png")
+
+	out, err := New(repo).StagedDiff(context.Background(), StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("StagedDiff: %v", err)
+	}
+	iSkeleton := strings.Index(out, "Change summary (numstat:")
+	iBinary := strings.Index(out, "[binary] logo.png")
+	iMd := strings.Index(out, "diff --git a/README.md")
+	iCode := strings.Index(out, "diff --git a/code.go")
+	for _, idx := range []struct {
+		name string
+		i    int
+	}{
+		{"skeleton", iSkeleton},
+		{"binary placeholder", iBinary},
+		{"markdown body", iMd},
+		{"code body", iCode},
+	} {
+		if idx.i < 0 {
+			t.Fatalf("%s section not found in output:\n%s", idx.name, out)
+		}
+	}
+	if !(iSkeleton < iBinary && iBinary < iMd && iMd < iCode) {
+		t.Fatalf("ordering invariant violated: skeleton@%d binary@%d md@%d code@%d "+
+			"(want skeleton < binary < md < code)\n%s", iSkeleton, iBinary, iMd, iCode, out)
+	}
+}
+
+// TestStagedDiff_SkeletonCompleteUnderBodyCap pins the FR3g completeness floor: the skeleton lists
+// EVERY changed file (including binary) even when a diff body is byte-capped. (The under-truncation
+// resilience itself is verified in M4; S2 asserts the floor pre-truncation.)
+func TestStagedDiff_SkeletonCompleteUnderBodyCap(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "big.go", strings.Repeat("// line\n", 300))  // will be byte-capped in Part 2
+	writeFile(t, repo, "small.go", "package main\n")                // whole body
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00") // binary (no body)
+	stageFile(t, repo, "big.go")
+	stageFile(t, repo, "small.go")
+	stageFile(t, repo, "logo.png")
+
+	out, err := New(repo).StagedDiff(context.Background(), StagedDiffOptions{MaxDiffBytes: 50}) // tight cap
+	if err != nil {
+		t.Fatalf("StagedDiff: %v", err)
+	}
+	// The skeleton block is everything from the header up to the first blank line that follows it.
+	// It must list every changed file regardless of body truncation.
+	skeleton := out
+	if strings.HasPrefix(out, "Change summary (numstat:") {
+		// header line + rows end at the first blank line (the second "\n\n" boundary after the header).
+		rest := out
+		// Find the blank-line terminator: the first occurrence of "\n\n" after the header row.
+		if i := strings.Index(rest, "\n\n"); i >= 0 {
+			skeleton = rest[:i]
+		}
+	} else {
+		t.Fatalf("payload does not begin with the skeleton header:\n%s", out)
+	}
+	for _, path := range []string{"big.go", "small.go", "logo.png"} {
+		if !strings.Contains(skeleton, path) {
+			t.Errorf("skeleton missing changed file %s (FR3g completeness floor):\nskeleton:\n%s\nfull:\n%s",
+				path, skeleton, out)
+		}
 	}
 }

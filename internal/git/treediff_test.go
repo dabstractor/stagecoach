@@ -408,3 +408,87 @@ func TestTreeDiff_ExcludedBinaryPrecedence(t *testing.T) {
 		t.Fatalf("expected code.go present, got:\n%s", out)
 	}
 }
+
+// TestTreeDiff_OrderingInvariant_SkeletonPlaceholdersMdCode pins the FR3g ordering invariant for
+// the tree-to-tree domain (PRD §9.1 FR3g / system_context §7): skeleton → [binary]/[excluded]
+// placeholders → markdown bodies → non-markdown bodies, with strictly increasing indices.
+func TestTreeDiff_OrderingInvariant_SkeletonPlaceholdersMdCode(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "base.go", "package main\n")
+	stageFile(t, repo, "base.go")
+	treeA := writeTreeOf(t, repo) // empty baseline (just base.go)
+
+	writeFile(t, repo, "code.go", "package main\nfunc main() {}\n")
+	stageFile(t, repo, "code.go")
+	writeFile(t, repo, "README.md", "# Title\n\nbody\n")
+	stageFile(t, repo, "README.md")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "logo.png")
+	treeB := writeTreeOf(t, repo)
+
+	out, err := New(repo).TreeDiff(context.Background(), treeA, treeB, StagedDiffOptions{})
+	if err != nil {
+		t.Fatalf("TreeDiff: %v", err)
+	}
+	iSkeleton := strings.Index(out, "Change summary (numstat:")
+	iBinary := strings.Index(out, "[binary] logo.png")
+	iMd := strings.Index(out, "diff --git a/README.md")
+	iCode := strings.Index(out, "diff --git a/code.go")
+	for _, idx := range []struct {
+		name string
+		i    int
+	}{
+		{"skeleton", iSkeleton},
+		{"binary placeholder", iBinary},
+		{"markdown body", iMd},
+		{"code body", iCode},
+	} {
+		if idx.i < 0 {
+			t.Fatalf("%s section not found in output:\n%s", idx.name, out)
+		}
+	}
+	if !(iSkeleton < iBinary && iBinary < iMd && iMd < iCode) {
+		t.Fatalf("ordering invariant violated: skeleton@%d binary@%d md@%d code@%d "+
+			"(want skeleton < binary < md < code)\n%s", iSkeleton, iBinary, iMd, iCode, out)
+	}
+}
+
+// TestTreeDiff_SkeletonCompleteUnderBodyCap pins the FR3g completeness floor for the tree-to-tree
+// domain: the skeleton lists EVERY changed file (including binary) even when a body is byte-capped.
+func TestTreeDiff_SkeletonCompleteUnderBodyCap(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "base.go", "package main\n")
+	stageFile(t, repo, "base.go")
+	treeA := writeTreeOf(t, repo)
+
+	writeFile(t, repo, "big.go", strings.Repeat("// line\n", 300))
+	stageFile(t, repo, "big.go")
+	writeFile(t, repo, "small.go", "package main\n")
+	stageFile(t, repo, "small.go")
+	writeFile(t, repo, "logo.png", "\x89PNG\r\n\x1a\n\x00\x00\x00")
+	stageFile(t, repo, "logo.png")
+	treeB := writeTreeOf(t, repo)
+
+	out, err := New(repo).TreeDiff(context.Background(), treeA, treeB, StagedDiffOptions{MaxDiffBytes: 50})
+	if err != nil {
+		t.Fatalf("TreeDiff: %v", err)
+	}
+	skeleton := out
+	if strings.HasPrefix(out, "Change summary (numstat:") {
+		if i := strings.Index(out, "\n\n"); i >= 0 {
+			skeleton = out[:i]
+		}
+	} else {
+		t.Fatalf("payload does not begin with the skeleton header:\n%s", out)
+	}
+	for _, path := range []string{"big.go", "small.go", "logo.png"} {
+		if !strings.Contains(skeleton, path) {
+			t.Errorf("skeleton missing changed file %s (FR3g completeness floor):\nskeleton:\n%s\nfull:\n%s",
+				path, skeleton, out)
+		}
+	}
+}

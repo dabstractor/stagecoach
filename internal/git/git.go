@@ -741,41 +741,28 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 
 	var b strings.Builder
 
-	// ---- Part 1: markdown, per-file, line-capped ----
-	// "*.md" / "*.markdown" are git pathspec globs (interpreted by git, not the shell — G10); the "--"
-	// guards pathspec-like filenames (G11).
-	mdList, stderr, code, err := g.run(ctx, g.workDir,
-		append(buildDiffArgs(opts, "--cached"), "--name-only", "--", "*.md", "*.markdown")...)
-	if err != nil {
-		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
-	}
-	if code != 0 {
-		return "", fmt.Errorf("git diff (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
-	}
-	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
-		if file == "" {
-			continue // nothing-staged ⇒ mdList is "" ⇒ Split yields [""] ⇒ skipped (G15)
-		}
-		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts, "--cached"), "--", file)...)
-		if ferr != nil {
-			return "", ferr
-		}
-		if fcode != 0 {
-			return "", fmt.Errorf("git diff --cached -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
-		}
-		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
-		// Per-file line cap (post-capture, FINDING 7/G3). Split on "\n", keep first maxMDLines.
-		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
-			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
-				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
-		}
-		b.WriteString(fileDiff)
-		if !strings.HasSuffix(fileDiff, "\n") {
-			b.WriteByte('\n') // ensure a clean boundary before the next hunk / Part 2
-		}
-	}
+	// FR3/FR-X1 exclude union (default denylist + user excludes) — applied to BOTH the skeleton and
+	// the diff bodies so the skeleton mirrors the change set the model actually sees (default-denylified
+	// noise stays out of view). Computed once; reused by Part 2's non-markdown aggregate.
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...) // FR3/FR-X1 source (a) — ALWAYS
+	excludes = append(excludes, opts.Excludes...)   // user union, FR-X1 sources (b)+(c)+(d)
 
-	// ---- Binary filtering (PRD §9.1 FR3a/b/c, staged path) ----
+	// ---- FR3g: compact numstat skeleton (completeness floor) — PREPENDED FIRST ----
+	// <domain> + "-M" + the exclude pathspecs (NOT buildDiffArgs output — numstatRows builds its own
+	// "diff" argv; buildDiffArgs would double it). -M matches the diff bodies (rename = one row);
+	// -U<n> is irrelevant for numstat (omitted).
+	skeletonArgs := make([]string, 0, 2+len(excludes)+1)
+	skeletonArgs = append(skeletonArgs, "--cached", "-M")
+	skeletonArgs = append(skeletonArgs, "--")
+	skeletonArgs = append(skeletonArgs, excludes...)
+	skeleton, serr := g.numstatSkeleton(ctx, skeletonArgs...)
+	if serr != nil {
+		return "", serr
+	}
+	b.WriteString(skeleton) // FIRST write; skeleton=="" for an empty change set is a no-op
+
+	// ---- Binary filtering (PRD §9.1 FR3a/b/c, staged path) ----  (BEFORE Part 1 markdown — FR3g reorder)
 	// detectBinaryFiles applies numstat + the BUILT-IN denylist (S1 hardcodes nil extraExts); supplement
 	// with the user's BinaryExtensions below. Key off fileStatuses (destination paths) to reconcile renames
 	// (numstat `old => new` vs name-status `new` — findings §4).
@@ -824,13 +811,43 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 		b.WriteByte('\n')
 	}
 
+	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder)
+	// "*.md" / "*.markdown" are git pathspec globs (interpreted by git, not the shell — G10); the "--"
+	// guards pathspec-like filenames (G11).
+	mdList, stderr, code, err := g.run(ctx, g.workDir,
+		append(buildDiffArgs(opts, "--cached"), "--name-only", "--", "*.md", "*.markdown")...)
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
+		if file == "" {
+			continue // nothing-staged ⇒ mdList is "" ⇒ Split yields [""] ⇒ skipped (G15)
+		}
+		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts, "--cached"), "--", file)...)
+		if ferr != nil {
+			return "", ferr
+		}
+		if fcode != 0 {
+			return "", fmt.Errorf("git diff --cached -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
+		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		// Per-file line cap (post-capture, FINDING 7/G3). Split on "\n", keep first maxMDLines.
+		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
+			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
+				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
+		}
+		b.WriteString(fileDiff)
+		if !strings.HasSuffix(fileDiff, "\n") {
+			b.WriteByte('\n') // ensure a clean boundary before the next hunk / Part 2
+		}
+	}
+
 	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
 	// opts.Excludes UNIONs the noise-filter default (FR-X1); the markdown excludes are
 	// ALWAYS appended (structural — prevents the double-count trap, G1).
-	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
-	excludes = append(excludes, defaultExcludes...) // FR3/FR-X1 source (a) — ALWAYS
-	excludes = append(excludes, opts.Excludes...)   // user union, FR-X1 sources (b)+(c)+(d)
-
 	nmArgs := buildDiffArgs(opts, "--cached")
 	nmArgs = append(nmArgs, "--")
 	nmArgs = append(nmArgs, excludes...)
@@ -1196,38 +1213,28 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 
 	var b strings.Builder
 
-	// ---- Part 1: markdown, per-file, line-capped ----
-	mdList, stderr, code, err := g.run(ctx, g.workDir,
-		append(buildDiffArgs(opts, treeA, treeB), "--name-only", "--", "*.md", "*.markdown")...)
-	if err != nil {
-		return "", err
-	}
-	if code != 0 {
-		return "", fmt.Errorf("git diff tree-to-tree (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
-	}
-	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
-		if file == "" {
-			continue
-		}
-		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts, treeA, treeB), "--", file)...)
-		if ferr != nil {
-			return "", ferr
-		}
-		if fcode != 0 {
-			return "", fmt.Errorf("git diff %s %s -- %s: failed (exit %d): %s", treeA, treeB, file, fcode, strings.TrimSpace(fstderr))
-		}
-		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
-		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
-			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
-				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
-		}
-		b.WriteString(fileDiff)
-		if !strings.HasSuffix(fileDiff, "\n") {
-			b.WriteByte('\n')
-		}
-	}
+	// FR3/FR-X1 exclude union (default denylist + user excludes) — applied to BOTH the skeleton and
+	// the diff bodies so the skeleton mirrors the change set the model actually sees (default-denylified
+	// noise stays out of view). Computed once; reused by Part 2's non-markdown aggregate.
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...)
+	excludes = append(excludes, opts.Excludes...)
 
-	// ---- Binary filtering (PRD §9.1 FR3a/b/c, tree-to-tree path) ----
+	// ---- FR3g: compact numstat skeleton (completeness floor) — PREPENDED FIRST ----
+	// <domain> + "-M" + the exclude pathspecs (NOT buildDiffArgs output — numstatRows builds its own
+	// "diff" argv; buildDiffArgs would double it). -M matches the diff bodies (rename = one row);
+	// -U<n> is irrelevant for numstat (omitted).
+	skeletonArgs := make([]string, 0, 4+len(excludes)+1)
+	skeletonArgs = append(skeletonArgs, treeA, treeB, "-M")
+	skeletonArgs = append(skeletonArgs, "--")
+	skeletonArgs = append(skeletonArgs, excludes...)
+	skeleton, serr := g.numstatSkeleton(ctx, skeletonArgs...)
+	if serr != nil {
+		return "", serr
+	}
+	b.WriteString(skeleton) // FIRST write; skeleton=="" for an empty change set is a no-op
+
+	// ---- Binary filtering (PRD §9.1 FR3a/b/c, tree-to-tree path) ----  (BEFORE Part 1 markdown — FR3g reorder)
 	binSet, berr := g.detectBinaryFiles(ctx, treeA, treeB)
 	if berr != nil {
 		return "", berr
@@ -1269,10 +1276,38 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 		b.WriteByte('\n')
 	}
 
+	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder)
+	mdList, stderr, code, err := g.run(ctx, g.workDir,
+		append(buildDiffArgs(opts, treeA, treeB), "--name-only", "--", "*.md", "*.markdown")...)
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff tree-to-tree (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
+		if file == "" {
+			continue
+		}
+		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts, treeA, treeB), "--", file)...)
+		if ferr != nil {
+			return "", ferr
+		}
+		if fcode != 0 {
+			return "", fmt.Errorf("git diff %s %s -- %s: failed (exit %d): %s", treeA, treeB, file, fcode, strings.TrimSpace(fstderr))
+		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
+			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
+				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
+		}
+		b.WriteString(fileDiff)
+		if !strings.HasSuffix(fileDiff, "\n") {
+			b.WriteByte('\n')
+		}
+	}
+
 	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
-	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
-	excludes = append(excludes, defaultExcludes...)
-	excludes = append(excludes, opts.Excludes...)
 	nmArgs := buildDiffArgs(opts, treeA, treeB)
 	nmArgs = append(nmArgs, "--")
 	nmArgs = append(nmArgs, excludes...)
@@ -1333,38 +1368,28 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 
 	var b strings.Builder
 
-	// ---- Part 1: markdown, per-file, line-capped ---- (working-tree domain: no --cached, no tree args)
-	mdList, stderr, code, err := g.run(ctx, g.workDir,
-		append(buildDiffArgs(opts), "--name-only", "--", "*.md", "*.markdown")...)
-	if err != nil {
-		return "", err
-	}
-	if code != 0 {
-		return "", fmt.Errorf("git diff (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
-	}
-	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
-		if file == "" {
-			continue
-		}
-		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts), "--", file)...)
-		if ferr != nil {
-			return "", ferr
-		}
-		if fcode != 0 {
-			return "", fmt.Errorf("git diff -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
-		}
-		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
-		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
-			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
-				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
-		}
-		b.WriteString(fileDiff)
-		if !strings.HasSuffix(fileDiff, "\n") {
-			b.WriteByte('\n')
-		}
-	}
+	// FR3/FR-X1 exclude union (default denylist + user excludes) — applied to BOTH the skeleton and
+	// the diff bodies so the skeleton mirrors the change set the model actually sees (default-denylified
+	// noise stays out of view). Computed once; reused by Part 2's non-markdown aggregate.
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...)
+	excludes = append(excludes, opts.Excludes...)
 
-	// ---- Binary filtering (PRD §9.1 FR3a/b/c, working-tree path) ----
+	// ---- FR3g: compact numstat skeleton (completeness floor) — PREPENDED FIRST ----
+	// <domain> + "-M" + the exclude pathspecs (NOT buildDiffArgs output — numstatRows builds its own
+	// "diff" argv; buildDiffArgs would double it). -M matches the diff bodies (rename = one row);
+	// -U<n> is irrelevant for numstat (omitted). Working-tree domain: no --cached, no tree args.
+	skeletonArgs := make([]string, 0, 2+len(excludes)+1)
+	skeletonArgs = append(skeletonArgs, "-M")
+	skeletonArgs = append(skeletonArgs, "--")
+	skeletonArgs = append(skeletonArgs, excludes...)
+	skeleton, serr := g.numstatSkeleton(ctx, skeletonArgs...)
+	if serr != nil {
+		return "", serr
+	}
+	b.WriteString(skeleton) // FIRST write; skeleton=="" for an empty change set is a no-op
+
+	// ---- Binary filtering (PRD §9.1 FR3a/b/c, working-tree path) ----  (BEFORE Part 1 markdown — FR3g reorder)
 	// Empty diffArgs ⇒ `git diff --numstat` / `git diff --name-status` (working-tree-vs-index).
 	binSet, berr := g.detectBinaryFiles(ctx)
 	if berr != nil {
@@ -1407,10 +1432,38 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 		b.WriteByte('\n')
 	}
 
+	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder; working-tree domain)
+	mdList, stderr, code, err := g.run(ctx, g.workDir,
+		append(buildDiffArgs(opts), "--name-only", "--", "*.md", "*.markdown")...)
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff (markdown list): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	for _, file := range strings.Split(strings.TrimSpace(mdList), "\n") {
+		if file == "" {
+			continue
+		}
+		fileDiff, fstderr, fcode, ferr := g.run(ctx, g.workDir, append(buildDiffArgs(opts), "--", file)...)
+		if ferr != nil {
+			return "", ferr
+		}
+		if fcode != 0 {
+			return "", fmt.Errorf("git diff -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
+		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
+			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
+				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
+		}
+		b.WriteString(fileDiff)
+		if !strings.HasSuffix(fileDiff, "\n") {
+			b.WriteByte('\n')
+		}
+	}
+
 	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
-	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
-	excludes = append(excludes, defaultExcludes...)
-	excludes = append(excludes, opts.Excludes...)
 	nmArgs := buildDiffArgs(opts)
 	nmArgs = append(nmArgs, "--")
 	nmArgs = append(nmArgs, excludes...)
