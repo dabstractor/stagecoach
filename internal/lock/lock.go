@@ -140,14 +140,20 @@ func (l *Locker) SetSnapshot(sha string) {
 	l.setSnapshot(sha)
 }
 
-// setSnapshot rewrites the lock file's snapshot= line in place (Truncate+Seek),
-// preserving cached pid/hostname/repo/timestamp plus the new sha.
+// setSnapshot rewrites the lock file's snapshot= line IN PLACE on the held fd,
+// preserving the cached pid/hostname/repo/timestamp plus the new sha. No-op if
+// the lock has already been released.
+//
+// Issue 4 fix: the rewrite is Seek→Write→Truncate→Sync (see writeContents) —
+// Write BEFORE Truncate so the file is NEVER empty during the rewrite (a
+// contender's os.ReadFile in Acquire's EWOULDBLOCK branch never observes an
+// empty/partial-diagnostic file). NEVER temp-file+os.Rename: flock is
+// inode-bound and rename would orphan the holder's flock on the old inode,
+// bypassing FR52 contention detection (architecture/flock_inode_constraint.md).
 func (l *Locker) setSnapshot(sha string) {
 	if l.file == nil {
 		return
 	}
-	l.file.Truncate(0)
-	l.file.Seek(0, 0)
 	l.writeContents(sha)
 }
 
@@ -178,11 +184,25 @@ func lockDir() (string, error) {
 }
 
 // writeContents writes the lock file contents (pid/hostname/repo/timestamp/snapshot)
-// at the current file position. Caller is responsible for Truncate+Seek if
-// rewriting.
+// as a single buffered, in-place rewrite on the held fd:
+// Seek(0,0) → Write(full) → Truncate(len) → Sync. Used by BOTH Acquire (the
+// initial write) and setSnapshot (the snapshot update).
+//
+// Write-before-Truncate is the Issue 4 invariant: the file is never empty
+// mid-rewrite — it is always the old content, a prefix of the new content, or
+// the complete new content. The single Write overwrites the old content from
+// offset 0; Truncate(int64(len(content))) then cuts any stale trailing bytes
+// left from a previous, possibly-longer content (the shrink case). The fd/inode
+// is unchanged, so flock semantics hold. I/O errors are intentionally ignored
+// (codebase style; the public SetSnapshot signatures are void and a write
+// failure is non-fatal — flock still holds; the snapshot is a fast-path/
+// diagnostic nicety).
 func (l *Locker) writeContents(snapshot string) {
-	fmt.Fprintf(l.file, "pid=%s\nhostname=%s\nrepo=%s\ntimestamp=%s\nsnapshot=%s\n",
+	content := fmt.Sprintf("pid=%s\nhostname=%s\nrepo=%s\ntimestamp=%s\nsnapshot=%s\n",
 		l.pid, l.hostname, l.repo, l.timestamp, snapshot)
+	l.file.Seek(0, 0)
+	l.file.Write([]byte(content))
+	l.file.Truncate(int64(len(content)))
 	l.file.Sync()
 }
 

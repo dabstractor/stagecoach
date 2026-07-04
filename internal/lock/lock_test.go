@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -318,6 +319,86 @@ func TestSetSnapshot_UpdatesFile(t *testing.T) {
 	canonical, _ := lockHash(repo)
 	if c.Repo != canonical {
 		t.Errorf("repo changed: %q, want canonical %q", c.Repo, canonical)
+	}
+}
+
+// TestSetSnapshot_FileNeverEmptyWellFormed verifies Issue 4a's write-ordering
+// invariant: after every setSnapshot (Seek→Write→Truncate→Sync, Write-before-
+// Truncate), the lock file is NEVER empty and is well-formed (all 5 key=value
+// lines; the 4 diagnostic fields non-empty). A contender's os.ReadFile in
+// Acquire's EWOULDBLOCK branch therefore never observes an empty/partial-
+// diagnostic file. Also verifies the SHRINK case (long snapshot → short
+// snapshot): Truncate must cut the stale trailing bytes so no garbage remains —
+// proven by a raw-bytes suffix check (parseContents alone CANNOT catch a
+// missing Truncate, since it silently skips the trailing malformed line).
+//
+// (The nil/released no-op is already covered by TestSetSnapshot_NilSafeNoOp +
+// TestSetSnapshot_MethodAfterRelease, which this change leaves unchanged. A
+// deterministic cross-process race test is not feasible — the window is
+// microsecond-wide and contention is nondeterministic; this invariant test is
+// the contract-specified proxy.)
+func TestSetSnapshot_FileNeverEmptyWellFormed(t *testing.T) {
+	resetCurrent(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // isolate — don't touch the real lock dir
+	t.Setenv("XDG_CACHE_HOME", "")
+	repo := t.TempDir()
+
+	l, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer l.Release() // reads happen in the body before this runs (Issue 2 removes the file on Release)
+
+	// assertWellFormed reads the file immediately and checks the Issue-4 invariant:
+	// non-empty + all 4 diagnostic fields present + the expected snapshot. The
+	// "never empty immediately after setSnapshot" check is the len(data)==0 assertion.
+	assertWellFormed := func(t *testing.T, wantSnapshot string) {
+		t.Helper()
+		data, err := os.ReadFile(l.path)
+		if err != nil {
+			t.Fatalf("ReadFile: %v", err)
+		}
+		if len(data) == 0 {
+			t.Fatal("lock file is EMPTY after writeContents (Issue 4 invariant violated — write-before-truncate broken)")
+		}
+		c := parseContents(data)
+		if c.Pid == "" || c.Hostname == "" || c.Repo == "" || c.Timestamp == "" {
+			t.Errorf("empty diagnostic field after rewrite: pid=%q hostname=%q repo=%q timestamp=%q",
+				c.Pid, c.Hostname, c.Repo, c.Timestamp)
+		}
+		if c.Snapshot != wantSnapshot {
+			t.Errorf("snapshot = %q, want %q", c.Snapshot, wantSnapshot)
+		}
+	}
+
+	// (a) The initial write (Acquire → writeContents("")) is well-formed.
+	assertWellFormed(t, "")
+
+	// (b) A snapshot update keeps the file non-empty + well-formed.
+	SetSnapshot("abc123def456")
+	assertWellFormed(t, "abc123def456")
+
+	// (c) SHRINK case: a LONG snapshot followed by a SHORT one. Truncate must cut the stale tail.
+	SetSnapshot("lorem-ipsum-dolor-sit-amet-XXXX-YYYY") // 36-char snapshot
+	assertWellFormed(t, "lorem-ipsum-dolor-sit-amet-XXXX-YYYY")
+	SetSnapshot("short") // shorter than the previous → trailing bytes would remain WITHOUT Truncate
+	assertWellFormed(t, "short")
+
+	// The raw-bytes suffix check is the meaningful Truncate proof: if Truncate
+	// didn't run, the file tail would be the leftover "...XXXX-YYYY\n" instead of
+	// "snapshot=short\n". (parseContents would still report snapshot="short" — it
+	// skips the malformed trailing line — so this raw check is required.)
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		t.Fatalf("ReadFile (shrink): %v", err)
+	}
+	if !strings.HasSuffix(string(data), "snapshot=short\n") {
+		tail := string(data)
+		if len(tail) > 80 {
+			tail = tail[len(tail)-80:]
+		}
+		t.Errorf("Truncate did not cut stale trailing bytes (Issue 4): file tail = %q, want suffix %q",
+			tail, "snapshot=short\n")
 	}
 }
 
