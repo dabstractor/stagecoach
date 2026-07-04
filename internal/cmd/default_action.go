@@ -248,10 +248,26 @@ func handleLockContention(stderr io.Writer, heldErr *lock.HeldError, g git.Git, 
 		}
 		// werr != nil (e.g. merge conflicts) or SHAs differ → fall through to Busy (G5).
 	}
+	// Issue 4b guard: a contender may read a partial/empty lock file (the residual race window
+	// from Issue 4a's SetSnapshot rewrite) yielding empty Repo/Pid/Hostname diagnostics. Substitute
+	// sensible fallbacks so the Busy message never renders as "on  (pid  on )". Path is always
+	// non-empty (it is the lock file path from lockPath), so it is passed through unchanged.
+	repo := heldErr.Contents.Repo
+	if repo == "" {
+		repo = "an unknown repo"
+	}
+	pid := heldErr.Contents.Pid
+	if pid == "" {
+		pid = "<unknown>"
+	}
+	hostname := heldErr.Contents.Hostname
+	if hostname == "" {
+		hostname = "<unknown>"
+	}
 	fmt.Fprintf(stderr,
 		"stagehand: another stagehand run is already in progress on %s (pid %s on %s). "+
 			"Your newly-staged changes will remain staged — re-run stagehand after it finishes. Lock: %s.\n",
-		heldErr.Contents.Repo, heldErr.Contents.Pid, heldErr.Contents.Hostname, heldErr.Path)
+		repo, pid, hostname, heldErr.Path)
 	return exitcode.New(exitcode.Busy, nil) // exit 5, SILENT
 }
 

@@ -96,7 +96,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Lock primitive hardening (Issues 2, 3, 4 — Minor)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Three independent lock-primitive fixes, all concentrated in internal/lock/lock.go (except Issue 4's message guard in internal/cmd/default_action.go). Subtasks are chained sequentially because they edit the same file (lock.go): Release cleanup → canonical repo field → atomic snapshot rewrite → contention message guard. Each is TDD (failing test → implement → pass).",
           "tasks": [
             {
@@ -176,14 +176,14 @@
               "type": "Task",
               "id": "P1.M2.T4",
               "title": "Guard the contention message against empty diagnostic fields (Issue 4b)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Defense-in-depth for the residual microsecond race window: even after the in-place atomic rewrite, a contender could read a partial file. handleLockContention (default_action.go:251-254) must substitute sensible fallbacks when repo/pid/hostname are empty so the Busy message is never gibberish ('on  (pid  on )').",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T4.S1",
                   "title": "Guard handleLockContention empty fields + add partial-read unit test",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T3.S1"
@@ -217,7 +217,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Sweep README.md for cross-cutting coherence",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

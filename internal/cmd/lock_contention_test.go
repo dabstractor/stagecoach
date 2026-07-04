@@ -114,6 +114,68 @@ func TestHandleLockContention_Busy_EmptySnapshot(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestHandleLockContention_Busy_EmptyDiagnostics — Issue 4b: a contender that read a
+// partial/empty lock file (the residual race window) has empty Repo/Pid/Hostname. The guard
+// must substitute sensible fallbacks so the Busy message never renders as "on  (pid  on )".
+// Covers BOTH ways to reach the Busy branch with empty diagnostics: (a) empty snapshot →
+// fast path skipped; (b) non-matching snapshot → fast path fails → fall through. Exit code
+// stays Busy(5), SILENT.
+// ---------------------------------------------------------------------------
+func TestHandleLockContention_Busy_EmptyDiagnostics(t *testing.T) {
+	cases := []struct {
+		name      string
+		snapshot  string
+		writeTree string // contender's WriteTree result (only consulted when snapshot != "")
+	}{
+		{"empty_snapshot", "", ""},                   // fast path SKIPPED (snapshot empty) → Busy; WriteTree uncalled
+		{"nonmatching_snapshot", "abc123", "zzz999"}, // fast path FAILS (trees differ) → fall through → Busy
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			held := &lock.HeldError{
+				Contents: lock.LockContents{
+					Pid:      "", // empty — the partial-read reproduction
+					Hostname: "",
+					Repo:     "",
+					Snapshot: tc.snapshot,
+				},
+				Path: "/x.lock", // always non-empty (lock file path) — passed through unchanged
+			}
+			g := &contentionFakeGit{writeTreeSHA: tc.writeTree}
+
+			var buf bytes.Buffer
+			err := handleLockContention(&buf, held, g, context.Background())
+
+			if code := exitcode.For(err); code != exitcode.Busy {
+				t.Errorf("exitcode.For(err) = %d, want %d (Busy)", code, exitcode.Busy)
+			}
+			if err.Error() != "" {
+				t.Errorf("err.Error() = %q, want empty (silent)", err.Error())
+			}
+			msg := buf.String()
+			// The fallbacks are present:
+			if !strings.Contains(msg, "an unknown repo") {
+				t.Errorf("stderr = %q, want to contain repo fallback 'an unknown repo'", msg)
+			}
+			if !strings.Contains(msg, "<unknown>") {
+				t.Errorf("stderr = %q, want to contain pid/hostname fallback '<unknown>'", msg)
+			}
+			// The lock Path is still reported (always non-empty):
+			if !strings.Contains(msg, "/x.lock") {
+				t.Errorf("stderr = %q, want to contain the lock path '/x.lock'", msg)
+			}
+			// The broken pattern is ABSENT (the contract's exact check + a robust no-double-space guard):
+			if strings.Contains(msg, "on  (") {
+				t.Errorf("stderr = %q, contains broken 'on  (' (double-space) pattern", msg)
+			}
+			if strings.Contains(msg, "  ") {
+				t.Errorf("stderr = %q, contains a double-space (no legit double space exists in the message)", msg)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestHandleLockContention_Busy_WriteTreeErr — WriteTree fails → fall through to Busy (G5)
 // ---------------------------------------------------------------------------
 
