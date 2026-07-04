@@ -33,6 +33,9 @@ Thumbs.db
 # pi subagent run artifacts (ephemeral; regenerates each run)
 .pi-subagents/
 
+# pi agent runtime config (ephemeral; per-repo agent state)
+.pi/
+
 # Go build / test artifacts (Stagehand)
 /bin/
 *.test

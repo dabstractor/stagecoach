@@ -199,8 +199,9 @@ func truncateByWaterFill(sections []string, allotments map[string]int) string {
 		headerBlock := section[:loc[0]]
 		body := section[loc[0]:]
 		if EstimateTokens(body) > allotment {
-			// allotment tokens ⟺ allotment×4 runes (inverse of ceil(runes/4)). Rune-boundary slice.
-			body = firstNRunes(body, allotment*4) + "\n" + truncatedSentinel
+			// allotment tokens ⟺ allotment×4 runes. Rune-boundary slice + sentinel on its own line,
+			// with a trailing "\n" so the next section's `diff --git` begins at a line start (FR3i).
+			body = firstNRunes(body, allotment*4) + "\n" + truncatedSentinel + "\n"
 		}
 		b.WriteString(headerBlock)
 		b.WriteString(body)

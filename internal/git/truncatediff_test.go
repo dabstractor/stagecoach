@@ -284,8 +284,8 @@ func TestTruncateByWaterFill(t *testing.T) {
 
 		// The sentinel must be on its own line: preceded by \n, and itself ending the line (no trailing
 		// content on the same line). It must be the SHORTER form (no N-bearing suffix).
-		if !strings.HasSuffix(out, "\n... [truncated]") {
-			t.Errorf("output must end with '\\n... [truncated]' (own line, shorter form); got tail=%q",
+		if !strings.HasSuffix(out, "\n... [truncated]\n") {
+			t.Errorf("output must end with '\\n... [truncated]\\n' (own line, trailing newline); got tail=%q",
 				tail(out, 40))
 		}
 	})
@@ -330,7 +330,7 @@ func TestTruncateByWaterFill(t *testing.T) {
 			t.Errorf("first @@ header not present exactly once; out=\n%s", out)
 		}
 		// The sentinel is appended (content was removed).
-		if !strings.HasSuffix(out, "\n... [truncated]") {
+		if !strings.HasSuffix(out, "\n... [truncated]\n") {
 			t.Errorf("multi-hunk truncation must end with the sentinel on its own line; got tail=%q", tail(out, 40))
 		}
 	})
@@ -349,7 +349,7 @@ func TestTruncateByWaterFill(t *testing.T) {
 		if !strings.Contains(out, "diff --git a/README.md b/README.md") {
 			t.Errorf("markdown header not preserved; out=\n%s", out)
 		}
-		if !strings.HasSuffix(out, "\n... [truncated]") {
+		if !strings.HasSuffix(out, "\n... [truncated]\n") {
 			t.Errorf("markdown section must be truncated with the sentinel; got tail=%q", tail(out, 40))
 		}
 	})
@@ -458,6 +458,99 @@ func TestTruncateByWaterFill(t *testing.T) {
 		}
 		if strings.Contains(out, "... [truncated]") {
 			t.Errorf("body exactly at allotment must NOT be truncated; out=\n%s", out)
+		}
+	})
+
+	// === REGRESSION (FR3i bugfix): truncated NON-LAST section must not glue its sentinel =============
+	// to the next section's `diff --git` header. Before the fix the sentinel was emitted WITHOUT a
+	// trailing "\n", so a truncated non-last section ran into the following `diff --git` on one line
+	// ("... [truncated]diff --git a/b.go b/b.go"). The fix appends "\n" after the sentinel in the
+	// truncation branch so every truncated section ends "... [truncated]\n" and the next `diff --git`
+	// begins at a line start. These four subtests cover the non-last-section gap that hid the bug
+	// (the existing tests truncated only the LAST/only section). bigBody builds a body that comfortably
+	// exceeds a small allotment (10 → 40 runes); the canonical 1-line body stays within budget under a
+	// large allotment (100000).
+	bigBody := func(n int) string {
+		var sb strings.Builder
+		sb.WriteString("@@ -1,100 +1,100 @@\n")
+		for i := 0; i < n; i++ {
+			sb.WriteString("-old content line payload " + itoa(i) + " here\n")
+			sb.WriteString("+new content line payload " + itoa(i) + " here\n")
+		}
+		return sb.String()
+	}
+
+	// (a) non-md truncated → non-md within budget.
+	t.Run("nonmd_truncated_then_nonmd_within_budget", func(t *testing.T) {
+		sectionA := "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n" + bigBody(60)
+		sectionB := "diff --git a/b.go b/b.go\n--- a/b.go\n+++ b/b.go\n@@ -1 +1 @@\n-b\n+b2\n"
+		out := truncateByWaterFill([]string{sectionA, sectionB}, map[string]int{"a.go": 10, "b.go": 100000})
+
+		if strings.Contains(out, "[truncated]diff --git") {
+			t.Errorf("sentinel glued to next diff --git (no newline separator); out=\n%s", out)
+		}
+		if !strings.Contains(out, "... [truncated]\ndiff --git a/b.go b/b.go") {
+			t.Errorf("next diff --git not at a line start after the sentinel; out=\n%s", out)
+		}
+		if c := strings.Count(out, "... [truncated]"); c != 1 {
+			t.Errorf("sentinel count = %d, want 1 (only A truncated); out=\n%s", c, out)
+		}
+		if !strings.Contains(out, sectionB) {
+			t.Errorf("B section not byte-identical in output; out=\n%s", out)
+		}
+	})
+
+	// (b) md truncated → non-md within budget.
+	t.Run("md_truncated_then_nonmd", func(t *testing.T) {
+		sectionA := "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n" + bigBody(60)
+		sectionB := "diff --git a/b.go b/b.go\n--- a/b.go\n+++ b/b.go\n@@ -1 +1 @@\n-b\n+b2\n"
+		out := truncateByWaterFill([]string{sectionA, sectionB}, map[string]int{"README.md": 10, "b.go": 100000})
+
+		if strings.Contains(out, "[truncated]diff --git") {
+			t.Errorf("sentinel glued to next diff --git (no newline separator); out=\n%s", out)
+		}
+		if !strings.Contains(out, "... [truncated]\ndiff --git a/b.go b/b.go") {
+			t.Errorf("next diff --git not at a line start after the sentinel; out=\n%s", out)
+		}
+		if c := strings.Count(out, "... [truncated]"); c != 1 {
+			t.Errorf("sentinel count = %d, want 1 (only the md section truncated); out=\n%s", c, out)
+		}
+	})
+
+	// (c) non-md truncated → md within budget.
+	t.Run("nonmd_truncated_then_md", func(t *testing.T) {
+		sectionA := "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n" + bigBody(60)
+		sectionB := "diff --git a/NOTES.md b/NOTES.md\n--- a/NOTES.md\n+++ b/NOTES.md\n@@ -1 +1 @@\n-x\n+y\n"
+		out := truncateByWaterFill([]string{sectionA, sectionB}, map[string]int{"a.go": 10, "NOTES.md": 100000})
+
+		if strings.Contains(out, "[truncated]diff --git") {
+			t.Errorf("sentinel glued to next diff --git (no newline separator); out=\n%s", out)
+		}
+		if !strings.Contains(out, "... [truncated]\ndiff --git a/NOTES.md b/NOTES.md") {
+			t.Errorf("next diff --git not at a line start after the sentinel; out=\n%s", out)
+		}
+		if c := strings.Count(out, "... [truncated]"); c != 1 {
+			t.Errorf("sentinel count = %d, want 1 (only A truncated); out=\n%s", c, out)
+		}
+	})
+
+	// (d) both non-md truncated — also covers the trailing "\n" when the LAST section is truncated.
+	t.Run("both_nonmd_truncated", func(t *testing.T) {
+		sectionA := "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n" + bigBody(60)
+		sectionB := "diff --git a/b.go b/b.go\n--- a/b.go\n+++ b/b.go\n" + bigBody(60)
+		out := truncateByWaterFill([]string{sectionA, sectionB}, map[string]int{"a.go": 10, "b.go": 10})
+
+		if strings.Contains(out, "[truncated]diff --git") {
+			t.Errorf("sentinel glued to next diff --git (no newline separator); out=\n%s", out)
+		}
+		if !strings.Contains(out, "... [truncated]\ndiff --git a/b.go b/b.go") {
+			t.Errorf("A's sentinel → B's header: next diff --git not at a line start; out=\n%s", out)
+		}
+		if c := strings.Count(out, "... [truncated]"); c != 2 {
+			t.Errorf("sentinel count = %d, want 2 (both truncated); out=\n%s", c, out)
+		}
+		if !strings.HasSuffix(out, "... [truncated]\n") {
+			t.Errorf("last section truncated → output must end with '... [truncated]\\n'; got tail=%q", tail(out, 40))
 		}
 	})
 }
