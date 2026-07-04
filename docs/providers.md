@@ -71,14 +71,14 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, g
 | `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | — no |
 | `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | — no |
 | `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | — no |
-| `agy` | stdin | `-p` | `-m` | `gemini-3.1-pro` | (prepended) | Read-only constraint (`--approval-mode default`) | — no |
+| `agy` | stdin | `-p` | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--approval-mode default`) | — no |
 | `qwen-code` | stdin | `-p` | `-m` | `qwen3-coder-plus` ⚠️ | (prepended) | Read-only constraint (`--approval-mode default`) | — no ⚠️ |
 
-Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) due to a non-TTY stdout drop bug (issue #76) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
+Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending the remaining §12.5.1.1 checklist items (the non-TTY stdout drop, issue #76, no longer reproduces as of 2026-07-03) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
 
 ## Tools-disable asymmetry
 
-The seven providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
+The eight built-in providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
 
 - **Explicit switch** (pi, claude): The manifest passes literal flags that **disable tools** (pi: `--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-session`; claude: `--tools "" --setting-sources "" --no-session-persistence`). This is the cleanest approach — the agent runs as a pure text-in/text-out process.
 
@@ -118,7 +118,7 @@ The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/
 | `pi` | `gpt-5.4` | `gpt-5.4-mini` | `gpt-5.4-nano` | `gpt-5.4-mini` |
 | `claude` | `opus` | `sonnet` | `haiku` | `sonnet` |
 | `gemini` | `gemini-3.1-pro` | *(cannot)* | `gemini-3.1-flash-lite` | `gemini-3.5-flash` |
-| `agy` | `gemini-3.1-pro` | *(cannot)* | `gemini-3.1-flash-lite` | `gemini-3.5-flash` |
+| `agy` | `Gemini 3.5 Flash (High)` | *(cannot)* | `Gemini 3.5 Flash (Low)` | `Gemini 3.5 Flash (Medium)` |
 | `opencode` | `openai/gpt-5.4` | *(cannot)* | `openai/gpt-5.4-nano` | `openai/gpt-5.4-mini` |
 | `codex` | `gpt-5.1-codex-max` | *(cannot)* | `gpt-5.4-nano` | `gpt-5.1-codex-mini` |
 | `cursor` | `gpt-5.4` ⚠️ | *(cannot)* | `gpt-5.4-nano` ⚠️ | `gpt-5.4-mini` ⚠️ |
