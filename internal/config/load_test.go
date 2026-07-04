@@ -615,6 +615,69 @@ func TestLoad_CLIOverridesEnv(t *testing.T) {
 	}
 }
 
+// TestLoad_RefusesStubViaEnvProvider (FR-SH1) proves the self-hosting guard fires when the test-only
+// "stub" provider is selected AMBIANTLY via $STAGEHAND_PROVIDER — the self-hosting footgun: an
+// exported STAGEHAND_PROVIDER=stub + STAGEHAND_STUB_OUT left in a shell silently hijacking a real
+// `git commit-pi` and minting a nonsense commit like "feat: add a".
+func TestLoad_RefusesStubViaEnvProvider(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGEHAND_PROVIDER", "stub")
+	t.Setenv("STAGEHAND_STUB_OUT", "feat: add a") // the very leak that minted the bad commits
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err == nil {
+		t.Fatalf("Load err=nil, want refusal for ambient stub (provider=%q)", cfg.Provider)
+	}
+	if !strings.Contains(err.Error(), "stub") || !strings.Contains(err.Error(), "STAGEHAND_PROVIDER") {
+		t.Errorf("err=%q, want it to name the stub provider and the $STAGEHAND_PROVIDER source", err.Error())
+	}
+}
+
+// TestLoad_RefusesStubViaGitConfig (FR-SH1) — the same guard against the stagehand.provider git-config.
+func TestLoad_RefusesStubViaGitConfig(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	setGitConfig(t, repo, "stagehand.provider", "stub")
+
+	if _, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true}); err == nil {
+		t.Fatal("Load err=nil, want refusal for ambient stub via git config")
+	}
+}
+
+// TestLoad_AllowsStubViaFlagAndFile (FR-SH1) — the guard must NOT fire for the two INTENTIONAL
+// channels: the --provider flag and a config file. Both are how the test suite legitimately selects
+// stub (e2e/validate.sh pass --provider stub; unit tests declare [provider.stub] in a config file).
+func TestLoad_AllowsStubViaFlagAndFile(t *testing.T) {
+	t.Run("flag", func(t *testing.T) {
+		_, repo, _ := loadEnvSetup(t)
+		chdir(t, repo)
+		fs := newFlagSet(t)
+		if err := fs.Set("provider", "stub"); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs, DisableBootstrap: true})
+		if err != nil {
+			t.Fatalf("Load err=%v, want nil (--provider stub is intentional)", err)
+		}
+		if cfg.Provider != "stub" {
+			t.Errorf("Provider=%q want stub", cfg.Provider)
+		}
+	})
+	t.Run("file", func(t *testing.T) {
+		_, repo, globalDir := loadEnvSetup(t)
+		chdir(t, repo)
+		writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"stub\"\n")
+		cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+		if err != nil {
+			t.Fatalf("Load err=%v, want nil (config-file stub is intentional)", err)
+		}
+		if cfg.Provider != "stub" {
+			t.Errorf("Provider=%q want stub", cfg.Provider)
+		}
+	})
+}
+
 func TestLoad_UnsetCLIFlagDoesNotOverride(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)

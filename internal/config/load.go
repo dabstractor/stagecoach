@@ -123,6 +123,12 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		overlay(&cfg, r)
 	}
 
+	// fileProvider = cfg.Provider as set by the CONFIG-FILE layers (Defaults + global + repo-local),
+	// captured BEFORE the ambient layers (gitconfig / STAGEHAND_* env / --provider flag) overlay it.
+	// Used by the self-hosting stub guard below to tell an intentional file-selected provider from
+	// one smuggled in by a leaked environment. MUST stay positioned before Layer 4 (gitconfig).
+	fileProvider := cfg.Provider
+
 	// Layer 4: repo git config (stagehand.* keys). Non-nil partial *Config; errors propagate.
 	gc, err := loadGitConfig(opts.RepoDir)
 	if err != nil {
@@ -171,6 +177,32 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	}
 	if err := validateTemplate(cfg.Template); err != nil {
 		return nil, fmt.Errorf("template: %w", err)
+	}
+
+	// Self-hosting guard (FR-SH1). "stub" (cmd/stubagent) is a TEST-ONLY provider double that echoes
+	// $STAGEHAND_STUB_OUT verbatim as the "generated" message. It is valid ONLY when selected
+	// intentionally — via the --provider flag or a config FILE (--config / repo-local .stagehand.toml
+	// / global). Refuse AMBIENT selection via $STAGEHAND_PROVIDER or the stagehand.provider repo
+	// git-config: those are the channels by which a leaked test environment (an exported
+	// STAGEHAND_PROVIDER=stub + STAGEHAND_STUB_OUT left sitting in a shell) silently hijacks a real
+	// `git commit-pi` / bare `stagehand` and mints nonsense commits ("feat: add a", "x", …). Tests
+	// select stub via --provider stub or a config file, so they are unaffected; fileProvider (captured
+	// above, after the file layers and before the ambient layers) distinguishes a genuine file pick.
+	if cfg.Provider == "stub" {
+		viaFlag := opts.Flags != nil && opts.Flags.Changed("provider")
+		if !viaFlag && fileProvider != "stub" {
+			src := "an ambient source"
+			switch {
+			case os.Getenv("STAGEHAND_PROVIDER") == "stub":
+				src = "$STAGEHAND_PROVIDER"
+			case gc != nil && gc.Provider == "stub":
+				src = "git config stagehand.provider"
+			}
+			return nil, fmt.Errorf("refusing test-only provider %q: selected via %s, not --provider "+
+				"or a config file (a leaked test environment would mint garbage commits through "+
+				"commit-pi/stagehand). Pass --provider stub explicitly, or unset the ambient source",
+				"stub", src)
+		}
 	}
 
 	return &cfg, nil
