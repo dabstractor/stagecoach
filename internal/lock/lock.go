@@ -66,23 +66,14 @@ var current atomic.Pointer[Locker]
 // containing the holder's parsed lock file contents. The lock is an advisory
 // flock auto-released on process death (no stale locks).
 func Acquire(repoPath string) (*Locker, error) {
-	dir, err := lockDir()
+	path, err := lockPath(repoPath)
 	if err != nil {
+		return nil, fmt.Errorf("lock path: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("lock dir: %w", err)
 	}
-
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("lock dir: %w", err)
-	}
-
-	canonical, err := filepath.EvalSymlinks(repoPath)
-	if err != nil {
-		canonical, _ = filepath.Abs(repoPath)
-	}
-
-	sum := sha256.Sum256([]byte(canonical))
-	hash := hex.EncodeToString(sum[:])
-	path := filepath.Join(dir, hash+".lock")
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
@@ -210,7 +201,7 @@ func parseContents(data []byte) LockContents {
 }
 
 // lockHash returns the sha256 hex hash of the repo's canonical path (EvalSymlinks,
-// falling back to Abs). Exported for testing.
+// falling back to Abs). It is exercised directly by lockHash tests.
 func lockHash(repoPath string) string {
 	canonical, err := filepath.EvalSymlinks(repoPath)
 	if err != nil {
@@ -220,7 +211,8 @@ func lockHash(repoPath string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// lockPath returns the full lock file path for a repo. Exported for testing.
+// lockPath returns the full lock file path for a repo (lockDir + lockHash). It is
+// the single source of truth shared by Acquire and the path-consistency test.
 func lockPath(repoPath string) (string, error) {
 	dir, err := lockDir()
 	if err != nil {

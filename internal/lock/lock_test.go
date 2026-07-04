@@ -117,6 +117,51 @@ func TestHash_CanonicalSymlink(t *testing.T) {
 	}
 }
 
+// TestAcquire_PathMatchesLockPath verifies the path Acquire creates equals
+// lockPath(repo) — the two must agree since Acquire resolves its path via
+// lockPath. A regression here would mean Acquire and lockPath drift apart,
+// breaking the no-op fast path (which keys off the same path on re-run).
+func TestAcquire_PathMatchesLockPath(t *testing.T) {
+	resetCurrent(t)
+	repo := t.TempDir()
+
+	l, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer l.Release()
+
+	want, err := lockPath(repo)
+	if err != nil {
+		t.Fatalf("lockPath: %v", err)
+	}
+	if l.path != want {
+		t.Errorf("Acquire path = %q, want lockPath = %q", l.path, want)
+	}
+}
+
+// TestLockPath_CanonicalSymlink verifies lockPath keys off the canonical path,
+// so a symlinked repo and its real target resolve to the same lock file.
+func TestLockPath_CanonicalSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpRepo := filepath.Join(tmpDir, "repo")
+	os.MkdirAll(tmpRepo, 0o755)
+	tmpLink := filepath.Join(tmpDir, "link")
+	os.Symlink(tmpRepo, tmpLink)
+
+	p1, err := lockPath(tmpRepo)
+	if err != nil {
+		t.Fatalf("lockPath(real): %v", err)
+	}
+	p2, err := lockPath(tmpLink)
+	if err != nil {
+		t.Fatalf("lockPath(symlink): %v", err)
+	}
+	if p1 != p2 {
+		t.Errorf("lockPath(symlink)=%q != lockPath(real)=%q", p2, p1)
+	}
+}
+
 // TestAcquireRelease_RoundTrip verifies Acquire creates the lock file with
 // correct contents and Release is idempotent.
 func TestAcquireRelease_RoundTrip(t *testing.T) {
