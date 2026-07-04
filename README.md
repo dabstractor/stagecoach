@@ -63,6 +63,7 @@ Stagehand does one thing — commit messages — and a few things around them.
 | Capability | Description |
 |---|---|
 | Payload exclusions | `.stagehandignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
+| Payload optimization | The diff sent to your agent is trimmed and budgeted — rename-aware (`-M`), reduced-context (`-U1`), led by a compact file skeleton, and optionally capped to your model's context window via `token_limit` ([how it works](docs/how-it-works.md#diff-capture-pipeline) · [knobs](docs/configuration.md#built-in-defaults)). |
 | Message shaping | `--format` (auto, conventional, gitmoji, plain), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
 | Git hook mode | `stagehand hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
 | Tool integrations | `stagehand integrate install git-alias lazygit` wires `git stagehand` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
