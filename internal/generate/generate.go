@@ -165,6 +165,8 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		MaxMDLines:       cfg.MaxMdLines,
 		BinaryExtensions: cfg.BinaryExtensions,
 		Excludes:         deps.Excludes,
+		TokenLimit:       cfg.TokenLimit,
+		DiffContext:      cfg.DiffContextValue(),
 	})
 	if err != nil {
 		return Result{}, err

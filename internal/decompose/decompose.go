@@ -610,6 +610,8 @@ func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chain
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
 		Excludes:         deps.Excludes,
+		TokenLimit:       deps.Config.TokenLimit,
+		DiffContext:      deps.Config.DiffContextValue(),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("%w: leftover diff: %w", ErrDecomposeFailed, err)

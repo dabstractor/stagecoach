@@ -71,6 +71,8 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
 		Excludes:         deps.Excludes,
+		TokenLimit:       deps.Config.TokenLimit,
+		DiffContext:      deps.Config.DiffContextValue(),
 	})
 	if err != nil {
 		return prompt.PlannerOutput{}, fmt.Errorf("%w: tree diff: %w", ErrPlannerFailed, err)

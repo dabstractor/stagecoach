@@ -86,6 +86,28 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestDiffContextValue(t *testing.T) {
+	// nil ⇒ the FR3f default 1 (-U1). Non-nil (incl. *0) ⇒ verbatim — an explicit 0 (-U0) is preserved.
+	tests := []struct {
+		name string
+		in   *int
+		want int
+	}{
+		{"nil omits the key → default 1", nil, 1},
+		{"explicit 0 → -U0 (changed-lines-only)", intPtr(0), 0},
+		{"explicit 3 → -U3", intPtr(3), 3},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			c := Config{DiffContext: tc.in}
+			if got := c.DiffContextValue(); got != tc.want {
+				t.Errorf("DiffContextValue() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTOMLMarshalKeysAndNoColorExclusion(t *testing.T) {
 	c := Defaults()
 	c.Output = strPtr("raw")

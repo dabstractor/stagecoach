@@ -192,3 +192,15 @@ func Defaults() Config {
 		//                              value to CurrentConfigVersion; 0 ⇒ no source declared a schema version.
 	}
 }
+
+// DiffContextValue resolves the *int DiffContext to the plain int the git diff functions consume
+// (StagedDiffOptions.DiffContext is a plain int holding the RESOLVED value — see internal/git/git.go,
+// P1.M1.T2.S1). Returns the FR3f default 1 (-U1) when the user omitted the key (nil pointer); a non-nil
+// pointer is returned verbatim, so an explicit 0 (-U0 = changed-lines-only) is preserved exactly.
+// Called by the 6 StagedDiffOptions production call sites (P1.M1.T2.S2).
+func (c Config) DiffContextValue() int {
+	if c.DiffContext != nil {
+		return *c.DiffContext
+	}
+	return 1
+}

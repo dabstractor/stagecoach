@@ -425,6 +425,8 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		MaxMDLines:       cfg.MaxMdLines,
 		BinaryExtensions: cfg.BinaryExtensions,
 		Excludes:         deps.Excludes,
+		TokenLimit:       cfg.TokenLimit,
+		DiffContext:      cfg.DiffContextValue(),
 	})
 	if err != nil {
 		return Result{}, err
