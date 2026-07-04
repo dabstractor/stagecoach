@@ -1,0 +1,147 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "v2.1 Validation Bug Fixes",
+      "status": "Complete",
+      "description": "Fix the 1 Major + 3 Minor issues discovered during creative end-to-end validation of the v2.1 'competitor feature parity + tool integrations' delta (§9.18–§9.23). All four fixes are independent, localized code changes grounded in the existing codebase architecture. The changes restore the no-mangle guarantee for lazygit (Issue 1), silence misleading hook-exec output (Issue 2), complete the reference config template (Issue 3), and fix TTY detection for /dev/null (Issue 4).",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Fix Four Validation Issues",
+          "status": "Complete",
+          "description": "Implement and test the four bug fixes. Each task is an independent, self-contained fix with its own TDD cycle. Issues 1-4 touch disjoint files and have no inter-dependencies, so they can be developed in any order.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Fix lazygit foreign key duplicate binding (Issue 1 — Major)",
+              "status": "Complete",
+              "description": "When lazygit's config already contains an unmarked customCommands entry bound to the target key (e.g. <c-a>), installing stagehand silently APPENDS a duplicate. Add a foreign-key probe + WARNING in lazygitEntry.Install() before delegating to integrate.Apply, mirroring the git-alias target's conflict surfacing.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Add foreign-key conflict WARNING to lazygitEntry.Install()",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_c38aa48290f0/bugfix/001_9f1ab2b62a84/architecture/issue_analysis.md §Issue 1 and system_context.md. The lazygitEntry.Install() method (internal/cmd/integrate_lazygit.go, ~line 163) delegates entirely to integrate.Apply(ActionUpsert) with no foreign-key check. lazygitTarget.Upsert() only looks for the marker (isStagehandItem checks item.Content[1].LineComment for lazygitMarker); an unmarked entry with the same key is invisible, so Upsert APPENDS a duplicate. The helper lazygitTarget.findKeyItem(key) already exists (~line 206) and finds an unmarked item whose key value == key. It is already used by Status() to detect StatusForeign (~line 153).\n2. INPUT: lazygitEntry struct fields: configPath (resolved config.yml path), key (binding string, resolved to \"<c-a>\" by default). integrate.InstallOptions fields: Yes (bool), Out (io.Writer — stderr in prod), Confirm (ConfirmFunc, nil → DefaultConfirm). The existing lazygitTarget.Parse(data []byte) and lazygitTarget.findKeyItem(key string) *yaml.Node methods are the probe seam.\n3. LOGIC: In lazygitEntry.Install() (internal/cmd/integrate_lazygit.go), BEFORE the existing integrate.Apply() call, add a best-effort foreign-key probe:\n   (a) Read the config file: data, rerr := os.ReadFile(e.resolvedPath()). If rerr != nil (missing/unreadable), SKIP the probe — no foreign key possible on a create path. Do NOT return an error; proceed to Apply (Apply handles the create path).\n   (b) Parse with a throwaway target: probe := &lazygitTarget{key: e.key}; if probe.Parse(data) != nil, SKIP the probe (Apply will refuse with a parse error). Do NOT return early.\n   (c) Check: if probe.findKeyItem(e.key) != nil, print a WARNING to opts.Out:\n       fmt.Fprintf(opts.Out, \"WARNING: a %s binding already exists (not managed by stagehand); installing will create a duplicate customCommands entry — use --key to choose a different binding.\\n\", e.key)\n   (d) Fall through to the existing integrate.Apply() call unchanged.\n   This mirrors gitAliasEntry.Install()'s pattern (internal/cmd/integrate_gitalias.go ~line 130-137) where it surfaces `WARNING: alias.<name> is currently set to \"<value>\" (not stagehand) — it will be overwritten.` before proceeding. The WARNING appears in BOTH interactive mode (before Apply's diff+confirm prompt) and --yes mode (before Apply's immediate write).\n4. OUTPUT: The modified lazygitEntry.Install() returns integrate.InstallResult as before — no signature change. The only observable new behavior is a WARNING line on opts.Out when a foreign unmarked key binding exists. The actual write still goes through Apply's no-mangle protocol (parse-first, diff, confirm, backup, atomic-write, validate).\n5. MOCKING: Tests use newIsolatedLazygitEntry(t, key) which sets configPath to a temp file (NEVER touches real ~/.config/lazygit/config.yml). Pre-write foreign YAML config via os.WriteFile. Capture opts.Out via *bytes.Buffer. Tests call e.Install(ctx, integrate.InstallOptions{Yes: true/false, Out: &buf, Confirm: func(...)...}) directly (no cobra). Follow the pattern in TestLazygitEntry_Install_ConfirmReceivesDiff (~line 577) and TestGitAlias_Install_ForeignConflictInPreview (integrate_gitalias_test.go ~line 208).\n6. TESTS (TDD — write failing test first, then implement):\n   - TestLazygitEntry_Install_ForeignKeyWarning: pre-write a config with an unmarked <c-a> entry (foreignYAML from TestLazygitEntry_Status_States ~line 701), call Install with Yes:true and Out:&buf, assert buf contains \"WARNING\" and \"duplicate\", assert config file has exactly TWO customCommands entries with key '<c-a>' (the foreign one + stagehand's marked one), assert res.Outcome == OutcomeCreated (it appended, not NoChange).\n   - TestLazygitEntry_Install_NoForeignNoWarning: pre-write a config WITHOUT a conflicting key (e.g. golden_input.yml or empty), call Install with Yes:true and Out:&buf, assert buf does NOT contain \"WARNING\".\n   - TestLazygitEntry_Install_ForeignKeyWarningInteractiveConfirm: pre-write foreign config, call Install with Yes:false and a Confirm func that captures the diff and returns true, assert both the WARNING (in opts.Out) AND the diff (in the confirm's diff arg) are present.\n7. DOCS: [Mode A] Update docs/cli.md or docs/integrations reference (if one exists for lazygit install) to note that a foreign key conflict produces a WARNING. Check docs/ for any integrate documentation — if none exists beyond what's in the --help text, then 'none — no user-facing/config/API surface change beyond the WARNING line which is self-documenting'. The WARNING text itself is the documentation.",
+                  "prd_selectors": [
+                    "h2.2",
+                    "h2.2/h3.0",
+                    "h2.0",
+                    "h2.4"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Fix hook exec progress noise on no-op sources and empty diffs (Issue 2 — Minor)",
+              "status": "Complete",
+              "description": "runHookExec prints '↳ Generating with <provider>…' unconditionally before calling hook.Run, but hook.Run returns ErrNoOp immediately for source-gated no-ops or empty diffs. Move the progress emission to AFTER the no-op gates pass by adding an optional Progress callback to generate.Deps.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Add Progress callback to generate.Deps and defer emission past no-op gates",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_c38aa48290f0/bugfix/001_9f1ab2b62a84/architecture/issue_analysis.md §Issue 2 and system_context.md. The unconditional progress call is at internal/cmd/hookexec.go line 131: `u.Progress(ui.ProgressLabel(\"Generating\", msgModel, labelProvider))`, called BEFORE `hook.Run()` at line 133. hook.Run (internal/hook/exec.go) returns hook.ErrNoOp at two points: (a) line 99-100 — `if NoOpSource(source) { return ErrNoOp }` (source gate); (b) line 113-114 — `if diff == \"\" { return ErrNoOp }` (empty staged diff). generate.Deps is defined at internal/generate/generate.go line 25-30 with fields Git, Manifest, Verbose, Excludes. generate.Deps is constructed ONLY in hookexec.go (for hook.Run) in prod code; decompose.go constructs it for CommitStaged but CommitStaged never calls Progress; pkg/stagehand/stagehand.go constructs it but leaves Progress nil. Adding a `Progress func()` field is backward-compatible (zero value nil).\n2. INPUT: The existing runHookExec function (internal/cmd/hookexec.go) computes `msgModel`, `labelProvider` (the provider name), and constructs a `*ui.UI` (u) before the progress call. These are the values needed for the progress label. hook.Run takes `generate.Deps` as its second argument.\n3. LOGIC: Three coordinated changes:\n   (a) internal/generate/generate.go (~line 30, after Excludes field): Add `Progress func()` field to the Deps struct with a comment: `// Progress is an optional callback invoked by hook.Run after no-op gates pass (nil-safe — never called by CommitStaged).`.\n   (b) internal/hook/exec.go (hook.Run, AFTER line 114 `if diff == \"\" { return ErrNoOp }` and BEFORE the parent/unborn step ~line 117): Add `if deps.Progress != nil { deps.Progress() }`. This ensures the callback fires ONLY when generation is actually about to run (both source-gate and empty-diff gates have passed).\n   (c) internal/cmd/hookexec.go: REMOVE the unconditional `u.Progress(...)` call at line 131. Instead, set the Progress field when constructing generate.Deps at line 133: `Progress: func() { u.Progress(ui.ProgressLabel(\"Generating\", msgModel, labelProvider)) },`.\n4. OUTPUT: No signature changes to any function. The observable change: the '↳ Generating…' progress line appears on stderr ONLY when generation is actually about to run (non-empty diff + non-no-op source). For no-op sources and empty diffs, stderr is silent. The exit code mapping is unchanged (ErrNoOp → exit 0).\n5. MOCKING: Tests use stubtest.Build(t) for a stub provider, hookexecNewTestRepo(t) for a git repo, writeTestStubConfig(t, stubBin) for config. Capture stderr via rootCmd.SetErr(&errBuf) and rootCmd.ExecuteContext(). For the source-gate case: TestHookExec_SourceGateExit0 (~line 68) already exists — extend it to assert errBuf does NOT contain \"Generating\" or \"↳\". For the empty-diff case: create a repo with NO staged changes, call hook exec with empty source, assert exit 0 AND errBuf does NOT contain \"Generating\".\n6. TESTS (TDD):\n   - Extend TestHookExec_SourceGateExit0: after asserting exit 0 and msg-file unmodified, also assert `!bytes.Contains(errBuf.Bytes(), []byte(\"Generating\"))` — the progress line must NOT appear for a source-gated no-op.\n   - Add TestHookExec_EmptyDiffNoProgress: create a repo with no staged changes (seed commit only, no `git add`), call `hook exec <msgfile>` with empty source, assert exit 0, assert msg-file unmodified, assert errBuf does NOT contain \"Generating\".\n   - Verify TestHookExec_StrictFailureNonZero still works (it has a real staged diff → progress SHOULD appear, but strict failure means the generation fails; this test checks the error path, not progress output, so it remains valid).\n7. DOCS: none — no user-facing/config/API surface change. This is an internal output-hygiene fix; the hook exec --help text already says 'No-op (exit 0) when a message source is present … or nothing is staged' which now matches actual behavior.",
+                  "prd_selectors": [
+                    "h2.3",
+                    "h2.3/h3.1",
+                    "h2.0",
+                    "h2.4"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Add v2.1 [generation] keys to reference config template (Issue 3 — Minor)",
+              "status": "Complete",
+              "description": "The exampleConfigTemplate [generation] section (internal/cmd/config.go ~lines 565-578) is missing the five v2.1 keys: exclude, format, locale, template, push. Add them as commented lines mirroring docs/configuration.md wording.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Add exclude, format, locale, template, push commented lines to exampleConfigTemplate",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_c38aa48290f0/bugfix/001_9f1ab2b62a84/architecture/issue_analysis.md §Issue 3. The exampleConfigTemplate constant is in internal/cmd/config.go starting at line 497. Its [generation] block (~lines 565-578) currently lists: max_diff_bytes, max_md_lines, max_duplicate_retries, subject_target_chars, output, strip_code_fence, max_commits, binary_extensions. Missing: exclude, format, locale, template, push. The Config struct (internal/config/config.go) confirms these fields: Exclude []string (line 103, toml:\"exclude\"), Format string (line 85, toml:\"format\"), Locale string (line 89, toml:\"locale\"), Template string (line 93, toml:\"template\"), Push bool (line 120, toml:\"push\"). docs/configuration.md documents all five (lines 106-108: exclude/format/locale/template; line 192: push in git-config table; also the commented [generation] example ~lines 101-108).\n2. INPUT: The exampleConfigTemplate const string in internal/cmd/config.go. The exact insertion point is AFTER the `# binary_extensions = []  ...` line and BEFORE the `# NOTE: [generation] output/strip_code_fence ...` line within the [generation] block.\n3. LOGIC: Add these 5 commented lines (mirroring docs/configuration.md wording, with PRD section refs and one-line descriptions), maintaining the column alignment used by existing keys:\n   # exclude               = []      # gitignore-style globs; UNION across global+repo+flag (§9.18 FR-X1)\n   # format                = \"auto\"  # auto|conventional|gitmoji|plain; unknown = hard error (exit 1) (§9.19 FR-F1)\n   # locale                = \"\"      # free-form language name or BCP-47 tag; never validated (§9.19 FR-F6)\n   # template              = \"\"      # wrap every message; must contain literal $msg, e.g. \"$msg (#205)\" (§9.19 FR-F8)\n   # push                  = false   # run `git push` after a fully-successful run; on failure commits stand (§9.22 FR-P1)\n   IMPORTANT: All lines must start with `# ` (commented out — the template is INERT). The Go string uses backtick raw literals with `+ \"` + backtick concatenation for backtick characters (follow the existing pattern in the template, e.g. the strip_code_fence line uses ` + \"` + ` for the ``` fence reference). The `template` line uses `$msg` — in a raw string literal this is fine (no escape needed), but note the existing template already uses `$msg` in the env var section.\n4. OUTPUT: The modified exampleConfigTemplate string. When `config init --template --config <path>` is run, the generated file's [generation] section now contains all 13 keys (8 existing + 5 new), all commented out.\n5. MOCKING: Tests write the template to a temp file via the config init command and grep for the keys. Use rootCmd.SetArgs([\"config\", \"init\", \"--template\", \"--config\", tmpPath]) and rootCmd.Execute().\n6. TESTS (TDD):\n   - Add/extend a test (e.g. TestConfigInitTemplate or similar — search config_test.go for existing template tests) that runs `config init --template --config <tmp>`, reads the file, and asserts it contains all 5 keys: \"exclude\", \"format\", \"locale\", \"template\", \"push\" within the [generation] section. Use strings.Contains for each key name. Also verify the lines are commented (start with #).\n   - Existing golden/snapshot tests (if any compare the full template output) must be updated to include the new lines.\n7. DOCS: [Mode A] The template IS the documentation — fixing it IS the doc update. No separate docs file change needed (docs/configuration.md already documents these keys correctly). The template's header comment says 'documents every available option' — this fix makes that statement true.",
+                  "prd_selectors": [
+                    "h2.3",
+                    "h2.3/h3.2",
+                    "h2.0",
+                    "h2.4"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T4",
+              "title": "Fix IsTerminal /dev/null misfire with true isatty ioctl (Issue 4 — Minor)",
+              "status": "Complete",
+              "description": "ui.IsTerminal uses stat.Mode() & os.ModeCharDevice, which treats /dev/null (a char device) as a terminal. Replace with a true isatty ioctl probe using stdlib syscall, following the project's existing platform-specific file pattern (procgroup_unix.go / procgroup_windows.go).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T4.S1",
+                  "title": "Replace char-device heuristic with platform-specific isatty ioctl probe",
+                  "status": "Complete",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_c38aa48290f0/bugfix/001_9f1ab2b62a84/architecture/issue_analysis.md §Issue 4, system_context.md, and external_deps.md. The current IsTerminal (internal/ui/output.go ~lines 25-30) tests `stat.Mode() & os.ModeCharDevice != 0`. /dev/null IS a char device → returns true. The code comment says 'NOT a true isatty ioctl'. The project is DELIBERATELY dep-free (NO golang.org/x/term or golang.org/x/sys) and uses stdlib syscall for platform-specific code (see internal/provider/procgroup_unix.go with `//go:build !windows`, procgroup_windows.go with `//go:build windows`, signal_unix.go/signal_windows.go). Supported platforms: linux, darwin, windows (all × amd64/arm64, CGO_ENABLED=0). Key syscall facts: Linux has `syscall.TCGETS` and `syscall.SYS_IOCTL`; Darwin has `syscall.TIOCGETA` and `syscall.SYS_IOCTL`; Windows uses `syscall.NewLazyDLL(\"kernel32.dll\")` (same pattern as procgroup_windows.go line ~15).\n2. INPUT: The existing IsTerminal(f *os.File) bool function in internal/ui/output.go. Its callers pass os.Stdin or os.Stdout. The function must remain `func IsTerminal(f *os.File) bool` (stable signature — callers depend on it).\n3. LOGIC: Create platform-specific isatty implementation files in internal/ui/, following the procgroup pattern:\n   (a) internal/ui/isatty_linux.go (`//go:build linux`): Define `const ioctlReadTermios = syscall.TCGETS` and `func isTerminalFd(fd uintptr) bool` that calls `syscall.Syscall6(syscall.SYS_IOCTL, fd, uintptr(ioctlReadTermios), uintptr(unsafe.Pointer(&buf)), 0, 0, 0)` where buf is `[128]byte` (portable raw buffer — avoids syscall.Termios struct-layout differences). Return true iff errno == 0.\n   (b) internal/ui/isatty_darwin.go (`//go:build darwin`): Same as linux but `const ioctlReadTermios = syscall.TIOCGETA`.\n   (c) internal/ui/isatty_windows.go (`//go:build windows`): Use `syscall.NewLazyDLL(\"kernel32.dll\").NewProc(\"GetConsoleMode\")` — call it with the fd as handle; return true iff it succeeds (GetConsoleMode returns nonzero on a console handle). /dev/null doesn't exist on Windows (NUL is not a char device), so the current behavior is less broken, but GetConsoleMode is still more correct.\n   (d) internal/ui/isatty_other.go (`//go:build !linux && !darwin && !windows`): Fallback for unexpected platforms — return the old char-device heuristic `(stat.Mode() & os.ModeCharDevice) != 0` so the build never breaks on an untested GOOS. This is the safe default.\n   (e) Update IsTerminal in output.go: replace the body with `return isTerminalFd(f.Fd())` and update the doc comment to reflect the true ioctl probe (remove the 'NOT a true isatty ioctl' note; note the platform files).\n   CRITICAL: `import \"unsafe\"` is needed in the unix files. `import \"syscall\"` in all platform files. The `unsafe.Pointer(&buf)` is the standard Go pattern for ioctl (used by golang.org/x/term internally).\n4. OUTPUT: IsTerminal now returns false for /dev/null, pipes, files, and redirects; returns true only for real terminals/ptys. No signature change. All callers benefit automatically (config_init_interactive.go TTY gate, integrate DefaultConfirm auto-decline, color resolution in hookexec.go and default_action.go).\n5. MOCKING: Tests open /dev/null directly via os.Open(\"/dev/null\") and call IsTerminal. On non-unix test runners, skip the /dev/null test (use `runtime.GOOS` guard or check file existence). The existing TestIsTerminal_Pipe (output_test.go ~line 269) must still pass (pipes are not terminals). For the Windows path, testing requires a Windows CI runner; the /dev/null test is Unix-only.\n6. TESTS (TDD):\n   - Add TestIsTerminal_DevNull: open /dev/null (`f, _ := os.Open(\"/dev/null\")`), assert `!IsTerminal(f)`. Guard with `if runtime.GOOS == \"windows\" { t.Skip() }` since /dev/null is Unix-only. Also check `os.Stat` to confirm it IS a char device (proving the old heuristic would have misfired).\n   - Verify TestIsTerminal_Pipe still passes (pipe reader/writer → false).\n   - Add TestIsTerminal_RealStdinConsistency: if os.Stdin is a pipe in the test env (CI), IsTerminal(os.Stdin) should return false (already covered conceptually by the pipe test).\n7. DOCS: none — no user-facing/config/API surface change. IsTerminal's signature is unchanged; the behavior fix makes the documented FR-L3 TTY gate and FR-I3c DefaultConfirm auto-decline work correctly for the /dev/null case.",
+                  "prd_selectors": [
+                    "h2.3",
+                    "h2.3/h3.3",
+                    "h2.0",
+                    "h2.4"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T5",
+              "title": "Sync changeset-level documentation",
+              "status": "Complete",
+              "description": "Final documentation sweep to ensure README.md and any overview docs accurately reflect the changeset. Per SOW §5 Mode B: cross-cutting docs that only make sense once the whole change is in place.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T5.S1",
+                  "title": "Verify README.md and overview docs reflect the four fixes",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T2.S1",
+                    "P1.M1.T3.S1",
+                    "P1.M1.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_c38aa48290f0/bugfix/001_9f1ab2b62a84/architecture/system_context.md. README.md (~19KB) surfaces all six v2.1 features. docs/configuration.md documents all config keys. docs/cli.md documents CLI commands.\n2. INPUT: All four fixes from P1.M1.T1 through P1.M1.T4 are complete. This subtask reviews documentation for accuracy AFTER the code changes.\n3. LOGIC: Review the following for accuracy and update ONLY if the changeset introduced drift:\n   (a) README.md: Check if any section describes lazygit install behavior, hook exec output, config template contents, or TTY detection that is now inaccurate. Most likely NO changes needed — these are bug fixes to internal behavior, not new features. If README mentions the lazygit no-mangle guarantee, verify it now holds (it does, after Issue 1 fix).\n   (b) docs/configuration.md: Already correctly documents all 5 generation keys — no change needed (the template fix in T3 brings the template in line with these docs).\n   (c) docs/cli.md (if exists): Verify hook exec and integrate command descriptions are still accurate.\n   (d) If NO documentation drift is found (the expected outcome for a bugfix changeset), document this finding in the subtask completion and make zero file changes. Do NOT invent documentation changes.\n4. OUTPUT: Either updated docs files (if drift found) or a confirmation that docs are already accurate. This is a verification + catch-all task.\n5. MOCKING: N/A — documentation review only.\n6. TESTS: N/A — documentation review (the TDD tests for code changes are in their respective subtasks).\n7. DOCS: [Mode B] This IS the documentation sync task. It sweeps README.md and overview docs for the entire changeset.",
+                  "prd_selectors": [
+                    "h2.0",
+                    "h2.2",
+                    "h2.3",
+                    "h2.4"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: integrate install lazygit silently creates a duplicate <c-a> key binding when a foreign one already exists
+ h2.3 Minor Issues (Nice to Fix)
+  h3.1 Issue 2: hook exec prints the "Generating…" progress line for no-op sources and empty diffs
+  h3.2 Issue 3: config init --template reference config omits the v2.1 [generation] keys
+  h3.3 Issue 4: ui.IsTerminal treats /dev/null (a character device) as a terminal
+ h2.4 Testing Summary
+---
+para:8 list:5

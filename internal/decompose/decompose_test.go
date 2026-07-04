@@ -399,6 +399,40 @@ func TestDecompose_SingleShortcut_CleanStatus(t *testing.T) {
 	}
 }
 
+// TestDecompose_SingleShortcut_TemplateApplied verifies the §9.19 FR-F8 seam on the FR-M11 planner
+// shortcut: the planner's message is templated before it is committed (call site #4).
+func TestDecompose_SingleShortcut_TemplateApplied(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmWriteFile(t, repo, "x.txt", "x\n")
+
+	plannerJSON := `{"count":1,"single":true,"commits":[{"title":"add x","description":"x.txt"}],"message":"feat: add x.txt"}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	// Message stub must NOT be called (clean single-shortcut path).
+	counterDir := t.TempDir()
+	counterFile := counterDir + "/counter"
+	messageM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
+
+	roles := RoleManifests{Planner: plannerM, Message: messageM}
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Commits = 2 // override FR-M2b one-file short-circuit so the planner path is tested
+	deps.Config.Template = "$msg (#205)"
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(shortcut template): %v", err)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1", len(result.Commits))
+	}
+	want := "feat: add x.txt (#205)"
+	if result.Commits[0].Subject != want {
+		t.Errorf("Subject = %q, want %q (templated planner shortcut message)", result.Commits[0].Subject, want)
+	}
+}
+
 func TestDecompose_SingleShortcut_DuplicateFallback(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
@@ -507,6 +541,48 @@ func TestDecompose_AutoMultiCommit_HappyPath(t *testing.T) {
 	parent2 := dcmGitOut(t, repo, "rev-parse", shas[2]+"^")
 	if parent2 != shas[1] {
 		t.Errorf("commit[2] parent = %q, want %q", parent2, shas[1])
+	}
+}
+
+// TestDecompose_AutoMultiCommit_TemplateAppliedUniformly verifies the §9.19 FR-F8 requirement that
+// EVERY commit in a decompose run is templated (call site #3, per-concept message loop).
+func TestDecompose_AutoMultiCommit_TemplateAppliedUniformly(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
+
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""}) // stub stager (can't run git)
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Template = "$msg (#812)"
+	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
+		"c1": {"a.txt"},
+		"c2": {"b.txt"},
+		"c3": {"c.txt"},
+	})
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(auto N=3, templated): %v", err)
+	}
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+	}
+
+	wantSubjects := []string{"feat: add a (#812)", "feat: add b (#812)", "feat: add c (#812)"}
+	for i, cr := range result.Commits {
+		if cr.Subject != wantSubjects[i] {
+			t.Errorf("Commits[%d].Subject = %q, want %q (uniformly templated)", i, cr.Subject, wantSubjects[i])
+		}
 	}
 }
 

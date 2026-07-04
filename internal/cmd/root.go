@@ -64,6 +64,29 @@ var (
 	flagDryRun      bool
 )
 
+// flagExclude holds repeatable --exclude/-x occurrences (§9.18 FR-X1). Read only via
+// fs.Changed/fs.GetStringArray in config.Load's loadFlags — never read directly (same
+// discipline as flagProvider/flagModel); the &flagExclude address here is its use.
+var flagExclude []string
+
+// §9.22 FR-E1 — --edit flag (flag-only; resolved by config.Load via fs.Changed). No env/git/config-file
+// counterpart — read only via fs.Changed/fs.GetBool in loadFlags (same discipline as flagContext).
+var flagEdit bool
+
+// §9.22 FR-P1 — --push flag (full 5-layer precedence; resolved by config.Load via fs.Changed).
+var flagPush bool
+
+// §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags (resolved by config.Load via fs.Changed).
+var (
+	flagFormat   string
+	flagLocale   string
+	flagTemplate string
+)
+
+// §9.19 FR-F7 — context flag (flag-only; resolved by config.Load via fs.Changed). No env/git/config-file
+// counterpart — read only via fs.Changed/fs.GetString in loadFlags (same discipline as flagExclude).
+var flagContext string
+
 // loadedCfg holds the config resolved in PersistentPreRunE; nil until then. Read by Config().
 var loadedCfg *config.Config
 
@@ -111,6 +134,9 @@ func init() {
 	pf.BoolVarP(&flagAll, "all", "a", false, "Run git add -A before snapshotting, even if something is staged")
 	pf.BoolVar(&flagNoAutoStage, "no-auto-stage", false, "If nothing is staged, exit instead of auto-staging")
 	pf.BoolVar(&flagDryRun, "dry-run", false, "Generate and print the message; do not commit")
+	pf.StringArrayVarP(&flagExclude, "exclude", "x", nil,
+		"Exclude matching files from the agent payload (unions with .stagehandignore and "+
+			"[generation].exclude; never excluded from the commit)")
 	// §15.2 decompose/per-role flags (P4.M1.T1.S1) — bound to package vars; loadFlags reads via fs.Changed.
 	pf.IntVar(&flagCommits, "commits", 0,
 		"Force exactly N commits when nothing is staged (skips the planner's count decision; 0 = auto-decompose). 1 ≡ --single (env/git stagehand.commits)")
@@ -132,6 +158,35 @@ func init() {
 		"Per-role provider override for the leftover arbiter (env STAGEHAND_ARBITER_PROVIDER; git stagehand.role.arbiter)")
 	pf.StringVar(&flagArbiterModel, "arbiter-model", "",
 		"Per-role model override for the leftover arbiter (env STAGEHAND_ARBITER_MODEL; git stagehand.role.arbiter)")
+	// §9.19 FR-F1/FR-F6 — message format + locale flags (zero default; loadFlags reads via fs.Changed).
+	pf.StringVar(&flagFormat, "format", "",
+		"Message format: auto|conventional|gitmoji|plain (env STAGEHAND_FORMAT; git stagehand.format; "+
+			"[generation].format; default auto). Unknown mode is a hard error.")
+	pf.StringVar(&flagLocale, "locale", "",
+		"Write the message in this language (free-form name or BCP-47 tag; env STAGEHAND_LOCALE; "+
+			"git stagehand.locale; [generation].locale; default empty)")
+	// §9.19 FR-F8 — message template (distinct from the LOCAL `config init --template` bool: pflag's
+	// AddFlagSet skips this inherited persistent flag on `config init` since a local name already exists).
+	pf.StringVar(&flagTemplate, "template", "",
+		"Wrap every commit message: the literal $msg is replaced with the generated message, e.g. "+
+			"\"$msg (#205)\" (env STAGEHAND_TEMPLATE; git stagehand.template; [generation].template; "+
+			"default empty). Must contain $msg. (Distinct from 'config init --template'.)")
+	pf.StringVar(&flagContext, "context", "",
+		"Extra context appended to the message+planner payload, e.g. \"hotfix for #812\" "+
+			"(flag only; per-invocation — no env/git/config key)")
+	pf.BoolVar(&flagEdit, "edit", false,
+		"If set, open your editor on the generated message before committing (uses $GIT_EDITOR). "+
+			"The message file includes the tree SHA + a diff-tree name-status summary; comment lines ('#') "+
+			"are stripped on close. An empty message aborts (exit 1, not a rescue). The edited message "+
+			"bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored "+
+			"with --dry-run; not valid with hook exec. (§9.22 FR-E1)")
+	pf.BoolVar(&flagPush, "push", false,
+		"If set, push to the remote (runs git push, streaming) after a fully-successful "+
+			"run. Never prompts; never auto-sets upstream. On push failure the commits stand — "+
+			"git's stderr is shown verbatim (including the no-upstream hint), \"commits created; "+
+			"push failed\" prints, and stagehand exits 1. Skipped on --dry-run, the nothing-to-commit "+
+			"exit, and any rescue/CAS abort. (env STAGEHAND_PUSH, git stagehand.push, config "+
+			"[generation].push; default false.) (§9.22 FR-P1)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")

@@ -3,6 +3,7 @@
 /build/
 /stagehand
 /stubagent
+cmd/stubagent/stubagent
 *.exe
 *.dll
 *.so

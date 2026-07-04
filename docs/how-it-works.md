@@ -100,6 +100,8 @@ Decompose activates when **nothing is staged**, **auto-stage-all is on** (the de
 
 **Overlapped staging and generation.** `stager[i+1]` runs in parallel with `message[i]` — the stager prepares the next concept's index while the message agent generates the current commit message. This 1-deep overlap keeps latency low.
 
+**Stage-while-editing (FR-E2).** With `--edit`, the snapshot is frozen *before* the editor opens. You can `git add` in another pane during the edit session — the in-flight commit is unaffected. This is the same stage-while-generating property, extended through the editor. This is the one thing `git commit -e`-style flows cannot offer on top of generation.
+
 **Frozen tree snapshots.** After each stager returns, `write-tree` freezes the accumulated index into an immutable tree object (`tree[i]`). This is the SAME snapshot mechanism as the single-commit path, composed N times.
 
 **Tree-to-tree diffs.** `message[i]` reasons over `diff(tree[i-1], tree[i])` — never `index-vs-HEAD`. This makes each concept diff immune to concurrent staging and to earlier commits landing.
@@ -128,6 +130,14 @@ See [configuration.md](configuration.md) for per-role model configuration and [c
 ### Binary and non-text file filtering
 
 Binary files, lock files, snapshots, sourcemaps, and vendor directories are **excluded from every diff payload** — staged diff, working-tree snapshot, and concept diff. They are replaced with a `<status>\t[binary] <path>` placeholder so the agent sees *that* the file changed without the useless binary hunk. This applies identically in the single-commit and multi-commit paths.
+
+### Payload exclusions (.stagehandignore)
+
+Exclusion patterns from `.stagehandignore`, the `[generation] exclude` config key, or the `--exclude`/`-x` CLI flag hide a file's **diff body** from every payload while still committing the file exactly as it stands. Excluded files emit a `<status>\t[excluded] <path>` placeholder (same shape as the `[binary]` placeholder, distinguishable by tag) so the agent sees *that* the file changed without its contents.
+
+**Payload-only guarantee (FR-X5):** Exclusion is payload-only — it never alters staging or commit content. The excluded file is committed exactly as staged, and `git diff-tree` of the resulting commit includes it. Only what the agent *sees* is affected.
+
+The built-in noise denylist (lock files, snapshots, sourcemaps, vendor directories) always applies alongside any user exclusions — the two sets are unioned, never replaced. See [configuration.md](configuration.md) for `.stagehandignore` syntax.
 
 ## Safety and the rescue protocol
 
@@ -187,6 +197,19 @@ For repos with more than one commit, Stagehand builds a system prompt from the l
 
 For repos with zero or one commit (including unborn repos), Stagehand falls back to a **conventional-commit** system prompt (PRD §17.2): "Use Conventional Commits format (type: description)."
 
+### Format modes and locale
+
+`--format` (default `auto`) controls how the system prompt shapes the commit message, and applies everywhere a message is produced: the message role, the planner's single-commit shortcut, and the arbiter's leftover-commit message.
+
+- **`auto`** — the default described above: learn style from recent commit history.
+- **`conventional`** — replaces the learned-style examples with an explicit `type(scope): description` contract (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`).
+- **`gitmoji`** — replaces the examples with an instruction to begin the subject with one [gitmoji](https://gitmoji.dev) emoji, followed by the compiled-in emoji reference table (no network fetch).
+- **`plain`** — replaces the examples with nothing: no learned style, no format contract, just the essence of the change.
+
+For any mode other than `auto`, the recent-commit history examples are omitted entirely — useful for repos with an idiosyncratic or empty history. The multi-line rule and subject-length target still apply in every mode.
+
+`--locale` (e.g. `--locale French`, `--locale ja`) appends one line — "Write the commit message in `<locale>`." — to the system prompt in every format mode. The value is passed through as-is with no translation or validation.
+
 ### User payload
 
 The user payload combines the staged diff with the rejection list (previously rejected subjects). On a parse-failure retry, the retry instruction ("Output ONLY the commit message. No preamble, no markdown, no quotes.") is prepended as a corrective preamble.
@@ -199,3 +222,29 @@ Stagehand requests raw text output from agents (`output = "raw"`) rather than st
 - A raw contract is more robust across different agent versions and providers.
 - The parser handles code-fence stripping and newline normalization, which covers the common raw-output quirks.
 - JSON mode is available as a fallback for agents that only produce structured output.
+
+## Hook mode vs the snapshot-based flow
+
+### Trade-off inversion (FR-H7)
+
+Stagehand offers two ways to generate commit messages, each with different trade-offs:
+
+**Snapshot-based flow** (the default `stagehand` command):
+
+- **Atomic**: uses `git write-tree` to freeze the index, then `git commit-tree` + `git update-ref` to publish — the repo is byte-for-byte unchanged on failure (no orphan commits, no partial state).
+- **Bypasses pre-commit hooks**: because the commit is built via plumbing (not `git commit`), tools like husky, lint-staged, and `.pre-commit-config.yaml` do NOT run on the generated commit.
+- **Stage-while-generating**: the snapshot decouples staged content from generation time, so you can keep staging while the message generates.
+- **Rescue protocol**: if generation fails after the snapshot, the frozen tree SHA is printed so you can commit manually.
+
+**Hook mode** (`stagehand hook install` + `git commit`):
+
+- **Pre-commit hooks honored**: the commit flows through the standard `git commit` path, so husky, lint-staged, and any other `pre-commit` hooks run normally.
+- **No snapshot guarantees**: the index is live during generation — if you stage more files while the hook runs, they may affect the commit. Generation latency is inside the commit flow (no overlap).
+- **Never-block contract**: any failure leaves the message file untouched and exits 0, so the commit proceeds to an empty editor — the commit is never aborted by a model hiccup (unless `--strict` opts in).
+- **No rescue protocol**: there is no frozen tree to recover — the commit simply proceeds without an AI message.
+
+### When to use which
+
+- Use **hook mode** for day-to-day commits in your IDE or lazygit — zero ceremony, pre-commit hooks run, never blocked.
+- Use the **snapshot-based flow** (`stagehand` directly) when you need atomicity, stage-while-generating overlap, or are scripting/batch-committing.
+- The two **compose**: install the hook for `git commit`, and run `stagehand` directly when you want the atomic path.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/decompose"
+	"github.com/dustin/stagehand/internal/exclude"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
 	"github.com/dustin/stagehand/internal/prompt"
@@ -138,6 +139,10 @@ func GenerateCommit(ctx context.Context, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	deps.Verbose = ui.NewVerbose(opts.Verbose, cfg.Verbose)
+	deps.Excludes, err = exclude.ResolveExcludePathspecs(cfg, repoDir, deps.Verbose)
+	if err != nil {
+		return Result{}, fmt.Errorf("resolve excludes: %w", err)
+	}
 
 	// Common path: no DryRun, no SystemExtra → delegate to the frozen, tested orchestrator.
 	if !opts.DryRun && opts.SystemExtra == "" {
@@ -199,6 +204,10 @@ func Decompose(ctx context.Context, opts DecomposeOptions) (DecomposeResult, err
 		Roles:    roleManifests,
 		Verbose:  ui.NewVerbose(opts.Verbose, cfg.Verbose),
 		Out:      opts.Verbose, // nil-safe rescue/CAS sink (G-DEPS-OUT-SINK)
+	}
+	deps.Excludes, err = exclude.ResolveExcludePathspecs(cfg, repoDir, deps.Verbose)
+	if err != nil {
+		return DecomposeResult{}, fmt.Errorf("resolve excludes: %w", err)
 	}
 	ires, derr := decompose.Decompose(ctx, deps)
 	return mapDecomposeResult(ires, roleModels), derr // partial + error on FR-M12
@@ -383,20 +392,20 @@ func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
 // builders; NOT IP duplication.
 func buildSysPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // runPipeline is the self-contained path for DryRun/SystemExtra. It mirrors generate.CommitStaged
@@ -415,6 +424,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		MaxDiffBytes:     cfg.MaxDiffBytes,
 		MaxMDLines:       cfg.MaxMdLines,
 		BinaryExtensions: cfg.BinaryExtensions,
+		Excludes:         deps.Excludes,
 	})
 	if err != nil {
 		return Result{}, err
@@ -468,7 +478,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	var lastCause error
 
 	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
-		payload := prompt.BuildUserPayload(diff, rejected)
+		payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload
 		}
@@ -506,7 +516,8 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			continue
 		}
 		parseFail = false
-		signal.SetCandidate(m) // keep the §18.3 candidate note current
+		m = generate.FinalizeMessage(m, cfg) // §9.19 FR-F8 seam — template BEFORE dedupe (§9.7 judges the final subject)
+		signal.SetCandidate(m)               // keep the §18.3 candidate note current
 
 		subject := generate.ExtractSubject(m)
 		if generate.IsDuplicate(subject, recent) {
@@ -525,6 +536,20 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			Kind: generate.ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
 			Candidate: candidate, Cause: lastCause,
 		}
+	}
+
+	// §9.22 FR-E1: post-dedupe editor gate (EditMessage). AFTER the dedupe loop accepts a message
+	// and BEFORE CommitTree. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	parentTree := git.EmptyTreeSHA
+	if !isUnborn {
+		if pt, perr := deps.Git.RevParseTree(ctx, "HEAD"); perr == nil {
+			parentTree = pt
+		}
+	}
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, parentTree, treeSHA) // best-effort; "" on err
+	msg, err = generate.EditMessage(ctx, msg, cfg, generate.EditContext{Git: deps.Git, TreeSHA: treeSHA, NameStatus: nameStatus})
+	if err != nil {
+		return Result{}, err // ErrEmptyMessage propagates BARE → exitcode.For() → exit 1
 	}
 
 	// ---- Dry-run success: skip commit-tree/update-ref. ----

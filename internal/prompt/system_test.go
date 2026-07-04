@@ -16,7 +16,7 @@ func TestBuildSystemPrompt_CanonicalExact(t *testing.T) {
 		"fix: handle nil deref\n\nThe parser panicked on an unresolved manifest.",
 	}
 	const subjectTarget = 50
-	got := BuildSystemPrompt(examples, true, subjectTarget)
+	got := BuildSystemPrompt(examples, true, subjectTarget, "auto", "")
 
 	const want = "You are a commit message generator.\n" +
 		"\n" +
@@ -165,7 +165,7 @@ func TestBuildSystemPrompt_Properties(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.check(t, BuildSystemPrompt(tc.examples, tc.hasMultiline, tc.subjectTarget))
+			tc.check(t, BuildSystemPrompt(tc.examples, tc.hasMultiline, tc.subjectTarget, "auto", ""))
 		})
 	}
 }
@@ -174,7 +174,7 @@ func TestBuildSystemPrompt_Properties(t *testing.T) {
 // and must omit all "---" lines while keeping the header, anti-reuse, rule, and target.
 func TestBuildSystemPrompt_EmptyExamples(t *testing.T) {
 	for _, ex := range [][]string{nil, {}} {
-		p := BuildSystemPrompt(ex, false, 50) // must not panic
+		p := BuildSystemPrompt(ex, false, 50, "auto", "") // must not panic
 		if strings.Contains(p, "---") {
 			t.Errorf("empty examples must emit no '---' lines; got %q", p)
 		}
@@ -242,7 +242,7 @@ func TestCountNonBlankLines(t *testing.T) {
 // PRD §17.2 byte-for-byte (role + blank + short output contract + blank + 2-line essence + blank + the
 // type(scope) target/format line). Independently derived from PRD §17.2 (not from the implementation).
 func TestBuildFallbackPrompt_CanonicalExact(t *testing.T) {
-	got := BuildFallbackPrompt(50)
+	got := BuildFallbackPrompt(50, "auto", "")
 
 	const want = "You are a commit message generator.\n" +
 		"\n" +
@@ -262,7 +262,7 @@ func TestBuildFallbackPrompt_CanonicalExact(t *testing.T) {
 // block is present, (b) the §17.2 ADDITIONS are present, and (c) — the anti-copy-paste guards — every
 // §17.1 MATURE-prompt element is ABSENT (the #1 implementation risk is copy-pasting S1's constants).
 func TestBuildFallbackPrompt_Properties(t *testing.T) {
-	p := BuildFallbackPrompt(50)
+	p := BuildFallbackPrompt(50, "auto", "")
 	cases := []struct {
 		name      string
 		needle    string
@@ -312,7 +312,7 @@ func TestBuildFallbackPrompt_Properties(t *testing.T) {
 // TestBuildFallbackPrompt_SubjectTargetInterpolated pins §2: a non-default subjectTarget changes ONLY
 // the char count; "(~7 words)" survives verbatim; no hardcoded 50 leaks.
 func TestBuildFallbackPrompt_SubjectTargetInterpolated(t *testing.T) {
-	p := BuildFallbackPrompt(72)
+	p := BuildFallbackPrompt(72, "auto", "")
 	if !strings.Contains(p, "Target ~72 characters (~7 words). Format: type(scope): description") {
 		t.Errorf("subjectTarget=72 not interpolated as expected; got %q", suffix(p, 80))
 	}
@@ -321,6 +321,177 @@ func TestBuildFallbackPrompt_SubjectTargetInterpolated(t *testing.T) {
 	}
 	if !strings.Contains(p, "(~7 words)") {
 		t.Error("the fixed '(~7 words)' gloss must survive a non-default subjectTarget (§2)")
+	}
+}
+
+// TestBuildSystemPrompt_FormatModes_CanonicalExact pins the exact §17.8 assembly for each non-auto mode
+// (mature-repo builder), with and without a locale, proving the scaffold REPLACES the style-examples
+// block + anti-reuse warning while retaining the preamble, multi-line rule, and subject-target line
+// (FR-F2/F3/F4), and that locale appends exactly one line (FR-F6).
+func TestBuildSystemPrompt_FormatModes_CanonicalExact(t *testing.T) {
+	examples := []string{"feat: add foo", "fix: handle nil deref"} // IGNORED in non-auto modes (FR-F1)
+
+	cases := []struct {
+		name   string
+		format string
+		locale string
+		want   string
+	}{
+		{
+			name: "conventional, no locale", format: "conventional", locale: "",
+			want: promptPreamble + "\n\n" + conventionalScaffold + "\n\n" + multilineRuleSingle + "\n" +
+				"Target ~50 characters for the subject line.",
+		},
+		{
+			name: "conventional, locale French", format: "conventional", locale: "French",
+			want: promptPreamble + "\n\n" + conventionalScaffold + "\n\n" + multilineRuleSingle + "\n" +
+				"Target ~50 characters for the subject line.\nWrite the commit message in French.",
+		},
+		{
+			name: "gitmoji, no locale", format: "gitmoji", locale: "",
+			want: promptPreamble + "\n\n" + gitmojiScaffoldInstruction + "\n\n" + RenderGitmojiTable() + "\n\n" +
+				multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.",
+		},
+		{
+			name: "gitmoji, locale French", format: "gitmoji", locale: "French",
+			want: promptPreamble + "\n\n" + gitmojiScaffoldInstruction + "\n\n" + RenderGitmojiTable() + "\n\n" +
+				multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.\nWrite the commit message in French.",
+		},
+		{
+			name: "plain, no locale", format: "plain", locale: "",
+			want: promptPreamble + "\n\n" + multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.",
+		},
+		{
+			name: "plain, locale French", format: "plain", locale: "French",
+			want: promptPreamble + "\n\n" + multilineRuleSingle + "\n" +
+				"Target ~50 characters for the subject line.\nWrite the commit message in French.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := BuildSystemPrompt(examples, false, 50, tc.format, tc.locale)
+			if got != tc.want {
+				t.Errorf("BuildSystemPrompt(%q, %q) mismatch:\n--- got ---\n%q\n--- want ---\n%q", tc.format, tc.locale, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildSystemPrompt_FormatModes_Properties asserts the structural invariants shared by every non-auto
+// mode: the style-examples block, the "Match the tone…" intro, and the anti-reuse block are ABSENT; the
+// multi-line rule + subject-target line are retained; and each mode's scaffold marker is present.
+func TestBuildSystemPrompt_FormatModes_Properties(t *testing.T) {
+	examples := []string{"feat: a", "fix: b"}
+	for _, format := range []string{"conventional", "gitmoji", "plain"} {
+		for _, locale := range []string{"", "French"} {
+			t.Run(format+"/locale="+locale, func(t *testing.T) {
+				p := BuildSystemPrompt(examples, true, 50, format, locale)
+
+				if strings.Contains(p, "Match the tone and style") {
+					t.Error("style-examples intro must be ABSENT in non-auto modes")
+				}
+				if strings.Contains(p, "CRITICAL: You MUST NOT copy") {
+					t.Error("anti-reuse block must be ABSENT in non-auto modes")
+				}
+				if strings.Contains(p, "---") {
+					t.Error("no '---' example markers must appear in non-auto modes")
+				}
+				if strings.Contains(p, "feat: a") || strings.Contains(p, "fix: b") {
+					t.Error("history examples must NOT be embedded in non-auto modes (FR-F1)")
+				}
+				if !strings.Contains(p, multilineRuleAllow) {
+					t.Error("multi-line rule must be retained (FR12 detection still runs)")
+				}
+				if !strings.Contains(p, "Target ~50 characters for the subject line.") {
+					t.Error("subject-target line must be retained")
+				}
+
+				switch format {
+				case "conventional":
+					if !strings.Contains(p, "type(scope): description") {
+						t.Error("conventional scaffold missing format contract")
+					}
+					for _, ty := range []string{"feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"} {
+						if !strings.Contains(p, ty) {
+							t.Errorf("conventional scaffold missing type %q", ty)
+						}
+					}
+				case "gitmoji":
+					if !strings.Contains(p, "Begin the subject with exactly ONE emoji") {
+						t.Error("gitmoji scaffold missing instruction")
+					}
+					if !strings.Contains(p, "🎨 - ") {
+						t.Error("gitmoji scaffold missing a RenderGitmojiTable() row")
+					}
+				case "plain":
+					if strings.Contains(p, "type(scope): description") {
+						t.Error("plain mode must have no format contract")
+					}
+					if strings.Contains(p, "Begin the subject with exactly ONE emoji") {
+						t.Error("plain mode must have no gitmoji instruction")
+					}
+				}
+
+				if locale == "French" {
+					if !strings.HasSuffix(p, "\nWrite the commit message in French.") {
+						t.Errorf("locale line missing/misplaced; suffix: %q", suffix(p, 60))
+					}
+				} else if strings.Contains(p, "Write the commit message in") {
+					t.Error("empty locale must NOT produce a locale line")
+				}
+			})
+		}
+	}
+}
+
+// TestBuildFallbackPrompt_FormatModes_CanonicalExact mirrors the mature-repo scaffold test for the
+// new-repo (fallback) builder: hasMultiline is implicitly false (no history), and the same scaffold +
+// locale rules apply (FR-F2/F3/F4/F6).
+func TestBuildFallbackPrompt_FormatModes_CanonicalExact(t *testing.T) {
+	cases := []struct {
+		name   string
+		format string
+		locale string
+		want   string
+	}{
+		{
+			name: "conventional, no locale", format: "conventional", locale: "",
+			want: promptPreamble + "\n\n" + conventionalScaffold + "\n\n" + multilineRuleSingle + "\n" +
+				"Target ~50 characters for the subject line.",
+		},
+		{
+			name: "gitmoji, locale ja", format: "gitmoji", locale: "ja",
+			want: promptPreamble + "\n\n" + gitmojiScaffoldInstruction + "\n\n" + RenderGitmojiTable() + "\n\n" +
+				multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.\nWrite the commit message in ja.",
+		},
+		{
+			name: "plain, no locale", format: "plain", locale: "",
+			want: promptPreamble + "\n\n" + multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := BuildFallbackPrompt(50, tc.format, tc.locale)
+			if got != tc.want {
+				t.Errorf("BuildFallbackPrompt(%q, %q) mismatch:\n--- got ---\n%q\n--- want ---\n%q", tc.format, tc.locale, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildSystemPrompt_UnknownFormat_DefaultsToAutoLike verifies the defensive path: an unreachable
+// unknown format value must not panic and must behave like "plain" (no scaffold body) rather than
+// crashing — the builder never re-validates cfg.Format (S1 owns validation).
+func TestBuildSystemPrompt_UnknownFormat_DefaultsToAutoLike(t *testing.T) {
+	p := BuildSystemPrompt([]string{"feat: a"}, false, 50, "bogus-mode", "")
+	if strings.Contains(p, "Match the tone and style") {
+		t.Error("unknown format must NOT take the auto examples-block path")
+	}
+	if strings.Contains(p, "type(scope): description") || strings.Contains(p, "Begin the subject with exactly ONE emoji") {
+		t.Error("unknown format must NOT emit any mode's scaffold body")
+	}
+	if !strings.Contains(p, "Target ~50 characters for the subject line.") {
+		t.Error("unknown format must still retain the subject-target line")
 	}
 }
 

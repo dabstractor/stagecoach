@@ -37,26 +37,44 @@ in git history. You MUST generate something COMPLETELY DIFFERENT:`
 // Committed VERBATIM. NO trailing newline — BuildUserPayload appends "\n\n" (one blank line) then the diff.
 const rejectionEpilogue = "Create an entirely new message with different wording."
 
+// contextIntro is the §17.8 context block header (PRD §9.19 FR-F7), committed VERBATIM (trailing COLON;
+// the user's text follows on the next line). NO trailing newline — BuildUserPayload / BuildPlannerUserPayload
+// own inter-block newline placement, same discipline as every other constant in this file.
+const contextIntro = "Additional context from the user (treat as authoritative):"
+
+// contextBlock returns the §17.8 context block ("<contextIntro>\n<text>") for a non-empty text, or "" when
+// text is empty. An empty result means the caller inserts nothing, preserving byte-identity with the
+// pre-FR-F7 payload. text is used VERBATIM — no trimming, no validation (FR-F7).
+func contextBlock(text string) string {
+	if text == "" {
+		return ""
+	}
+	return contextIntro + "\n" + text
+}
+
 // BuildUserPayload implements PRD §9.3 FR15 / §9.7 FR32 / §17.3: assemble the user payload delivered to
 // the agent via stdin (never as a CLI arg — FR15). It is the user-payload half of the prompt layer (the
 // system-prompt half is S1/S2's BuildSystemPrompt / BuildFallbackPrompt). The orchestrator (P1.M3.T4)
 // calls it on EVERY generation attempt:
 //
-//	payload := prompt.BuildUserPayload(diff, rejected)
+//	payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
 //	spec, _ := manifest.Render(model, provider, sys, payload)   // payload is the 4th arg (P1.M2.T4)
 //
-// `rejected` is []string{} on the first attempt and non-empty (the matched duplicate subjects, FR30:
-// each "the first line of the message") on a duplicate-rejection retry (FR32, up to
+// `context` is the §9.19 FR-F7 `--context` flag text ("" when unset) — see contextBlock/contextIntro
+// above. `rejected` is []string{} on the first attempt and non-empty (the matched duplicate subjects,
+// FR30: each "the first line of the message") on a duplicate-rejection retry (FR32, up to
 // max_duplicate_retries default 3). len(rejected) == 0 selects the normal path.
 //
-// ASSEMBLY (PRD §17.3, exact — see research design-decisions.md §3):
+// ASSEMBLY (PRD §17.3/§17.8, exact — see research design-decisions.md §3):
 //
 //	NORMAL (len(rejected) == 0):
-//	  userInstruction + "\n\n" + diff
+//	  userInstruction + "\n\n" + [contextBlock(context) + "\n\n" if context != ""] + diff
 //	    → "Generate a commit message for these changes:\n\n<diff>"   (COLON instruction + blank + diff)
+//	    → with context: "...changes:\n\nAdditional context...\n<context>\n\n<diff>"
 //
 //	REJECTION (len(rejected) > 0):
 //	  userInstructionReject + "\n\n"          // PERIOD instruction + blank line
+//	  + [contextBlock(context) + "\n\n" if context != ""]   // §17.8: context BEFORE the rejection block
 //	  + rejectionPreamble + "\n"              // the two-line IMPORTANT header, then end its 2nd line
 //	  + for each s in rejected: "- " + s + "\n"   // one list line per rejected subject (single-line per FR30)
 //	  + "\n"                                  // blank line after the list
@@ -65,7 +83,8 @@ const rejectionEpilogue = "Create an entirely new message with different wording
 //
 // THE colon-vs-period call (design-decisions.md §2): the normal instruction ends ":" (introduces the diff),
 // the rejection instruction ends "." (the IMPORTANT directive follows). BOTH are §17.3 renderings; the
-// work-item paraphrase elides the period but the PRD is authoritative.
+// work-item paraphrase elides the period but the PRD is authoritative. context does NOT change this choice
+// (design-decisions.md §2) — it is governed ONLY by len(rejected).
 //
 // The diff is appended VERBATIM — its trailing bytes (including whether it ends with '\n' and any
 // StagedDiff truncation sentinel) are preserved. The diff's shape is git.StagedDiff's contract (P1.M1.T3.S1),
@@ -73,17 +92,25 @@ const rejectionEpilogue = "Create an entirely new message with different wording
 //
 // Defensive: nil/empty rejected ⇒ normal path (len(nil)==0); empty diff ⇒ instruction (+ optional block)
 // with an empty tail — no panic (the orchestrator gates on HasStagedChanges, so diff is non-empty in
-// practice). Subjects are assumed single-line (FR30) — no sanitization (design-decisions.md §8).
-func BuildUserPayload(diff string, rejected []string) string {
+// practice). Subjects are assumed single-line (FR30) — no sanitization (design-decisions.md §8). context=="" ⇒
+// BYTE-IDENTICAL to the pre-FR-F7 payload in every path (the load-bearing regression guard).
+func BuildUserPayload(diff, context string, rejected []string) string {
 	if len(rejected) == 0 {
-		// §17.3 NORMAL: colon instruction + blank line + diff (verbatim). Fast path — no loop, no Builder.
-		return userInstruction + "\n\n" + diff
+		if context == "" {
+			// §17.3 NORMAL: colon instruction + blank line + diff (verbatim). Fast path — no loop, no Builder.
+			return userInstruction + "\n\n" + diff
+		}
+		return userInstruction + "\n\n" + contextBlock(context) + "\n\n" + diff // instruction → context → diff
 	}
 
-	// §17.3 REJECTION: period instruction + blank + IMPORTANT preamble + per-subject list + blank + epilogue + blank + diff.
+	// §17.3 REJECTION: period instruction + blank + [context] + IMPORTANT preamble + per-subject list + blank + epilogue + blank + diff.
 	var b strings.Builder
 	b.WriteString(userInstructionReject)
 	b.WriteString("\n\n")
+	if context != "" { // §17.8: context BEFORE the rejection block when both are present
+		b.WriteString(contextBlock(context))
+		b.WriteString("\n\n")
+	}
 	b.WriteString(rejectionPreamble)
 	b.WriteByte('\n') // end the preamble's second line, then the list
 	for _, s := range rejected {

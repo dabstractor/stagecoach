@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,6 +143,63 @@ func TestCommitStaged_DedupeRetryThenSuccess(t *testing.T) {
 	}
 	if got := headSHA(t, repo); got != res.CommitSHA {
 		t.Errorf("HEAD = %q, want %q", got, res.CommitSHA)
+	}
+}
+
+// TestCommitStaged_TemplateApplied verifies the §9.19 FR-F8 seam: with cfg.Template set, the
+// generated message is templated before it becomes Result.Message/Subject.
+func TestCommitStaged_TemplateApplied(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello world")
+	stageFile(t, repo, "new.txt")
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+	cfg := config.Defaults()
+	cfg.Template = "$msg (#205)"
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	want := "feat: add login (#205)"
+	if res.Message != want {
+		t.Errorf("Message = %q, want %q (templated)", res.Message, want)
+	}
+	if res.Subject != want {
+		t.Errorf("Subject = %q, want %q (templated)", res.Subject, want)
+	}
+	logMsg := gitOut(t, repo, "log", "--format=%B", "-n1", res.CommitSHA)
+	if logMsg != want {
+		t.Errorf("git log message = %q, want %q", logMsg, want)
+	}
+}
+
+// TestCommitStaged_TemplateSeenByDedupe verifies the §9.7/FR-F8 ordering contract: the duplicate
+// check compares the TEMPLATED subject, not the bare generated one. HEAD's subject is already in
+// the templated shape ("feat: dup (#205)"); the stub's first bare output templates to that same
+// subject and must be rejected, forcing a retry to the second scripted output.
+func TestCommitStaged_TemplateSeenByDedupe(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "feat: dup (#205)") // HEAD subject already carries the template shape
+	writeFile(t, repo, "a.txt", "data")
+	stageFile(t, repo, "a.txt")
+
+	m := stubtest.NewScript(t, bin, []string{"feat: dup", "feat: new"})
+	cfg := config.Defaults()
+	cfg.Template = "$msg (#205)"
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	want := "feat: new (#205)"
+	if res.Subject != want {
+		t.Errorf("Subject = %q, want %q (templated bare-duplicate rejected, fresh accepted)", res.Subject, want)
 	}
 }
 
@@ -602,4 +660,183 @@ func TestCommitStaged_ResolvesSubProviderFromManifest(t *testing.T) {
 	if strings.Contains(cmd, "--provider pi") {
 		t.Errorf("rendered command emits the manifest name as sub-provider (conflation bug)\ngot: %s", cmd)
 	}
+}
+
+func TestCommitStaged_ExcludedPayloadCapture(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	writeFile(t, repo, "feature.go", "package main\n")
+	stageFile(t, repo, "feature.go")
+	writeFile(t, repo, "secret.conf", "password=abc\n")
+	stageFile(t, repo, "secret.conf")
+
+	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
+	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	stub := stubtest.Build(t)
+	m := stubtest.Manifest(stub, stubtest.Options{Out: "feat: add feature"})
+
+	cfg := config.Config{
+		Provider: "stub",
+		Model:    "stub",
+		Timeout:  30 * time.Second,
+	}
+	deps := Deps{
+		Git:      git.New(repo),
+		Manifest: m,
+		Verbose:  ui.NewVerbose(io.Discard, false),
+		Excludes: []string{":(exclude,glob)**/secret.conf"},
+	}
+
+	res, err := CommitStaged(context.Background(), deps, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	if res.CommitSHA == "" {
+		t.Fatal("expected a commit SHA")
+	}
+
+	// Read the captured stdin payload.
+	data, err := os.ReadFile(stdinFile)
+	if err != nil {
+		t.Fatalf("read stdin capture: %v", err)
+	}
+	payload := string(data)
+
+	// secret.conf: hunk absent, placeholder present
+	if strings.Contains(payload, "diff --git a/secret.conf") {
+		t.Fatalf("expected secret.conf hunk ABSENT from payload, got:\n%s", payload)
+	}
+	if !strings.Contains(payload, "[excluded] secret.conf") {
+		t.Fatalf("expected [excluded] placeholder for secret.conf, got:\n%s", payload)
+	}
+	// feature.go present
+	if !strings.Contains(payload, "feature.go") {
+		t.Fatalf("expected feature.go present in payload, got:\n%s", payload)
+	}
+}
+
+// TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt is the stub-agent integration check for
+// PRD §9.19 FR-F3/F5/F6 / §17.8: with cfg.Format="gitmoji" and cfg.Locale="French", the REAL rendered
+// system prompt (via provider.Render) must contain the gitmoji scaffold instruction, a compiled-in
+// RenderGitmojiTable() row, and the locale line — and must NOT contain the auto-mode style-examples
+// intro. The stub uses stdin delivery with no system_prompt_flag, so provider.Render prepends the
+// system prompt to the payload with a "\n\n" delimiter (render.go) — the captured stdin therefore
+// contains the rendered system prompt (mirrors TestCommitStaged_ExcludedPayloadCapture).
+func TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "feat: first")
+	commitRaw(t, repo, "fix: second") // ≥2 commits → mature path (BuildSystemPrompt, not the fallback)
+	writeFile(t, repo, "auth.go", "package main\n")
+	stageFile(t, repo, "auth.go")
+
+	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
+	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	bin := stubtest.Build(t)
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "🎨 refactor auth flow"})
+
+	cfg := config.Defaults()
+	cfg.Provider = "stub"
+	cfg.Model = "stub"
+	cfg.Format = "gitmoji"
+	cfg.Locale = "French"
+
+	deps := Deps{Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(io.Discard, false)}
+	res, err := CommitStaged(context.Background(), deps, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	if res.CommitSHA == "" {
+		t.Fatal("expected a commit SHA")
+	}
+
+	data, err := os.ReadFile(stdinFile)
+	if err != nil {
+		t.Fatalf("read stdin capture: %v", err)
+	}
+	payload := string(data)
+
+	if !strings.Contains(payload, "Begin the subject with exactly ONE emoji") {
+		t.Errorf("expected the gitmoji scaffold instruction in the rendered system prompt, got:\n%s", payload)
+	}
+	if !strings.Contains(payload, "🎨 - ") {
+		t.Errorf("expected a RenderGitmojiTable() row in the rendered system prompt, got:\n%s", payload)
+	}
+	if !strings.Contains(payload, "Write the commit message in French.") {
+		t.Errorf("expected the FR-F6 locale line in the rendered system prompt, got:\n%s", payload)
+	}
+	if strings.Contains(payload, "Match the tone and style") {
+		t.Errorf("gitmoji mode must NOT contain the auto-mode style-examples intro, got:\n%s", payload)
+	}
+}
+
+// TestCommitStaged_EditGate verifies the --edit integration (§9.22 FR-E1).
+// Uses a fake editor script (via GIT_EDITOR env) to rewrite the commit message.
+func TestCommitStaged_EditGate(t *testing.T) {
+	t.Run("fake editor rewrites message", func(t *testing.T) {
+		bin := stubtest.Build(t)
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "new.txt", "hello world")
+		stageFile(t, repo, "new.txt")
+
+		// Create a fake editor script that rewrites the message.
+		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'edited subject' > \"$1\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_EDITOR", script)
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+		cfg := config.Defaults()
+		cfg.Edit = true // enable the editor gate
+
+		res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err != nil {
+			t.Fatalf("CommitStaged with --edit: %v", err)
+		}
+		if res.Message != "edited subject" {
+			t.Errorf("Message = %q, want 'edited subject' (editor overwrote)", res.Message)
+		}
+		// Verify it landed in git.
+		logMsg := gitOut(t, repo, "log", "--format=%B", "-n1", res.CommitSHA)
+		if logMsg != "edited subject" {
+			t.Errorf("git log message = %q, want 'edited subject'", logMsg)
+		}
+	})
+
+	t.Run("fake editor empties message → ErrEmptyMessage", func(t *testing.T) {
+		bin := stubtest.Build(t)
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "new.txt", "hello world")
+		stageFile(t, repo, "new.txt")
+
+		// Create a fake editor that truncates the file (empty → abort).
+		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\n: > \"$1\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_EDITOR", script)
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+		cfg := config.Defaults()
+		cfg.Edit = true
+
+		headBefore := headSHA(t, repo)
+		_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err == nil {
+			t.Fatal("CommitStaged with empty editor: expected error, got nil")
+		}
+		if !errors.Is(err, ErrEmptyMessage) {
+			t.Fatalf("CommitStaged error = %v, want ErrEmptyMessage", err)
+		}
+		// HEAD and index MUST be untouched (abort, not rescue).
+		if got := headSHA(t, repo); got != headBefore {
+			t.Errorf("HEAD moved from %s to %s — abort must NOT create a commit", headBefore, got)
+		}
+	})
 }

@@ -65,53 +65,72 @@ type PlannerOutput struct {
 }
 
 // BuildPlannerSystemPrompt assembles the planner system prompt from the verbatim §17.5 constant
-// followed by a blank line and the style examples in "---\n<msg>\n" format (identical to
-// system.go's BuildSystemPrompt example loop). The examples are the SAME RecentMessages-based
-// format as system.go. §17.5 has neither a hasMultiline rule nor a subjectTarget line.
+// followed by a blank line and EITHER the style examples in "---\n<msg>\n" format (format=="auto",
+// identical to system.go's BuildSystemPrompt example loop) OR the §17.8 format scaffold body
+// (formatScaffoldBody — shared with the message builders, FR-F5: the planner's single-call-shortcut
+// message obeys the same substitution). The PARTITIONING contract (plannerSystemPrompt) itself is
+// UNCHANGED in every mode (FR-F5); only the trailing style-examples-vs-scaffold block varies. locale,
+// when non-empty, appends the FR-F6 one-line language instruction (withLocale — a no-op when
+// locale=="", preserving FR-F1 byte-identity for format=="auto" && locale=="").
 //
-// ASSEMBLY TOPOLOGY (§17.5, exact):
+// ASSEMBLY TOPOLOGY (§17.5/§17.8, exact):
 //
 //	plannerSystemPrompt              // "…find the exact changes." (no trailing \n)
-//	'\n' '\n'                        // one blank line before the style examples
-//	for each ex: "---\n" + ex + '\n' // one "---" BEFORE each message (same as system.go)
+//	'\n' '\n'                        // one blank line before the style examples / scaffold
+//	auto: for each ex: "---\n" + ex + '\n'   // one "---" BEFORE each message (same as system.go)
+//	non-auto: formatScaffoldBody(format)     // "" for "plain" — contract + (locale) only
+//	<withLocale>
 //
-// Defensive: nil/empty examples ⇒ no "---" lines and no panic. The result is
+// Defensive: nil/empty examples ⇒ no "---" lines and no panic. The auto result is
 // plannerSystemPrompt + "\n\n" (a trailing blank line where the examples section is simply empty).
-func BuildPlannerSystemPrompt(examples []string) string {
+func BuildPlannerSystemPrompt(examples []string, format, locale string) string {
 	var b strings.Builder
 	b.WriteString(plannerSystemPrompt)
 	b.WriteByte('\n')
-	b.WriteByte('\n') // one blank line between the JSON contract and the style examples
-	for _, ex := range examples {
-		b.WriteString("---\n") // one "---" BEFORE each message (same format as system.go)
-		b.WriteString(ex)      // examples are pre-trimmed by RecentMessages
-		b.WriteByte('\n')
+	b.WriteByte('\n') // one blank line between the JSON contract and the style examples/scaffold
+	if format == "auto" {
+		for _, ex := range examples {
+			b.WriteString("---\n") // one "---" BEFORE each message (same format as system.go)
+			b.WriteString(ex)      // examples are pre-trimmed by RecentMessages
+			b.WriteByte('\n')
+		}
+	} else {
+		b.WriteString(formatScaffoldBody(format)) // scaffold REPLACES the examples (FR-F5)
 	}
-	return b.String()
+	return withLocale(b.String(), locale)
 }
 
 // BuildPlannerUserPayload assembles the §17.5 user payload: the instruction + blank line + the diff.
-// When forcedCount > 0, a forced-count directive is prepended (§17.5 forced-count mode).
+// When forcedCount > 0, a forced-count directive is prepended (§17.5 forced-count mode). `context` is the
+// §9.19 FR-F7 `--context` flag text ("" when unset); when non-empty, the same contextBlock (payload.go)
+// is inserted after the instruction line and before the diff (§17.8) — after the forced-count directive
+// in forced mode.
 //
-// ASSEMBLY (§17.5, exact):
+// ASSEMBLY (§17.5/§17.8, exact):
 //
 //	NORMAL (forcedCount <= 0):
-//	  plannerUserInstruction + "\n\n" + diff
+//	  plannerUserInstruction + "\n\n" + [contextBlock(context) + "\n\n" if context != ""] + diff
 //	    → "Decompose these un-staged changes into commits:\n\n<diff>"
 //
 //	FORCED (forcedCount > 0):
 //	  "Produce EXACTLY N commits from these changes (do not reconsider the count):\n"
-//	  + plannerUserInstruction + "\n\n" + diff
-//	    → the two colon-ending instructions on consecutive lines, then ONE blank line, then the diff.
+//	  + plannerUserInstruction + "\n\n" + [contextBlock(context) + "\n\n" if context != ""] + diff
+//	    → the two colon-ending instructions on consecutive lines, then ONE blank line, then
+//	      (optionally) the context block, then the diff.
 //
 // forcedCount <= 0 (incl. negative) ⇒ normal path. The diff is appended VERBATIM (no normalization;
-// mirrors payload.go's "diff is the exact tail").
-func BuildPlannerUserPayload(diff string, forcedCount int) string {
+// mirrors payload.go's "diff is the exact tail"). context=="" ⇒ BYTE-IDENTICAL to the pre-FR-F7 payload
+// in both normal and forced modes.
+func BuildPlannerUserPayload(diff, context string, forcedCount int) string {
+	block := ""
+	if context != "" {
+		block = contextBlock(context) + "\n\n" // shared helper (payload.go, same package)
+	}
 	if forcedCount <= 0 {
-		return plannerUserInstruction + "\n\n" + diff // §17.5 normal (fast path; diff verbatim as tail)
+		return plannerUserInstruction + "\n\n" + block + diff // §17.5 normal (diff verbatim as tail)
 	}
 	forced := fmt.Sprintf("Produce EXACTLY %d commits from these changes (do not reconsider the count):", forcedCount)
-	return forced + "\n" + plannerUserInstruction + "\n\n" + diff // §17.5 forced-count prepend
+	return forced + "\n" + plannerUserInstruction + "\n\n" + block + diff // §17.5 forced-count prepend
 }
 
 // ParsePlannerOutput parses the planner agent's raw JSON output into a typed PlannerOutput. It first

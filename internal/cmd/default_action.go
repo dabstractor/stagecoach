@@ -11,6 +11,7 @@ import (
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/decompose"
+	"github.com/dustin/stagehand/internal/exclude"
 	"github.com/dustin/stagehand/internal/exitcode"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
@@ -51,6 +52,12 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	g := git.New(repoDir)
 
 	// ---- §9.4 auto-stage-all state machine (FR16–FR20) ----
+	// §9.22 FR-E4: --dry-run + --edit → warn + skip the editor (nothing to commit).
+	if flagDryRun && cfg.Edit {
+		fmt.Fprintln(stderr, "stagehand: --edit ignored in --dry-run mode (nothing to commit)")
+		cfg.Edit = false
+	}
+
 	// FR20: --all/-a forces `git add -A` BEFORE the staged check, even if something is already staged.
 	if flagAll {
 		if err := g.AddAll(ctx); err != nil {
@@ -73,7 +80,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 			if status == "" {
 				return exitcode.New(exitcode.NothingToCommit, errors.New("Nothing to commit.")) // clean tree
 			}
-			return runDecompose(ctx, stdout, stderr, u, cfg, g) // planner gets the working-tree diff
+			return runDecompose(ctx, stdout, stderr, u, cfg, g, repoDir) // planner gets the working-tree diff
 		}
 		switch {
 		case flagNoAutoStage:
@@ -132,9 +139,11 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	}
 	reg := provider.NewRegistry(overrides)
 
-	// FR51b: resolve the message role's provider (auto-detect mirrors pkg/stagehand.buildDeps) so
-	// the label names the resolved invocation even when --provider is unset.
-	labelProvider := cfg.Provider
+	// FR51b: resolve the message role's provider+model (mirrors hookexec.go) so the label
+	// names the resolved invocation even when --provider is unset and when the role is pinned
+	// to a different provider than the global default.
+	roleProvider, roleModel, _ := config.ResolveRoleModel("message", *cfg)
+	labelProvider := roleProvider
 	if labelProvider == "" {
 		var installed []string
 		for _, m := range reg.List() {
@@ -144,13 +153,17 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		}
 		labelProvider = reg.DefaultProvider(installed)
 	}
+	labelModel := roleModel
+	if labelModel == "" {
+		labelModel = cfg.Model
+	}
 	// Validate an EXPLICIT provider (autodetect is validated inside GenerateCommit/buildDeps).
 	if cfg.Provider != "" {
 		if _, ok := reg.Get(cfg.Provider); !ok {
 			return exitcode.New(exitcode.Error, fmt.Errorf("unknown provider %q", cfg.Provider))
 		}
 	}
-	u.Progress(ui.ProgressLabel("Generating", cfg.Model, labelProvider))
+	u.Progress(ui.ProgressLabel("Generating", labelModel, labelProvider))
 
 	res, err := stagehand.GenerateCommit(ctx, stagehand.Options{
 		Config:    cfg,
@@ -182,7 +195,26 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		changes = nil // report without the file list; do NOT fail the success
 	}
 	printCommitReport(stdout, res, changes)
+	if err := runPush(ctx, stderr, g, *cfg); err != nil { // §9.22 FR-P1/P2 — no-op unless cfg.Push
+		return exitcode.New(exitcode.Error, err) // exit 1; commits already stand (FR-P2)
+	}
 	return nil // exit 0
+}
+
+// runPush runs `git push` (plain, streaming) after a fully-clean run, iff cfg.Push is true (§9.22
+// FR-P1). It is a no-op when push is disabled (the default — byte-identical to the pre-feature path).
+// On push failure the COMMITS STAND (FR-P2): git's stderr was already streamed verbatim by Push, so
+// print the closing note "commits created; push failed" to stderr and return a wrapped error (the
+// caller maps it to exit 1 via exitcode.For's default tail). Never prompts; never auto-sets upstream.
+func runPush(ctx context.Context, stderr io.Writer, g git.Git, cfg config.Config) error {
+	if !cfg.Push {
+		return nil // THE no-op guard — the byte-identity regression invariant
+	}
+	if err := g.Push(ctx, os.Stdout, stderr); err != nil { // stream git's stdout/stderr verbatim
+		fmt.Fprintln(stderr, "commits created; push failed") // FR-P2 closing note (stderr; BEFORE the err)
+		return fmt.Errorf("git push: %w", err)
+	}
+	return nil
 }
 
 // handleGenError maps a GenerateCommit error to the §15.4 outcome WITH the right user-facing output. It
@@ -273,7 +305,7 @@ func shouldDecompose(cfg *config.Config, dryRun, noAutoStage bool) bool {
 // Prints each landed commit's FR42 report to stdout (including partial landings on FR-M12), then maps
 // the error. Calls internal/decompose.Decompose directly (pkg/stagehand.Decompose is P4.M2.T1.S1 —
 // not yet shipped; that task swaps this one call site to the public wrapper).
-func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *config.Config, g git.Git) error {
+func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *config.Config, g git.Git, repoDir string) error {
 	overrides, err := provider.DecodeUserOverrides(cfg.Providers)
 	if err != nil {
 		return exitcode.New(exitcode.Error, fmt.Errorf("decompose: provider overrides: %w", err))
@@ -293,6 +325,12 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 	})
 	// FR51b: main line surfaces the PLANNER role's resolved invocation.
 	u.Progress(ui.ProgressLabel("Decomposing", roleModels.Planner.Model, roleModels.Planner.Provider))
+
+	// Resolve user exclude pathspecs for the diff layer (FR-X1 union + FR-X4 placeholders).
+	excludes, err := exclude.ResolveExcludePathspecs(*cfg, repoDir, verbose)
+	if err != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("resolve excludes: %w", err))
+	}
 	deps := decompose.Deps{
 		Git:      g,
 		Registry: reg,
@@ -300,6 +338,7 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 		Roles:    roleManifests,
 		Verbose:  verbose,
 		Out:      stderr, // the loop prints §18.3 rescue + §13.5 CAS here (P3.M4.T1.S2)
+		Excludes: excludes,
 	}
 
 	res, derr := decompose.Decompose(ctx, deps)
@@ -308,6 +347,9 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 	}
 	if derr != nil {
 		return handleDecomposeError(derr) // suppress re-print; map exit code
+	}
+	if err := runPush(ctx, stderr, g, *cfg); err != nil { // §9.22 FR-P1/P2
+		return exitcode.New(exitcode.Error, err)
 	}
 	return nil
 }

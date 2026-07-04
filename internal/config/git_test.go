@@ -79,6 +79,11 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	setGitConfig(t, repo, "stagehand.maxDiffBytes", "12345")
 	setGitConfig(t, repo, "stagehand.stripCodeFence", "1") // "1" -> true
 	setGitConfig(t, repo, "stagehand.output", "json")
+	// §9.19 FR-F1/FR-F6
+	setGitConfig(t, repo, "stagehand.format", "gitmoji")
+	setGitConfig(t, repo, "stagehand.locale", "de")
+	// §9.22 FR-P1
+	setGitConfig(t, repo, "stagehand.push", "true")
 
 	cfg, err := loadGitConfig(repo)
 	if err != nil {
@@ -110,6 +115,17 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	}
 	if cfg.Output == nil || *cfg.Output != "json" {
 		t.Errorf("Output=%v want strPtr(json)", cfg.Output)
+	}
+	// §9.19 FR-F1/FR-F6 — format/locale via git config
+	if cfg.Format != "gitmoji" {
+		t.Errorf("Format=%q want gitmoji", cfg.Format)
+	}
+	if cfg.Locale != "de" {
+		t.Errorf("Locale=%q want de", cfg.Locale)
+	}
+	// §9.22 FR-P1 — push via git config
+	if !cfg.Push {
+		t.Errorf("Push=false want true (stagehand.push set)")
 	}
 }
 
@@ -162,6 +178,15 @@ func TestLoadGitConfig_BoolNormalization(t *testing.T) {
 	}
 	if cfg.StripCodeFence != nil && *cfg.StripCodeFence {
 		t.Errorf("StripCodeFence=%v want false (--bool 'no')", cfg.StripCodeFence)
+	}
+	// §9.22 FR-P1 — push=false via git config
+	setGitConfig(t, repo, "stagehand.push", "false")
+	cfg, err = loadGitConfig(repo)
+	if err != nil {
+		t.Fatalf("loadGitConfig push err=%v, want nil", err)
+	}
+	if cfg.Push {
+		t.Errorf("Push=true want false (stagehand.push=false)")
 	}
 }
 

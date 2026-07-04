@@ -72,6 +72,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		MaxDiffBytes:     deps.Config.MaxDiffBytes,
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
+		Excludes:         deps.Excludes,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: tree diff: %w", ErrMessageFailed, err)
@@ -115,7 +116,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 	success := false
 
 	for attempt := 0; attempt <= deps.Config.MaxDuplicateRetries; attempt++ {
-		payload := prompt.BuildUserPayload(diff, rejected)
+		payload := prompt.BuildUserPayload(diff, deps.Config.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}
@@ -158,6 +159,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
+		m = generate.FinalizeMessage(m, deps.Config) // §9.19 FR-F8 seam — before dedupe
 
 		subject := generate.ExtractSubject(m)
 		if generate.IsDuplicate(subject, recent) {
@@ -176,6 +178,15 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 			Kind: generate.ErrRescue, TreeSHA: treeB,
 			ParentSHA: parentSHA, Candidate: candidate, Cause: lastCause,
 		}
+	}
+
+	// §9.22 FR-E1: post-dedupe editor gate. AFTER the dedupe loop accepts a message and BEFORE
+	// the caller publishes. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	// This site ALSO covers the arbiter N+1 (chain.go resolveNewCommit reuses generateMessage — transitively).
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, treeA, treeB) // best-effort; "" on err
+	msg, err = generate.EditMessage(ctx, msg, deps.Config, generate.EditContext{Git: deps.Git, TreeSHA: treeB, NameStatus: nameStatus})
+	if err != nil {
+		return "", err // ErrEmptyMessage → propagates to runLoop's FR-M12 handling
 	}
 
 	return msg, nil
@@ -229,20 +240,20 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 // fallback (§17.2); else → mature (§17.1) with recent messages + multiline detection.
 func messageSystemPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // messageRecentSubjects returns recent commit subjects for dedupe checking, or nil on an unborn

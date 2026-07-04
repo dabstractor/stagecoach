@@ -74,15 +74,50 @@ type Config struct {
 	Single  bool `toml:"-"` // --single/--no-decompose: bypass the planner entirely (v1 single-commit path)
 
 	// [generation] (PRD §16.2)
-	MaxDiffBytes        int     `toml:"max_diff_bytes"`        // byte cap on non-markdown diff section
-	MaxMdLines          int     `toml:"max_md_lines"`          // per-file line cap for markdown diffs
-	MaxDuplicateRetries int     `toml:"max_duplicate_retries"` // re-gen attempts on duplicate subject
-	SubjectTargetChars  int     `toml:"subject_target_chars"`  // target subject length for truncation
-	Output              *string `toml:"output"`                // nil ⇒ honor manifest (S2 bridge); non-nil ⇒ override
-	StripCodeFence      *bool   `toml:"strip_code_fence"`      // strip ``` fences from agent output; nil ⇒ true
+	MaxDiffBytes        int `toml:"max_diff_bytes"`        // byte cap on non-markdown diff section
+	MaxMdLines          int `toml:"max_md_lines"`          // per-file line cap for markdown diffs
+	MaxDuplicateRetries int `toml:"max_duplicate_retries"` // re-gen attempts on duplicate subject
+	SubjectTargetChars  int `toml:"subject_target_chars"`  // target subject length for truncation
+	// Format selects the commit-message style (PRD §9.19 FR-F1): "auto" (style learning, default),
+	// "conventional", "gitmoji", or "plain". Resolved through the standard 5-layer precedence
+	// (file → git → env → flag). Validated against validFormats at the tail of Load() — an unknown
+	// mode is a hard error (exit 1). Consumed by S3 (prompt scaffolds).
+	Format string `toml:"format"`
+	// Locale is a free-form language name or BCP-47 tag appended to the system prompt (PRD §9.19
+	// FR-F6). Resolved through the standard 5-layer precedence; NEVER validated, passed verbatim
+	// (no i18n tables). Empty = no locale instruction. Consumed by S3.
+	Locale string `toml:"locale"`
+	// Template is the §9.19 FR-F8 message template. When non-empty it MUST contain the literal `$msg`
+	// (validated at Load — hard error otherwise); the substituted message lands AFTER parse/cleanup and
+	// BEFORE the duplicate check (§9.7). Standard 5-layer precedence (file→git→env→flag). Empty = no template.
+	Template       string  `toml:"template"`
+	Output         *string `toml:"output"`           // nil ⇒ honor manifest (S2 bridge); non-nil ⇒ override
+	StripCodeFence *bool   `toml:"strip_code_fence"` // strip ``` fences from agent output; nil ⇒ true
 	// V2 generation tuning (PRD §16.2, §9.1 FR3a, §9.14 FR-M4) — decoded from [generation] in S2.
 	MaxCommits       int      `toml:"max_commits"`       // safety cap on auto-decompose (default 12; FR-M4)
 	BinaryExtensions []string `toml:"binary_extensions"` // extra non-text exts to filter (FR3a); nil ⇒ built-in denylist only
+	// Exclude holds §9.18 FR-X1 gitignore-style globs, RAW/untranslated; UNION across global+repo
+	// files AND --exclude/-x (NOT replace — the one list key in this resolver that accumulates
+	// rather than replaces). No env var, no git-config key (deliberate — avoids the env-list
+	// quoting trap). Consumed by S2's :(exclude,glob) pathspec translator. nil ⇒ none.
+	Exclude []string `toml:"exclude"`
+
+	// Context is the §9.19 FR-F7 per-invocation context text. FLAG-ONLY: no env, no git key, no
+	// config-file key (per-invocation by nature). Injected into the message + planner USER payloads
+	// (§17.8), after the instruction line and before the diff. Empty = no context block.
+	Context string `toml:"-"`
+
+	// Edit is the §9.22 FR-E1 --edit flag (FLAG-ONLY: no env, no git key, no config-file key — mirrors
+	// Context). When true, an editor round-trip gates each commit message before publication (post-dedupe,
+	// pre-CommitTree). Default false (non-interactive). See generate.EditMessage.
+	Edit bool `toml:"-"`
+
+	// Push is the §9.22 FR-P1 --push workflow convenience (full 5-layer precedence: --push /
+	// STAGEHAND_PUSH / stagehand.push / [generation].push, default false). When true, a plain `git push`
+	// (no args, streaming) runs AFTER a fully-clean run. Push failure does NOT roll back commits (FR-P2):
+	// git's stderr is streamed verbatim, "commits created; push failed" prints, exit 1. Skipped on
+	// --dry-run, the exit-2 path, and any rescue/CAS abort (FR-P3). See cmd.runPush + git.Git.Push.
+	Push bool `toml:"push"`
 
 	// [provider.<name>] user-defined / override provider definitions (PRD §16.2, §12.8).
 	// Carried as a RAW map: the provider MANIFEST type lives in internal/provider, so config must not import
@@ -136,8 +171,15 @@ func Defaults() Config {
 		SubjectTargetChars:  50,
 		Output:              nil,
 		StripCodeFence:      nil,
-		MaxCommits:          12,  // §9.14 FR-M4 default safety cap on auto-decompose
-		BinaryExtensions:    nil, // nil ⇒ built-in denylist only (§9.1 FR3a)
+		Format:              "auto", // §9.19 FR-F1 default (NON-empty; validateFormat would reject "" — must be set here)
+		Locale:              "",     // §9.19 FR-F6 default (empty = no locale instruction)
+		Template:            "",     // §9.19 FR-F8 default (empty = no template; validateTemplate accepts "")
+		MaxCommits:          12,     // §9.14 FR-M4 default safety cap on auto-decompose
+		BinaryExtensions:    nil,    // nil ⇒ built-in denylist only (§9.1 FR3a)
+		Exclude:             nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
+		Context:             "",     // §9.19 FR-F7 default (empty = no context block)
+		Edit:                false,  // §9.22 FR-E1 default (false = non-interactive; no editor gate)
+		Push:                false,  // §9.22 FR-P1 default (false = no auto-push)
 		Providers:           nil,
 		Roles:               nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:       0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved

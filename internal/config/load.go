@@ -163,6 +163,16 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		fmt.Fprint(noticeOut, msg)
 	}
 
+	// PRD §9.19 FR-F1: an unknown format mode is a HARD configuration error. Validate the RESOLVED
+	// value once (not per-layer — a low-layer typo overridden higher is not an error). Locale is
+	// deliberately NOT validated (FR-F6: free-form, verbatim, no i18n tables).
+	if err := validateFormat(cfg.Format); err != nil {
+		return nil, fmt.Errorf("format: %w", err)
+	}
+	if err := validateTemplate(cfg.Template); err != nil {
+		return nil, fmt.Errorf("template: %w", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -225,6 +235,30 @@ func loadEnv(cfg *Config) error {
 			return fmt.Errorf("STAGEHAND_COMMITS: %w", err)
 		}
 		cfg.Commits = n
+	}
+
+	// No STAGEHAND_EXCLUDE: deliberately omitted (§9.18 FR-X1) — a colon/comma-joined env list is a
+	// documented quoting trap for glob patterns. Do NOT "helpfully" add one; [generation].exclude and
+	// --exclude/-x already cover the persistent and ad-hoc cases.
+
+	// §9.19 FR-F1/FR-F6 — format/locale via env (presence-semantic, mirrors STAGEHAND_PROVIDER).
+	if v, ok := os.LookupEnv("STAGEHAND_FORMAT"); ok && v != "" {
+		cfg.Format = v
+	}
+	if v, ok := os.LookupEnv("STAGEHAND_LOCALE"); ok && v != "" {
+		cfg.Locale = v
+	}
+	if v, ok := os.LookupEnv("STAGEHAND_TEMPLATE"); ok && v != "" {
+		cfg.Template = v
+	}
+
+	// §9.22 FR-P1 — push via env (presence-semantic, mirrors STAGEHAND_VERBOSE).
+	if v, ok := os.LookupEnv("STAGEHAND_PUSH"); ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("STAGEHAND_PUSH: %w", err)
+		}
+		cfg.Push = b // DIRECT set — can be false (escape hatch)
 	}
 
 	return nil
@@ -303,6 +337,83 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			cfg.MaxCommits = v
 		}
 	}
+
+	// §9.18 FR-X1 — exclude UNIONS onto whatever the config files contributed; it does NOT replace
+	// (differs from every scalar flag above, which sets DIRECTLY). Each -x/--exclude occurrence is
+	// appended in CLI order after [global..., repo...] globs.
+	if fs.Changed("exclude") {
+		if vals, err := fs.GetStringArray("exclude"); err == nil {
+			cfg.Exclude = append(cfg.Exclude, vals...)
+		}
+	}
+
+	// §9.19 FR-F1/FR-F6 — format/locale via CLI flags (gated on fs.Changed, mirrors provider).
+	if fs.Changed("format") {
+		if v, err := fs.GetString("format"); err == nil {
+			cfg.Format = v
+		}
+	}
+	if fs.Changed("locale") {
+		if v, err := fs.GetString("locale"); err == nil {
+			cfg.Locale = v
+		}
+	}
+	if fs.Changed("template") {
+		if v, err := fs.GetString("template"); err == nil {
+			cfg.Template = v
+		}
+	}
+
+	// §9.19 FR-F7 — context via CLI flag ONLY (no env/git/file source; per-invocation). Mirrors --exclude's
+	// flag-only discipline (there is no STAGEHAND_CONTEXT / stagehand.context / [generation].context).
+	if fs.Changed("context") {
+		if v, err := fs.GetString("context"); err == nil {
+			cfg.Context = v
+		}
+	}
+
+	// §9.22 FR-E1 — --edit flag (flag-only; no env/git/file source; per-invocation). Mirrors --context's
+	// flag-only discipline (there is no STAGEHAND_EDIT / stagehand.edit / [generation].edit).
+	if fs.Changed("edit") {
+		if v, err := fs.GetBool("edit"); err == nil {
+			cfg.Edit = v
+		}
+	}
+
+	// §9.22 FR-P1 — --push flag (full 5-layer precedence; mirrors --verbose/--template).
+	if fs.Changed("push") {
+		if v, err := fs.GetBool("push"); err == nil {
+			cfg.Push = v // DIRECT set
+		}
+	}
+}
+
+// validFormats is the closed set of --format modes (PRD §9.19 FR-F1). Validation-only; S3 builds the
+// prompt scaffolds from static strings, not this slice.
+var validFormats = []string{"auto", "conventional", "gitmoji", "plain"}
+
+// validateFormat returns nil iff format is one of validFormats, else an error naming the offending value
+// and the valid set (PRD §9.19 FR-F1: "An unknown mode is a hard configuration error"). PURE (no I/O) so it
+// is unit-testable; called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Format (not per-layer — a
+// low-layer typo overridden by a higher layer is not an error). Locale is deliberately NOT validated (FR-F6).
+func validateFormat(format string) error {
+	for _, m := range validFormats {
+		if format == m {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid format %q (valid: %s)", format, strings.Join(validFormats, ", "))
+}
+
+// validateTemplate returns nil iff tpl is empty or contains the literal "$msg" substring, else an error
+// (PRD §9.19 FR-F8: "must contain the literal $msg", hard configuration error otherwise). PURE (no I/O) so
+// it is unit-testable; called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Template (not per-layer —
+// a low-layer template overridden by a valid higher layer is not an error).
+func validateTemplate(tpl string) error {
+	if tpl == "" || strings.Contains(tpl, "$msg") {
+		return nil
+	}
+	return fmt.Errorf("invalid template %q: must contain the literal $msg (e.g. %q)", tpl, "$msg (#205)")
 }
 
 // configVersionNotice returns the PRD §9.17 FR-B4 advisory text when a loaded config file's schema version

@@ -1,0 +1,18 @@
+# Lazygit configuration — hand-maintained test fixture.
+# This file exercises whole-doc round-trip preservation (comments, formatting, other entries).
+
+gui:
+  showRandomTip: false
+  # A user comment inside gui
+  nerdFontsVersion: '3'
+
+customCommands:
+  - key: 'b'
+    command: "echo existing"
+    context: 'files'
+
+git:
+  paging:
+    colorArg: always
+  # This is a note about git settings
+  autoFetch: false

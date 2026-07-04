@@ -26,6 +26,11 @@ type Deps struct {
 	Git      git.Git           // the git boundary (real *gitRunner via git.New(repo) in prod+tests)
 	Manifest provider.Manifest // the provider manifest to Render+Execute (stub in tests)
 	Verbose  *ui.Verbose       // nil-safe --verbose diagnostics sink (P1.M4.T3.S2); logs retries here + passed to provider.Execute for command/raw-output logging
+	Excludes []string          // resolved user exclude pathspecs (from exclude.ResolveExcludePathspecs); nil ⇒ none
+	// Progress is an optional callback invoked by hook.Run after no-op gates pass (nil-safe —
+	// never called by CommitStaged). runHookExec sets it to emit the "Generating…" line
+	// only when generation is about to run.
+	Progress func()
 }
 
 // Result is the outcome of a successful CommitStaged. Carries everything the CLI
@@ -158,6 +163,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		MaxDiffBytes:     cfg.MaxDiffBytes,
 		MaxMDLines:       cfg.MaxMdLines,
 		BinaryExtensions: cfg.BinaryExtensions,
+		Excludes:         deps.Excludes,
 	})
 	if err != nil {
 		return Result{}, err
@@ -203,7 +209,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 
 	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
 		// Build user payload each attempt (rejection list / retry_instruction change).
-		payload := prompt.BuildUserPayload(diff, rejected)
+		payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}
@@ -247,7 +253,8 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			continue // FR29 retry (consumes an attempt)
 		}
 		parseFail = false
-		signal.SetCandidate(m) // keep the §18.3 candidate note current
+		m = FinalizeMessage(m, cfg) // §9.19 FR-F8 seam — template BEFORE dedupe (§9.7 judges the final subject)
+		signal.SetCandidate(m)      // keep the §18.3 candidate note current
 
 		subject := ExtractSubject(m) // same package — no prefix
 		if IsDuplicate(subject, recent) {
@@ -266,6 +273,21 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			Kind: ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
 			Candidate: candidate, Cause: lastCause,
 		}
+	}
+
+	// §9.22 FR-E1: post-dedupe editor gate (EditMessage). AFTER the dedupe loop accepts a message
+	// and BEFORE CommitTree. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	// The template was already applied by FinalizeMessage (pre-dedupe, FR-F8).
+	parentTree := git.EmptyTreeSHA
+	if !isUnborn {
+		if pt, perr := deps.Git.RevParseTree(ctx, "HEAD"); perr == nil {
+			parentTree = pt
+		}
+	}
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, parentTree, treeSHA) // best-effort; "" on err
+	msg, err = EditMessage(ctx, msg, cfg, EditContext{Git: deps.Git, TreeSHA: treeSHA, NameStatus: nameStatus})
+	if err != nil {
+		return Result{}, err // ErrEmptyMessage propagates BARE → exitcode.For() → exit 1 (NOT rescue)
 	}
 
 	// Step 7: commit-tree — build the DANGLING commit object from the FROZEN tree.
@@ -328,20 +350,20 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 // recent messages + multiline detection.
 func buildSystemPrompt(ctx context.Context, g git.Git, cfg config.Config, isUnborn bool) (string, error) {
 	if isUnborn {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	n, err := g.CommitCount(ctx)
 	if err != nil {
 		return "", err
 	}
 	if n <= 1 {
-		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars), nil
+		return prompt.BuildFallbackPrompt(cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 	}
 	msgs, err := g.RecentMessages(ctx, 20)
 	if err != nil {
 		return "", err
 	}
-	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars), nil
+	return prompt.BuildSystemPrompt(msgs, prompt.DetectMultiline(msgs), cfg.SubjectTargetChars, cfg.Format, cfg.Locale), nil
 }
 
 // recentSubjects returns recent commit subjects for dedupe checking, or nil on

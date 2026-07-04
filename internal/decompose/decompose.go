@@ -318,14 +318,25 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 	// captured the working-tree change set; a live AddAll would pick up concurrent changes.
 	treePrime := tStart
 
-	// Dup-check the planner's message. Fallback to the message agent ONLY on a duplicate (FR-M11).
-	msg := plannerMsg
-	if dupCheckMessage(ctx, deps, plannerMsg, isUnborn) {
+	// Dup-check the TEMPLATED planner's message (§9.19 FR-F8 seam — before dedupe, §9.7 judges the final
+	// subject). Fallback to the message agent ONLY on a duplicate (FR-M11); it templates internally
+	// (generateMessage → call site #3) so msg is NOT re-templated here.
+	msg := generate.FinalizeMessage(plannerMsg, deps.Config)
+	if dupCheckMessage(ctx, deps, msg, isUnborn) {
 		var err error
 		msg, err = generateMessage(ctx, deps, baseTree, tStart) // the message agent regenerates from baseTree→tStart
 		if err != nil {
 			return DecomposeResult{}, err // *RescueError — propagate DIRECTLY
 		}
+	}
+
+	// §9.22 FR-E1: post-dedupe editor gate. AFTER the dup-check and BEFORE publishCommit.
+	// The user's hand-edited message bypasses the re-check (FR-E3 git parity).
+	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, baseTree, treePrime) // best-effort; "" on err
+	var editErr error
+	msg, editErr = generate.EditMessage(ctx, msg, deps.Config, generate.EditContext{Git: deps.Git, TreeSHA: treePrime, NameStatus: nameStatus})
+	if editErr != nil {
+		return DecomposeResult{}, editErr // ErrEmptyMessage → per-concept abort (FR-E4)
 	}
 
 	// Publish (parentSHA = preRunHEAD; root if unborn). publishCommit returns *CASError DIRECTLY on CAS.
@@ -596,6 +607,7 @@ func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chain
 		MaxDiffBytes:     deps.Config.MaxDiffBytes,
 		MaxMDLines:       deps.Config.MaxMdLines,
 		BinaryExtensions: deps.Config.BinaryExtensions,
+		Excludes:         deps.Excludes,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("%w: leftover diff: %w", ErrDecomposeFailed, err)

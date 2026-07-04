@@ -142,6 +142,7 @@ func init() {
 	configInitCmd.Flags().String("provider", "", "Target a specific provider instead of auto-detecting")
 	configInitCmd.Flags().Bool("force", false, "Overwrite an existing config file")
 	configInitCmd.Flags().Bool("template", false, "Write the inert all-commented reference config (v1 behavior)")
+	configInitCmd.Flags().Bool("interactive", false, "Guided TTY wizard: pick a detected provider, accept or edit per-role models (prompts for the inference/ prefix on multi-backend providers); writes the same config as plain 'config init'")
 
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configPathCmd)
@@ -430,21 +431,12 @@ func leadingHeaderEnd(lines []string) int {
 // Parent dirs are created; the written path is always printed. Never calls os.Exit.
 // The populated-config generation is delegated to config.GenerateBootstrapConfig (P1.M4.T4.S1).
 func runConfigInit(cmd *cobra.Command, args []string) error {
+	// Route to interactive wizard at the TOP (before template/force checks).
+	if interactive, _ := cmd.Flags().GetBool("interactive"); interactive {
+		return runConfigInitInteractive(cmd, args)
+	}
+
 	path := config.ResolveConfigPath(flagConfig)
-
-	force, _ := cmd.Flags().GetBool("force")
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return exitcode.New(exitcode.Error, fmt.Errorf("config file already exists at %s (not overwritten)", path))
-		} else if !os.IsNotExist(err) {
-			return exitcode.New(exitcode.Error, fmt.Errorf("check config path %s: %w", path, err))
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("create config dir %s: %w", filepath.Dir(path), err))
-	}
-
 	tmpl, _ := cmd.Flags().GetBool("template")
 	var content string
 	if tmpl {
@@ -461,14 +453,37 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 		content = config.GenerateBootstrapConfig(providerName)
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("write config %s: %w", path, err))
+	force, _ := cmd.Flags().GetBool("force")
+	if err := writeBootstrapFile(cmd, path, content, force); err != nil {
+		return err
 	}
 
 	if tmpl {
 		fmt.Fprintf(cmd.OutOrStdout(), "Wrote example config to %s\n", path)
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "Wrote config to %s\n", path)
+	}
+	return nil
+}
+
+// writeBootstrapFile handles the shared file-write contract for both plain and interactive config init:
+// force-check (refuse to overwrite unless --force) + MkdirAll + WriteFile. Returns exitcode.New(Error, …)
+// on failure. Used by BOTH runConfigInit and runConfigInitInteractive (DRY — one place for the contract).
+func writeBootstrapFile(cmd *cobra.Command, path, content string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return exitcode.New(exitcode.Error, fmt.Errorf("config file already exists at %s (not overwritten)", path))
+		} else if !os.IsNotExist(err) {
+			return exitcode.New(exitcode.Error, fmt.Errorf("check config path %s: %w", path, err))
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("create config dir %s: %w", filepath.Dir(path), err))
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("write config %s: %w", path, err))
 	}
 	return nil
 }
@@ -508,9 +523,9 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # ---------------------------------------------------------------------------
 # config_version — schema version (PRD §9.17 FR-B4). Top-level metadata, NOT a [defaults] key and
 # NOT a precedence layer (§16.1): it never overrides another field; it only tells stagehand which
-# schema the file was written for. This binary supports config_version = 2.
+# schema the file was written for. This binary supports config_version = 3.
 # ---------------------------------------------------------------------------
-# config_version = 2
+# config_version = 3
 #
 # On load, if this is missing/older than the binary's version, stagehand prints an advisory and
 # points you at the remediation; it NEVER auto-migrates your file (no behavior change, just a
@@ -556,6 +571,11 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # strip_code_fence      = true    # strip ` + "`" + ` fences from agent output (all providers)
 # max_commits           = 12      # safety cap on auto-decompose (PRD §9.14 FR-M4); default 12
 # binary_extensions     = []      # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
+# exclude               = []      # gitignore-style globs; UNION across global+repo+flag (§9.18 FR-X1)
+# format                = "auto"  # auto|conventional|gitmoji|plain; unknown = hard error (exit 1) (§9.19 FR-F1)
+# locale                = ""      # free-form language name or BCP-47 tag; never validated (§9.19 FR-F6)
+# template              = ""      # wrap every message; must contain literal $msg, e.g. "$msg (#205)" (§9.19 FR-F8)
+# push                  = false   # run ` + "`git push`" + ` after a fully-successful run; on failure commits stand (§9.22 FR-P1)
 # NOTE: [generation] output/strip_code_fence override any per-provider [provider.<name>] values.
 
 # ---------------------------------------------------------------------------

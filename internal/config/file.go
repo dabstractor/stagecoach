@@ -55,6 +55,11 @@ type fileGeneration struct {
 	StripCodeFence      *bool    `toml:"strip_code_fence"`
 	MaxCommits          int      `toml:"max_commits"`       // V2 — safety cap on auto-decompose (§9.14 FR-M4)
 	BinaryExtensions    []string `toml:"binary_extensions"` // V2 — extra non-text exts to filter (§9.1 FR3a)
+	Exclude             []string `toml:"exclude"`           // V2.1 — §9.18 FR-X1 exclusion globs; UNION-merged in overlay()
+	Format              string   `toml:"format"`            // V2.1 — §9.19 FR-F1 message format (validated at Load)
+	Locale              string   `toml:"locale"`            // V2.1 — §9.19 FR-F6 message locale (free-form, never validated)
+	Template            string   `toml:"template"`          // V2.1 — §9.19 FR-F8 message template (validated at Load)
+	Push                bool     `toml:"push"`              // §9.22 FR-P1 — push after clean run (default false)
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +233,24 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if len(g.BinaryExtensions) > 0 {
 		c.BinaryExtensions = g.BinaryExtensions
 	}
+	// §9.18 FR-X1 — single-file copy (union across layers happens in overlay(), not here).
+	if len(g.Exclude) > 0 {
+		c.Exclude = g.Exclude
+	}
+	// §9.19 FR-F1/FR-F6 — format/locale are SCALARS: non-zero/non-empty copy.
+	if g.Format != "" {
+		c.Format = g.Format
+	}
+	if g.Locale != "" {
+		c.Locale = g.Locale
+	}
+	if g.Template != "" {
+		c.Template = g.Template
+	}
+	// §9.22 FR-P1 — push from file (mirrors AutoStageAll/Verbose bool pattern).
+	if g.Push {
+		c.Push = true
+	}
 	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
@@ -277,6 +300,13 @@ func overlay(dst, src *Config) {
 	}
 	if src.Verbose {
 		dst.Verbose = true
+	}
+	if src.Edit {
+		dst.Edit = true
+	}
+	// §9.22 FR-P1 — push
+	if src.Push {
+		dst.Push = true
 	}
 	// [generation]
 	if src.MaxDiffBytes != 0 {
@@ -344,6 +374,23 @@ func overlay(dst, src *Config) {
 	}
 	if len(src.BinaryExtensions) > 0 {
 		dst.BinaryExtensions = src.BinaryExtensions // REPLACE, not append (runtime denylist merge is P2.M1)
+	}
+	// §9.18 FR-X1: exclude UNIONS across layers (global → repo), the ONE list key that accumulates
+	// rather than replaces (§16.1). A repo must not be able to DROP a globally-excluded glob. This is
+	// a DELIBERATE exception to the REPLACE pattern used by BinaryExtensions above.
+	if len(src.Exclude) > 0 {
+		dst.Exclude = append(dst.Exclude, src.Exclude...)
+	}
+	// §9.19 FR-F1/FR-F6 — format/locale are SCALARS: standard non-zero REPLACE (the rule), NOT union
+	// (only Exclude unions, FR-X1). overlay is called global→repo→gitconfig; highest non-empty layer wins.
+	if src.Format != "" {
+		dst.Format = src.Format
+	}
+	if src.Locale != "" {
+		dst.Locale = src.Locale
+	}
+	if src.Template != "" {
+		dst.Template = src.Template
 	}
 }
 

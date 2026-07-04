@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -256,6 +257,68 @@ type Git interface {
 	// unresolvable tree SHA — a REAL error (NOT an unborn signal: branch on code != 0, never on code ==
 	// 128; never use --quiet). Read-only with respect to refs and the index (PRD §18.1).
 	DiffTreeNames(ctx context.Context, treeA, treeB string) (paths []string, err error)
+
+	// ConfigGlobalGet reads a key from git's GLOBAL config (not repo-local) via
+	// `git config --global --get <key>` (PRD §9.21 FR-I4). Exit-code semantics (mirrors
+	// config/git.go gitConfigGet): 0 = found (trimmed value); 1 = not found (found=false,
+	// NOT an error); else wrapped error incl. stderr. Repo-independent: the `-C workDir`
+	// from run() is a harmless no-op for `--global` scope (git config --global targets
+	// ~/.gitconfig / $GIT_CONFIG_GLOBAL regardless of cwd). Used by integrate git-alias
+	// to read back alias.<name> — the stored value INCLUDES the leading `!` for shell
+	// aliases, so callers strip it when comparing whether the alias is stagehand's
+	// (external_deps.md §7).
+	ConfigGlobalGet(ctx context.Context, key string) (value string, found bool, err error)
+
+	// ConfigGlobalSet writes a key/value to git's GLOBAL config via
+	// `git config --global <key> <value>` (PRD §9.21 FR-I4). git performs the .gitconfig
+	// edit itself (so the FR-I3 file machinery is unnecessary). value is passed as a
+	// SINGLE argv element (NEVER sh -c — PRD §19), so a value like "!stagehand" is
+	// stored verbatim with its `!`. Non-zero exit ⇒ wrapped error incl. stderr.
+	ConfigGlobalSet(ctx context.Context, key, value string) error
+
+	// ConfigGlobalUnset removes a key from git's GLOBAL config via
+	// `git config --global --unset <key>` (PRD §9.21 FR-I6). Returns found=false when
+	// the key was not present (git exit 5 — NOT an error); found=true + nil when
+	// removed. The caller (git-alias) MUST first verify the value is ours before
+	// calling this (FR-I6: only unset when the current value is stagehand's).
+	ConfigGlobalUnset(ctx context.Context, key string) (found bool, err error)
+
+	// HooksPath returns the ABSOLUTE path to this repo's hooks directory via
+	// `git rev-parse --git-path hooks` (honors core.hooksPath and linked worktrees — architecture §3).
+	// git may return a cwd-relative path (notably from a subdirectory); it is resolved to absolute against
+	// the runner's workDir. Exit 128 (non-repo/corrupt) is a REAL error (this call works on unborn repos,
+	// so there is NO 128-as-non-error convention here — like StatusPorcelain). Read-only (PRD §18.1).
+	HooksPath(ctx context.Context) (string, error)
+
+	// GitDir returns the absolute path to the repository's .git directory via `git rev-parse
+	// --absolute-git-dir` (honors worktrees + commondir; git 2.13+, universally available). Used by the
+	// --edit editor gate (§9.22 FR-E1) to locate .git/STAGEHAND_EDITMSG. `--absolute-git-dir` succeeds on
+	// an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) — mirror HooksPath's convention
+	// (branch on code != 0, NOT on code == 128). Read-only w.r.t. refs and the index (PRD §18.1).
+	GitDir(ctx context.Context) (dir string, err error)
+
+	// Editor returns the user's resolved editor command via `git var GIT_EDITOR` (the exact chain
+	// GIT_EDITOR → core.editor → $VISUAL → $EDITOR → vi — external_deps.md §6, VERIFIED). The returned
+	// string is SHELL-INTERPRETED (may contain args/quotes); callers invoke it via `sh -c '<editor> "$@"'
+	// -- <file>`, NEVER a bare exec. Read-only w.r.t. refs and the index (PRD §18.1).
+	Editor(ctx context.Context) (editor string, err error)
+
+	// DiffTreeNameStatus returns the raw `git diff-tree --no-commit-id --name-status -r <treeA> <treeB>`
+	// output — the A/M/D/<status>\t<path> lines for the --edit EDITMSG summary (§9.22 FR-E1). It is the
+	// tree-to-tree name-status analogue of DiffTree (which diffs a commit vs its parent). Empty output
+	// when treeA == treeB. Read-only w.r.t. refs and the index.
+	DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (nameStatus string, err error)
+
+	// Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
+	// passed writers (the CLI passes os.Stdout/os.Stderr so the user sees git's real output: progress,
+	// the no-upstream hint, rejected non-fast-forwards, etc.). It NEVER adds `--set-upstream` (FR-P2:
+	// publishing a new branch is the user's call — stagehand surfaces git's own hint verbatim instead).
+	// On a non-zero exit (128 = no upstream / rejected; 1 = network) it returns a wrapped error carrying
+	// git's exit code; the COMMITS STAND (push failure does not roll back local commits — push moves the
+	// REMOTE, not local HEAD; the caller prints "commits created; push failed" and exits 1). ctx-aware
+	// (timeout/signal cancel the push). Targets the repo via -C (the goroutine-safe convention). Push is
+	// the ONLY method on Git that runs a network-mutating command and the ONLY one taking io.Writer params.
+	Push(ctx context.Context, stdout, stderr io.Writer) error
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -650,13 +713,33 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 		binExcludes = append(binExcludes, ":!"+path)
 	}
 
-	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
-	// opts.Excludes REPLACES the noise-filter default if non-empty (G6); the markdown excludes are
-	// ALWAYS appended (structural — prevents the double-count trap, G1).
-	excludes := opts.Excludes
-	if len(excludes) == 0 {
-		excludes = defaultExcludes
+	// ---- User-exclude placeholders (PRD §9.18 FR-X4, staged path) ----
+	// detectExcludedStatuses probes which changed files the USER exclude pathspecs match (set-difference).
+	// Only user excludes get placeholders; defaultExcludes are dropped silently (no placeholder).
+	excluded, xerr := g.detectExcludedStatuses(ctx, statuses, opts.Excludes, "--cached")
+	if xerr != nil {
+		return "", xerr
 	}
+	exPaths := make([]string, 0, len(excluded))
+	for path := range excluded {
+		if binSet[path] {
+			continue // FR3b binary placeholder already covers this path; binary is the more specific signal
+		}
+		exPaths = append(exPaths, path)
+	}
+	sort.Strings(exPaths)
+	for _, path := range exPaths {
+		b.WriteString(excludedPlaceholderLine(excluded[path], path)) // "<status>\t[excluded] <path>"
+		b.WriteByte('\n')
+	}
+
+	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
+	// opts.Excludes UNIONs the noise-filter default (FR-X1); the markdown excludes are
+	// ALWAYS appended (structural — prevents the double-count trap, G1).
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...) // FR3/FR-X1 source (a) — ALWAYS
+	excludes = append(excludes, opts.Excludes...)   // user union, FR-X1 sources (b)+(c)+(d)
+
 	nmArgs := []string{"diff", "--cached", "--"}
 	nmArgs = append(nmArgs, excludes...)
 	nmArgs = append(nmArgs, ":!*.md", ":!*.markdown")
@@ -1074,11 +1157,28 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 		binExcludes = append(binExcludes, ":!"+path)
 	}
 
-	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
-	excludes := opts.Excludes
-	if len(excludes) == 0 {
-		excludes = defaultExcludes
+	// ---- User-exclude placeholders (PRD §9.18 FR-X4, tree-to-tree path) ----
+	excluded, xerr := g.detectExcludedStatuses(ctx, statuses, opts.Excludes, treeA, treeB)
+	if xerr != nil {
+		return "", xerr
 	}
+	exPaths := make([]string, 0, len(excluded))
+	for path := range excluded {
+		if binSet[path] {
+			continue
+		}
+		exPaths = append(exPaths, path)
+	}
+	sort.Strings(exPaths)
+	for _, path := range exPaths {
+		b.WriteString(excludedPlaceholderLine(excluded[path], path))
+		b.WriteByte('\n')
+	}
+
+	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...)
+	excludes = append(excludes, opts.Excludes...)
 	nmArgs := []string{"diff", treeA, treeB, "--"}
 	nmArgs = append(nmArgs, excludes...)
 	nmArgs = append(nmArgs, ":!*.md", ":!*.markdown")
@@ -1192,11 +1292,28 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 		binExcludes = append(binExcludes, ":!"+path)
 	}
 
-	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
-	excludes := opts.Excludes
-	if len(excludes) == 0 {
-		excludes = defaultExcludes
+	// ---- User-exclude placeholders (PRD §9.18 FR-X4, working-tree path) ----
+	excluded, xerr := g.detectExcludedStatuses(ctx, statuses, opts.Excludes)
+	if xerr != nil {
+		return "", xerr
 	}
+	exPaths := make([]string, 0, len(excluded))
+	for path := range excluded {
+		if binSet[path] {
+			continue
+		}
+		exPaths = append(exPaths, path)
+	}
+	sort.Strings(exPaths)
+	for _, path := range exPaths {
+		b.WriteString(excludedPlaceholderLine(excluded[path], path))
+		b.WriteByte('\n')
+	}
+
+	// ---- Part 2: non-markdown, aggregate, byte-capped, excluded ----
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...)
+	excludes = append(excludes, opts.Excludes...)
 	nmArgs := []string{"diff", "--"}
 	nmArgs = append(nmArgs, excludes...)
 	nmArgs = append(nmArgs, ":!*.md", ":!*.markdown")
@@ -1264,4 +1381,177 @@ func (g *gitRunner) DiffTreeNames(ctx context.Context, treeA, treeB string) ([]s
 		}
 	}
 	return out, nil // nil if stdout was empty (identical trees); out aliases paths (same backing array)
+}
+
+// HooksPath returns the ABSOLUTE path to this repo's hooks directory (PRD §9.20 FR-H1). It runs
+// `git rev-parse --git-path hooks`, which honors core.hooksPath and resolves to the common dir from a
+// linked worktree (architecture §3, verified git 2.54.0). Because run() execs `git -C g.workDir …`, any
+// relative output is relative to g.workDir (notably `.git/hooks` from the repo root, or `../.git/hooks`
+// from a subdirectory) — it is resolved to absolute here so callers never see a cwd-relative path.
+//
+// `--git-path hooks` succeeds on an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) —
+// mirror StatusPorcelain's convention (branch on code != 0, NOT on code == 128; do NOT reuse
+// RevParseHEAD's 128-as-unborn special-case). Read-only with respect to refs and the index (PRD §18.1).
+// ConfigGlobalGet reads a key from git's GLOBAL config (not repo-local) via
+// `git config --global --get <key>` (PRD §9.21 FR-I4). Exit-code semantics: 0 = found
+// (trimmed value); 1 = not found (found=false, NOT an error); else wrapped error.
+// Repo-independent: the `-C workDir` from run() is a harmless no-op for `--global`.
+func (g *gitRunner) ConfigGlobalGet(ctx context.Context, key string) (string, bool, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "config", "--global", "--get", key)
+	if err != nil {
+		return "", false, err // git binary missing / context cancel / start failure (code == -1)
+	}
+	switch code {
+	case 0:
+		return strings.TrimSpace(stdout), true, nil
+	case 1:
+		return "", false, nil // missing key — NOT an error
+	default:
+		return "", false, fmt.Errorf("git config --global --get %s: exit %d: %s", key, code, strings.TrimSpace(stderr))
+	}
+}
+
+// ConfigGlobalSet writes a key/value to git's GLOBAL config via
+// `git config --global <key> <value>` (PRD §9.21 FR-I4). value is passed as a SINGLE
+// argv element (NEVER sh -c — PRD §19). Non-zero exit ⇒ wrapped error.
+func (g *gitRunner) ConfigGlobalSet(ctx context.Context, key, value string) error {
+	_, stderr, code, err := g.run(ctx, g.workDir, "config", "--global", key, value)
+	if err != nil {
+		return err // git binary missing / context cancel / start failure (code == -1)
+	}
+	if code != 0 {
+		return fmt.Errorf("git config --global %s %s: exit %d: %s", key, value, code, strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+// ConfigGlobalUnset removes a key from git's GLOBAL config via
+// `git config --global --unset <key>` (PRD §9.21 FR-I6). Returns found=false when
+// the key was not present (git exit 5 — NOT an error); found=true + nil when removed.
+func (g *gitRunner) ConfigGlobalUnset(ctx context.Context, key string) (bool, error) {
+	_, stderr, code, err := g.run(ctx, g.workDir, "config", "--global", "--unset", key)
+	if err != nil {
+		return false, err // git binary missing / context cancel / start failure (code == -1)
+	}
+	switch code {
+	case 0:
+		return true, nil // key removed
+	case 5:
+		return false, nil // key not set — NOT an error
+	default:
+		return false, fmt.Errorf("git config --global --unset %s: exit %d: %s", key, code, strings.TrimSpace(stderr))
+	}
+}
+
+// HooksPath returns the ABSOLUTE path to this repo's hooks directory (PRD §9.20 FR-H1). It runs
+// `git rev-parse --git-path hooks`, which honors core.hooksPath and resolves to the common dir from a
+// linked worktree (architecture §3, verified git 2.54.0). Because run() execs `git -C g.workDir …`, any
+// relative output is relative to g.workDir (notably `.git/hooks` from the repo root, or `../.git/hooks`
+// from a subdirectory) — it is resolved to absolute here so callers never see a cwd-relative path.
+//
+// `--git-path hooks` succeeds on an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) —
+// mirror StatusPorcelain's convention (branch on code != 0, NOT on code == 128; do NOT reuse
+// RevParseHEAD's 128-as-unborn special-case). Read-only with respect to refs and the index (PRD §18.1).
+func (g *gitRunner) HooksPath(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		// 128 = non-repo/corrupt — a REAL error (this call works on unborn repos; no 128-as-non-error here).
+		return "", fmt.Errorf("git rev-parse --git-path hooks: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	raw := strings.TrimSpace(stdout)
+	if raw == "" { // defensive: never observed on a valid repo
+		return "", fmt.Errorf("git rev-parse --git-path hooks: empty output")
+	}
+	if filepath.IsAbs(raw) {
+		return filepath.Clean(raw), nil // core.hooksPath=abs, or a worktree returning an absolute common path
+	}
+	// Relative output (default `.git/hooks`, or `../.git/hooks` from a subdirectory) is relative to the -C dir.
+	abs, aerr := filepath.Abs(filepath.Join(g.workDir, raw))
+	if aerr != nil {
+		return "", fmt.Errorf("resolve hooks path %q against %q: %w", raw, g.workDir, aerr)
+	}
+	return abs, nil
+}
+
+// GitDir returns the absolute path to the repository's .git directory (§9.22 FR-E1). It runs
+// `git rev-parse --absolute-git-dir` (honors worktrees + commondir; git 2.13+). The output is
+// already absolute (no cwd-relative resolution needed). Exit 128 here is a REAL error (non-repo/corrupt)
+// — the call works on unborn repos, so there is NO 128-as-non-error convention (mirror HooksPath).
+// Read-only w.r.t. refs and the index (PRD §18.1).
+func (g *gitRunner) GitDir(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		// 128 = non-repo/corrupt — a REAL error (this call works on unborn repos; no 128-as-non-error here).
+		return "", fmt.Errorf("git rev-parse --absolute-git-dir: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// Editor returns the user's resolved editor command (§9.22 FR-E1). It runs `git var GIT_EDITOR`
+// (the exact chain GIT_EDITOR → core.editor → $VISUAL → $EDITOR → vi; external_deps.md §6,
+// VERIFIED). The returned string is shell-interpreted (may contain args/quotes); callers MUST
+// invoke it via `sh -c '<editor> "$@"' -- <file>`, NEVER a bare exec. Read-only w.r.t. refs/index.
+func (g *gitRunner) Editor(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "var", "GIT_EDITOR")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git var GIT_EDITOR: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// DiffTreeNameStatus returns the raw `git diff-tree --no-commit-id --name-status -r <treeA> <treeB>`
+// output (§9.22 FR-E1) — the A/M/D/<status>\t<path> lines for the EDITMSG summary. Empty output
+// when treeA == treeB (identical trees). `git diff-tree` exits 0 whether or not there are changes;
+// exit 128 means a bad/unresolvable tree SHA — a REAL error (NOT an unborn signal: branch on
+// code != 0, never on code == 128; never use --quiet). Read-only w.r.t. refs and the index.
+func (g *gitRunner) DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "diff-tree", "--no-commit-id", "--name-status", "-r", treeA, treeB)
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff-tree --name-status: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return stdout, nil // raw A/M/D lines; caller prefixes with "# " for the EDITMSG
+}
+
+// Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
+// passed writers. It wires cmd.Stdout/cmd.Stderr directly to the passed io.Writers (the CLI passes
+// os.Stdout/os.Stderr → verbatim streaming; the existing run()/runWithInput() helpers both CAPTURE into
+// bytes.Buffer and CANNOT stream). It NEVER adds --set-upstream (FR-P2: publishing a new branch is the
+// user's call). On a non-zero exit (128 = no upstream / rejected; 1 = network) it returns a wrapped error
+// carrying git's exit code; the COMMITS STAND (push failure does not roll back local commits — push moves
+// the REMOTE, not local HEAD; the caller prints "commits created; push failed" and exits 1). ctx-aware
+// (timeout/signal cancel the push). Targets the repo via -C (the goroutine-safe convention every method
+// uses via g.workDir).
+func (g *gitRunner) Push(ctx context.Context, stdout, stderr io.Writer) error {
+	gitPath, lerr := exec.LookPath("git")
+	if lerr != nil {
+		return fmt.Errorf("git binary not found in PATH: %w", lerr)
+	}
+	// `git -C <repo> push` — NO args after `push` (plain push, FR-P1); NEVER --set-upstream (FR-P2).
+	cmd := exec.CommandContext(ctx, gitPath, "-C", g.workDir, "push")
+	cmd.Stdout = stdout // STREAM VERBATIM (not a bytes.Buffer)
+	cmd.Stderr = stderr // STREAM VERBATIM
+	runErr := cmd.Run()
+	if runErr == nil {
+		return nil
+	}
+	if cerr := ctx.Err(); cerr != nil { // context cancelled (timeout/signal) — not a git exit
+		return cerr
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) { // non-zero git exit → wrapped error (code carried for diagnostics)
+		return fmt.Errorf("git push failed (exit %d)", exitErr.ExitCode())
+	}
+	return fmt.Errorf("git push: %w", runErr) // start / I/O failure
 }

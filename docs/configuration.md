@@ -49,6 +49,8 @@ The written path is always printed on success.
 
 If a config file already exists, it is NOT overwritten unless `--force` is passed (exit code 1). Parent directories are created as needed.
 
+`config init --interactive` runs a TTY-gated wizard: it lists detected providers (FR-D1 default highlighted), shows each role's curated default (FR-D4) for accept-or-edit, and — for multi-backend providers (pi, opencode) — prompts for the `inference/model` prefix on edited models (FR-D2/FR-R5b) rather than guessing. It writes the **same file** as plain `config init`. Non-TTY stdin exits 1 pointing at plain `config init` (which stays non-interactive for post-install/first-run use, FR-B3). Composes with `--force` (overwrites) and `--provider <name>` (pre-selects); mutually exclusive with `--template`.
+
 ### Schema versioning (`config upgrade`)
 
 `stagehand config upgrade` rewrites an existing config's top-level `config_version` line to the current schema version (3) in place — For multi-backend providers, the former `default_provider` is folded into a slash-prefix on the model and the key is deleted. Every other line is preserved. Idempotent: running it twice leaves the file unchanged. No flags.
@@ -100,6 +102,10 @@ model = "sonnet"
 # [generation] — diff capture and output tuning (commented defaults)
 # [generation]
 # max_diff_bytes        = 300000
+# exclude               = []   # UNIONS across layers — see "Exclusion globs" below
+# format                = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
+# locale                = ""       # free-form language name or BCP-47 tag; never validated
+# template              = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"
 # ...
 ```
 
@@ -122,6 +128,10 @@ These are the values when no config file, env var, git-config key, or flag sets 
 | `subject_target_chars` | `50` | `config.Defaults()` |
 | `output` | `"raw"` | provider manifest (§12.1) |
 | `strip_code_fence` | `true` | provider manifest (§12.1) |
+| `format` | `"auto"` | `config.Defaults()` (§9.19 FR-F1) |
+| `locale` | `""` | `config.Defaults()` (§9.19 FR-F6) |
+| `template` | `""` | `config.Defaults()` (§9.19 FR-F8) |
+| `push` | `false` | `config.Defaults()` (§9.22 FR-P1) |
 
 `NoColor` is TTY-aware at runtime (set by the UI layer); it is not a file field and has no config-file key.
 
@@ -149,11 +159,15 @@ All `STAGEHAND_*` variables override the config file and are overridden by CLI f
 | `STAGEHAND_MESSAGE_MODEL` | `--message-model` | Per-role: message model (env + config only) | `STAGEHAND_MESSAGE_MODEL=haiku stagehand` |
 | `STAGEHAND_ARBITER_PROVIDER` | `--arbiter-provider` | Per-role: arbiter provider | `STAGEHAND_ARBITER_PROVIDER=claude stagehand` |
 | `STAGEHAND_ARBITER_MODEL` | `--arbiter-model` | Per-role: arbiter model | `STAGEHAND_ARBITER_MODEL=sonnet stagehand` |
-| `STAGEHAND_REASONING` | `--reasoning` | Global reasoning effort: off|low|medium|high | `STAGEHAND_REASONING=high stagehand` |
+| `STAGEHAND_REASONING` | `--reasoning` | Global reasoning effort: off\|low\|medium\|high | `STAGEHAND_REASONING=high stagehand` |
 | `STAGEHAND_PLANNER_REASONING` | `--planner-reasoning` | Per-role: planner reasoning | `STAGEHAND_PLANNER_REASONING=high stagehand` |
 | `STAGEHAND_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGEHAND_STAGER_REASONING=low stagehand` |
 | `STAGEHAND_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGEHAND_MESSAGE_REASONING=low stagehand` |
 | `STAGEHAND_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGEHAND_ARBITER_REASONING=low stagehand` |
+| `STAGEHAND_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGEHAND_FORMAT=conventional stagehand` |
+| `STAGEHAND_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGEHAND_LOCALE=ja stagehand` |
+| `STAGEHAND_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGEHAND_TEMPLATE='$msg (#205)' stagehand` |
+| `STAGEHAND_PUSH` | `--push` | Run `git push` after a fully-successful run (true = push; false = disable); on failure commits stand, exit 1 | `STAGEHAND_PUSH=1 stagehand` |
 
 ## Git-config keys
 
@@ -175,9 +189,13 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | `stagehand.auto_stage_all` | bool | `git config --get --bool stagehand.auto_stage_all` | Auto-stage all when nothing staged |
 | `stagehand.output` | string | `git config --get stagehand.output` | Agent output mode: `raw` \| `json` (overrides per-provider default) |
 | `stagehand.stripCodeFence` | bool | `git config --get --bool stagehand.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
+| `stagehand.format` | string | `git config --get stagehand.format` | Message format: `auto` \| `conventional` \| `gitmoji` \| `plain`. Unknown = hard error (exit 1). |
+| `stagehand.locale` | string | `git config --get stagehand.locale` | Message language (free-form name or BCP-47 tag; never validated). |
+| `stagehand.template` | string | `git config --get stagehand.template` | Message template; the literal `$msg` is replaced with the generated message. Must contain `$msg` (hard error, exit 1). |
+| `stagehand.push` | bool | `git config --get --bool stagehand.push` | Run `git push` after a fully-successful run (§9.22 FR-P1). On failure the commits stand — git's stderr is shown verbatim, "commits created; push failed" prints, exit 1. |
 
 > [!NOTE]
-> The git-config layer has **no** per-role keys (`stagehand.role.*`), no `stagehand.commits`, and no `stagehand.max_commits`. Per-role configuration is available via CLI flags (`--planner-provider`, etc.), env vars (`STAGEHAND_PLANNER_*`), and config-file `[role.*]` blocks only. Decompose settings (`--commits`, `--single`, `--no-decompose`) are flag/env only; `--max-commits` also reads from the `[generation]` config-file section.
+> The git-config layer has **no** per-role keys (`stagehand.role.*`), no `stagehand.commits`, and no `stagehand.max_commits`. Per-role configuration is available via CLI flags (`--planner-provider`, etc.), env vars (`STAGEHAND_PLANNER_*`), and config-file `[role.*]` blocks only. Decompose settings (`--commits`, `--single`, `--no-decompose`) are flag/env only; `--max-commits` also reads from the `[generation]` config-file section. There is also no `stagehand.exclude` git-config key and no `STAGEHAND_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.
 
 ### Decompose config keys
 
@@ -188,3 +206,37 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | Max commits | `--max-commits <N>` | — | `[generation].max_commits` | `12` | Safety cap on auto-decompose count |
 
 Per-role provider/model overrides (flag > env > `[role.<role>]` config > `[defaults]` > built-in): see [providers.md](providers.md#per-role-default-models-fr-d4) for the compiled-in defaults per provider. Every role (including message) exposes `--<role>-provider`/`--<role>-model`/`--<role>-reasoning` (FR-R3).
+
+### Exclusion globs (`[generation].exclude`)
+
+```toml
+[generation]
+exclude = ["*.min.js", "dist/*"]
+```
+
+`[generation].exclude` (config file, both global and repo-local) and the repeatable `--exclude <glob>` / `-x <glob>` CLI flag (§9.18 FR-X1) exclude matching files' **diff content** from the agent payload — a placeholder line stands in for the diff; the file is still captured and committed normally. Patterns are gitignore-style globs.
+
+> [!IMPORTANT]
+> This is the **one setting in the whole precedence system that UNIONS instead of overriding** (§16.1). Every other list-valued key (e.g. `[generation].binary_extensions`) REPLACES across layers — a higher layer's list wins outright. `exclude` instead **accumulates**: the resolved set is the global file's globs, followed by the repo file's globs, followed by every `--exclude`/`-x` occurrence, in that order. A repo cannot use its local config to un-exclude a glob a user set globally.
+>
+> There is deliberately **no** `STAGEHAND_EXCLUDE` environment variable and **no** `stagehand.exclude` git-config key — a colon/comma-joined env list is a well-known quoting trap for glob patterns containing those characters. Use the config file for persistent excludes and `--exclude`/`-x` for ad-hoc ones.
+
+### `.stagehandignore`
+
+A repo can place a `.stagehandignore` file at its root (alongside `.stagehand.toml`) containing one gitignore-style glob per line (§9.18 FR-X1b, FR-X2). Blank lines and `#` comment lines are ignored. The globs are **unioned** with `[generation].exclude` and `--exclude`/`-x` (see [Exclusion globs](#exclusion-globs-generationexclude) above).
+
+> [!WARNING]
+> **Negation (`!`) is NOT supported.** Git pathspec excludes have no re-include mechanism — a `!` line is silently skipped with a `--verbose` warning. This is intentional: the translated `:(exclude,glob)` pathspecs cannot un-exclude.
+
+A missing `.stagehandignore` is a no-op (no warning, no error).
+
+**Exclusions are payload-only:** excluded files are hidden from what the agent sees but are still captured and committed normally.
+
+Example:
+
+```
+# .stagehandignore
+*.min.js          # any-depth
+/dist/            # root dist/ dir contents only
+vendor/
+```

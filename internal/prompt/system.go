@@ -13,18 +13,28 @@ import (
 // Constants are defined WITHOUT trailing newlines; BuildSystemPrompt owns ALL inter-block newline
 // placement so the §17.1 blank-line topology lives in exactly one auditable place (design-decisions §11).
 
-// maturePromptHeader is the prompt preamble through the examples-intro line: role, RAW-output contract
-// (§17.4 design call — NOT commit-pi's JSON contract), essence instruction, and "Match the tone…" intro.
-// Note "from this repository" (PRD refinement; commit-pi had "from these recent commits:").
-const maturePromptHeader = `You are a commit message generator.
+// promptPreamble is the shared role + RAW-output contract (§17.4 design call — NOT commit-pi's JSON
+// contract) + essence instruction, common to both the auto examples-block header and the non-auto
+// format scaffolds (PRD §9.19 FR-F2/F3/F4 / §17.8). NO trailing newline; NO "Match the tone…" line — that
+// is auto-only (examplesIntro).
+const promptPreamble = `You are a commit message generator.
 
 Output ONLY the commit message. No preamble, no markdown, no code fences,
 no quoting. If a body is warranted, use a blank line between subject and body.
 
 Focus on the ESSENCE of the change (the intent/purpose), not implementation
-details like filenames or function names.
+details like filenames or function names.`
 
-Match the tone and style of these recent commits from this repository:`
+// examplesIntro is the auto-mode-only "Match the tone…" line that introduces the style-examples block
+// (PRD §17.1). Non-auto format modes (§17.8) omit it entirely — the scaffold body replaces the block.
+const examplesIntro = "Match the tone and style of these recent commits from this repository:"
+
+// maturePromptHeader is the prompt preamble through the examples-intro line: role, RAW-output contract,
+// essence instruction, and "Match the tone…" intro. Note "from this repository" (PRD refinement;
+// commit-pi had "from these recent commits:"). Defined as a COMPILE-TIME constant concatenation of
+// promptPreamble + examplesIntro so the auto-mode assembled bytes are unchanged by the §17.8 split
+// (FR-F1: auto + empty locale stays byte-identical to today).
+const maturePromptHeader = promptPreamble + "\n\n" + examplesIntro
 
 // antiReuseProhibition is the verbatim anti-reuse block (PRD §17.1). NOTE the EM-DASH "—" (U+2014) in
 // "the STYLE to match — format" — commit-pi used an ASCII hyphen "-"; the PRD refined it to an em-dash.
@@ -116,7 +126,7 @@ func countNonBlankLines(s string) int {
 // independently testable and the caller controls it. The orchestrator wires them:
 //
 //	hasMulti := prompt.DetectMultiline(recent)                                  // FR12
-//	sys := prompt.BuildSystemPrompt(recent, hasMulti, cfg.SubjectTargetChars)   // FR13
+//	sys := prompt.BuildSystemPrompt(recent, hasMulti, cfg.SubjectTargetChars, cfg.Format, cfg.Locale)   // FR13
 //
 // Defensive: nil/empty examples emit NO "---" lines and no panic (the orchestrator gates on
 // CommitCount>1, so examples are non-empty in practice). See design-decisions.md §9.
@@ -155,14 +165,33 @@ details like filenames or function names.`
 //
 // Do NOT reuse S1's subjectTargetLine — it emits the §17.1 wording, wrong for §17.2.
 //
+// format/locale implement PRD §9.19 FR-F1/F4/F6 / §17.8: format=="auto" reproduces the §17.2 body exactly
+// (FR-F1 byte-identity); any other mode replaces it with the mode's scaffold (buildFormatSystemPrompt,
+// hasMultiline=false — a new/unborn repo has no history to detect multi-line commits from). locale, when
+// non-empty, appends the FR-F6 one-line language instruction in EITHER path (withLocale is a no-op when
+// locale=="").
+//
 // Defensive: subjectTarget is a plain int with no failure mode; fmt.Sprintf cannot fail. Returns string
 // only (no error). See design-decisions.md §1/§2/§3.
-func BuildFallbackPrompt(subjectTarget int) string {
-	return fallbackPromptBody + "\n\n" +
+func BuildFallbackPrompt(subjectTarget int, format, locale string) string {
+	if format != "auto" {
+		return withLocale(buildFormatSystemPrompt(format, false, subjectTarget), locale)
+	}
+	s := fallbackPromptBody + "\n\n" +
 		fmt.Sprintf("Target ~%d characters (~7 words). Format: type(scope): description", subjectTarget)
+	return withLocale(s, locale)
 }
 
-func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int) string {
+// format/locale implement PRD §9.19 FR-F1/F2/F3/F6 / §17.8: format=="auto" reproduces the §17.1 assembly
+// exactly (FR-F1 byte-identity — the ONLY change is wrapping the return in withLocale, a no-op when
+// locale==""); any other mode replaces the style-examples block + anti-reuse warning with the mode's
+// scaffold (buildFormatSystemPrompt) while retaining the multi-line rule (FR12 detection still runs) and
+// the subject-target line.
+func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int, format, locale string) string {
+	if format != "auto" {
+		return withLocale(buildFormatSystemPrompt(format, hasMultiline, subjectTarget), locale)
+	}
+
 	var b strings.Builder
 
 	// Header (role + raw-output contract + essence + examples intro).
@@ -194,5 +223,5 @@ func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int) 
 	b.WriteByte('\n')
 	b.WriteString(subjectTargetLine(subjectTarget))
 
-	return b.String()
+	return withLocale(b.String(), locale)
 }

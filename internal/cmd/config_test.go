@@ -491,6 +491,73 @@ func TestConfigInit_TemplateIsInert(t *testing.T) {
 	}
 }
 
+func TestConfigInit_Template_GenerationKeys(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	tmp := filepath.Join(t.TempDir(), "ref.toml")
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--template", "--config", tmp})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	data, err := os.ReadFile(tmp)
+	if err != nil {
+		t.Fatalf("cannot read template at %s: %v", tmp, err)
+	}
+	content := string(data)
+
+	// All 5 v2.1 keys must render as commented documentation lines in the [generation] section.
+	for _, key := range []string{"exclude", "format", "locale", "template", "push"} {
+		needle := "# " + key
+		if !strings.Contains(content, needle) {
+			t.Errorf("template [generation] missing commented key %q (needle %q not found)", key, needle)
+		}
+	}
+
+	// The push line's `git push` code span must render correctly (validates the backtick-split concatenation).
+	if !strings.Contains(content, "`git push`") {
+		t.Errorf("template push line did not render the `git push` code span (backtick split mis-wired)")
+	}
+}
+
+// TestConfigInit_TemplateFlag_CollisionSafe verifies the §9.19 FR-F8 cobra collision analysis:
+// `config init` keeps its LOCAL bool `--template` (v1 inert-reference-config behavior); the root
+// PERSISTENT string `--template` (message template) is skipped for `config init` by pflag's
+// AddFlagSet (local name already present) and is unaffected — no panic, no type clash.
+func TestConfigInit_TemplateFlag_CollisionSafe(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--template"})
+
+	err := Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	// The LOCAL bool won: it wrote the inert reference config (v1 behavior), not a value-taking flag.
+	got, err := configInitCmd.Flags().GetBool("template")
+	if err != nil {
+		t.Fatalf("config init --template did not parse as a bool: %v", err)
+	}
+	if !got {
+		t.Error("config init --template bool = false, want true")
+	}
+
+	// The root persistent string --template is untouched (still its zero value) — no collision.
+	if flagTemplate != "" {
+		t.Errorf("flagTemplate = %q, want empty (config init's local bool must not leak into the global string)", flagTemplate)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // config init tests -- --force
 // ---------------------------------------------------------------------------

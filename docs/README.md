@@ -30,14 +30,27 @@ scoop install dustin/stagehand
 
 | Page | Description |
 |------|-------------|
-| [CLI reference](cli.md) | Synopsis, all global flags (incl. decompose + per-role), subcommands, exit codes, examples, and the flag↔env↔git-config map. |
-| [Configuration](configuration.md) | 7-layer precedence, config file format, environment variables, git-config keys, built-in defaults, and paths. |
+| [CLI reference](cli.md) | Synopsis, all global flags (incl. decompose + per-role), subcommands, exit codes, examples, and the flag↔env↔git-config map. **v2.1 additions:** hook (install/uninstall/status/exec), integrate (git-alias/lazygit + no-mangle protocol), models, and the global flags `--exclude`, `--format`, `--locale`, `--context`, `--template`, `--edit`, `--push`. |
+| [Configuration](configuration.md) | 7-layer precedence, config file format, environment variables, git-config keys, built-in defaults, and paths. **v2.1 additions:** exclusion globs + `.stagehandignore`, `[generation]` shaping keys (format/locale/template), `STAGEHAND_PUSH`, and `config init --interactive` (guided setup). |
 | [Provider manifests](providers.md) | 18-field manifest schema, command rendering, the 7 built-in providers (incl. agy), and adding a new agent. |
-| [How Stagehand works](how-it-works.md) | Snapshot-based architecture, multi-commit decomposition pipeline, stage-while-generating, the safety and rescue protocol, binary filtering, and prompt engineering. |
+| [How Stagehand works](how-it-works.md) | Snapshot-based architecture, multi-commit decomposition pipeline, stage-while-generating, the safety and rescue protocol, binary filtering, and prompt engineering. **v2.1 additions:** payload exclusions, format modes & locale, the hook-vs-snapshot trade-off (FR-H7), and stage-while-editing (`--edit`). |
+
+## Capability index
+
+Each v2.1 capability maps to a specific doc anchor:
+
+- **Payload exclusions** → [configuration.md#exclusion-globs-generationexclude](configuration.md#exclusion-globs-generationexclude) · [how-it-works.md#payload-exclusions-stagehandignore](how-it-works.md#payload-exclusions-stagehandignore)
+- **Message shaping** → [how-it-works.md#format-modes-and-locale](how-it-works.md#format-modes-and-locale)
+- **Git hook mode** → [how-it-works.md#trade-off-inversion-fr-h7](how-it-works.md#trade-off-inversion-fr-h7) · [cli.md#hook-install](cli.md#hook-install)
+- **Tool integrations** → [cli.md#integrate-install-target](cli.md#integrate-install-target)
+- **`--edit` / `--push`** → [cli.md](cli.md) (global flags)
+- **Discovery** → [cli.md#models-provider](cli.md#models-provider) · [cli.md#config-init](cli.md#config-init)
 
 ## Product specification
 
 The [PRD](../PRD.md) is the authoritative product and technical specification (read-only). These docs are derived from it and from the shipped binary — refer to the PRD for the canonical requirements and design rationale.
+
+The [FUTURE_SPEC.md](../FUTURE_SPEC.md) lists deferred and rejected ideas — each with its reason.
 
 ## Contributing
 

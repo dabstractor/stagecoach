@@ -21,6 +21,7 @@ func TestFor(t *testing.T) {
 		{"wrapped ExitError → Code (errors.As traverses %w)", fmt.Errorf("wrap: %w", New(7, errors.New("x"))), 7},
 		{"wrapped ExitError NothingToCommit beats sentinel branch", fmt.Errorf("%w", New(NothingToCommit, errors.New("y"))), NothingToCommit},
 		{"ErrNothingToCommit", generate.ErrNothingToCommit, NothingToCommit},
+		{"ErrEmptyMessage → 1", generate.ErrEmptyMessage, Error},
 		{"RescueError(ErrRescue) → 3", &generate.RescueError{Kind: generate.ErrRescue}, Rescue},
 		{"RescueError(ErrTimeout) → 124 (timeout before rescue)", &generate.RescueError{Kind: generate.ErrTimeout}, Timeout},
 		{"wrapped ErrTimeout → 124", fmt.Errorf("wrap: %w", generate.ErrTimeout), Timeout},

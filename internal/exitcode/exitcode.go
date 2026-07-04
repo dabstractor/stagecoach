@@ -61,6 +61,9 @@ func For(err error) int {
 	if errors.Is(err, generate.ErrNothingToCommit) {
 		return NothingToCommit
 	}
+	if errors.Is(err, generate.ErrEmptyMessage) {
+		return Error // §9.22 FR-E1 abort — exit 1, NOT rescue (no recipe; HEAD+index untouched)
+	}
 	// *RescueError.Unwrap()==Kind; check timeout BEFORE rescue (a timeout IS a rescue with Kind=ErrTimeout).
 	if errors.Is(err, generate.ErrTimeout) {
 		return Timeout

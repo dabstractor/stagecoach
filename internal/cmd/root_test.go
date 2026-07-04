@@ -164,6 +164,8 @@ func TestFlags_RegisteredAndDefaults(t *testing.T) {
 		{"stager-model", "", ""},
 		{"arbiter-provider", "", ""},
 		{"arbiter-model", "", ""},
+		// §9.19 FR-F8 — global message template (distinct from the LOCAL `config init --template` bool)
+		{"template", "", ""},
 	}
 	for _, f := range requiredFlags {
 		t.Run("flag_"+f.name, func(t *testing.T) {
@@ -291,6 +293,36 @@ func TestRoot_FlagOverridesEnvOverridesGit(t *testing.T) {
 			t.Errorf("Provider=%v, want env-p (env > git)", cfg)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// TestRoot_TemplateFlag_SetsConfig — global --template (string) sets cfg.Template and is
+// distinct from `config init --template` (local bool); the pflag AddFlagSet collision is safe.
+// ---------------------------------------------------------------------------
+
+func TestRoot_TemplateFlag_SetsConfig(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+
+	rootCmd.RunE = func(cmd *cobra.Command, args []string) error { return nil }
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"--template", "$msg (#205)"})
+
+	err := Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	cfg := Config()
+	if cfg == nil {
+		t.Fatal("Config() returned nil, want non-nil")
+	}
+	if cfg.Template != "$msg (#205)" {
+		t.Errorf("Template=%q, want %q (root --template string)", cfg.Template, "$msg (#205)")
+	}
 }
 
 // ---------------------------------------------------------------------------

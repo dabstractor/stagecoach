@@ -68,6 +68,12 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 	fs.Bool("single", false, "")
 	fs.Bool("no-decompose", false, "")
 	fs.Int("max-commits", 0, "")
+	// §9.18 FR-X1 — repeatable exclude flag (StringArray; each Set call appends one literal value).
+	fs.StringArray("exclude", nil, "")
+	// §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags.
+	fs.String("format", "", "")
+	fs.String("locale", "", "")
+	fs.String("template", "", "")
 	return fs
 }
 
@@ -425,6 +431,46 @@ func TestLoadFlags_Decompose(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// loadFlags — §9.18 FR-X1 exclude UNION tests
+// ---------------------------------------------------------------------------
+
+func TestLoadFlags_ExcludeUnion(t *testing.T) {
+	// Starting from a config that already has file-contributed globs, the flag layer must APPEND,
+	// not replace (differs from every scalar flag in loadFlags, which sets DIRECTLY).
+	cfg := Config{Exclude: []string{"g1", "r1"}}
+	fs := newFlagSet(t)
+	if err := fs.Set("exclude", "f1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Set("exclude", "f2"); err != nil {
+		t.Fatal(err)
+	}
+
+	loadFlags(&cfg, fs)
+
+	want := []string{"g1", "r1", "f1", "f2"}
+	if len(cfg.Exclude) != len(want) {
+		t.Fatalf("Exclude=%v want %v", cfg.Exclude, want)
+	}
+	for i, v := range want {
+		if cfg.Exclude[i] != v {
+			t.Errorf("Exclude[%d]=%q want %q", i, cfg.Exclude[i], v)
+		}
+	}
+}
+
+func TestLoadFlags_ExcludeNotChangedNoop(t *testing.T) {
+	cfg := Config{Exclude: []string{"g1"}}
+	fs := newFlagSet(t) // --exclude NOT Set
+
+	loadFlags(&cfg, fs)
+
+	if len(cfg.Exclude) != 1 || cfg.Exclude[0] != "g1" {
+		t.Errorf("Exclude=%v want [g1] (unset flag must not touch Exclude)", cfg.Exclude)
+	}
+}
+
 func TestLoadFlags_TimeoutInteger(t *testing.T) {
 	cfg := Config{}
 	fs := newFlagSet(t)
@@ -632,6 +678,106 @@ func TestLoad_CLIBoolFalseEscape(t *testing.T) {
 	}
 	if cfg.Verbose {
 		t.Errorf("Verbose=true want false (CLI DIRECT set overrides file true)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — §9.18 FR-X1 exclude UNION tests (P1.M1.T1.S1)
+// ---------------------------------------------------------------------------
+
+func TestLoad_ExcludeUnion_GlobalOnly(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\nexclude = [\"*.min.js\", \"dist/*\"]\n")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	want := []string{"*.min.js", "dist/*"}
+	if len(cfg.Exclude) != len(want) || cfg.Exclude[0] != want[0] || cfg.Exclude[1] != want[1] {
+		t.Errorf("Exclude=%v want %v", cfg.Exclude, want)
+	}
+}
+
+func TestLoad_ExcludeUnion_GlobalAndRepo(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\nexclude = [\"g1\"]\n")
+	writeConfigFile(t, repo, ".stagehand.toml", "[generation]\nexclude = [\"r1\"]\n")
+
+	origNoticeOut := noticeOut
+	noticeOut = &strings.Builder{}
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	want := []string{"g1", "r1"}
+	if len(cfg.Exclude) != len(want) || cfg.Exclude[0] != want[0] || cfg.Exclude[1] != want[1] {
+		t.Errorf("Exclude=%v want %v (global then repo — UNION, not replace)", cfg.Exclude, want)
+	}
+}
+
+func TestLoad_ExcludeUnion_GlobalRepoAndFlags(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\nexclude = [\"g1\"]\n")
+	writeConfigFile(t, repo, ".stagehand.toml", "[generation]\nexclude = [\"r1\"]\n")
+
+	origNoticeOut := noticeOut
+	noticeOut = &strings.Builder{}
+	defer func() { noticeOut = origNoticeOut }()
+
+	fs := newFlagSet(t)
+	if err := fs.Set("exclude", "f1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Set("exclude", "f2"); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	want := []string{"g1", "r1", "f1", "f2"}
+	if len(cfg.Exclude) != len(want) {
+		t.Fatalf("Exclude=%v want %v", cfg.Exclude, want)
+	}
+	for i, v := range want {
+		if cfg.Exclude[i] != v {
+			t.Errorf("Exclude[%d]=%q want %q (order: global, repo, flags)", i, cfg.Exclude[i], v)
+		}
+	}
+}
+
+func TestLoad_ExcludeNoEnvVar(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	// FR-X1: no STAGEHAND_EXCLUDE env var exists — it must be silently ignored, not consumed.
+	t.Setenv("STAGEHAND_EXCLUDE", "*.snap")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if len(cfg.Exclude) != 0 {
+		t.Errorf("Exclude=%v want empty (no STAGEHAND_EXCLUDE support per FR-X1)", cfg.Exclude)
+	}
+}
+
+func TestLoad_ExcludeAbsentEverywhere(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if len(cfg.Exclude) != 0 {
+		t.Errorf("Exclude=%v want empty/nil (nothing set anywhere)", cfg.Exclude)
 	}
 }
 
@@ -893,6 +1039,229 @@ func TestLoad_NilFlagsSkipped(t *testing.T) {
 	}
 	if cfg.Provider != "pi" {
 		t.Errorf("Provider=%q want pi (nil Flags should not panic, env still applies)", cfg.Provider)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validateFormat tests (§9.19 FR-F1)
+// ---------------------------------------------------------------------------
+
+func TestValidateFormat(t *testing.T) {
+	validModes := []string{"auto", "conventional", "gitmoji", "plain"}
+	for _, mode := range validModes {
+		t.Run("valid_"+mode, func(t *testing.T) {
+			if err := validateFormat(mode); err != nil {
+				t.Errorf("validateFormat(%q) = %v, want nil", mode, err)
+			}
+		})
+	}
+	invalidModes := []string{"", "emoji", "Conventional", "AUTO", "gitmojii", " auto"}
+	for _, mode := range invalidModes {
+		t.Run("invalid_"+mode, func(t *testing.T) {
+			err := validateFormat(mode)
+			if err == nil {
+				t.Fatalf("validateFormat(%q) = nil, want error", mode)
+			}
+			if !strings.Contains(err.Error(), mode) {
+				t.Errorf("error %q does not contain %q", err.Error(), mode)
+			}
+			if !strings.Contains(err.Error(), "auto, conventional, gitmoji, plain") {
+				t.Errorf("error %q does not contain valid set", err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateTemplate(t *testing.T) {
+	validTemplates := []string{"", "$msg", "$msg (#205)", "[skip ci] $msg"}
+	for _, tpl := range validTemplates {
+		t.Run("valid_"+tpl, func(t *testing.T) {
+			if err := validateTemplate(tpl); err != nil {
+				t.Errorf("validateTemplate(%q) = %v, want nil", tpl, err)
+			}
+		})
+	}
+	invalidTemplates := []string{"(#205)", "${msg}", "msg"}
+	for _, tpl := range invalidTemplates {
+		t.Run("invalid_"+tpl, func(t *testing.T) {
+			err := validateTemplate(tpl)
+			if err == nil {
+				t.Fatalf("validateTemplate(%q) = nil, want error", tpl)
+			}
+			if !strings.Contains(err.Error(), tpl) {
+				t.Errorf("error %q does not contain %q", err.Error(), tpl)
+			}
+			if !strings.Contains(err.Error(), "$msg") {
+				t.Errorf("error %q does not contain '$msg'", err.Error())
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — template precedence (file < git < env < flag) + hard $msg error
+// ---------------------------------------------------------------------------
+
+func TestLoad_TemplatePrecedence(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+
+	// Layer 2/3: file sets template
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\ntemplate = \"$msg (file)\"\n")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (file)" {
+		t.Errorf("Template=%q want %q (from [generation].template)", cfg.Template, "$msg (file)")
+	}
+
+	// Layer 4: git overrides
+	setGitConfig(t, repo, "stagehand.template", "$msg (git)")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (git)" {
+		t.Errorf("Template=%q want %q (git > file)", cfg.Template, "$msg (git)")
+	}
+
+	// Layer 5: env overrides
+	t.Setenv("STAGEHAND_TEMPLATE", "$msg (env)")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (env)" {
+		t.Errorf("Template=%q want %q (env > git)", cfg.Template, "$msg (env)")
+	}
+
+	// Layer 7: CLI flag overrides
+	fs := newFlagSet(t)
+	if err := fs.Set("template", "$msg (flag)"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Template != "$msg (flag)" {
+		t.Errorf("Template=%q want %q (flag > env)", cfg.Template, "$msg (flag)")
+	}
+}
+
+func TestLoad_TemplateNoMsg_HardError(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGEHAND_TEMPLATE", "(#205)")
+
+	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err == nil {
+		t.Fatal("Load err=nil, want error for a resolved template lacking $msg")
+	}
+	if !strings.Contains(err.Error(), "template: invalid template") {
+		t.Errorf("err=%v, want it to contain 'template: invalid template'", err)
+	}
+	if !strings.Contains(err.Error(), "$msg") {
+		t.Errorf("err=%v, want it to mention '$msg'", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Load — push precedence (§9.22 FR-P1: flag > env > git-config > file > default false)
+// ---------------------------------------------------------------------------
+
+func TestLoadEnv_Push(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGEHAND_PUSH", "true")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (STAGEHAND_PUSH=true)")
+	}
+
+	// DIRECT-set escape hatch: STAGEHAND_PUSH=false
+	cfg2 := Config{Push: true}
+	t.Setenv("STAGEHAND_PUSH", "false")
+	if err := loadEnv(&cfg2); err != nil {
+		t.Fatalf("loadEnv escape err=%v", err)
+	}
+	if cfg2.Push {
+		t.Errorf("Push=true want false (STAGEHAND_PUSH=false DIRECT set escape)")
+	}
+}
+
+func TestLoadFlags_Push(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	// Register --push flag (newFlagSet does NOT register it by default yet)
+	fs.Bool("push", false, "")
+	if err := fs.Set("push", "true"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if !cfg.Push {
+		t.Errorf("Push=false want true (--push set)")
+	}
+
+	// Not changed → no-op
+	cfg2 := Defaults()
+	fs2 := newFlagSet(t)
+	fs2.Bool("push", false, "")
+	loadFlags(&cfg2, fs2)
+	if cfg2.Push {
+		t.Errorf("Push=true want false (--push not changed)")
+	}
+}
+
+func TestLoad_PushPrecedence(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+
+	// Layer 2/3: file sets push=true
+	writeConfigFile(t, globalDir, "config.toml", "[generation]\npush = true\n")
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (from [generation].push)")
+	}
+
+	// Layer 4: git overrides (NOTE: git-config false is a no-op with overlay — same as
+	// AutoStageAll/Verbose. DIRECT-set escape via env or flag.)
+	setGitConfig(t, repo, "stagehand.push", "false")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (git-config false is no-op; file true stands)")
+	}
+
+	// Layer 5: env overrides
+	t.Setenv("STAGEHAND_PUSH", "true")
+	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if !cfg.Push {
+		t.Errorf("Push=false want true (env > git)")
+	}
+}
+
+func TestLoad_PushDefaultFalse(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.Push {
+		t.Errorf("Push=true want false (default)")
 	}
 }
 

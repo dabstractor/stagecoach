@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -111,4 +112,189 @@ func TestRun_LookPathFailure(t *testing.T) {
 	if code != -1 {
 		t.Fatalf("run() exitCode = %d, want -1 (sentinel for infrastructural failure)", code)
 	}
+}
+
+func TestGitDir(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	got, err := g.GitDir(ctx)
+	if err != nil {
+		t.Fatalf("GitDir() error: %v", err)
+	}
+	if got == "" {
+		t.Fatal("GitDir() returned empty")
+	}
+	// Must end with ".git" or be an absolute path.
+	if got[len(got)-4:] != ".git" && got[len(got)-5:] != ".git/" {
+		t.Logf("GitDir() = %q (should be an absolute path ending in .git)", got)
+	}
+}
+
+func TestEditor(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	// With GIT_EDITOR set, git var GIT_EDITOR should return it.
+	t.Setenv("GIT_EDITOR", "/usr/bin/vim")
+	got, err := g.Editor(ctx)
+	if err != nil {
+		t.Fatalf("Editor() error: %v", err)
+	}
+	if got != "/usr/bin/vim" {
+		t.Errorf("Editor() = %q, want /usr/bin/vim", got)
+	}
+
+	// Without GIT_EDITOR, it should resolve something (at minimum vi).
+	t.Setenv("GIT_EDITOR", "")
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "")
+	got2, err2 := g.Editor(ctx)
+	if err2 != nil {
+		t.Fatalf("Editor() without GIT_EDITOR error: %v", err2)
+	}
+	// In CI vi may not be installed; just verify we got a non-error result.
+	t.Logf("Editor() without GIT_EDITOR = %q", got2)
+}
+
+func TestDiffTreeNameStatus(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := New(repo)
+	ctx := context.Background()
+
+	// Create an initial commit with a file.
+	writeFile(t, repo, "a.txt", "hello")
+	runGit(t, repo, "add", "a.txt")
+	runGit(t, repo, "commit", "-m", "initial")
+
+	srcA := strings.TrimSpace(runGit(t, repo, "rev-parse", "HEAD^{tree}"))
+
+	// Modify the file and commit.
+	writeFile(t, repo, "a.txt", "world")
+	runGit(t, repo, "commit", "-am", "update")
+	srcB := strings.TrimSpace(runGit(t, repo, "rev-parse", "HEAD^{tree}"))
+
+	got, err := g.DiffTreeNameStatus(ctx, srcA, srcB)
+	if err != nil {
+		t.Fatalf("DiffTreeNameStatus() error: %v", err)
+	}
+	if !strings.Contains(got, "M\ta.txt") {
+		t.Errorf("DiffTreeNameStatus() = %q, want to contain 'M\ta.txt'", got)
+	}
+
+	// Identical trees → empty output.
+	got2, err2 := g.DiffTreeNameStatus(ctx, srcA, srcA)
+	if err2 != nil {
+		t.Fatalf("DiffTreeNameStatus(same) error: %v", err2)
+	}
+	if strings.TrimSpace(got2) != "" {
+		t.Errorf("DiffTreeNameStatus(same) = %q, want empty", got2)
+	}
+}
+
+// mustRun runs a git command in dir; fails the test on error.
+func mustRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test <test@example.com>",
+		"GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=Test <test@example.com>",
+		"GIT_COMMITTER_EMAIL=test@example.com>",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// writeAndCommit creates a file at dir/name, stages it, and commits.
+func writeAndCommit(t *testing.T, dir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(dir+"/"+name, []byte(body), 0644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+	mustRun(t, dir, "add", name)
+	mustRun(t, dir, "commit", "-m", "add "+name)
+}
+
+func TestPush_CleanToBareRemote(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	bare := t.TempDir()
+	if out, err := exec.Command("git", "init", "--bare", bare).CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	mustRun(t, repo, "remote", "add", "origin", bare)
+
+	// TEST SETUP: establish upstream + initial commit + push
+	writeAndCommit(t, repo, "a.txt", "a")
+	mustRun(t, repo, "push", "-u", "origin", "HEAD")
+
+	// Now add a NEW commit and push via the Push method.
+	writeAndCommit(t, repo, "b.txt", "b")
+	g := New(repo)
+	var out, errb bytes.Buffer
+	if err := g.Push(context.Background(), &out, &errb); err != nil {
+		t.Fatalf("Push err = %v (stdout=%q, stderr=%q)", err, out.String(), errb.String())
+	}
+
+	// Assert the remote advanced: git -C <bare> log --oneline shows 2 commits.
+	log := runGit(t, bare, "log", "--oneline")
+	lines := strings.Split(strings.TrimSpace(log), "\n")
+	if len(lines) < 2 {
+		t.Errorf("remote has %d commits, want >= 2: %q", len(lines), log)
+	}
+}
+
+func TestPush_NoUpstreamFails128(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null") // MASKS autoSetupRemote — CRITICAL (external_deps.md §8)
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null") // (external_deps.md §8)
+
+	repo := t.TempDir()
+	initRepo(t, repo)
+	bare := t.TempDir()
+	if err := exec.Command("git", "init", "--bare", bare).Run(); err != nil {
+		t.Fatalf("init bare repo: %v", err)
+	}
+	mustRun(t, repo, "remote", "add", "origin", bare)
+	writeAndCommit(t, repo, "a.txt", "a")
+	// NOTE: deliberately NO `git push -u origin HEAD` — no upstream.
+
+	g := New(repo)
+	var errb bytes.Buffer
+	err := g.Push(context.Background(), io.Discard, &errb)
+	if err == nil {
+		t.Fatal("Push err = nil, want non-nil (no upstream)")
+	}
+	stderrStr := errb.String()
+	if !strings.Contains(stderrStr, "has no upstream branch") {
+		t.Errorf("stderr missing 'has no upstream branch': %q", stderrStr)
+	}
+	if !strings.Contains(stderrStr, "--set-upstream") {
+		t.Errorf("stderr missing '--set-upstream': %q", stderrStr)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir)
+	cmd.Args = append(cmd.Args, args...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test <test@example.com>",
+		"GIT_AUTHOR_EMAIL=test@example.com>",
+		"GIT_COMMITTER_NAME=Test <test@example.com>",
+		"GIT_COMMITTER_EMAIL=test@example.com>",
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
 }
