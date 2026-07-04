@@ -126,14 +126,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Canonicalize the repo= diagnostic field (Issue 3)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Acquire (lock.go:102) stores the RAW repoPath (os.Getwd()) in the repo= field, but lockHash canonicalizes via filepath.EvalSymlinks for the filename. So two terminals reaching the same repo via symlink vs real path share one lock file but display different repo= values. Store the canonical path in repo= so the diagnostic agrees with the hash key.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Store canonical path in repo= field and add symlink diagnostic test",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -151,14 +151,14 @@
               "type": "Task",
               "id": "P1.M2.T3",
               "title": "Make the SetSnapshot rewrite atomic in-place (Issue 4a)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "setSnapshot (lock.go:131-140) does Truncate(0)→Seek(0,0)→writeContents, producing an EMPTY file in the window between Truncate and the write completion; a contender reading then sees empty diagnostics. Rewrite in place as Seek→Write(fullBuffer)→Truncate(len) so the file is never empty (always old or new content). CRITICAL: do NOT use temp-file+os.Rename — flock is inode-bound and rename would orphan the holder's flock.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T3.S1",
                   "title": "Restructure setSnapshot to Seek→Write→Truncate in place + invariant test",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T2.S1"

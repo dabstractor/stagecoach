@@ -70,6 +70,7 @@ func Acquire(repoPath string) (*Locker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lock path: %w", err)
 	}
+	canonical, _ := lockHash(repoPath) // Issue 3: canonical path for the repo= diagnostic
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("lock dir: %w", err)
@@ -99,7 +100,7 @@ func Acquire(repoPath string) (*Locker, error) {
 		path:      path,
 		pid:       pid,
 		hostname:  host,
-		repo:      repoPath,
+		repo:      canonical, // Issue 3: canonical path (was repoPath — raw CWD/symlink)
 		timestamp: ts,
 	}
 
@@ -211,25 +212,32 @@ func parseContents(data []byte) LockContents {
 	return c
 }
 
-// lockHash returns the sha256 hex hash of the repo's canonical path (EvalSymlinks,
-// falling back to Abs). It is exercised directly by lockHash tests.
-func lockHash(repoPath string) string {
+// lockHash returns the repo's canonical path and its sha256 hex hash. The
+// canonical path (EvalSymlinks, falling back to Abs) is the single source of
+// truth reused by BOTH the lock filename (hash) and the diagnostic repo= field
+// (Issue 3) — the two always agree for a symlinked checkout. lockHash is the
+// sole canonicalization site in the package (DRY). It is exercised directly by
+// lockHash tests.
+func lockHash(repoPath string) (canonical, hash string) {
 	canonical, err := filepath.EvalSymlinks(repoPath)
 	if err != nil {
 		canonical, _ = filepath.Abs(repoPath)
 	}
 	sum := sha256.Sum256([]byte(canonical))
-	return hex.EncodeToString(sum[:])
+	return canonical, hex.EncodeToString(sum[:])
 }
 
-// lockPath returns the full lock file path for a repo (lockDir + lockHash). It is
-// the single source of truth shared by Acquire and the path-consistency test.
+// lockPath returns the full lock file path for a repo (lockDir + lockHash). It
+// is the single source of truth shared by Acquire and the path-consistency test.
+// The canonical returned by lockHash is intentionally discarded here (only the
+// hash keys the filename); Acquire reuses the canonical for the repo= field.
 func lockPath(repoPath string) (string, error) {
 	dir, err := lockDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, lockHash(repoPath)+".lock"), nil
+	_, hash := lockHash(repoPath)
+	return filepath.Join(dir, hash+".lock"), nil
 }
 
 // IsHeldError reports whether err is a *HeldError.

@@ -105,13 +105,13 @@ func TestHash_CanonicalSymlink(t *testing.T) {
 	tmpLink := filepath.Join(tmpDir, "link")
 	os.Symlink(tmpRepo, tmpLink)
 
-	hash1 := lockHash(tmpRepo)
-	hash2 := lockHash(tmpLink)
+	_, hash1 := lockHash(tmpRepo)
+	_, hash2 := lockHash(tmpLink)
 	if hash1 != hash2 {
 		t.Errorf("lockHash(symlink)=%q != lockHash(real)=%q", hash2, hash1)
 	}
 	// Determinism: same path → same hash always.
-	hash3 := lockHash(tmpRepo)
+	_, hash3 := lockHash(tmpRepo)
 	if hash1 != hash3 {
 		t.Errorf("lockHash not deterministic: %q != %q", hash1, hash3)
 	}
@@ -185,8 +185,12 @@ func TestAcquireRelease_RoundTrip(t *testing.T) {
 	if c.Hostname == "" {
 		t.Error("hostname is empty")
 	}
-	if c.Repo != repo {
-		t.Errorf("repo = %q, want %q", c.Repo, repo)
+	// Issue 3: repo= stores the canonical path (EvalSymlinks-resolved). On macOS
+	// t.TempDir() is under /var → /private/var, so c.Repo != raw repo; compare
+	// against the same canonical oracle lockHash uses.
+	canonical, _ := lockHash(repo)
+	if c.Repo != canonical {
+		t.Errorf("repo = %q, want canonical %q", c.Repo, canonical)
 	}
 	if c.Timestamp == "" {
 		t.Error("timestamp is empty")
@@ -198,6 +202,49 @@ func TestAcquireRelease_RoundTrip(t *testing.T) {
 	// Release is idempotent.
 	l.Release()
 	l.Release() // second call must not panic
+}
+
+// TestAcquire_RepoFieldIsCanonical verifies Issue 3's diagnostic fix: when a
+// repo is reached via a symlink, the repo= field stores the CANONICAL real path
+// (the same path the lock filename hash uses), not the raw symlink. This is the
+// headline deliverable — it makes the contention message unambiguous for two
+// terminals in the same repo (one via the symlink, one via the real path).
+func TestAcquire_RepoFieldIsCanonical(t *testing.T) {
+	resetCurrent(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // isolate — don't touch the real lock dir
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	tmpDir := t.TempDir()
+	realRepo := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(realRepo, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	link := filepath.Join(tmpDir, "link")
+	if err := os.Symlink(realRepo, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	canonical, _ := lockHash(link) // the expected canonical (EvalSymlinks(link) == realRepo)
+
+	l, err := Acquire(link) // acquire via the SYMLINK (raw path)
+	if err != nil {
+		t.Fatalf("Acquire via symlink: %v", err)
+	}
+	// Read the lock file BEFORE Release — Issue 2 (P1.M2.T1.S1) removes the file on Release.
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		l.Release()
+		t.Fatalf("ReadFile before Release: %v", err)
+	}
+	l.Release()
+
+	c := parseContents(data)
+	if c.Repo != canonical {
+		t.Errorf("repo field = %q, want canonical %q (Issue 3: repo= must be canonical, not the raw symlink %q)",
+			c.Repo, canonical, link)
+	}
+	if c.Repo == link {
+		t.Errorf("repo field is the raw symlink path %q — Issue 3 not fixed", link)
+	}
 }
 
 // TestRelease_RemovesLockFile verifies Issue 2's disk-hygiene fix: Release removes
@@ -266,8 +313,11 @@ func TestSetSnapshot_UpdatesFile(t *testing.T) {
 	if c.Pid == "" {
 		t.Error("pid was cleared by SetSnapshot")
 	}
-	if c.Repo != repo {
-		t.Errorf("repo changed: %q, want %q", c.Repo, repo)
+	// Issue 3: repo= is the canonical path; compare against the canonical oracle
+	// (macOS-symlink-tmpdir-safe).
+	canonical, _ := lockHash(repo)
+	if c.Repo != canonical {
+		t.Errorf("repo changed: %q, want canonical %q", c.Repo, canonical)
 	}
 }
 
