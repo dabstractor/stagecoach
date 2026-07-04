@@ -108,17 +108,28 @@ func Acquire(repoPath string) (*Locker, error) {
 	return l, nil
 }
 
-// Release releases the lock. Idempotent: a second call is a no-op. Closing the
-// fd auto-releases the flock; this also clears the singleton if it points at l.
+// Release releases the lock and removes the lock file (Issue 2 — disk hygiene).
+// Idempotent: a second call is a no-op (the l.file==nil guard returns before the
+// remove). Closing the fd auto-releases the flock; this also clears the singleton
+// if it points at l, and best-effort removes the lock file.
+//
+// CRITICAL ORDERING: the fd is closed FIRST (releasing the flock on the inode)
+// and the file is removed AFTER, so the remove never races a still-held flock —
+// removing while held would let a contender OpenFile(O_CREATE) a freshly-created
+// inode and flock it (free), defeating FR52. os.Remove errors are ignored (the
+// file may already be gone, or a concurrent Acquire may have recreated it — both
+// harmless; the next Acquire recreates it via O_CREATE).
 func (l *Locker) Release() {
 	if l == nil || l.file == nil {
 		return
 	}
-	l.file.Close()
+	l.file.Close() // release the flock FIRST
+	path := l.path
 	l.file = nil
 	if current.Load() == l {
 		current.Store(nil)
 	}
+	os.Remove(path) // best-effort cleanup; ignore errors
 }
 
 // SetSnapshot (method) rewrites the lock file's snapshot= line with the given

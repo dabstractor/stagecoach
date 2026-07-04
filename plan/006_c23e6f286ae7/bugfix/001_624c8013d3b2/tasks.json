@@ -103,14 +103,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Remove the lock file on Release (Issue 2 — disk hygiene)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Release() (lock.go:110-123) closes the fd and clears the singleton but never removes the lock file, so every distinct repo path leaves a permanent <hash>.lock. Add os.Remove(l.path) after closing the fd (ignoring errors — the next Acquire recreates the file via OpenFile O_CREATE). This is the conventional pattern for flock lock files.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Remove lock file in Release() and add cleanup unit test",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 2). internal/lock/lock.go:110-123 Release() currently: if l==nil||l.file==nil return; l.file.Close(); l.file=nil; clear singleton. It does NOT os.Remove(l.path). flock auto-releases on fd close, so removing the file afterward is safe: the next Acquire calls os.OpenFile(path, O_CREATE|O_RDWR, 0600) which recreates it. CRITICAL ORDERING: close the fd FIRST (releases the flock), THEN os.Remove — so the remove never races a still-held flock on the same inode. os.Remove errors are ignored (file may already be gone, or a concurrent Acquire recreated it — both harmless). On Windows (lock_windows.go flock is a no-op) the remove is still correct: the file is just a marker.\n2. INPUT: The current Release() method at internal/lock/lock.go:110-123. The lock file path is l.path (the <hash>.lock path computed by lockPath). The existing idempotency guard (l.file == nil → return) must be preserved.\n3. LOGIC: In Release(), AFTER l.file.Close() and BEFORE (or after) setting l.file=nil, capture l.path, then after setting l.file=nil call os.Remove(l.path) ignoring the error. Concretely: `l.file.Close(); path := l.path; l.file = nil; if current.Load()==l { current.Store(nil) }; os.Remove(path)`. Add a unit test in internal/lock/lock_test.go: Acquire(repo) → capture the path (expose it or derive via lockPath/lockHash) → Release() → assert os.Stat(path) returns os.IsNotExist (file removed). Also assert a second Release() is still a no-op (no panic) and that a subsequent Acquire on the same repo succeeds (file recreated). Run 'go test ./internal/lock/'.\n4. OUTPUT: Modified Release() in internal/lock/lock.go + new unit test. Verified by 'go test ./internal/lock/'.\n5. DOCS: none — no user-facing/config surface change; docs/configuration.md (lock file location, lines 233-247) makes no accumulation claim to correct, and the cleanup is transparent.",
@@ -126,14 +126,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Canonicalize the repo= diagnostic field (Issue 3)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Acquire (lock.go:102) stores the RAW repoPath (os.Getwd()) in the repo= field, but lockHash canonicalizes via filepath.EvalSymlinks for the filename. So two terminals reaching the same repo via symlink vs real path share one lock file but display different repo= values. Store the canonical path in repo= so the diagnostic agrees with the hash key.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Store canonical path in repo= field and add symlink diagnostic test",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

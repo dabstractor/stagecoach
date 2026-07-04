@@ -200,6 +200,48 @@ func TestAcquireRelease_RoundTrip(t *testing.T) {
 	l.Release() // second call must not panic
 }
 
+// TestRelease_RemovesLockFile verifies Issue 2's disk-hygiene fix: Release removes
+// the lock file after closing the fd (close-then-remove), the removal is
+// idempotent (a second Release is a no-op), and a fresh Acquire recreates the
+// file (OpenFile O_CREATE) so removal never breaks re-acquisition.
+func TestRelease_RemovesLockFile(t *testing.T) {
+	resetCurrent(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // isolate — don't touch the real lock dir
+	t.Setenv("XDG_CACHE_HOME", "")
+	repo := t.TempDir()
+
+	l, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	path := l.path
+
+	// Sanity: the lock file exists while held.
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("lock file missing immediately after Acquire: %v", err)
+	}
+
+	l.Release()
+
+	// Issue 2 fix: Release removes the lock file.
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("after Release, os.Stat(lock) err = %v, want os.IsNotExist (file should be removed)", err)
+	}
+
+	// Idempotency: a second Release is a no-op (no panic on the now-absent file).
+	l.Release()
+
+	// Re-acquisition recreates the file (OpenFile O_CREATE) — removal must not break re-Acquire.
+	l2, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("re-Acquire after Release: %v", err)
+	}
+	if _, err := os.Stat(l2.path); err != nil {
+		t.Errorf("lock file missing after re-Acquire: %v", err)
+	}
+	l2.Release()
+}
+
 // TestSetSnapshot_UpdatesFile verifies SetSnapshot rewrites the snapshot= line.
 func TestSetSnapshot_UpdatesFile(t *testing.T) {
 	resetCurrent(t)
