@@ -419,14 +419,28 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		return Result{}, err
 	}
 
-	// Step 2: diff payload; empty → nothing to commit.
+	// Step 2: system prompt (+ SystemExtra) — built BEFORE the diff so the FR3i prompt-reserve seam
+	// (P1.M4.T1.S2) can measure its worst-case token count and thread it into opts.PromptReserveTokens.
+	// The reserve is measured AFTER the SystemExtra append (design §9) so SystemExtra is included.
+	sysPrompt, err := buildSysPrompt(ctx, deps.Git, cfg, isUnborn)
+	if err != nil {
+		return Result{}, err
+	}
+	if systemExtra != "" {
+		sysPrompt += "\n\n" + systemExtra
+	}
+	reserve := prompt.MessageReserveTokens(sysPrompt, cfg.MaxDuplicateRetries, cfg.SubjectTargetChars, cfg.Context, git.EstimateTokens)
+
+	// Step 3: diff payload; empty → nothing to commit. PromptReserveTokens carries the worst-case prompt
+	// token count for M4.T2's water-fill / M4.T3's gate (unread until M4.T3).
 	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
-		MaxDiffBytes:     cfg.MaxDiffBytes,
-		MaxMDLines:       cfg.MaxMdLines,
-		BinaryExtensions: cfg.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       cfg.TokenLimit,
-		DiffContext:      cfg.DiffContextValue(),
+		MaxDiffBytes:        cfg.MaxDiffBytes,
+		MaxMDLines:          cfg.MaxMdLines,
+		BinaryExtensions:    cfg.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          cfg.TokenLimit,
+		DiffContext:         cfg.DiffContextValue(),
+		PromptReserveTokens: reserve,
 	})
 	if err != nil {
 		return Result{}, err
@@ -435,7 +449,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		return Result{}, ErrNothingToCommit
 	}
 
-	// Step 3: snapshot (FR49 — dry-run runs the full diff→snapshot→… pipeline; the dangling tree in
+	// Step 4: snapshot (FR49 — dry-run runs the full diff→snapshot→… pipeline; the dangling tree in
 	// dry-run is intentional and harmless — commit-tree/update-ref are skipped later for dry-run).
 	treeSHA, err := deps.Git.WriteTree(ctx)
 	if err != nil {
@@ -443,14 +457,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	}
 	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4) — both the commit and dry-run paths
 
-	// Step 4: system prompt (+ SystemExtra) + recent subjects (built ONCE).
-	sysPrompt, err := buildSysPrompt(ctx, deps.Git, cfg, isUnborn)
-	if err != nil {
-		return Result{}, err
-	}
-	if systemExtra != "" {
-		sysPrompt += "\n\n" + systemExtra
-	}
+	// Step 5: recent subjects (built ONCE; for dedupe — NOT needed for the reserve).
 
 	var recent []string
 	if !isUnborn {

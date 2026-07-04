@@ -289,7 +289,7 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Token estimator utility + prompt-reserve plumbing",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add the model-agnostic chars/4 token estimator (the single source of truth for both the prompt-reserve measurement and the per-file numstat sizing), and wire PromptReserveTokens at the call sites by measuring the stable prompt portion upstream.",
               "subtasks": [
                 {
@@ -311,7 +311,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Measure PromptReserveTokens upstream at the 6 call sites",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1",
@@ -330,14 +330,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Dynamic water-fill truncation algorithm",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the FR3i water-fill: given per-file body sizes (from numstat) and a body budget (token_limit − skeleton − promptReserve − margin), find the level L such that Σ min(size_i, L) = budget; keep files ≤ L whole, cap files > L at L. This is the algorithm core; the gate that activates it (M4.T3) is separate so the solver is independently testable.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Water-fill level solver (sort-and-walk)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S1",
@@ -353,7 +353,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T2.S2",
                   "title": "Per-file truncation application + sentinel + header preservation",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T2.S1"

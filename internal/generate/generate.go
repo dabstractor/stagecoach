@@ -143,15 +143,18 @@ func (e *CASError) Unwrap() error { return git.ErrCASFailed }
 //
 // Pipeline (10 steps, PRD §13.3):
 //  1. RevParseHEAD  — capture parent + isUnborn
-//  2. StagedDiff    — diff payload; empty → ErrNothingToCommit
-//  3. WriteTree     — freeze the index into an immutable tree object (SNAPSHOT)
-//  4. System prompt + recent subjects (built ONCE, stable across attempts)
-//  5. Generate→Parse→Dedupe LOOP (bounded by cfg.MaxDuplicateRetries)
-//  7. CommitTree    — build dangling commit from the frozen tree
-//  8. UpdateRefCAS  — sole ref mutation; CAS fail → CASError, never force
-//  9. DiffTree      — "what landed" for the FR42 report
+//  2. System prompt (built ONCE, stable across attempts) — built BEFORE the diff so its worst-case
+//     token count can be measured and threaded into opts.PromptReserveTokens (FR3i seam, P1.M4.T1.S2)
+//  3. StagedDiff    — diff payload; empty → ErrNothingToCommit (carries PromptReserveTokens)
+//  4. WriteTree     — freeze the index into an immutable tree object (SNAPSHOT)
+//  5. Recent subjects (fetched ONCE)
+//  6. Generate→Parse→Dedupe LOOP (bounded by cfg.MaxDuplicateRetries)
+//  8. CommitTree    — build dangling commit from the frozen tree
+//  9. UpdateRefCAS  — sole ref mutation; CAS fail → CASError, never force
 //
-// 10. Return Result
+// 10. DiffTree      — "what landed" for the FR42 report
+//
+// 11. Return Result
 func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, error) {
 	// Step 1: capture parent + isUnborn.
 	parentSHA, isUnborn, err := deps.Git.RevParseHEAD(ctx)
@@ -159,14 +162,27 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		return Result{}, err
 	}
 
-	// Step 2: diff payload; empty → nothing to commit (design §6).
+	// Step 2: system prompt (built ONCE, stable across attempts). Built BEFORE StagedDiff so the FR3i
+	// prompt-reserve seam (P1.M4.T1.S2) can measure its worst-case token count and thread it into
+	// opts.PromptReserveTokens (the field is unread until M4.T3 — behavior-free). buildSystemPrompt
+	// needs isUnborn (from RevParseHEAD above). ✓ On the empty-diff path this fetches RecentMessages
+	// before the empty-check returns — rare, cheap, accepted (gated upstream by HasStagedChanges).
+	sysPrompt, err := buildSystemPrompt(ctx, deps.Git, cfg, isUnborn)
+	if err != nil {
+		return Result{}, err
+	}
+	reserve := prompt.MessageReserveTokens(sysPrompt, cfg.MaxDuplicateRetries, cfg.SubjectTargetChars, cfg.Context, git.EstimateTokens)
+
+	// Step 3: diff payload; empty → nothing to commit (design §6). PromptReserveTokens carries the
+	// worst-case prompt token count for M4.T2's water-fill / M4.T3's gate (unread until M4.T3).
 	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
-		MaxDiffBytes:     cfg.MaxDiffBytes,
-		MaxMDLines:       cfg.MaxMdLines,
-		BinaryExtensions: cfg.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       cfg.TokenLimit,
-		DiffContext:      cfg.DiffContextValue(),
+		MaxDiffBytes:        cfg.MaxDiffBytes,
+		MaxMDLines:          cfg.MaxMdLines,
+		BinaryExtensions:    cfg.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          cfg.TokenLimit,
+		DiffContext:         cfg.DiffContextValue(),
+		PromptReserveTokens: reserve,
 	})
 	if err != nil {
 		return Result{}, err
@@ -175,7 +191,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		return Result{}, ErrNothingToCommit
 	}
 
-	// Step 3: snapshot — freeze the index into an immutable tree object.
+	// Step 4: snapshot — freeze the index into an immutable tree object.
 	// Fails on unresolved merge conflicts (exit 128). BEFORE generation — not a rescue.
 	treeSHA, err := deps.Git.WriteTree(ctx)
 	if err != nil {
@@ -185,17 +201,13 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4)
 	lock.SetSnapshot(treeSHA)                  // publish frozen index tree for the FR52 no-op fast path (nil-safe: no-op w/o lock)
 
-	// Step 4: system prompt (built ONCE) + recent subjects (fetched ONCE).
-	sysPrompt, err := buildSystemPrompt(ctx, deps.Git, cfg, isUnborn)
-	if err != nil {
-		return Result{}, err
-	}
+	// Step 5: recent subjects (fetched ONCE; for dedupe — NOT needed for the reserve).
 	recent, err := recentSubjects(ctx, deps.Git, isUnborn)
 	if err != nil {
 		return Result{}, err
 	}
 
-	// Step 5: GENERATION+DEDUPE LOOP (design §4 — FR29 + FR32 share one bounded counter).
+	// Step 6: GENERATION+DEDUPE LOOP (design §4 — FR29 + FR32 share one bounded counter).
 	resolved := deps.Manifest.Resolve()
 	retryInstr := *resolved.RetryInstruction // resolved default: "Output ONLY the commit message…"
 

@@ -64,29 +64,35 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("planner", deps.Config)
 
-	// 2. FR-M1b: the FROZEN concept diff — TreeDiff(baseTree, tStart), with binary placeholders per FR3c.
-	// NOT a live WorkingTreeDiff (a concurrent change after the freeze must be invisible to the planner).
-	diff, err := deps.Git.TreeDiff(ctx, baseTree, tStart, git.StagedDiffOptions{
-		MaxDiffBytes:     deps.Config.MaxDiffBytes,
-		MaxMDLines:       deps.Config.MaxMdLines,
-		BinaryExtensions: deps.Config.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       deps.Config.TokenLimit,
-		DiffContext:      deps.Config.DiffContextValue(),
-	})
-	if err != nil {
-		return prompt.PlannerOutput{}, fmt.Errorf("%w: tree diff: %w", ErrPlannerFailed, err)
-	}
-
-	// 3. Build the system prompt (style examples) + the base user payload.
+	// 2. Build the system prompt (style examples) BEFORE the diff so the FR3i prompt-reserve seam
+	// (P1.M4.T1.S2) can measure its worst-case token count and thread it into opts.PromptReserveTokens.
 	examples, err := plannerExamples(ctx, deps.Git, isUnborn)
 	if err != nil {
 		return prompt.PlannerOutput{}, fmt.Errorf("%w: recent messages: %w", ErrPlannerFailed, err)
 	}
 	sysPrompt := prompt.BuildPlannerSystemPrompt(examples, deps.Config.Format, deps.Config.Locale)
+	reserve := prompt.PlannerReserveTokens(sysPrompt, forcedCount, deps.Config.Context, git.EstimateTokens)
+
+	// 3. FR-M1b: the FROZEN concept diff — TreeDiff(baseTree, tStart), with binary placeholders per FR3c.
+	// NOT a live WorkingTreeDiff (a concurrent change after the freeze must be invisible to the planner).
+	// PromptReserveTokens carries the worst-case prompt token count for M4.T2's water-fill / M4.T3's gate.
+	diff, err := deps.Git.TreeDiff(ctx, baseTree, tStart, git.StagedDiffOptions{
+		MaxDiffBytes:        deps.Config.MaxDiffBytes,
+		MaxMDLines:          deps.Config.MaxMdLines,
+		BinaryExtensions:    deps.Config.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          deps.Config.TokenLimit,
+		DiffContext:         deps.Config.DiffContextValue(),
+		PromptReserveTokens: reserve,
+	})
+	if err != nil {
+		return prompt.PlannerOutput{}, fmt.Errorf("%w: tree diff: %w", ErrPlannerFailed, err)
+	}
+
+	// 4. The base user payload (style examples + system prompt are already built above).
 	basePayload := prompt.BuildPlannerUserPayload(diff, deps.Config.Context, forcedCount)
 
-	// 4. The retry loop (≤2 attempts: 1 initial + 1 retry on parse/contract failure).
+	// 5. The retry loop (≤2 attempts: 1 initial + 1 retry on parse/contract failure).
 	const maxAttempts = 2
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {

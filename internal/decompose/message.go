@@ -67,14 +67,34 @@ var ErrPublicationFailed = errors.New("decompose: publication failed")
 // (includes just-committed concepts for cross-concept dedupe). It does NOT import or call the
 // signal package (SIGNAL-FREE — signal.RestoreDefault is one-shot; loop signal is P3.M4.T1.S2).
 func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (string, error) {
-	// 1. Concept diff (§13.6.3 invariant 2 — tree-to-tree, never index-vs-HEAD).
+	// 1. Current HEAD (parent for rescue + isUnborn for prompt). Derived BEFORE the diff so the FR3i
+	//    prompt-reserve seam (P1.M4.T1.S2) can build the system prompt and measure its worst-case token
+	//    count upstream. Safe under overlap: the concurrent stager mutates the INDEX, not HEAD.
+	parentSHA, isUnborn, err := deps.Git.RevParseHEAD(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%w: rev-parse head: %w", ErrMessageFailed, err)
+	}
+
+	// 2. System prompt (v1, unchanged — the message role IS the §13.1–§13.5 agent). Built BEFORE the diff
+	//    so the FR3i reserve can be measured and threaded into opts.PromptReserveTokens (unread until
+	//    M4.T3 — behavior-free). Site 5 is the MESSAGE role (its dedupe loop grows `rejected`) ⇒ use
+	//    MessageReserveTokens (with the worst-case rejection block), NOT the planner formula (design §1).
+	sysPrompt, err := messageSystemPrompt(ctx, deps.Git, deps.Config, isUnborn)
+	if err != nil {
+		return "", fmt.Errorf("%w: system prompt: %w", ErrMessageFailed, err)
+	}
+	reserve := prompt.MessageReserveTokens(sysPrompt, deps.Config.MaxDuplicateRetries, deps.Config.SubjectTargetChars, deps.Config.Context, git.EstimateTokens)
+
+	// 3. Concept diff (§13.6.3 invariant 2 — tree-to-tree, never index-vs-HEAD). PromptReserveTokens
+	//    carries the worst-case prompt token count for M4.T2's water-fill / M4.T3's gate.
 	diff, err := deps.Git.TreeDiff(ctx, treeA, treeB, git.StagedDiffOptions{
-		MaxDiffBytes:     deps.Config.MaxDiffBytes,
-		MaxMDLines:       deps.Config.MaxMdLines,
-		BinaryExtensions: deps.Config.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       deps.Config.TokenLimit,
-		DiffContext:      deps.Config.DiffContextValue(),
+		MaxDiffBytes:        deps.Config.MaxDiffBytes,
+		MaxMDLines:          deps.Config.MaxMdLines,
+		BinaryExtensions:    deps.Config.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          deps.Config.TokenLimit,
+		DiffContext:         deps.Config.DiffContextValue(),
+		PromptReserveTokens: reserve,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: tree diff: %w", ErrMessageFailed, err)
@@ -83,31 +103,20 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		return "", fmt.Errorf("%w: empty concept diff %s..%s", ErrMessageFailed, treeA, treeB)
 	}
 
-	// 2. Current HEAD (parent for rescue + isUnborn for prompt). Safe under overlap: stager
-	//    mutates the INDEX, not HEAD.
-	parentSHA, isUnborn, err := deps.Git.RevParseHEAD(ctx)
-	if err != nil {
-		return "", fmt.Errorf("%w: rev-parse head: %w", ErrMessageFailed, err)
-	}
-
-	// 3. System prompt (v1, unchanged — the message role IS the §13.1–§13.5 agent) + recent
-	//    subjects (FRESH — includes just-committed concepts for cross-concept dedupe).
-	sysPrompt, err := messageSystemPrompt(ctx, deps.Git, deps.Config, isUnborn)
-	if err != nil {
-		return "", fmt.Errorf("%w: system prompt: %w", ErrMessageFailed, err)
-	}
+	// 4. Recent subjects (FRESH — includes just-committed concepts for cross-concept dedupe; NOT needed
+	//    for the reserve).
 	recent, err := messageRecentSubjects(ctx, deps.Git, isUnborn)
 	if err != nil {
 		return "", fmt.Errorf("%w: recent subjects: %w", ErrMessageFailed, err)
 	}
 
-	// 4. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
+	// 5. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("message", deps.Config)
 	resolved := deps.Roles.Message.Resolve()
 	retryInstr := *resolved.RetryInstruction
 
-	// 5. GENERATION+DEDUPE LOOP — a variant of CommitStaged's step-5 loop (diff = concept diff,
+	// 6. GENERATION+DEDUPE LOOP — a variant of CommitStaged's step-6 loop (diff = concept diff,
 	//    not StagedDiff; manifest = deps.Roles.Message; Render BARE; ResolveRoleModel for
 	//    provider/model).
 	var rejected []string

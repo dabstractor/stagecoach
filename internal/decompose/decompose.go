@@ -601,17 +601,28 @@ func rereadFinalCommits(ctx context.Context, deps Deps, preRunHEAD string, isUnb
 }
 
 func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry, tStart string) (int, error) {
+	// FR3i prompt-reserve seam (P1.M4.T1.S2): measure the arbiter's worst-case prompt token count
+	// BEFORE the TreeDiff and thread it into opts.PromptReserveTokens. convertArbiterCommits is
+	// in-package (design §8) — gives the EXACT commits+headers overhead via the empty-diff trick.
+	// runArbiter continues to call convertArbiterCommits internally (UNCHANGED) — double-conversion is
+	// negligible (pure-struct map, no git/I/O). validSHAs is discarded for the reserve.
+	arbiterCommits, _ := convertArbiterCommits(commits)
+	arbiterSys := prompt.BuildArbiterSystemPrompt()
+	reserve := prompt.ArbiterReserveTokens(arbiterSys, arbiterCommits, git.EstimateTokens)
+
 	// FR-M1b: the leftover diff is FROZEN — TreeDiff(tipTree, tStart), not a live WorkingTreeDiff.
 	// tipTree = the last committed tree (HEAD.tree post-loop; == chainData[last].Tree). A concurrent
 	// working-tree change after the freeze is invisible (it's not in tStart).
+	// PromptReserveTokens carries the worst-case prompt token count for M4.T2's water-fill / M4.T3's gate.
 	tipTree := chainData[len(chainData)-1].Tree
 	leftoverDiff, err := deps.Git.TreeDiff(ctx, tipTree, tStart, git.StagedDiffOptions{
-		MaxDiffBytes:     deps.Config.MaxDiffBytes,
-		MaxMDLines:       deps.Config.MaxMdLines,
-		BinaryExtensions: deps.Config.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       deps.Config.TokenLimit,
-		DiffContext:      deps.Config.DiffContextValue(),
+		MaxDiffBytes:        deps.Config.MaxDiffBytes,
+		MaxMDLines:          deps.Config.MaxMdLines,
+		BinaryExtensions:    deps.Config.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          deps.Config.TokenLimit,
+		DiffContext:         deps.Config.DiffContextValue(),
+		PromptReserveTokens: reserve,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("%w: leftover diff: %w", ErrDecomposeFailed, err)

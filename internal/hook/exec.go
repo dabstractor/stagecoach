@@ -100,14 +100,33 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 		return ErrNoOp
 	}
 
-	// Step B: capture staged diff.
+	// Step B: parent / unborn — derived BEFORE the diff so the FR3i prompt-reserve seam
+	// (P1.M4.T1.S2) can build the system prompt and measure its worst-case token count upstream.
+	_, isUnborn, err := deps.Git.RevParseHEAD(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Step C: system prompt (stable across attempts). Built BEFORE StagedDiff so the FR3i reserve can
+	// be measured and threaded into opts.PromptReserveTokens (unread until M4.T3 — behavior-free). On
+	// the empty-diff path this fetches RecentMessages before the empty-check returns — rare, cheap,
+	// accepted (gated upstream by HasStagedChanges).
+	sysPrompt, err := hookSystemPrompt(ctx, deps.Git, cfg, isUnborn)
+	if err != nil {
+		return err
+	}
+	reserve := prompt.MessageReserveTokens(sysPrompt, cfg.MaxDuplicateRetries, cfg.SubjectTargetChars, cfg.Context, git.EstimateTokens)
+
+	// Step D: capture staged diff. PromptReserveTokens carries the worst-case prompt token count for
+	// M4.T2's water-fill / M4.T3's gate (unread until M4.T3).
 	diff, err := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
-		MaxDiffBytes:     cfg.MaxDiffBytes,
-		MaxMDLines:       cfg.MaxMdLines,
-		BinaryExtensions: cfg.BinaryExtensions,
-		Excludes:         deps.Excludes,
-		TokenLimit:       cfg.TokenLimit,
-		DiffContext:      cfg.DiffContextValue(),
+		MaxDiffBytes:        cfg.MaxDiffBytes,
+		MaxMDLines:          cfg.MaxMdLines,
+		BinaryExtensions:    cfg.BinaryExtensions,
+		Excludes:            deps.Excludes,
+		TokenLimit:          cfg.TokenLimit,
+		DiffContext:         cfg.DiffContextValue(),
+		PromptReserveTokens: reserve,
 	})
 	if err != nil {
 		return err
@@ -121,27 +140,17 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 		deps.Progress()
 	}
 
-	// Step C: parent / unborn.
-	_, isUnborn, err := deps.Git.RevParseHEAD(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Step D: system prompt + recent subjects (stable across attempts).
-	sysPrompt, err := hookSystemPrompt(ctx, deps.Git, cfg, isUnborn)
-	if err != nil {
-		return err
-	}
+	// Step E: recent subjects (for dedupe — NOT needed for the reserve).
 	recent, err := hookRecentSubjects(ctx, deps.Git, isUnborn)
 	if err != nil {
 		return err
 	}
 
-	// Step E: resolve the message role (FR-H6 — exactly like the single-commit path).
+	// Step F: resolve the message role (FR-H6 — exactly like the single-commit path).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
 	retryInstr := *deps.Manifest.Resolve().RetryInstruction
 
-	// Step F: generate→parse→dedupe loop (mirrors CommitStaged step 5).
+	// Step G: generate→parse→dedupe loop (mirrors CommitStaged step 6).
 	var rejected []string
 	var parseFail bool
 
