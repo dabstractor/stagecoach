@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "FR3i Diff Truncation Formatting Fix & Diff-Context Hardening",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Bugfix delta for the FR3d–FR3i diff-payload optimization (plan 007_b33d310438c6). Fixes the Major FR3i truncated-section newline-separator defect (PRD Issue 1, reproducible in all three diff functions) and the Minor diff_context out-of-range silent-clamp defect (PRD Issue 2). PRD Issue 3 requires NO action (verified rune-boundary-safe). Research root cause, fix locations, and test gaps are documented in plan/007_b33d310438c6/bugfix/001_7e79f5773da8/architecture/system_context.md.",
       "milestones": [
         {
@@ -112,21 +112,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Sync changeset-level documentation (Mode B catch-all)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Final cross-cutting documentation sweep that only makes sense once the whole changeset is in place. Verifies the overview/feature docs (README.md, docs/how-it-works.md) and configuration docs are consistent with the shipped behavior (newline-separated truncation sentinel + validated diff_context range). Depends on every implementing subtask so it runs last.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Sweep README.md, docs/how-it-works.md, and docs/configuration.md for any statement about the per-file truncation format, the sentinel line shape, or the diff_context range that is now inaccurate or would benefit from surfacing the newline separation / validated range. Update only where a statement is stale or unclear; do not invent features.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Sweep README.md, docs/how-it-works.md, docs/configuration.md for truncation-format & diff_context accuracy",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
