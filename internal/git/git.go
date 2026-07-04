@@ -814,6 +814,12 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder)
 	// "*.md" / "*.markdown" are git pathspec globs (interpreted by git, not the shell — G10); the "--"
 	// guards pathspec-like filenames (G11).
+	//
+	// FR3d/FR3i token-limit gate (P1.M4.T3.S1): when opts.TokenLimit>0, the per-file markdown diffs are
+	// collected UNCAPPED into mdDiffs (the legacy line cap is SUPPERSeded — FR3d); the gate truncates them
+	// via the shared water-fill budget in Part 2. The ==0 path (line cap + sentinel) is BYTE-IDENTICAL
+	// (regression anchor — system_context §6 inv 1).
+	var mdDiffs []string // collected UNCAPPED when token_limit>0 (FR3d: >0 supersedes the line cap)
 	mdList, stderr, code, err := g.run(ctx, g.workDir,
 		append(buildDiffArgs(opts, "--cached"), "--name-only", "--", "*.md", "*.markdown")...)
 	if err != nil {
@@ -834,6 +840,11 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 			return "", fmt.Errorf("git diff --cached -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
 		}
 		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		if opts.TokenLimit > 0 {
+			// FR3d/FR3i: collect UNCAPPED — the gate truncates md via the shared water-fill budget (Part 2).
+			mdDiffs = append(mdDiffs, fileDiff)
+			continue
+		}
 		// Per-file line cap (post-capture, FINDING 7/G3). Split on "\n", keep first maxMDLines.
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
@@ -861,6 +872,12 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 		return "", fmt.Errorf("git diff (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
 	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
+	if opts.TokenLimit > 0 {
+		// FR3d/FR3i: the gate emits md + non-md (BOTH) under ONE shared water-fill budget; it returns the
+		// recomposed body (skeleton was already written above). The legacy byte cap is SUPPERSeded.
+		b.WriteString(applyWaterFillGate(mdDiffs, nmDiff, skeleton, opts.TokenLimit, opts.PromptReserveTokens))
+		return b.String(), nil
+	}
 	// Byte cap (post-capture, FINDING 7/G3). len() is byte length; the slice may split a UTF-8 rune —
 	// matches `head -c` (G3). The sentinel is appended AFTER the cap and is not counted against it.
 	if len(nmDiff) > maxDiffBytes {
@@ -1277,6 +1294,12 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 	}
 
 	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder)
+	//
+	// FR3d/FR3i token-limit gate (P1.M4.T3.S1): when opts.TokenLimit>0, the per-file markdown diffs are
+	// collected UNCAPPED into mdDiffs (the legacy line cap is SUPPERSeded — FR3d); the gate truncates them
+	// via the shared water-fill budget in Part 2. The ==0 path (line cap + sentinel) is BYTE-IDENTICAL
+	// (regression anchor — system_context §6 inv 1).
+	var mdDiffs []string // collected UNCAPPED when token_limit>0 (FR3d: >0 supersedes the line cap)
 	mdList, stderr, code, err := g.run(ctx, g.workDir,
 		append(buildDiffArgs(opts, treeA, treeB), "--name-only", "--", "*.md", "*.markdown")...)
 	if err != nil {
@@ -1297,6 +1320,11 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 			return "", fmt.Errorf("git diff %s %s -- %s: failed (exit %d): %s", treeA, treeB, file, fcode, strings.TrimSpace(fstderr))
 		}
 		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		if opts.TokenLimit > 0 {
+			// FR3d/FR3i: collect UNCAPPED — the gate truncates md via the shared water-fill budget (Part 2).
+			mdDiffs = append(mdDiffs, fileDiff)
+			continue
+		}
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
 				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
@@ -1321,6 +1349,12 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 		return "", fmt.Errorf("git diff tree-to-tree (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
 	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
+	if opts.TokenLimit > 0 {
+		// FR3d/FR3i: the gate emits md + non-md (BOTH) under ONE shared water-fill budget; it returns the
+		// recomposed body (skeleton was already written above). The legacy byte cap is SUPPERSeded.
+		b.WriteString(applyWaterFillGate(mdDiffs, nmDiff, skeleton, opts.TokenLimit, opts.PromptReserveTokens))
+		return b.String(), nil
+	}
 	if len(nmDiff) > maxDiffBytes {
 		nmDiff = nmDiff[:maxDiffBytes] +
 			fmt.Sprintf("\n... [diff truncated at %d bytes]", maxDiffBytes)
@@ -1433,6 +1467,12 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 	}
 
 	// ---- Part 1: markdown, per-file, line-capped ----  (AFTER placeholders — FR3g reorder; working-tree domain)
+	//
+	// FR3d/FR3i token-limit gate (P1.M4.T3.S1): when opts.TokenLimit>0, the per-file markdown diffs are
+	// collected UNCAPPED into mdDiffs (the legacy line cap is SUPPERSeded — FR3d); the gate truncates them
+	// via the shared water-fill budget in Part 2. The ==0 path (line cap + sentinel) is BYTE-IDENTICAL
+	// (regression anchor — system_context §6 inv 1).
+	var mdDiffs []string // collected UNCAPPED when token_limit>0 (FR3d: >0 supersedes the line cap)
 	mdList, stderr, code, err := g.run(ctx, g.workDir,
 		append(buildDiffArgs(opts), "--name-only", "--", "*.md", "*.markdown")...)
 	if err != nil {
@@ -1453,6 +1493,11 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 			return "", fmt.Errorf("git diff -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
 		}
 		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
+		if opts.TokenLimit > 0 {
+			// FR3d/FR3i: collect UNCAPPED — the gate truncates md via the shared water-fill budget (Part 2).
+			mdDiffs = append(mdDiffs, fileDiff)
+			continue
+		}
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
 				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
@@ -1477,6 +1522,12 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 		return "", fmt.Errorf("git diff (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
 	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
+	if opts.TokenLimit > 0 {
+		// FR3d/FR3i: the gate emits md + non-md (BOTH) under ONE shared water-fill budget; it returns the
+		// recomposed body (skeleton was already written above). The legacy byte cap is SUPPERSeded.
+		b.WriteString(applyWaterFillGate(mdDiffs, nmDiff, skeleton, opts.TokenLimit, opts.PromptReserveTokens))
+		return b.String(), nil
+	}
 	if len(nmDiff) > maxDiffBytes {
 		nmDiff = nmDiff[:maxDiffBytes] +
 			fmt.Sprintf("\n... [diff truncated at %d bytes]", maxDiffBytes)

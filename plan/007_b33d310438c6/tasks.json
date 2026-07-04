@@ -282,7 +282,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Token budget overlay + water-fill truncation (FR3d, FR3i)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The headline feature: when token_limit > 0, replace the legacy per-section byte/line caps with a holistic token budget over the WHOLE payload (prompt + examples + skeleton + diff), and allocate the diff body across files by a dynamic water-fill that keeps small files whole and caps large files at a shared level. When token_limit == 0, the legacy caps apply byte-identically. Algorithm and edge cases verified in git_diff_semantics.md §5/§6.",
           "tasks": [
             {
@@ -370,14 +370,14 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "Token-limit gate (supersedes legacy caps when >0)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Wire the token_limit gate into the 3 diff functions: when opts.TokenLimit > 0, compute body_budget = token_limit − skeleton_tokens − promptReserve − margin, run the water-fill (M4.T2), and emit the `... [truncated]` sentinels — REPLACING the legacy max_diff_bytes/max_md_lines caps for that run. When token_limit == 0, the legacy byte/line caps + their sentinels apply byte-identically (the regression invariant).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "Gate logic in 3 diff functions; token_limit==0 byte-identical legacy path",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T2.S2",
@@ -415,7 +415,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T1.S1",
                   "title": "docs/how-it-works.md diff-capture section",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T3.S1",
