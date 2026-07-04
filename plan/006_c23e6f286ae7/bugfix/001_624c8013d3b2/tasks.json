@@ -1,0 +1,203 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "FR52 Lock Robustness & Documentation Accuracy",
+      "status": "Ready",
+      "description": "Resolve the 1 Major + 3 Minor issues found in creative QA of the FR52 per-repo run lock (PRD §18.5). Core concurrency safety is verified correct on both commit paths — no data-corruption, double-commit, stale-lock, or false-no-op conditions exist. This changeset corrects a behavior-vs-documentation mismatch (Issue 1: the no-op fast path is structurally impossible on the decompose path), and applies three lock-primitive hardening fixes (lock-file cleanup, canonical diagnostic path, atomic snapshot rewrite + message guard). All fixes are grounded in codebase recon stored in plan/006_c23e6f286ae7/bugfix/001_624c8013d3b2/architecture/.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Correct the decompose-path no-op fast path claim (Issue 1 — Major)",
+          "status": "Planned",
+          "description": "The no-op fast path (exit 0 on accidental double-run) is structurally impossible on the decompose path: the holder publishes a working-tree snapshot (T_start) while the contender can only reproduce an index-derived tree (baseTree) without the lock, so they can never be byte-identical. The PRD-recommended fix is Option 1 (lowest-risk, makes the docs honest): qualify the documentation to scope the exit-0 promise to the single-commit (staged) path, state that decompose accidental double-runs exit Busy(5), and add an e2e regression scenario that pins the documented behavior so it cannot regress silently. PRD.md §18.5 is NOT edited (read-only spec, owned by humans).",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Qualify the no-op fast path documentation to the single-commit (staged) path",
+              "status": "Planned",
+              "description": "Three user-facing/spec documents make an unconditional 'if nothing new is staged it exits 0' claim that is false on the decompose path. Edit each to scope the exit-0 no-op fast path to the single-commit (staged) path and state that decompose accidental double-runs exit Busy(5). Use consistent language across all three. Do NOT edit PRD.md (read-only).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Scope the README 'Safe to run twice' exit-0 claim to the single-commit path",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.0", "h2.2", "h3.0", "h2.4"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/006_c23e6f286ae7/bugfix/001_624c8013d3b2/architecture/issue_analysis.md (Issue 1) and architecture/system_context.md (snapshot publish axis mismatch). README.md:330 currently states unconditionally: 'if nothing new is staged it exits `0` (...nothing to do...)'. On the decompose path this is false — the contender always exits 5 (Busy) because the holder publishes a working-tree snapshot (T_start) that the contender cannot reproduce from a lock-free index write-tree (it returns baseTree = HEAD^{tree}). The fix is documentation-only (Option 1, PRD-recommended).\n2. INPUT: The current README.md:330 paragraph (the 'Safe to run twice.' sentence under the '### Will it corrupt my repo?' FAQ heading at line 326).\n3. LOGIC: Rewrite the 'Safe to run twice.' sentence so the exit-0 promise is scoped to the STAGED (single-commit) path, and add that on the DECOMPOSE path (nothing staged, working tree dirty) an accidental double-run exits 5 (Busy) because the holder publishes a working-tree snapshot a contender cannot reproduce without the lock. Keep the per-host/CAS caveat sentence intact. Do NOT change the surrounding 'No. Stagehand uses git write-tree...' sentence (line 328). Do NOT edit PRD.md. Suggested phrasing to adapt to the README's voice: 'Safe to run twice. A per-repo run lock prevents two concurrent commit-producing runs from racing on HEAD. On the single-commit path (changes staged), an accidental double-invoke exits `0` if nothing new is staged since the in-progress run began (nothing to do — an in-progress run already covers your staged changes); if genuinely new work is staged it exits `5` (Busy). On the decompose path (nothing staged, dirty working tree), an accidental double-run exits `5` (Busy) rather than 0 — the holder publishes a working-tree snapshot that a lock-free contender cannot reproduce, so it conservatively refuses and leaves the working tree untouched.'\n4. OUTPUT: Updated README.md with the qualified claim. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for README.md:330. A final Mode B sweep (P1.M3.T1) re-checks README coherence after all changes."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "Qualify the docs/cli.md contention-behavior prose (line 379)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.0", "h2.2", "h3.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 1) and architecture/system_context.md. docs/cli.md:379 currently states the no-op fast path generically: 'if a contending run's staged changes are already covered by the in-progress run's published snapshot, it exits 0'. This is false on the decompose path (the published snapshot is a working-tree tree, not reproducible by the contender's index write-tree). The exit-code TABLE (lines 368-375) is generic and does NOT overclaim — do NOT edit the table, only the prose at line 379.\n2. INPUT: The current docs/cli.md:379 paragraph (the 'Code 5 (Busy) is distinct...' sentence under the '## Exit codes' section).\n3. LOGIC: Rewrite line 379's prose to scope the exit-0 no-op fast path to the single-commit (staged) path and add that decompose accidental double-runs exit Busy(5). Keep the 'Code 5 is distinct from commit-failure codes' framing and the 'Stagehand never force-breaks the lock' sentence. Suggested phrasing: 'Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell \"busy, retry\" from \"failed.\" Contention on the per-repo run lock (FR52) has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** (\"nothing to do — an in-progress run already covers your staged changes\"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagehand never force-breaks the lock.' Do NOT edit PRD.md.\n4. OUTPUT: Updated docs/cli.md with the qualified prose. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for docs/cli.md:379."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S3",
+                  "title": "Qualify the docs/how-it-works.md 'No-op fast path' subsection (line 155)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.0", "h2.2", "h3.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 1). docs/how-it-works.md:155 (the '**No-op fast path.**' paragraph under '### Per-repo run lock (FR52)' at line 144) states: 'A contender with nothing new staged since that snapshot can exit 0 immediately (no-op fast path).' — unconditional. This is false on the decompose path. NOTE: the how-it-works.md 'Failure modes and exit codes' table (lines 165-173) does NOT list code 5/Busy at all — that is a pre-existing gap unrelated to this bug; do NOT expand scope to fix it.\n2. INPUT: The current docs/how-it-works.md:155 paragraph.\n3. LOGIC: Rewrite the 'No-op fast path.' paragraph to scope exit-0 to the single-commit (staged) path and note decompose double-runs exit Busy(5). Keep it concise to match the subsection's style. Suggested phrasing: '**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot()`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.' Do NOT edit PRD.md.\n4. OUTPUT: Updated docs/how-it-works.md with the qualified subsection. No code changes.\n5. DOCS: [Mode A] This subtask IS the doc fix for docs/how-it-works.md:155."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Add e2e regression scenario for the decompose accidental double-run (assert Busy)",
+              "status": "Planned",
+              "description": "The e2e suite covers the no-op fast path ONLY on the single-commit path (scenario B). There is no scenario for decompose contention — exactly where Issue 1 hid. Add scenario F to internal/e2e/lock_scenarios_test.go that reproduces the decompose accidental double-run and asserts exit 5 (Busy), pinning the documented behavior so it cannot regress silently.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Add scenario F (decompose accidental double-run → Busy) to lock_scenarios_test.go",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.0", "h2.2", "h3.0", "h2.4"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/e2e_test_strategy.md (full scenario design + skeleton + feasibility analysis) and architecture/system_context.md. KEY INSIGHT: the contention scenario only needs the holder to reach lock.SetSnapshot(tStart) (decompose.go:169) and then SLEEP — it does NOT need to complete the decompose. With EXACTLY ONE untracked file and auto mode (Commits=0, the default), Decompose takes the FR-M2b one-file shortcut (runOneFileShortcut, decompose.go:187) which uses ONLY the MESSAGE role — the stub's single-response STAGEHAND_STUB_OUT satisfies it. SetSnapshot(tStart) runs BEFORE the message-role agent call, so when the stub writes the readiness marker (during message generation) the snapshot T_start is ALREADY published. The base writeStubConfig config defaults enable decompose (AutoStageAll=true, Commits=0, Single=false per internal/config/config.go:163-167) — no extras needed for activation. Reuse the scenario-B two-process skeleton (goroutine + waitForMarker + drain channel) verbatim from internal/e2e/lock_scenarios_test.go.\n2. INPUT: The existing harness helpers in internal/e2e/harness_test.go (buildStagehand, buildStub, newRepo, seedCommit, writeFile, writeStubConfig, stubEnv, runStagehand, waitForMarker, commitCount) and the scenario-B skeleton in internal/e2e/lock_scenarios_test.go (the canonical two-process contention coordination pattern). Test runs under build tag 'e2e' (line-1 '//go:build e2e').\n3. LOGIC: Add a new subtest 'F_DecomposeAccidentalDoubleRun_Busy' to TestE2ELockContention in internal/e2e/lock_scenarios_test.go. Setup: newRepo + seedCommit('readme.md','init') + writeFile('feature.txt','new work') (ONE untracked file, NOT staged → decompose activates). Holder env: STAGEHAND_STUB_OUT='feat: add feature', STAGEHAND_STUB_MARKER=readiness, STAGEHAND_STUB_SLEEP_MS='4000'. Launch holder in a goroutine; waitForMarker(readiness, 10s). Contender: same repo (same dirty tree, still nothing staged), STAGEHAND_STUB_OUT='feat: add feature', run synchronously. ASSERTIONS on contender: ExitCode == 5 (Busy); stderr contains 'already in progress'; stderr must NOT contain 'nothing to do' (the no-op fast path must not fire on the decompose path). Drain holder via the channel; assert holder ExitCode == 0. The assertion ExitCode==5 is robust regardless of snapshot timing: if snapshot published (T_start) → WriteTree returns baseTree != T_start → Busy; if snapshot empty (race) → snap=='' skips the no-op arm → Busy. Either way → 5. MOCKING: the stub agent (cmd/stubagent) mocks the LLM provider; no real agent needed (one-file shortcut uses only the message role).\n4. OUTPUT: New scenario F subtest in internal/e2e/lock_scenarios_test.go. Verified by 'go test -tags e2e -run TestE2ELockContention/F_DecomposeAccidentalDoubleRun_Busy ./internal/e2e/...'.\n5. DOCS: none — no user-facing/config/API surface change (test-only). If scenario F surfaces that the base config does NOT default AutoStageAll=true when the TOML omits it, add 'auto_stage_all = true' to the writeStubConfig extras for this scenario (verify the loaded config first).\n6. RISK: If the holder errors before sleeping (e.g. ResolveRoles fails with stub-only config, or the one-file shortcut is not reached), the contention window never opens and the holder goroutine result will show the error. If this happens, inspect the holder's stderr and adjust the config extras (see internal/e2e/scenarios_test.go S2 for the [role.planner] extras pattern) — but the one-file shortcut path should NOT require the planner role to be invoked."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M2",
+          "title": "Lock primitive hardening (Issues 2, 3, 4 — Minor)",
+          "status": "Planned",
+          "description": "Three independent lock-primitive fixes, all concentrated in internal/lock/lock.go (except Issue 4's message guard in internal/cmd/default_action.go). Subtasks are chained sequentially because they edit the same file (lock.go): Release cleanup → canonical repo field → atomic snapshot rewrite → contention message guard. Each is TDD (failing test → implement → pass).",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M2.T1",
+              "title": "Remove the lock file on Release (Issue 2 — disk hygiene)",
+              "status": "Planned",
+              "description": "Release() (lock.go:110-123) closes the fd and clears the singleton but never removes the lock file, so every distinct repo path leaves a permanent <hash>.lock. Add os.Remove(l.path) after closing the fd (ignoring errors — the next Acquire recreates the file via OpenFile O_CREATE). This is the conventional pattern for flock lock files.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
+                  "title": "Remove lock file in Release() and add cleanup unit test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.0", "h2.3", "h3.1"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 2). internal/lock/lock.go:110-123 Release() currently: if l==nil||l.file==nil return; l.file.Close(); l.file=nil; clear singleton. It does NOT os.Remove(l.path). flock auto-releases on fd close, so removing the file afterward is safe: the next Acquire calls os.OpenFile(path, O_CREATE|O_RDWR, 0600) which recreates it. CRITICAL ORDERING: close the fd FIRST (releases the flock), THEN os.Remove — so the remove never races a still-held flock on the same inode. os.Remove errors are ignored (file may already be gone, or a concurrent Acquire recreated it — both harmless). On Windows (lock_windows.go flock is a no-op) the remove is still correct: the file is just a marker.\n2. INPUT: The current Release() method at internal/lock/lock.go:110-123. The lock file path is l.path (the <hash>.lock path computed by lockPath). The existing idempotency guard (l.file == nil → return) must be preserved.\n3. LOGIC: In Release(), AFTER l.file.Close() and BEFORE (or after) setting l.file=nil, capture l.path, then after setting l.file=nil call os.Remove(l.path) ignoring the error. Concretely: `l.file.Close(); path := l.path; l.file = nil; if current.Load()==l { current.Store(nil) }; os.Remove(path)`. Add a unit test in internal/lock/lock_test.go: Acquire(repo) → capture the path (expose it or derive via lockPath/lockHash) → Release() → assert os.Stat(path) returns os.IsNotExist (file removed). Also assert a second Release() is still a no-op (no panic) and that a subsequent Acquire on the same repo succeeds (file recreated). Run 'go test ./internal/lock/'.\n4. OUTPUT: Modified Release() in internal/lock/lock.go + new unit test. Verified by 'go test ./internal/lock/'.\n5. DOCS: none — no user-facing/config surface change; docs/configuration.md (lock file location, lines 233-247) makes no accumulation claim to correct, and the cleanup is transparent."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T2",
+              "title": "Canonicalize the repo= diagnostic field (Issue 3)",
+              "status": "Planned",
+              "description": "Acquire (lock.go:102) stores the RAW repoPath (os.Getwd()) in the repo= field, but lockHash canonicalizes via filepath.EvalSymlinks for the filename. So two terminals reaching the same repo via symlink vs real path share one lock file but display different repo= values. Store the canonical path in repo= so the diagnostic agrees with the hash key.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T2.S1",
+                  "title": "Store canonical path in repo= field and add symlink diagnostic test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M2.T1.S1"],
+                  "prd_selectors": ["h2.0", "h2.3", "h3.2"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 3) and architecture/system_context.md. internal/lock/lock.go:102 sets `repo: repoPath` (raw input). lockHash (lock.go:204-213) canonicalizes via filepath.EvalSymlinks(repoPath) (fallback filepath.Abs) for the sha256 filename. The canonical value is computed inside lockHash but NOT exposed. DRY approach: refactor so the canonical path is computed ONCE and reused by both the hash and the repo= field.\n2. INPUT: The current lockHash(repoPath string) string (lock.go:204-213), lockPath(repoPath) (lock.go:215-222), and Acquire(repoPath) (lock.go:63-108, repo assignment at line 102). The LockContents.Repo field is what parseContents populates and what handleLockContention prints.\n3. LOGIC: Refactor lockHash to expose the canonical path. Preferred: change lockHash signature to `func lockHash(repoPath string) (canonical, hash string)` returning both, OR add a sibling `func canonicalRepo(repoPath string) string` that both lockHash and Acquire call (single EvalSymlinks source of truth). Update lockPath to use the hash. Update Acquire to store `repo: canonical` (the canonical path) instead of `repo: repoPath`. Update any lockHash/lockPath tests for the new signature (TestHash_CanonicalSymlink, TestLockPath_CanonicalSymlink, determinism). Add a NEW unit test: create a repo via t.TempDir(), create a symlink to it elsewhere, Acquire via the symlink path, then read the lock file contents and assert the repo= field equals the CANONICAL (real) path, not the symlink path (use a test that reads the file or exposes LockContents.Repo). This must compose with the Issue 2 cleanup (P1.M2.T1.S1) — the file is removed on Release, so the test must read contents before Release or use the HeldError/Locker state.\n4. OUTPUT: Refactored lockHash + updated Acquire + updated tests + new symlink-diagnostic test. Verified by 'go test ./internal/lock/'.\n5. DOCS: none — diagnostic-only improvement; no user-facing/config/API surface change."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T3",
+              "title": "Make the SetSnapshot rewrite atomic in-place (Issue 4a)",
+              "status": "Planned",
+              "description": "setSnapshot (lock.go:131-140) does Truncate(0)→Seek(0,0)→writeContents, producing an EMPTY file in the window between Truncate and the write completion; a contender reading then sees empty diagnostics. Rewrite in place as Seek→Write(fullBuffer)→Truncate(len) so the file is never empty (always old or new content). CRITICAL: do NOT use temp-file+os.Rename — flock is inode-bound and rename would orphan the holder's flock.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T3.S1",
+                  "title": "Restructure setSnapshot to Seek→Write→Truncate in place + invariant test",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M2.T2.S1"],
+                  "prd_selectors": ["h2.0", "h2.3", "h3.3"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/flock_inode_constraint.md (CRITICAL) and architecture/issue_analysis.md (Issue 4). The current setSnapshot (internal/lock/lock.go:131-140) is `l.file.Truncate(0); l.file.Seek(0,0); l.writeContents(sha)`. writeContents (lock.go:167-174) does a single fmt.Fprintf of all 5 key=value lines + Sync. The empty-file window (Truncate → Fprintf completion) is where a contender's os.ReadFile (separate open in Acquire on EWOULDBLOCK) reads an empty/partial file → parseContents yields empty fields → Busy message renders as 'on  (pid  on )'.\n2. INPUT: The current setSnapshot (lock.go:131-140) and writeContents (lock.go:167-174) methods. The Locker struct fields (pid, hostname, repo, timestamp) used to build the content. The held fd l.file.\n3. LOGIC: HARD CONSTRAINT (architecture/flock_inode_constraint.md): flock is bound to the INODE, not the filename. You MUST NOT use temp-file + os.Rename over the lock path — that creates a new inode, orphans the holder's flock on the old inode, and lets a contender flock the new inode and SUCCEED (bypassing the lock entirely). Instead, rewrite IN PLACE on the held fd: build the full content string in a buffer, then `l.file.Seek(0,0); l.file.Write([]byte(content)); l.file.Truncate(int64(len(content))); l.file.Sync()`. ORDER MATTERS: Write BEFORE Truncate so the file is NEVER empty — it is always the old content, a prefix of the new content, or the complete new content. (Writing-then-truncating cuts any stale trailing bytes from the previous, possibly-longer content.) Consolidate writeContents into this single buffered Write (or have writeContents build the string and setSnapshot do Seek→Write→Truncate→Sync). Keep error handling consistent with the codebase style (the current code ignores Truncate/Seek/Sync errors; preserve that or surface them minimally — do NOT change the public SetSnapshot signatures). Add a unit test asserting the write-ordering INVARIANT: after setSnapshot, the file is non-empty and well-formed (contains all 5 keys); and that setSnapshot on a nil/released locker is a no-op (existing behavior preserved). A full race test is non-deterministic; instead assert the file is never empty immediately after a setSnapshot call.\n4. OUTPUT: Restructured setSnapshot/writeContents in internal/lock/lock.go + invariant unit test. Verified by 'go test ./internal/lock/'.\n5. DOCS: none — internal correctness; no user-facing/config/API surface change."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T4",
+              "title": "Guard the contention message against empty diagnostic fields (Issue 4b)",
+              "status": "Planned",
+              "description": "Defense-in-depth for the residual microsecond race window: even after the in-place atomic rewrite, a contender could read a partial file. handleLockContention (default_action.go:251-254) must substitute sensible fallbacks when repo/pid/hostname are empty so the Busy message is never gibberish ('on  (pid  on )').",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T4.S1",
+                  "title": "Guard handleLockContention empty fields + add partial-read unit test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M2.T3.S1"],
+                  "prd_selectors": ["h2.0", "h2.3", "h3.3"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md (Issue 4b) and architecture/system_context.md (handleLockContention). internal/cmd/default_action.go:251-254 builds the Busy message via a single fmt.Fprintf substituting heldErr.Contents.Repo, .Pid, .Hostname, .Path. If a contender read a partial lock file (the residual race window), these fields are empty strings and the message renders as 'stagehand: another stagehand run is already in progress on  (pid  on ).' — ugly and uninformative. The existing unit tests in internal/cmd/lock_contention_test.go cover the 4 branches (no-op, tree-differs, empty-snapshot, WriteTree-err) but NOT the empty-diagnostics case.\n2. INPUT: The current handleLockContention (default_action.go:241-256) and its Busy message fmt.Fprintf (lines 251-254). The contentionFakeGit test double and the existing test helpers in internal/cmd/lock_contention_test.go (contentionFakeGit overrides only WriteTree).\n3. LOGIC: Before formatting the Busy message, compute fallback values: if heldErr.Contents.Repo == \"\" use a sensible placeholder (e.g. \"an unknown repo\"); if Pid == \"\" use \"<unknown>\"; if Hostname == \"\" use \"<unknown>\". Keep the Path substitution (it is the lock file path, always non-empty since it comes from lockPath). Do NOT change the exit code (still exitcode.New(exitcode.Busy, nil) → 5, silent) or the no-op fast path logic. Keep the message tone consistent with the existing wording. Add a unit test in internal/cmd/lock_contention_test.go: construct a *lock.HeldError with Contents having EMPTY Repo/Pid/Hostname (and a non-matching snapshot so it reaches the Busy branch), call handleLockContention, assert exit 5 AND that the stderr message contains the fallback text (e.g. 'unknown' or the placeholder) and does NOT contain the broken 'on  (pid  on )' pattern (no double-space 'on  (').\n4. OUTPUT: Guarded handleLockContention in internal/cmd/default_action.go + new partial-read unit test. Verified by 'go test ./internal/cmd/ -run TestHandleLockContention'.\n5. DOCS: none — message-quality improvement; no user-facing/config/API surface change."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M3",
+          "title": "Sync changeset-level documentation (Mode B)",
+          "status": "Planned",
+          "description": "Per the §5 Documentation Sync rule, a final task sweeps the changeset-level / overview docs (README, how-it-works, cli.md) for cross-cutting coherence after ALL implementing subtasks land. The per-file doc qualification (P1.M1.T1) was Mode A (doc-with-work); this is the Mode B catch-all that ensures the README features/overview sections do not contradict the qualified claims and that the changeset reads coherently end-to-end.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M3.T1",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Final sweep of the README and docs overview sections to ensure the whole changeset reads coherently. Depends on every implementing subtask so it runs last. The implementing agent decides whether each touched file needs a further touch; do not skip.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S1",
+                  "title": "Sweep README.md for cross-cutting coherence",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T1.S3", "P1.M1.T2.S1", "P1.M2.T1.S1", "P1.M2.T2.S1", "P1.M2.T3.S1", "P1.M2.T4.S1"],
+                  "prd_selectors": ["h2.0", "h2.2", "h2.3", "h2.4"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: README.md was qualified at line 330 by P1.M1.T1.S1 (scoping the no-op fast path to the single-commit path). This sweep checks whether ANY OTHER README section references the run lock, the no-op fast path, exit code 0/5, or 'safe to run twice' and contradicts the qualified claim. Search README.md for: 'run lock', 'FR52', 'Safe to run', 'nothing to do', 'exit 0', 'exit 5', 'Busy', 'concurrent', 'double-run', 'decompose'. Also check whether README's features list / overview mentions decompose behavior in a way that now needs the Busy(5) caveat.\n2. INPUT: The qualified README.md (post P1.M1.T1.S1) and the full changeset (all 8 implementing subtasks landed).\n3. LOGIC: Grep README.md for the terms above. For each hit outside line 330, verify it is consistent with the qualified claim (no-op fast path = single-commit path only; decompose double-run = Busy). Edit any contradicting line to match. If no contradictions exist, this subtask is a no-op confirmation (document that in a brief note). Do NOT re-introduce the unconditional 'exits 0' claim anywhere. Do NOT edit PRD.md.\n4. OUTPUT: README.md coherent with the qualified claims across all sections (or confirmation no further edit needed).\n5. DOCS: [Mode B] This IS the changeset-level doc sweep for README.md."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S2",
+                  "title": "Sweep docs/how-it-works.md and docs/cli.md for cross-cutting coherence",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T1.S3", "P1.M1.T2.S1", "P1.M2.T1.S1", "P1.M2.T2.S1", "P1.M2.T3.S1", "P1.M2.T4.S1"],
+                  "prd_selectors": ["h2.0", "h2.2", "h2.3", "h2.4"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/how-it-works.md:155 and docs/cli.md:379 were qualified by P1.M1.T1.S3 and P1.M1.T1.S2 respectively. This sweep checks the REST of both files for lock/no-op/exit-code references that contradict the qualified claims. In docs/how-it-works.md, also note the pre-existing gap that the 'Failure modes and exit codes' table (lines 165-173) does NOT list code 5/Busy — decide whether to add a Busy row for completeness (low-effort, improves coherence) but do NOT widen scope beyond the lock changeset. In docs/cli.md, verify the exit-code table (lines 368-375) rows for 0 and 5 are consistent with the qualified prose (they are generic and should be fine). Also check docs/configuration.md (lines 233-247, lock file location) — it makes no behavior claim and should need no edit, but confirm.\n2. INPUT: The qualified docs/how-it-works.md and docs/cli.md (post P1.M1.T1.S2/S3) and the full changeset.\n3. LOGIC: Grep both docs for: 'run lock', 'FR52', 'no-op', 'nothing to do', 'exit 0', 'exit 5', 'Busy', 'concurrent', 'decompose', 'snapshot', 'SetSnapshot'. For each hit, verify consistency with the qualified claim. Edit contradictions. Optionally add a Busy(5) row to the how-it-works failure-modes table if it improves coherence. Do NOT edit PRD.md. If no contradictions, document the confirmation.\n4. OUTPUT: docs/how-it-works.md and docs/cli.md coherent with the qualified claims (or confirmation no further edit needed).\n5. DOCS: [Mode B] This IS the changeset-level doc sweep for the docs/ overview files."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
