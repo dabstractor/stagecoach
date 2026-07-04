@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Configuration & option plumbing",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add the two new config knobs (token_limit, diff_context) through Stagehand's existing 5-layer precedence (defaults → global file → repo file → git-config → env/flag), and extend StagedDiffOptions + the 6 production call sites so every diff function can receive them. This milestone changes NO diff behavior — it only builds the wiring the later milestones consume. All facts/line numbers are in plan/007_b33d310438c6/architecture/diff_capture_touchmap.md §2–§4.",
           "tasks": [
             {
@@ -99,14 +99,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Extend StagedDiffOptions + thread through 6 call sites",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Add TokenLimit, DiffContext, and PromptReserveTokens to StagedDiffOptions and map cfg→opts at all 6 production call sites. This is the bridge from config to the diff functions; it changes no diff behavior (the fields are read in M2/M4).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "StagedDiffOptions fields (TokenLimit, DiffContext, PromptReserveTokens)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -123,7 +123,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S2",
                   "title": "Map cfg fields at the 6 production call-site struct literals",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1",

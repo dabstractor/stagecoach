@@ -41,6 +41,34 @@ type StagedDiffOptions struct {
 	// (png jpg … woff2 in internal/git/binary.go); nil ⇒ built-in denylist only.
 	// Entries are dot-tolerant + case-insensitive (PRD §9.1 FR3a).
 	// Sourced from config `binary_extensions`.
+
+	// --- v2.1 diff-payload optimization (PRD §9.1 FR3d/FR3f/FR3i) ---
+	// These overlay the legacy per-section caps above. UNREAD by the three diff functions until M2
+	// (DiffContext) and M4 (TokenLimit/PromptReserveTokens) — added now to thread the seam so the 6
+	// call sites (T2.S2) can map cfg → opts in one pass. No behavior change from this field set.
+
+	// FR3d: holistic token budget over the WHOLE payload (system prompt + style examples + diff).
+	// 0 = unset ⇒ the legacy MaxDiffBytes/MaxMDLines per-section caps apply unchanged (the two modes
+	// are mutually exclusive: a non-zero TokenLimit supersedes both). Sourced from config `token_limit`
+	// (a plain int — 0 IS its unset sentinel; no meaningful "explicit 0"). Read by the M4 gate + water-fill.
+	TokenLimit int
+
+	// FR3f: unified-context line count for `git diff -U<n>` (0–3). Reduces git's -U3 default to cut
+	// unchanged-context noise.
+	// ⚠️ 0 is VALID (-U0 = changed lines only) — this is a PLAIN int (not *int) because the git layer
+	// takes the RESOLVED value: callers MUST pass the resolved context (default 1 when the user omits
+	// it) explicitly, NEVER a "0 means unset" sentinel. Sourced from config `diff_context` (a *int at
+	// the config layer to distinguish unset from explicit 0; the call site dereferences with a
+	// default-1 fallback before constructing this struct). Read by M2's flag helper.
+	DiffContext int
+
+	// FR3i: token cost of the STABLE prompt portion — system-prompt header + style examples (FR11) +
+	// user instruction + worst-case rejection block + margin — measured UPSTREAM (prompt/generate
+	// layers) and passed in so the git layer can compute body_budget = token_limit − skeleton −
+	// promptReserve for the dynamic water-fill. 0 = unset (no reserve subtracted); only meaningful
+	// when TokenLimit > 0. The git layer RECEIVES this (it does not compute it — keeps internal/git
+	// free of internal/prompt imports). Read by the M4 water-fill. See system_context.md §5.
+	PromptReserveTokens int
 }
 
 // Git is the shell-free boundary to the real git binary. Every method delegates to the private
