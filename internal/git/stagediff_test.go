@@ -589,3 +589,94 @@ func TestStagedDiff_DiffContextZero_ChangedLinesOnly(t *testing.T) {
 		t.Fatalf("DiffContext:0 (-U0) should drop unchanged context (changed-lines-only), got:\n%s", out0)
 	}
 }
+
+// TestStripIndexLines verifies FR3h's post-capture filter: the `index <oid>..<oid> <mode>` header line is
+// removed; every other line is preserved verbatim — including a content line that starts with the word
+// "index" but lacks the OID `..` form (the regex disambiguator), and the rename/similarity extended headers.
+func TestStripIndexLines(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "index line removed, structural + content kept",
+			input: "diff --git a/a.go b/a.go\nindex 600d48a..62b056e 100644\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n",
+			want:  "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n",
+		},
+		{
+			// THE contract negative case: a content line that starts with "index" but lacks the OID form is KEPT.
+			// "index of items" → "of" is not hex → no match. The diff-marked variants (space/-/+) also kept.
+			name:  "content line starting with index but no OID form is kept",
+			input: "index of items in the list\n",
+			want:  "index of items in the list\n",
+		},
+		{
+			name:  "diff-marked content lines mentioning index are kept (markers protect them)",
+			input: "diff --git a/a.go b/a.go\nindex 600d48a..62b056e 100644\n@@ -1,3 +1,3 @@\n // index of items\n-index of items\n+index of other\n",
+			want:  "diff --git a/a.go b/a.go\n@@ -1,3 +1,3 @@\n // index of items\n-index of items\n+index of other\n",
+		},
+		{
+			name:  "no index line → byte-identical (fast path)",
+			input: "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n",
+			want:  "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n",
+		},
+		{
+			name:  "multiple files → all index lines removed, headers/content kept",
+			input: "diff --git a/a.go b/a.go\nindex 1111111..2222222 100644\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/b.md b/b.md\nindex 3333333..4444444 100644\n--- a/b.md\n+++ b/b.md\n@@ -1 +1 @@\n-x\n+y\n",
+			want:  "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/b.md b/b.md\n--- a/b.md\n+++ b/b.md\n@@ -1 +1 @@\n-x\n+y\n",
+		},
+		{
+			// Composes with FR3e (-M): a pure rename has NO index line; similarity index / rename from / to
+			// start with a different token → all KEPT. stripIndexLines is a no-op here (correct).
+			name:  "rename path: similarity index / rename from / rename to KEPT (no index line present)",
+			input: "diff --git a/old.go b/new.go\nsimilarity index 100%\nrename from old.go\nrename to new.go\n",
+			want:  "diff --git a/old.go b/new.go\nsimilarity index 100%\nrename from old.go\nrename to new.go\n",
+		},
+		{
+			name:  "empty string → empty string",
+			input: "",
+			want:  "",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripIndexLines(tc.input); got != tc.want {
+				t.Errorf("stripIndexLines mismatch:\n got=%q\nwant=%q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStagedDiff_IndexLineStripped is the FR3h integration test: a real captured StagedDiff payload
+// contains NO `index <oid>..<oid> <mode>` line, while the structural identity lines (diff --git, +++) are
+// retained. Proves the helper is wired into the capture→strip→cap path.
+func TestStagedDiff_IndexLineStripped(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	writeFile(t, repo, "a.go", "package main\n")
+	stageFile(t, repo, "a.go")
+	execGit(t, repo, "commit", "-qm", "base")
+	writeFile(t, repo, "a.go", "package main\nfunc a(){}\n")
+	stageFile(t, repo, "a.go")
+
+	g := New(repo)
+	out, err := g.StagedDiff(context.Background(), StagedDiffOptions{DiffContext: 1})
+	if err != nil {
+		t.Fatalf("StagedDiff: %v", err)
+	}
+	// FR3h: no line in the captured payload matches the index-header regex.
+	for _, line := range strings.Split(out, "\n") {
+		if indexLineRe.MatchString(line) {
+			t.Errorf("FR3h: index line present in StagedDiff output: %q\nfull output:\n%s", line, out)
+		}
+	}
+	// Sanity: the kept structural lines are present.
+	if !strings.Contains(out, "diff --git a/a.go b/a.go") {
+		t.Errorf("diff --git header missing (should be KEPT):\n%s", out)
+	}
+	if !strings.Contains(out, "+++ b/a.go") {
+		t.Errorf("+++ header missing (should be KEPT):\n%s", out)
+	}
+}

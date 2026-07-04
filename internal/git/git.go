@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -696,6 +697,38 @@ func buildDiffArgs(opts StagedDiffOptions, domain ...string) []string {
 	return args
 }
 
+// indexLineRe matches git's per-file `index <oid>..<oid> <mode>` patch header (PRD §9.1 FR3h).
+// Anchored at start: "index ", a hex OID run, "..", another hex OID run, then a space (the file mode
+// follows). A content line that merely starts with the word "index" (e.g. "// index of items" or
+// "index of items") does NOT match — it lacks the "<hex>..<hex> " form — and is preserved. diff --git /
+// --- / +++ / @@ / similarity index / rename from / rename to lines start with a different token and are
+// all kept. In a real diff body content lines also carry a +//-/space marker, so they cannot start with
+// "index " at all. The regex is OID-form-disambiguated (belt-and-suspenders with the diff markers).
+var indexLineRe = regexp.MustCompile(`^index [0-9a-f]+\.\.[0-9a-f]+ `)
+
+// stripIndexLines removes git's per-file `index <oid>..<oid> <mode>` header lines from a captured diff
+// body (PRD §9.1 FR3h). The blob OIDs are useless to the model and cost ~30 bytes/file; stripping
+// PRE-CAP means the byte/line cap measures the smaller, stripped size (the FR3h savings point). Only a
+// line matching indexLineRe is dropped; every other line is preserved verbatim. No git flag suppresses
+// the index line (git_diff_semantics §4), so this post-capture filter is the only way. Applied in all 3
+// diff paths (FR3c parity) on BOTH the markdown per-file body and the non-markdown aggregate, immediately
+// after capture and before the cap. Always-on (not token-limit-gated). A pure rename / mode-only change
+// has no index line → this is a no-op there (correct; nothing to strip).
+func stripIndexLines(s string) string {
+	if !strings.Contains(s, "index ") {
+		return s // fast path: substring absent → no line can start with "index "
+	}
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if indexLineRe.MatchString(line) {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
 func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (string, error) {
 	maxMDLines := opts.MaxMDLines
 	if maxMDLines <= 0 {
@@ -730,6 +763,7 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 		if fcode != 0 {
 			return "", fmt.Errorf("git diff --cached -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
 		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
 		// Per-file line cap (post-capture, FINDING 7/G3). Split on "\n", keep first maxMDLines.
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
@@ -809,6 +843,7 @@ func (g *gitRunner) StagedDiff(ctx context.Context, opts StagedDiffOptions) (str
 	if nmcode != 0 {
 		return "", fmt.Errorf("git diff (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
+	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
 	// Byte cap (post-capture, FINDING 7/G3). len() is byte length; the slice may split a UTF-8 rune —
 	// matches `head -c` (G3). The sentinel is appended AFTER the cap and is not counted against it.
 	if len(nmDiff) > maxDiffBytes {
@@ -1181,6 +1216,7 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 		if fcode != 0 {
 			return "", fmt.Errorf("git diff %s %s -- %s: failed (exit %d): %s", treeA, treeB, file, fcode, strings.TrimSpace(fstderr))
 		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
 				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
@@ -1249,6 +1285,7 @@ func (g *gitRunner) TreeDiff(ctx context.Context, treeA, treeB string, opts Stag
 	if nmcode != 0 {
 		return "", fmt.Errorf("git diff tree-to-tree (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
+	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
 	if len(nmDiff) > maxDiffBytes {
 		nmDiff = nmDiff[:maxDiffBytes] +
 			fmt.Sprintf("\n... [diff truncated at %d bytes]", maxDiffBytes)
@@ -1316,6 +1353,7 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 		if fcode != 0 {
 			return "", fmt.Errorf("git diff -- %s: failed (exit %d): %s", file, fcode, strings.TrimSpace(fstderr))
 		}
+		fileDiff = stripIndexLines(fileDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the line cap
 		if lines := strings.Split(fileDiff, "\n"); len(lines) > maxMDLines {
 			fileDiff = strings.Join(lines[:maxMDLines], "\n") +
 				fmt.Sprintf("\n... [diff truncated at %d lines]", maxMDLines)
@@ -1385,6 +1423,7 @@ func (g *gitRunner) WorkingTreeDiff(ctx context.Context, opts StagedDiffOptions)
 	if nmcode != 0 {
 		return "", fmt.Errorf("git diff (non-markdown): failed (exit %d): %s", nmcode, strings.TrimSpace(nmstderr))
 	}
+	nmDiff = stripIndexLines(nmDiff) // FR3h: drop `index <oid>..<oid> <mode>` before the byte cap
 	if len(nmDiff) > maxDiffBytes {
 		nmDiff = nmDiff[:maxDiffBytes] +
 			fmt.Sprintf("\n... [diff truncated at %d bytes]", maxDiffBytes)
