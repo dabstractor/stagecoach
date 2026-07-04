@@ -231,21 +231,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Compact numstat change skeleton (FR3g)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Prepend a compact per-file skeleton (`git diff --numstat`: one `added\\tdeleted\\tpath` line per changed file, binary as `-\\t-`) to the payload BEFORE any diff body, so the model always sees the full shape of the change even when bodies are truncated. This is dual-use: the skeleton is also the per-file size input to FR3i's water-fill (M4). Always-on. Facts in git_diff_semantics.md §3.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Numstat capture + skeleton prepend",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Capture `git diff --numstat` per diff path, parse it (handling the `=>` rename notation and binary `-` rows), and emit a compact skeleton block prepended to the payload. The parsed numstat rows are also returned/stored for M4's water-fill sizing.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "numstat capture + parse (rename notation, binary, path keying)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -262,7 +262,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Prepend compact skeleton block; ordering invariance",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
