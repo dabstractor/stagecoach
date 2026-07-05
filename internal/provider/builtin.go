@@ -51,6 +51,7 @@ func builtinPi() Manifest {
 		DefaultModel:      strPtr(""), // FR-D2: was glm-5-turbo; decoupled from any one subscription
 		SystemPromptFlag:  strPtr("--system-prompt"),
 		ProviderFlag:      strPtr("--provider"),
+		SessionMode:       strPtr("append"), // VERIFIED 2026-07-05 via `pi --session-id X <isolation-flags-minus-no-session> -p "remember BANANA"` then recall returns BANANA; FR-T9.
 		BareFlags: []string{
 			"--no-tools",
 			"--no-extensions",

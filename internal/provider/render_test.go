@@ -598,6 +598,64 @@ func TestRenderMultiTurn_DoesNotMutateManifest(t *testing.T) {
 	}
 }
 
+// TestRenderMultiTurn_GoldenTable is the §5 golden/table consolidation. PRESENCE-based (containsPair/
+// containsToken), NOT byte-exact: S3's individual tests own byte-exact; this table owns the contract
+// surface in the codebase's documented table idiom. Per the work item: "assert presence + the
+// system-prompt turn-1-only distinction"; "Do NOT assert exact arg position for --session-id".
+func TestRenderMultiTurn_GoldenTable(t *testing.T) {
+	cases := []struct {
+		name                 string
+		turn                 int
+		sessionID            string
+		wantSysPromptPresent bool
+	}{
+		{"pi_turn1_session_id_and_sys_prompt_no_no_session", 1, "stagehand-gt-t1", true},
+		{"pi_turn2_session_id_present_sys_prompt_absent", 2, "stagehand-gt-t1", false},
+		{"pi_turn3_session_id_still_present_sys_prompt_absent", 3, "stagehand-gt-t1", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", tc.sessionID, tc.turn)
+			if err != nil {
+				t.Fatalf("turn %d: %v", tc.turn, err)
+			}
+			if !containsPair(spec.Args, "--session-id", tc.sessionID) {
+				t.Errorf("turn %d: --session-id %q not present as a pair: %v", tc.turn, tc.sessionID, spec.Args)
+			}
+			if containsToken(spec.Args, "--no-session") {
+				t.Errorf("turn %d: --no-session should be filtered out: %v", tc.turn, spec.Args)
+			}
+			if containsToken(spec.Args, "--system-prompt") != tc.wantSysPromptPresent {
+				t.Errorf("turn %d: --system-prompt presence = %v, want %v",
+					tc.turn, containsToken(spec.Args, "--system-prompt"), tc.wantSysPromptPresent)
+			}
+			if !containsToken(spec.Args, "-p") {
+				t.Errorf("turn %d: -p (print_flag) missing: %v", tc.turn, spec.Args)
+			}
+			if spec.Stdin != "<payload>" {
+				t.Errorf("turn %d: Stdin = %q, want <payload> (no sys prepend via stdin)", tc.turn, spec.Stdin)
+			}
+		})
+	}
+}
+
+// TestRenderMultiTurn_SessionIDStableAcrossTurns pins FR-T6's invariant: the orchestrator mints ONE
+// session id and re-invokes it every turn. S3's per-turn tests use a shared literal but never EXPLICITLY
+// assert the id renders identically across turns. A regression that mutated the id per turn (e.g.
+// appending a counter) would fail here.
+func TestRenderMultiTurn_SessionIDStableAcrossTurns(t *testing.T) {
+	const sid = "stagehand-stability-probe"
+	for turn := 1; turn <= 3; turn++ {
+		spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", sid, turn)
+		if err != nil {
+			t.Fatalf("turn %d: %v", turn, err)
+		}
+		if !containsPair(spec.Args, "--session-id", sid) {
+			t.Errorf("turn %d: expected --session-id %q in args, got %v", turn, sid, spec.Args)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------

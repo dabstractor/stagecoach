@@ -53,6 +53,11 @@ provider_flag = "--provider"        # pi routes to backends: zai | anthropic | g
 # default_provider removed in v3: the inference backend is now the slash-prefix on the model
 # (e.g. "zai/glm-5.2" → --provider zai --model glm-5.2). FR-R5b enforces this at Render.
 
+# --- session continuation (multi-turn fallback, §9.24) ---
+session_mode = "append"             # VERIFIED 2026-07-05; FR-T9. pi re-invoking the SAME --session-id
+                                    # appends a recallable turn (one-shot → multi-turn available). Other
+                                    # providers ship "" until their append mechanism is verified (FR-T9).
+
 # --- bare mode (§12.7.1: explicit tool-disable switch) ---
 bare_flags = [                      # appended VERBATIM to make the call bare + ephemeral.
   "--no-tools",                     # disable ALL tools (pure text-in/text-out).

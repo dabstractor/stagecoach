@@ -21,6 +21,8 @@ From lowest to highest:
 
 When a `[provider.<name>]` section appears in a config file, its fields are **merged onto** the built-in manifest of the same name (field-by-field: present values override, absent values inherit).
 
+> **`session_mode` override.** `session_mode` is one such overridable field. An explicit `session_mode = ""` on a provider that ships `"append"` (pi) **disables the multi-turn fallback** for that provider (the run proceeds one-shot → rescue, unchanged); omitting the key inherits the built-in `"append"`. Setting `session_mode = "append"` on a provider that ships `""` is a user override at their own FR-T9 verification risk — the shipped default stays `""` until a reproducible append-turn rendering is confirmed (see [providers.md](providers.md#the-schema) and §9.24).
+
 ## Config file paths
 
 | Scope | Path | Notes |

@@ -1,6 +1,6 @@
 # Provider manifests
 
-Full reference for Stagehand's provider manifest system: the 21-field schema, command-rendering algorithm, the 8 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
+Full reference for Stagehand's provider manifest system: the 22-field schema, command-rendering algorithm, the 8 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
 
 ## What a manifest is
 
@@ -10,7 +10,7 @@ See the [shipped `providers/*.toml` files](../providers/) for human-readable ref
 
 ## The schema
 
-Each manifest has 21 fields (matching the TOML tags in `internal/provider/manifest.go`):
+Each manifest has 22 fields (matching the TOML tags in `internal/provider/manifest.go`):
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
@@ -26,6 +26,7 @@ Each manifest has 21 fields (matching the TOML tags in `internal/provider/manife
 | `default_model` | string | `""` | Model used when the user specifies none. |
 | `system_prompt_flag` | string | `""` | Flag for the system prompt. When `""`, the system prompt is prepended to the payload instead. |
 | `provider_flag` | string | `""` | Flag for sub-provider selection (e.g. `"--provider"`). |
+| `session_mode` | string | `""` | Multi-turn fallback capability (§9.24). `""` (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; `"append"` = re-invoking the same session id appends a recallable turn. **Only pi ships `"append"`** (VERIFIED 2026-07-05; FR-T9). Requires a verified, reproducible append-turn rendering — see below. |
 | `bare_flags` | list of string | `[]` (none) | Extra flags appended verbatim before `print_flag` in bare mode. |
 | `tooled_flags` | list of string | `nil` (none) | Flags for tooled/stager mode — tools ON, git-scoped, non-interactive. `nil`/empty ⇒ not stager-capable. |
 | `output` | string | `"raw"` | Agent output mode: `"raw"` or `"json"`. |
@@ -35,6 +36,17 @@ Each manifest has 21 fields (matching the TOML tags in `internal/provider/manife
 | `env` | table | `nil` (none) | Environment variables set only for the subprocess (as `KEY=VAL`). |
 | `reasoning_levels` | table | nil (none) | Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op (FR-R6). Appended after the model flag at render. pi populates high/medium/low via `--thinking` (verified `pi --help`); claude via `--effort` (verified `claude --help`); all other built-ins are nil (graceful no-op). |
 | `experimental` | bool | false | Marks a provider experimental (agy, qwen-code) — surfaced in `providers list`/`show`. Absent/false ⇒ stable. |
+
+### Multi-turn capability (`session_mode`)
+
+A provider supports Stagehand's **lossless multi-turn fallback** (§9.24 — used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The `session_mode` manifest field declares this:
+
+- `"append"` — re-invoking the same session id appends a recallable turn (multi-turn available).
+- `""` (default) — the provider cannot append turns across one-shot calls (multi-turn unavailable; the run proceeds one-shot → rescue, unchanged).
+
+**Only `pi` ships `session_mode = "append"` today** — VERIFIED 2026-07-05 via a live run (`pi --session-id X <isolation-flags-minus-no-session> -p "remember BANANA"`, then a same-`--session-id` recall turn returning "BANANA"). Every other built-in (claude, opencode, codex, cursor, agy, gemini, qwen-code) ships `""`.
+
+**FR-T9 verification bar.** A manifest MUST NOT declare `"append"` speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to FR-D5's model-token verification duty). Until a provider's append mechanism is verified, its `session_mode` stays `""` and multi-turn is silently skipped for it. See §9.24 (FR-T8/FR-T9) for the full contract.
 
 ## Command rendering
 

@@ -24,6 +24,7 @@ default_model = ""                          # FR-D2: empty in the shipped defaul
 system_prompt_flag = "--system-prompt"
 provider_flag = "--provider"
 default_provider = ""
+session_mode = "append"             # FR-T9
 bare_flags = [
   "--no-tools",
   "--no-extensions",
@@ -264,6 +265,7 @@ func TestBuiltinManifests_PiFields(t *testing.T) {
 	assertStr(t, "DefaultModel", m.DefaultModel, "") // FR-D2: decoupled from any one subscription
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "--system-prompt")
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "--provider")
+	assertStr(t, "SessionMode", m.SessionMode, "append") // FR-T9 verified: pi is the lone session-capable builtin
 
 	// BareFlags: 6 tokens in order
 	wantBare := []string{
@@ -714,12 +716,12 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 	assertStr(t, "Detect", m.Detect, "agy")
 	assertStr(t, "Command", m.Command, "agy")
 	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
-	assertStr(t, "PrintFlag", m.PrintFlag, "-p") // NON-NIL (agy HAS a -p print flag per §12.5.1)
+	assertStr(t, "PrintFlag", m.PrintFlag, "-p")                           // NON-NIL (agy HAS a -p print flag per §12.5.1)
 	assertStr(t, "ModelFlag", m.ModelFlag, "--model")                      // `-m` is rejected by agy (verified 2026-07-03)
 	assertStr(t, "DefaultModel", m.DefaultModel, "Gemini 3.5 Flash (Low)") // display label, verbatim (verified 2026-07-03)
-	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "") // NON-NIL explicit empty (prepend)
-	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
-	assertStr(t, "ProviderFlag", m.ProviderFlag, "")         // NON-NIL explicit empty
+	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "")               // NON-NIL explicit empty (prepend)
+	assertStr(t, "ProviderFlag", m.ProviderFlag, "")                       // NON-NIL explicit empty
+	assertStr(t, "ProviderFlag", m.ProviderFlag, "")                       // NON-NIL explicit empty
 	wantBare := []string{"--approval-mode", "default"}
 	if !reflect.DeepEqual(m.BareFlags, wantBare) {
 		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
