@@ -1,0 +1,9 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: splitDiffSections fragments files whose content contains the literal diff --git , defeating token_limit truncation and overflowing the context window
+ h2.3 Minor Issues (Nice to Fix)
+ h2.4 Testing Summary
+---
+code:3 para:19 list:5 table:1
