@@ -287,6 +287,20 @@ type Git interface {
 	// 128; never use --quiet). Read-only with respect to refs and the index (PRD §18.1).
 	DiffTreeNames(ctx context.Context, treeA, treeB string) (paths []string, err error)
 
+	// OverlayTreePaths returns a NEW tree equal to baseTree with each path in paths overwritten by its
+	// state in sourceTree (PRD §13.6.5 / FR-M10 mid-chain rebuild). For each path in paths:
+	//   - present in sourceTree → overwritten with sourceTree's (mode, blob)
+	//     (git update-index --add --cacheinfo <mode>,<blob>,<path>).
+	//   - absent in sourceTree  → removed from the result (deletion-overlay)
+	//     (git update-index --force-remove <path>).
+	// The (mode, blob) pairs come from ONE `git ls-tree -r --full-tree <sourceTree> -- <paths...>`.
+	// Implementation: read-tree baseTree (index = baseTree) → per-path update-index → write-tree.
+	// EMPTY paths ⇒ return baseTree verbatim (no-op early return, NO index mutation).
+	// It mutates ONLY .git/index and the object store (same discipline as FreezeWorkingTree/ReadTree/
+	// WriteTree); it NEVER touches the working tree and NEVER moves a ref. Bad/unresolvable tree SHA
+	// ⇒ a wrapped error (code != 0; NO 128-as-non-error special case — mirror ReadTree/DiffTreeNames).
+	OverlayTreePaths(ctx context.Context, baseTree, sourceTree string, paths []string) (treeSHA string, err error)
+
 	// ConfigGlobalGet reads a key from git's GLOBAL config (not repo-local) via
 	// `git config --global --get <key>` (PRD §9.21 FR-I4). Exit-code semantics (mirrors
 	// config/git.go gitConfigGet): 0 = found (trimmed value); 1 = not found (found=false,
@@ -1589,6 +1603,81 @@ func (g *gitRunner) DiffTreeNames(ctx context.Context, treeA, treeB string) ([]s
 		}
 	}
 	return out, nil // nil if stdout was empty (identical trees); out aliases paths (same backing array)
+}
+
+// lsTreeEntry is one parsed entry from `git ls-tree -r --full-tree`: the path is the map KEY, so only
+// the mode and blob SHA are stored here. type is always "blob" for -r over file paths and is discarded.
+type lsTreeEntry struct{ mode, blob string }
+
+// parseLsTree parses `git ls-tree -r --full-tree` output ("<mode> <type> <blob>\t<path>" per line) into
+// map[path]→{mode, blob}. The <type> column (always "blob" for -r over file paths) is ignored. Pure
+// (no git side-effects). Empty lines (incl. a trailing "" from Split) are skipped.
+func parseLsTree(out string) map[string]lsTreeEntry {
+	m := make(map[string]lsTreeEntry)
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		tab := strings.IndexByte(line, '\t')
+		if tab < 0 {
+			continue
+		}
+		path := line[tab+1:]
+		left := strings.Fields(line[:tab]) // [mode, type, blob]
+		if len(left) < 3 {
+			continue
+		}
+		m[path] = lsTreeEntry{mode: left[0], blob: left[2]} // left[1] = type ("blob"), ignored
+	}
+	return m
+}
+
+// OverlayTreePaths returns a NEW tree equal to baseTree with each path in paths overwritten by its
+// state in sourceTree (PRD §13.6.5 / FR-M10 mid-chain rebuild). See the interface doc comment for the
+// full contract. It orchestrates index/object-store-only git plumbing: read-tree baseTree → ONE
+// ls-tree sourceTree for the requested paths → per-path update-index (--cacheinfo present /
+// --force-remove absent) → write-tree. EMPTY paths ⇒ return baseTree verbatim (no read-tree, no
+// write-tree). Mirrors the mutation exit-code convention of ReadTree/DiffTreeNames: err != nil ⇒ git
+// binary missing / context cancelled / start failure → propagate UNWRAPPED; code != 0 ⇒ wrap with
+// stderr. NEVER touches the working tree; NEVER moves a ref (mirrors FreezeWorkingTree).
+func (g *gitRunner) OverlayTreePaths(ctx context.Context, baseTree, sourceTree string, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return baseTree, nil // early no-op — avoids a pointless read-tree + write-tree
+	}
+	// 1. read-tree baseTree → index = baseTree.
+	if _, stderr, code, err := g.run(ctx, g.workDir, "read-tree", baseTree); err != nil {
+		return "", err // git binary missing / context cancelled / start failure (run sets code=-1) — UNWRAPPED
+	} else if code != 0 {
+		return "", fmt.Errorf("git read-tree (overlay base): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	// 2. ONE ls-tree sourceTree for the requested paths (fresh backing array — don't mutate a shared slice).
+	lsArgs := append([]string{"ls-tree", "-r", "--full-tree", sourceTree, "--"}, paths...)
+	lsOut, stderr, code, err := g.run(ctx, g.workDir, lsArgs...)
+	if err != nil {
+		return "", err // UNWRAPPED
+	} else if code != 0 {
+		return "", fmt.Errorf("git ls-tree (overlay source): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	blobs := parseLsTree(lsOut)
+	// 3. per-path update-index: cacheinfo if present in source; force-remove if absent = deletion-overlay.
+	for _, p := range paths {
+		if ent, ok := blobs[p]; ok {
+			if _, stderr, code, err := g.run(ctx, g.workDir, "update-index", "--add", "--cacheinfo",
+				fmt.Sprintf("%s,%s,%s", ent.mode, ent.blob, p)); err != nil {
+				return "", err // UNWRAPPED
+			} else if code != 0 {
+				return "", fmt.Errorf("git update-index --cacheinfo %s: failed (exit %d): %s", p, code, strings.TrimSpace(stderr))
+			}
+		} else {
+			if _, stderr, code, err := g.run(ctx, g.workDir, "update-index", "--force-remove", p); err != nil {
+				return "", err // UNWRAPPED
+			} else if code != 0 {
+				return "", fmt.Errorf("git update-index --force-remove %s: failed (exit %d): %s", p, code, strings.TrimSpace(stderr))
+			}
+		}
+	}
+	// 4. write-tree → new tree SHA.
+	return g.WriteTree(ctx)
 }
 
 // HooksPath returns the ABSOLUTE path to this repo's hooks directory (PRD §9.20 FR-H1). It runs
