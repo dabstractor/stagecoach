@@ -9,7 +9,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
@@ -221,11 +223,12 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	var parseFail bool   // previous attempt failed parsing → prepend retryInstr next attempt
 	var lastCause error  // last Execute error (for RescueError.Cause)
 	var msg string       // the successful message (set on break)
+	var payload string   // hoisted: the last-built payload survives the loop for the FR-T1 gate (D1)
 	success := false
 
 	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
 		// Build user payload each attempt (rejection list / retry_instruction change).
-		payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
+		payload = prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}
@@ -285,9 +288,58 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		break // SUCCESS — accept the message
 	}
 	if !success {
-		return Result{}, &RescueError{
-			Kind: ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
-			Candidate: candidate, Cause: lastCause,
+		// FR-T1 multi-turn fallback trigger gate (PRD §9.24). Multi-turn activates ONLY when one-shot
+		// exhausted (already true here at !success — condition a) AND the captured payload exceeds one
+		// chunk (b) AND multi_turn_fallback is enabled (c) AND the resolved manifest declares
+		// session_mode="append" (d). If any condition fails, fall through to the existing rescue
+		// (byte-identical, FR-T7). The captured payload is passed UNCHANGED (FR-T12 — no token_limit
+		// re-truncation; D2). Finalize happens BEFORE dedupe (§9.7 judges the final subject; D3).
+		if cfg.MultiTurnFallback &&
+			git.EstimateTokens(payload) > cfg.MultiTurnChunkTokens &&
+			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
+
+			// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
+			// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
+			turns := len(chunkPayload(payload, cfg.MultiTurnChunkTokens)) + 1 // N chunks + 1 final turn
+			totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
+			if totalMin < 1 {
+				totalMin = 1
+			}
+			fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns, ~%dm total\n", turns, totalMin)
+
+			// FR-T11: verbose trigger line (per-turn verbose is emitted by provider.Execute inside Run).
+			deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")
+
+			// FR-T2/FR-T4: lossless N+1-turn delivery of the captured payload (FR-T12: NOT re-truncated).
+			msg2, ok2, cause := Run(ctx, deps, cfg, deps.Manifest, sysPrompt, payload, msgModel, msgReasoning)
+
+			if cause == nil && ok2 {
+				// Dedupe the multi-turn result. §9.7 judges the FINAL subject → finalize BEFORE dedupe
+				// (one-shot parity; avoids the template-duplicate-slip bug — D3).
+				finalMsg := FinalizeMessage(msg2, cfg)
+				signal.SetCandidate(finalMsg)
+				if !IsDuplicate(ExtractSubject(finalMsg), recent) {
+					msg = finalMsg
+					success = true // multi-turn succeeded → skip the rescue return
+				} else {
+					// Duplicate → rescue with the finalized candidate (one-shot parity: candidate = m post-finalize).
+					candidate = finalMsg
+				}
+			} else {
+				// cause != nil (turn error/timeout) OR ok2==false (final parse empty) → rescue.
+				if cause != nil {
+					lastCause = cause // the multi-turn failure supersedes one-shot's lastCause
+				}
+				if msg2 != "" {
+					candidate = msg2 // raw parse output (one-shot parse-fail parity: candidate = m raw)
+				}
+			}
+		}
+		if !success {
+			return Result{}, &RescueError{
+				Kind: ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
+				Candidate: candidate, Cause: lastCause,
+			}
 		}
 	}
 

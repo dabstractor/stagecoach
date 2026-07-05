@@ -15,6 +15,7 @@ import (
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
 	"github.com/dustin/stagehand/internal/ui"
 )
@@ -839,4 +840,123 @@ func TestCommitStaged_EditGate(t *testing.T) {
 			t.Errorf("HEAD moved from %s to %s — abort must NOT create a commit", headBefore, got)
 		}
 	})
+}
+
+// --- FR-T1 multi-turn fallback trigger gate tests (P1.M1.T3.S3) ---
+//
+// These focus on the wiring of the FR-T1 gate inside CommitStaged (PRD §9.24):
+// when ALL FOUR conditions hold (one-shot exhausted + payload>chunk +
+// multi_turn_fallback + session_mode="append"), CommitStaged transparently invokes
+// multiturn.Run and either commits the multi-turn message or falls through to the
+// EXISTING byte-identical rescue (FR-T7). The exhaustive 4-condition truth table +
+// token_limit non-interaction are P1.M1.T3.S4; the integration matrix is P1.M1.T4.
+
+// appendScriptManifest wraps stubtest.NewScript and sets SessionMode="append" so the
+// gate's condition (d) and RenderMultiTurn's own gate both pass. NewScript alone
+// leaves SessionMode unset (⇒ "" after Resolve).
+func appendScriptManifest(t *testing.T, bin string, responses []string) provider.Manifest {
+	t.Helper()
+	m := stubtest.NewScript(t, bin, responses)
+	appendMode := "append"
+	m.SessionMode = &appendMode
+	return m
+}
+
+// TestCommitStaged_MultiTurnFallbackSuccess: one-shot exhausts (call 1 = ""), the
+// FR-T1 gate fires (conditions a–d all hold), and the final multi-turn turn returns
+// "feat: multi-turn win" → committed. chunkTokens=4 keeps N bounded but > 1.
+func TestCommitStaged_MultiTurnFallbackSuccess(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hello world\n")
+	stageFile(t, repo, "new.txt")
+
+	m := appendScriptManifest(t, bin, []string{"", "ok", "ok", "feat: multi-turn win"})
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0  // one-shot: 1 attempt (the "")
+	cfg.MultiTurnChunkTokens = 4 // small enough that EstimateTokens(payload) > 4 (cond b); N bounded
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v (expected multi-turn success)", err)
+	}
+	if res.Subject != "feat: multi-turn win" {
+		t.Errorf("Subject = %q, want %q (the multi-turn final-turn message)", res.Subject, "feat: multi-turn win")
+	}
+	if got := headSHA(t, repo); got != res.CommitSHA {
+		t.Errorf("HEAD = %q, want %q (commit must land)", got, res.CommitSHA)
+	}
+}
+
+// TestCommitStaged_MultiTurnSkipped_NonAppend: SessionMode unset (⇒ "") ⇒ condition
+// (d) false ⇒ no multi-turn ⇒ the existing rescue fires byte-identically (FR-T7).
+func TestCommitStaged_MultiTurnSkipped_NonAppend(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	writeFile(t, repo, "new.txt", "hello world\n")
+	stageFile(t, repo, "new.txt")
+
+	// SessionMode unset (⇒ "") — NO append override. cond (b) would hold, but (d) fails.
+	m := stubtest.NewScript(t, bin, []string{""})
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0
+	cfg.MultiTurnChunkTokens = 4
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	var re *RescueError
+	if !errors.As(err, &re) || re.Kind != ErrRescue {
+		t.Fatalf("err = %v, want *RescueError{Kind:ErrRescue} (non-append ⇒ no multi-turn ⇒ rescue)", err)
+	}
+}
+
+// TestCommitStaged_MultiTurnSkipped_SmallPayload: default chunkTokens (32000) ⇒
+// EstimateTokens(payload) ≤ 32000 ⇒ condition (b) false ⇒ a small-payload one-shot
+// failure skips multi-turn (FR-T1b) ⇒ rescue.
+func TestCommitStaged_MultiTurnSkipped_SmallPayload(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "hi\n") // tiny diff
+	stageFile(t, repo, "new.txt")
+
+	appendMode := "append"
+	m := stubtest.NewScript(t, bin, []string{""})
+	m.SessionMode = &appendMode
+	cfg := config.Defaults() // MultiTurnChunkTokens=32000 (default) — cond (b) false for a tiny diff
+	cfg.MaxDuplicateRetries = 0
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	var re *RescueError
+	if !errors.As(err, &re) || re.Kind != ErrRescue {
+		t.Fatalf("err = %v, want *RescueError{Kind:ErrRescue} (small payload ⇒ no multi-turn ⇒ rescue)", err)
+	}
+}
+
+// TestCommitStaged_MultiTurnDuplicateRescue: multi-turn returns a message whose
+// subject matches HEAD's → duplicate → rescue carries the finalized Candidate (D3/D7).
+func TestCommitStaged_MultiTurnDuplicateRescue(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "feat: dup") // HEAD subject = "feat: dup"
+	writeFile(t, repo, "new.txt", "hello world\n")
+	stageFile(t, repo, "new.txt")
+
+	m := appendScriptManifest(t, bin, []string{"", "ok", "ok", "feat: dup"})
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0
+	cfg.MultiTurnChunkTokens = 4
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	var re *RescueError
+	if !errors.As(err, &re) || re.Kind != ErrRescue {
+		t.Fatalf("err = %v, want *RescueError{Kind:ErrRescue} (multi-turn duplicate ⇒ rescue)", err)
+	}
+	if !strings.Contains(re.Candidate, "feat: dup") {
+		t.Errorf("Candidate = %q, want it to contain %q", re.Candidate, "feat: dup")
+	}
 }
