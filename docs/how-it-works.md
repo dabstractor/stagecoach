@@ -67,11 +67,11 @@ Decompose activates when **nothing is staged**, **auto-stage-all is on** (the de
                  nothing staged + dirty working tree
                               │
                               ▼
-            ┌────────────┐   full working-tree diff (binary placeholders)
+            ┌────────────┐   T_start diff (binary placeholders)
             │  planner   │◀──── + style examples
             │ (bare)     │
             └─────┬──────┘   JSON: {count, single, commits:[…], message?}
-                  │ single? ──yes──▶ git add -A → CommitStaged (one call) → done
+                  │ single? ──yes──▶ commit T_start (planner's message) → done
                   ▼ no (N concepts)
          for i in 0..N-1:
             ┌────────────┐  concept[i] description        ┌────────────┐
@@ -125,7 +125,7 @@ The same snapshot-based safety invariants from the single-commit path apply to e
 - **Atomic and safe** — `update-ref CAS` is the only ref mutation per commit; stagehand owns all `commit-tree`, `update-ref`, and `push` operations. The stager is the ONE role that touches the index. Its scoping differs by provider: claude is structurally constrained to a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi is constrained instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. See [providers.md](providers.md#tooled-mode-and-the-stager-role).
 - **Frozen content** — `tree[i]` captures exactly what was staged at `write-tree` time. Nothing added afterward can affect it.
 - **No index resets** — the index accumulates across concepts. After the final commit, HEAD.tree == tree[N-1] == full accumulated index, so the index is clean relative to HEAD.
-- **Start-of-run freeze** — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. Each staging step is verified as a content-subset of T_start.
+- **Start-of-run freeze** — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. The stager is verified as a content-subset of T_start after each staging step (FR-M1c), and the arbiter — the third freeze surface — derives its gate, its diff, and every tree it commits strictly from T_start and tipTree, never a live re-read (FR-M1d).
 
 See [configuration.md](configuration.md) for per-role model configuration and [cli.md](cli.md) for the decompose and per-role flags.
 
