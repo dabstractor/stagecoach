@@ -58,6 +58,13 @@ type Manifest struct {
 	// --- sub-provider (§12.1) ---
 	ProviderFlag *string `toml:"provider_flag"`
 
+	// --- session continuation (multi-turn fallback, §9.24) ---
+	// "" (default): provider cannot append turns across one-shot calls → multi-turn fallback unavailable
+	//   for this provider (one-shot → rescue, unchanged). "append": re-invoking the same session id
+	//   appends a turn the model can recall (pi: `--session-id <id> ... -p`, repeated). REQUIRES a
+	//   verified append rendering (FR-T9); never set speculatively. nil => Resolve→"".
+	SessionMode *string `toml:"session_mode"`
+
 	// --- bare mode (§12.1) ---
 	BareFlags []string `toml:"bare_flags"` // appended verbatim; nil => none.
 
@@ -111,6 +118,11 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provider manifest %q: output %q must be one of raw|json", m.Name, *m.Output)
 		}
 	}
+	if m.SessionMode != nil {
+		if *m.SessionMode != "" && *m.SessionMode != "append" {
+			return fmt.Errorf("provider manifest %q: session_mode %q must be \"\" or \"append\"", m.Name, *m.SessionMode)
+		}
+	}
 	return nil
 }
 
@@ -161,6 +173,9 @@ func (m Manifest) Resolve() Manifest {
 	}
 	if out.ProviderFlag == nil {
 		out.ProviderFlag = strPtr("")
+	}
+	if out.SessionMode == nil {
+		out.SessionMode = strPtr("")
 	}
 
 	if out.Output == nil {

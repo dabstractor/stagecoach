@@ -291,6 +291,17 @@ func TestValidate_BadOutput_Errors(t *testing.T) {
 	}
 }
 
+func TestValidate_BadSessionMode_Errors(t *testing.T) {
+	m := Manifest{Name: "x", Command: strPtr("x"), SessionMode: strPtr("bogus")}
+	err := m.Validate()
+	if err == nil {
+		t.Fatal("Validate err = nil, want non-nil for bogus session_mode")
+	}
+	if !strings.Contains(err.Error(), "session_mode") {
+		t.Errorf("err = %v, want it to mention session_mode", err)
+	}
+}
+
 func TestValidate_NilEnumsAreOK(t *testing.T) {
 	m := Manifest{Name: "x", Command: strPtr("x")}
 	if err := m.Validate(); err != nil {
@@ -347,6 +358,9 @@ func TestResolve_AppliesDefaultsToNilOptionals(t *testing.T) {
 	if r.Experimental == nil || *r.Experimental != false {
 		t.Errorf("Experimental = %v, want non-nil *false (default non-experimental)", r.Experimental)
 	}
+	if r.SessionMode == nil || *r.SessionMode != "" {
+		t.Errorf("SessionMode = %v, want non-nil *\"\" (default no support)", r.SessionMode)
+	}
 }
 
 func TestResolve_PreservesExplicitValues(t *testing.T) {
@@ -356,6 +370,7 @@ func TestResolve_PreservesExplicitValues(t *testing.T) {
 		StripCodeFence: boolPtr(false), // explicit false — must NOT become the true default
 		Output:         strPtr("json"), // explicit json — must NOT become the raw default
 		Experimental:   boolPtr(true),  // explicit true — must survive Resolve
+		SessionMode:    strPtr("append"),
 	}
 	r := m.Resolve()
 
@@ -367,6 +382,9 @@ func TestResolve_PreservesExplicitValues(t *testing.T) {
 	}
 	if r.Experimental == nil || *r.Experimental != true {
 		t.Errorf("Experimental = %v, want non-nil *true (explicit value preserved)", r.Experimental)
+	}
+	if r.SessionMode == nil || *r.SessionMode != "append" {
+		t.Errorf("SessionMode = %v, want non-nil *\"append\" (explicit preserved)", r.SessionMode)
 	}
 }
 
