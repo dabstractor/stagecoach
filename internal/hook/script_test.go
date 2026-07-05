@@ -141,7 +141,7 @@ func TestHookScript_ConfigPathBaked_POSIX(t *testing.T) {
 			script := hookScript(tc.strict, tc.path)
 			f := filepath.Join(t.TempDir(), "prepare-commit-msg")
 			if err := os.WriteFile(f, []byte(script), ScriptMode); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
+				t.Fatalf("WriteFile failed: %v", err)
 			}
 			cmd := exec.Command(shPath, "-n", f)
 			if out, err := cmd.CombinedOutput(); err != nil {
