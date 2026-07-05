@@ -148,14 +148,16 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 
 	// Step F: resolve the message role (FR-H6 — exactly like the single-commit path).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
-	retryInstr := *deps.Manifest.Resolve().RetryInstruction
+	resolved := deps.Manifest.Resolve() // bound: the FR-T1 gate (P1.M3.T1.S2) reads resolved.SessionMode
+	retryInstr := *resolved.RetryInstruction
 
 	// Step G: generate→parse→dedupe loop (mirrors CommitStaged step 6).
 	var rejected []string
 	var parseFail bool
+	var payload string // hoisted: survives the loop for the FR-T1 multi-turn gate (P1.M3.T1.S2)
 
 	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
-		payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
+		payload = prompt.BuildUserPayload(diff, cfg.Context, rejected) // `=` (declared above), not `:=`
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload // FR29 corrective preamble
 		}
