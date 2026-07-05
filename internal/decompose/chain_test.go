@@ -76,9 +76,11 @@ func chnDeps(t *testing.T, repo string, msgManifest provider.Manifest) Deps {
 }
 
 // chnBuildChain builds a 3-commit chain (C0, C1, C2) with distinct files, returns the parallel
-// []CommitInfo + []ChainEntry arrays. Each commit carries a unique file so the tree is easy to reason
-// about. Leaves a leftover file "leftover.go" uncommitted in the working tree.
-func chnBuildChain(t *testing.T, repo string) ([]CommitInfo, []ChainEntry) {
+// []CommitInfo + []ChainEntry arrays PLUS the frozen tStart tree (tree2 + leftover.go) and the
+// leftoverPaths set (DiffTreeNames(tree2, tStart) == ["leftover.go"]). Each commit carries a unique
+// file so the tree is easy to reason about. Leaves a leftover file "leftover.go" staged into tStart
+// (the working tree is then restored to tree2 so the test's starting state is a clean index == tree2).
+func chnBuildChain(t *testing.T, repo string) (commits []CommitInfo, chainData []ChainEntry, tStart string, leftoverPaths []string) {
 	t.Helper()
 	// C0: commit c0.go
 	chnWriteFile(t, repo, "c0.go", "package c0\n")
@@ -107,17 +109,27 @@ func chnBuildChain(t *testing.T, repo string) ([]CommitInfo, []ChainEntry) {
 	// Create leftover (untracked, NOT staged/committed).
 	chnWriteFile(t, repo, "leftover.go", "package leftover\n")
 
-	commits := []CommitInfo{
+	// Build tStart = tree2 + leftover.go (the frozen working-tree-as-of-run-start). Stage leftover.go,
+	// capture write-tree as tStart, then read-tree tree2 to restore a clean index == tree2 (so the tests'
+	// starting state is unchanged: working tree holds untracked leftover.go, index == HEAD.tree == tree2).
+	chnStageFile(t, repo, "leftover.go")
+	tStart = chnRunGit(t, repo, "write-tree")
+	chnRunGit(t, repo, "read-tree", tree2)
+	chnRunGit(t, repo, "rm", "--cached", "--ignore-unmatch", "leftover.go")
+
+	leftoverPaths = []string{"leftover.go"}
+
+	commits = []CommitInfo{
 		{SHA: sha0, Subject: "feat: add c0", Files: nil},
 		{SHA: sha1, Subject: "feat: add c1", Files: nil},
 		{SHA: sha2, Subject: "feat: add c2", Files: nil},
 	}
-	chainData := []ChainEntry{
+	chainData = []ChainEntry{
 		{SHA: sha0, Tree: tree0, Message: msg0, Parent: ""}, // root — parent was pre-repo HEAD (empty)
 		{SHA: sha1, Tree: tree1, Message: msg1, Parent: sha0},
 		{SHA: sha2, Tree: tree2, Message: msg2, Parent: sha1},
 	}
-	return commits, chainData
+	return commits, chainData, tStart, leftoverPaths
 }
 
 // --- Tests ---
@@ -126,7 +138,7 @@ func TestResolveArbiter_NullNewCommit(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover"})
 	deps := chnDeps(t, repo, m)
@@ -134,7 +146,7 @@ func TestResolveArbiter_NullNewCommit(t *testing.T) {
 	N := len(chainData)
 	tipSHA := chainData[N-1].SHA
 
-	err := resolveArbiter(context.Background(), deps, nil, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, nil, commits, chainData, tStart, leftoverPaths)
 	if err != nil {
 		t.Fatalf("resolveArbiter(nil): %v", err)
 	}
@@ -175,7 +187,7 @@ func TestResolveArbiter_TipAmend(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	// Use a message manifest that returns something different to prove tip amend doesn't call it.
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "SHOULD NOT BE USED"})
@@ -188,7 +200,7 @@ func TestResolveArbiter_TipAmend(t *testing.T) {
 	tipParent := tip.Parent
 
 	target := tipSHA
-	err := resolveArbiter(context.Background(), deps, &target, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, &target, commits, chainData, tStart, leftoverPaths)
 	if err != nil {
 		t.Fatalf("resolveArbiter(&tipSHA): %v", err)
 	}
@@ -238,7 +250,7 @@ func TestResolveArbiter_MidChainRebuild(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "SHOULD NOT BE USED"})
 	deps := chnDeps(t, repo, m)
@@ -248,7 +260,7 @@ func TestResolveArbiter_MidChainRebuild(t *testing.T) {
 	sha0 := chainData[0].SHA
 
 	target := sha1
-	err := resolveArbiter(context.Background(), deps, &target, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, &target, commits, chainData, tStart, leftoverPaths)
 	if err != nil {
 		t.Fatalf("resolveArbiter(&sha1): %v", err)
 	}
@@ -314,14 +326,14 @@ func TestResolveArbiter_TargetNotFound(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover"})
 	deps := chnDeps(t, repo, m)
 
 	// Bogus SHA — should degrade to null (new commit path).
 	bogus := "0123456789abcdef0123456789abcdef01234567"
-	err := resolveArbiter(context.Background(), deps, &bogus, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, &bogus, commits, chainData, tStart, leftoverPaths)
 	if err != nil {
 		t.Fatalf("resolveArbiter(bogus): %v", err)
 	}
@@ -337,7 +349,7 @@ func TestResolveArbiter_CASFailure(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover"})
 	deps := chnDeps(t, repo, m)
@@ -360,7 +372,7 @@ func TestResolveArbiter_CASFailure(t *testing.T) {
 	chnCommitRaw(t, repo, "external: moved HEAD")
 	movedHEAD := chnHeadSHA(t, repo)
 
-	err := resolveArbiter(context.Background(), deps, nil, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, nil, commits, chainData, tStart, leftoverPaths)
 	if err == nil {
 		t.Fatal("resolveArbiter returned nil on CAS failure")
 	}
@@ -388,7 +400,7 @@ func TestResolveArbiter_RescueErrorPropagation(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	chnInitRepo(t, repo)
-	commits, chainData := chnBuildChain(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChain(t, repo)
 
 	// Stub that sleeps longer than the timeout → generateMessage times out.
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover", SleepMS: 2000})
@@ -398,7 +410,7 @@ func TestResolveArbiter_RescueErrorPropagation(t *testing.T) {
 	deps := chnDeps(t, repo, m)
 	deps.Config = cfg
 
-	err := resolveArbiter(context.Background(), deps, nil, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, nil, commits, chainData, tStart, leftoverPaths)
 	if err == nil {
 		t.Fatal("resolveArbiter returned nil on timeout")
 	}
@@ -412,75 +424,6 @@ func TestResolveArbiter_RescueErrorPropagation(t *testing.T) {
 	// ErrArbiterResolutionFailed should NOT be wrapping it.
 	if errors.Is(err, ErrArbiterResolutionFailed) {
 		t.Error("RescueError was wrapped in ErrArbiterResolutionFailed — should be propagated directly")
-	}
-}
-
-func TestLeftoverPaths(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		wantLen   int
-		wantPaths []string
-	}{
-		{
-			name:      "empty input",
-			input:     "",
-			wantLen:   0,
-			wantPaths: nil,
-		},
-		{
-			name:      "single modified",
-			input:     " M leftover.go",
-			wantLen:   1,
-			wantPaths: []string{"leftover.go"},
-		},
-		{
-			name:      "untracked",
-			input:     "?? newfile.go",
-			wantLen:   1,
-			wantPaths: []string{"newfile.go"},
-		},
-		{
-			name:      "deletion",
-			input:     " D gone.go",
-			wantLen:   1,
-			wantPaths: []string{"gone.go"},
-		},
-		{
-			name:      "multiple entries",
-			input:     " M a.go\n?? b.go\n D c.go",
-			wantLen:   3,
-			wantPaths: []string{"a.go", "b.go", "c.go"},
-		},
-		{
-			name:      "rename takes destination",
-			input:     "R100 old.go -> new.go",
-			wantLen:   1,
-			wantPaths: []string{"new.go"},
-		},
-		{
-			name:      "short lines skipped",
-			input:     "??\n M",
-			wantLen:   0,
-			wantPaths: nil,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := leftoverPaths(tc.input)
-			if len(got) != tc.wantLen {
-				t.Fatalf("len = %d, want %d; got %v", len(got), tc.wantLen, got)
-			}
-			for i, w := range tc.wantPaths {
-				if i >= len(got) {
-					break
-				}
-				if got[i] != w {
-					t.Errorf("paths[%d] = %q, want %q", i, got[i], w)
-				}
-			}
-		})
 	}
 }
 
@@ -533,6 +476,13 @@ func TestResolveArbiter_CleanTreePostcondition(t *testing.T) {
 	// Leftover.
 	chnWriteFile(t, repo, "leftover.go", "package leftover\n")
 
+	// Build tStart = tree1 + leftover.go (stage leftover → write-tree → restore clean index == tree1).
+	chnStageFile(t, repo, "leftover.go")
+	tStart := chnRunGit(t, repo, "write-tree")
+	chnRunGit(t, repo, "read-tree", tree1)
+	chnRunGit(t, repo, "rm", "--cached", "--ignore-unmatch", "leftover.go")
+	leftoverPaths := []string{"leftover.go"}
+
 	commits := []CommitInfo{
 		{SHA: sha0, Subject: "feat: add a", Files: nil},
 		{SHA: sha1, Subject: "feat: add b", Files: nil},
@@ -545,7 +495,7 @@ func TestResolveArbiter_CleanTreePostcondition(t *testing.T) {
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover"})
 	deps := chnDeps(t, repo, m)
 
-	err := resolveArbiter(context.Background(), deps, nil, commits, chainData)
+	err := resolveArbiter(context.Background(), deps, nil, commits, chainData, tStart, leftoverPaths)
 	if err != nil {
 		t.Fatalf("resolveArbiter: %v", err)
 	}

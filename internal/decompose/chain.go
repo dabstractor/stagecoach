@@ -33,10 +33,11 @@ type ChainEntry struct {
 // It is the RESOLUTION step (PRD §13.6.5 / FR-M10); runArbiter (P3.M3.T1.S1) only DECIDED.
 //
 // PRECONDITION (documented; the orchestrator guarantees): the per-concept loop made ≥1 commit;
-// HEAD.tree == index == tree[N-1] (the full accumulated index, clean); the WORKING TREE holds the
-// leftovers (StatusPorcelain != ""). The orchestrator already called runArbiter and passes its
-// ArbiterOutput.Target (nil ⇒ new; &sha ⇒ amend). commits []CommitInfo and chainData []ChainEntry are
-// PARALLEL (same length, order, SHAs).
+// HEAD.tree == index == tree[N-1] (the full accumulated index, clean). The orchestrator already called
+// runArbiter and passes its ArbiterOutput.Target (nil ⇒ new; &sha ⇒ amend). commits []CommitInfo and
+// chainData []ChainEntry are PARALLEL (same length, order, SHAs). tStart is the frozen working-tree-as-
+// of-run-start tree; leftoverPaths = DiffTreeNames(tipTree, tStart) is the frozen leftover set (the fold
+// set for the mid-chain path). FR-M1d: the gate/diff/staging are ALL frozen (no live StatusPorcelain/AddAll).
 //
 // Branching: target==nil || N==0 → resolveNewCommit. Else find idx where chainData[idx].SHA == *target;
 // not found (runArbiter should have nulled it — defensive) → resolveNewCommit. idx==N-1 → resolveTipAmend.
@@ -47,19 +48,19 @@ type ChainEntry struct {
 // UNCHANGED (refs move ONLY at the final UpdateRefCAS — §18.1). *generate.RescueError (null path) and
 // *generate.CASError (any CAS failure) propagate DIRECTLY (not wrapped); other infra failures wrap
 // ErrArbiterResolutionFailed.
-func resolveArbiter(ctx context.Context, deps Deps, target *string, commits []CommitInfo, chainData []ChainEntry) error {
+func resolveArbiter(ctx context.Context, deps Deps, target *string, commits []CommitInfo, chainData []ChainEntry, tStart string, leftoverPaths []string) error {
 	N := len(chainData)
 	if target == nil || N == 0 {
-		return resolveNewCommit(ctx, deps, commits, chainData)
+		return resolveNewCommit(ctx, deps, commits, chainData, tStart)
 	}
 	idx := findTargetIndex(*target, chainData)
 	if idx < 0 {
-		return resolveNewCommit(ctx, deps, commits, chainData) // not found → defensive null
+		return resolveNewCommit(ctx, deps, commits, chainData, tStart) // not found → defensive null
 	}
 	if idx == N-1 {
-		return resolveTipAmend(ctx, deps, chainData)
+		return resolveTipAmend(ctx, deps, chainData, tStart)
 	}
-	return resolveMidChain(ctx, deps, idx, chainData)
+	return resolveMidChain(ctx, deps, idx, chainData, tStart, leftoverPaths)
 }
 
 // findTargetIndex returns the index of sha in chainData, or -1 if absent.
@@ -72,10 +73,12 @@ func findTargetIndex(sha string, chainData []ChainEntry) int {
 	return -1
 }
 
-// resolveNewCommit (path A, null): AddAll → WriteTree → generateMessage → CommitTree → UpdateRefCAS.
-// Lands an (N+1)-th commit whose message is generated from the leftovers (concept diff = TreeDiff(tip,
-// treePrime) = exactly the leftovers). generateMessage (P3.M2.T4.S1) is REUSED — same package.
-func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry) error {
+// resolveNewCommit (path A, null): treePrime := tStart → generateMessage → CommitTree → UpdateRefCAS →
+// ReadTree(tStart). Lands an (N+1)-th commit whose tree == T_start (the frozen working-tree-as-of-
+// run-start). generateMessage (P3.M2.T4.S1) is REUSED — same package; its concept diff = TreeDiff(tipTree,
+// T_start) = exactly the frozen leftovers (FR-M10). FR-M1d: NO AddAll/WriteTree (those read the live
+// working tree); the index is synced to T_start via ReadTree after the CAS.
+func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry, tStart string) error {
 	N := len(chainData)
 	// tipSHA = current HEAD; tipTree = the base for the concept diff. On an empty run (N==0) this path
 	// is reached only defensively (the arbiter does not run on a clean tree) — treat HEAD as the base.
@@ -92,16 +95,9 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 		tipTree = tree
 	}
 
-	// 1. Stage all leftovers (index == tree[N-1] ⇒ AddAll stages ONLY the leftovers).
-	if err := deps.Git.AddAll(ctx); err != nil {
-		return fmt.Errorf("%w: add -A: %w", ErrArbiterResolutionFailed, err)
-	}
-	// 2. Snapshot the staged index.
-	treePrime, err := deps.Git.WriteTree(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: write-tree: %w", ErrArbiterResolutionFailed, err)
-	}
-	// 3. Generate the message from the leftover concept diff (generateMessage derives its own parent).
+	// 1. FR-M1d: treePrime := T_start (the frozen tree). NO AddAll/WriteTree — those read the live tree.
+	treePrime := tStart
+	// 2. Generate the message from the frozen leftover concept diff (tipTree → T_start).
 	treeA := tipTree
 	if treeA == "" {
 		treeA = git.EmptyTreeSHA // unborn base — generateMessage's TreeDiff treats it as a tree arg
@@ -110,7 +106,7 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if err != nil {
 		return err // *generate.RescueError — propagate DIRECTLY (not wrapped)
 	}
-	// 4. Commit (parent = tipSHA; root if tipSHA=="").
+	// 3. Commit (parent = tipSHA; root if tipSHA=="").
 	var parents []string
 	if tipSHA != "" {
 		parents = []string{tipSHA}
@@ -119,7 +115,7 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if err != nil {
 		return fmt.Errorf("%w: commit-tree: %w", ErrArbiterResolutionFailed, err)
 	}
-	// 5. CAS-advance HEAD (expected-old = tipSHA = CURRENT HEAD).
+	// 4. CAS-advance HEAD (expected-old = tipSHA = CURRENT HEAD).
 	expectedOld := tipSHA
 	if tipSHA == "" {
 		expectedOld = strings.Repeat("0", 40) // root commit on an unborn repo
@@ -127,25 +123,24 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		return handleUpdateRefErr(ctx, deps, treePrime, expectedOld, msg, err)
 	}
+	// 5. FR-M1d (3): sync the index to T_start so git status is clean (index == HEAD.tree == T_start).
+	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
+		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
+	}
 	return nil
 }
 
-// resolveTipAmend (path B, target==tip): AddAll → WriteTree → CommitTree(tree', [tipParent], tipMsg)
-// reusing the tip's message VERBATIM (NO regeneration) → UpdateRefCAS(expectedOld = tipSHA). A plumbing
-// amend — no `git commit --amend`. publishCommit is NOT used (its expectedOld=parentSHA is wrong: HEAD
-// currently == tipSHA, not tipParent).
-func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry) error {
+// resolveTipAmend (path B, target==tip): treePrime := tStart → CommitTree(tStart, [tipParent], tipMsg)
+// reusing the tip's message VERBATIM (NO regeneration) → UpdateRefCAS(expectedOld = tipSHA) →
+// ReadTree(tStart). A plumbing amend — no `git commit --amend`. publishCommit is NOT used (its
+// expectedOld=parentSHA is wrong: HEAD currently == tipSHA, not tipParent). FR-M1d: NO AddAll/WriteTree.
+func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry, tStart string) error {
 	N := len(chainData)
 	tip := chainData[N-1]
 	tipSHA, tipParent, tipMsg := tip.SHA, tip.Parent, tip.Message
 
-	if err := deps.Git.AddAll(ctx); err != nil {
-		return fmt.Errorf("%w: add -A: %w", ErrArbiterResolutionFailed, err)
-	}
-	treePrime, err := deps.Git.WriteTree(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: write-tree: %w", ErrArbiterResolutionFailed, err)
-	}
+	// FR-M1d: treePrime := T_start (the frozen tree). NO AddAll/WriteTree — those read the live tree.
+	treePrime := tStart
 	// Reuse the tip's message VERBATIM (no regeneration). Parent = tipParent (the amend); root if "".
 	var parents []string
 	if tipParent != "" {
@@ -163,52 +158,43 @@ func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry) err
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		return handleUpdateRefErr(ctx, deps, treePrime, expectedOld, tipMsg, err)
 	}
+	// FR-M1d (3): sync the index to T_start so git status is clean (index == HEAD.tree == T_start).
+	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
+		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
+	}
 	return nil
 }
 
 // resolveMidChain (path C, target==earlier commit[i], i<N-1): deterministic linear-chain rebuild.
-// NEVER interactive rebase; HEAD only; refs move ONLY at the final UpdateRefCAS.
+// NEVER interactive rebase; HEAD only; refs move ONLY at the final UpdateRefCAS. FR-M1d: the tree per j
+// is built via OverlayTreePaths (index/object-store-only; never touches the working tree) — NO
+// StatusPorcelain/ReadTree(tree[j])/Add/WriteTree (those read/staged the live working tree).
 //
-//  1. Capture leftoverPaths = parse(StatusPorcelain()) — MUST be BEFORE any ReadTree (G-STATUS-FIRST).
-//  2. rebuiltParent = chainData[i].Parent (for i>0 == chainData[i-1].SHA; for i==0 the pre-run HEAD / "").
-//  3. for j := i; j < N; j++:
-//     ReadTree(chainData[j].Tree)   // index = tree[j]
-//     Add(leftoverPaths)            // fold leftovers onto tree[j] → index = tree[j]+leftovers
-//     treePrime = WriteTree()
+//  1. rebuiltParent = chainData[i].Parent (for i>0 == chainData[i-1].SHA; for i==0 the pre-run HEAD / "").
+//  2. for j := i; j < N; j++:
+//     treePrime = OverlayTreePaths(tree[j], T_start, leftoverPaths)  // fold ONLY the leftover paths
+//     onto tree[j]; unchanged paths keep tree[j]'s blob. (FR-M10 mid-chain fold.)
 //     parent := rebuiltParent (or nil if rebuiltParent=="" for the root case at j==i==0)
 //     newSHA = CommitTree(treePrime, parent, chainData[j].Message)  // REUSE msg[j] verbatim
 //     rebuiltParent = newSHA
-//  4. UpdateRefCAS(HEAD, rebuiltParent, tipSHA)  // single atomic move; tipSHA = chainData[N-1].SHA
+//  3. UpdateRefCAS(HEAD, rebuiltParent, tipSHA)  // single atomic move; tipSHA = chainData[N-1].SHA
+//  4. ReadTree(tStart)  // sync the index to T_start (rebuilt tip == T_start by construction)
 //
 // The fold runs at EVERY j ∈ [i, N-1] (G-FOLD): trees are cumulative, so leftovers folded into commit[i]
 // must also appear in every subsequent rebuilt tree, else commit[i+1] reverts them (dirty tree).
-func resolveMidChain(ctx context.Context, deps Deps, i int, chainData []ChainEntry) error {
+// leftoverPaths (the param) is the frozen set DiffTreeNames(tipTree, T_start) threaded in from the gate.
+func resolveMidChain(ctx context.Context, deps Deps, i int, chainData []ChainEntry, tStart string, leftoverPaths []string) error {
 	N := len(chainData)
 	tipSHA := chainData[N-1].SHA
 
-	// 1. Capture leftover paths BEFORE any ReadTree (StatusPorcelain is index-relative).
-	status, err := deps.Git.StatusPorcelain(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: status: %w", ErrArbiterResolutionFailed, err)
-	}
-	paths := leftoverPaths(status)
-
-	// 2. Rebuild base.
+	// 1. Rebuild base.
 	rebuiltParent := chainData[i].Parent
 
-	// 3. Walk j = i..N-1, rebuilding each commit with leftovers folded in.
+	// 2. Walk j = i..N-1, rebuilding each commit with the leftovers folded in via OverlayTreePaths.
 	for j := i; j < N; j++ {
-		if err := deps.Git.ReadTree(ctx, chainData[j].Tree); err != nil {
-			return fmt.Errorf("%w: read-tree[%d]: %w", ErrArbiterResolutionFailed, j, err)
-		}
-		if len(paths) > 0 {
-			if err := deps.Git.Add(ctx, paths); err != nil { // fold (NOT AddAll — G-ADDALL)
-				return fmt.Errorf("%w: add[%d]: %w", ErrArbiterResolutionFailed, j, err)
-			}
-		}
-		treePrime, err := deps.Git.WriteTree(ctx)
+		treePrime, err := deps.Git.OverlayTreePaths(ctx, chainData[j].Tree, tStart, leftoverPaths)
 		if err != nil {
-			return fmt.Errorf("%w: write-tree[%d]: %w", ErrArbiterResolutionFailed, j, err)
+			return fmt.Errorf("%w: overlay-tree-paths[%d]: %w", ErrArbiterResolutionFailed, j, err)
 		}
 		var parents []string
 		if rebuiltParent != "" {
@@ -221,34 +207,15 @@ func resolveMidChain(ctx context.Context, deps Deps, i int, chainData []ChainEnt
 		rebuiltParent = newSHA
 	}
 
-	// 4. Single CAS move (expected-old = tipSHA = CURRENT HEAD).
+	// 3. Single CAS move (expected-old = tipSHA = CURRENT HEAD).
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", rebuiltParent, tipSHA); err != nil {
 		return handleUpdateRefErr(ctx, deps, "", tipSHA, "", err) // no single tree/msg for the rebuilt chain
 	}
-	return nil
-}
-
-// leftoverPaths parses `git status --porcelain` output into the leftover path set (mid-chain only).
-// Each non-empty line "XY <path>" → path = line[3:]; rename/copy "XY <orig> -> <dst>" → the part after
-// " -> " (destination). Lines shorter than 4 chars are skipped. core.quotepath (default on) C-quotes
-// non-ASCII paths — v1 ASSUMES ASCII (documented limitation). After the per-concept loop index ==
-// HEAD.tree, so ONLY leftovers (unstaged + untracked + deletions) appear — exactly the fold set.
-func leftoverPaths(status string) []string {
-	var paths []string
-	for _, line := range strings.Split(status, "\n") {
-		line = strings.TrimRight(line, " \t") // only strip trailing whitespace (leading space is index status)
-		if len(line) < 4 {                    // "XY <path>" minimum (2 status + 1 space + ≥1 path char)
-			continue
-		}
-		rest := line[3:] // skip "XY "
-		if idx := strings.Index(rest, " -> "); idx >= 0 {
-			rest = rest[idx+len(" -> "):] // rename/copy: take the destination
-		}
-		if rest != "" {
-			paths = append(paths, rest)
-		}
+	// 4. FR-M1d (3): sync the index to T_start (rebuilt tip == T_start) so git status is clean.
+	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
+		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
 	}
-	return paths
+	return nil
 }
 
 // handleUpdateRefErr centralizes the two UpdateRefCAS failure kinds: ErrCASFailed → *generate.CASError

@@ -211,27 +211,34 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 		return DecomposeResult{Commits: commits}, err
 	}
 
-	// (7)+(8) Arbiter gate: StatusPorcelain != "" → runArbiter → resolveArbiter.
-	// Happy path ONLY: the arbiter does NOT run on loop abort (rescue/CAS/hard error) — §18.3.
+	// (7)+(8) Arbiter gate: FR-M1d — gate on the FROZEN leftover set DiffTreeNames(tipTree, T_start),
+	// NOT a live StatusPorcelain read. A file written to the working tree AFTER T_start capture is
+	// invisible to this gate (it is not in T_start), so it can never trip the arbiter. tipTree = the
+	// last committed tree (HEAD.tree post-loop; == chainData[last].Tree). Happy path ONLY: the arbiter
+	// does NOT run on loop abort (rescue/CAS/hard error) — §18.3. The arbiter also does not run when the
+	// loop produced no commits (all concepts empty-skipped) — guard the tipTree derivation accordingly.
 	amended := 0
-	status, err := deps.Git.StatusPorcelain(ctx)
-	if err != nil {
-		return DecomposeResult{}, fmt.Errorf("%w: status: %w", ErrDecomposeFailed, err)
-	}
-	if status != "" && len(commits) > 0 {
-		// Build []CommitInfo from the loop's published commits (parallel to chainData).
-		arbiterCommits := buildArbiterCommits(ctx, deps, commits, isUnborn)
-		amended, err = runArbiterPhase(ctx, deps, arbiterCommits, chainData, tStart)
+	if len(commits) > 0 {
+		tipTree := chainData[len(chainData)-1].Tree
+		leftoverPaths, err := deps.Git.DiffTreeNames(ctx, tipTree, tStart)
 		if err != nil {
-			return DecomposeResult{}, err // resolveArbiter errors propagated (incl. *RescueError/*CASError)
+			return DecomposeResult{}, fmt.Errorf("%w: arbiter gate diff-names: %w", ErrDecomposeFailed, err)
 		}
-		// §G-RESULT gap closed: re-read the FINAL commits (post-arbiter) for accurate, resolvable SHAs.
-		finalCommits, rerr := rereadFinalCommits(ctx, deps, preRunHEAD, isUnborn)
-		if rerr != nil {
-			// Best-effort: the commits are already published. Log and keep the loop's pre-arbiter commits.
-			deps.Verbose.VerboseRawOutput(fmt.Sprintf("decompose: reread final commits failed (best-effort, keeping loop commits): %v", rerr))
-		} else {
-			commits = finalCommits
+		if len(leftoverPaths) > 0 {
+			// Build []CommitInfo from the loop's published commits (parallel to chainData).
+			arbiterCommits := buildArbiterCommits(ctx, deps, commits, isUnborn)
+			amended, err = runArbiterPhase(ctx, deps, arbiterCommits, chainData, tStart, leftoverPaths)
+			if err != nil {
+				return DecomposeResult{}, err // resolveArbiter errors propagated (incl. *RescueError/*CASError)
+			}
+			// §G-RESULT gap closed: re-read the FINAL commits (post-arbiter) for accurate, resolvable SHAs.
+			finalCommits, rerr := rereadFinalCommits(ctx, deps, preRunHEAD, isUnborn)
+			if rerr != nil {
+				// Best-effort: the commits are already published. Log and keep the loop's pre-arbiter commits.
+				deps.Verbose.VerboseRawOutput(fmt.Sprintf("decompose: reread final commits failed (best-effort, keeping loop commits): %v", rerr))
+			} else {
+				commits = finalCommits
+			}
 		}
 	}
 
@@ -600,7 +607,7 @@ func rereadFinalCommits(ctx context.Context, deps Deps, preRunHEAD string, isUnb
 	return out, nil
 }
 
-func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry, tStart string) (int, error) {
+func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chainData []ChainEntry, tStart string, leftoverPaths []string) (int, error) {
 	// FR3i prompt-reserve seam (P1.M4.T1.S2): measure the arbiter's worst-case prompt token count
 	// BEFORE the TreeDiff and thread it into opts.PromptReserveTokens. convertArbiterCommits is
 	// in-package (design §8) — gives the EXACT commits+headers overhead via the empty-diff trick.
@@ -635,7 +642,7 @@ func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chain
 
 	amended := computeAmended(out.Target, chainData) // BEFORE resolveArbiter (it doesn't return the count)
 
-	if err := resolveArbiter(ctx, deps, out.Target, commits, chainData); err != nil {
+	if err := resolveArbiter(ctx, deps, out.Target, commits, chainData, tStart, leftoverPaths); err != nil {
 		return 0, err // *RescueError / *CASError / ErrArbiterResolutionFailed — propagated
 	}
 	return amended, nil
