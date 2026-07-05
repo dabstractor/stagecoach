@@ -6,26 +6,77 @@ import (
 )
 
 // TestBuildStagerTask_CanonicalExact asserts the FULL assembled stager task prompt for a known
-// (title, description) is byte-for-byte the §17.6 rendering. Independently derived from PRD §17.6
-// (not from the implementation) so a match is meaningful. Pins the instruction, the blank-line
-// topology, and the guardrails block.
+// (title, description) is byte-for-byte the §17.6 rendering, in TWO cases: with a files list
+// (block PRESENT) and with nil files (block ABSENT — byte-identity minus the block segment).
+// Independently derived from PRD §17.6 (not from the implementation) so a match is meaningful.
+// Pins the instruction, the blank-line topology, the files block, and the guardrails block.
 func TestBuildStagerTask_CanonicalExact(t *testing.T) {
 	const title = "Refactor auth middleware"
 	const description = "Stage internal/auth/middleware.go and its callers in internal/api/."
 
-	const want = "Stage, but do NOT commit, all changes in this repository that match this concept:\n" +
-		"\n" +
-		"Refactor auth middleware\n" +
-		"Stage internal/auth/middleware.go and its callers in internal/api/.\n" +
-		"\n" +
-		"Use git to stage the relevant files and hunks (`git add <path>`, and for partial files apply\n" +
-		"only the relevant hunks via `git apply --cached`). Stage ONLY changes belonging to this\n" +
-		"concept; leave unrelated changes unstaged. Do not commit, do not amend, do not push, do not\n" +
-		"modify file contents — only update the index. When done, reply with the list of paths you\n" +
-		"staged and stop."
+	// The shared guardrails tail (verbatim §17.6 wording; em-dash U+2014 preserved).
+	const guardrails = "Use git to stage the relevant files and hunks (`git add <path>`, and for partial files apply\n" +
+		"only the relevant hunks via `git apply --cached`). Stage ONLY the changes the description\n" +
+		"assigns to this concept (the files above are where they live); leave everything else unstaged.\n" +
+		"Do not commit, do not amend, do not push, do not modify file contents — only update the index.\n" +
+		"When done, reply with the list of paths you staged and stop."
 
-	if got := BuildStagerTask(title, description); got != want {
-		t.Errorf("BuildStagerTask mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	// Case (a): files = []string{"a.go", "b.go"} — the files block is PRESENT.
+	t.Run("files present", func(t *testing.T) {
+		const want = "Stage, but do NOT commit, all changes in this repository that match this concept:\n" +
+			"\n" +
+			"Refactor auth middleware\n" +
+			"Stage internal/auth/middleware.go and its callers in internal/api/.\n" +
+			"\n" +
+			"Files for this concept (where these changes live):\n" +
+			"a.go\n" +
+			"b.go\n" +
+			"\n" +
+			guardrails
+
+		got := BuildStagerTask(title, description, []string{"a.go", "b.go"})
+		if got != want {
+			t.Errorf("BuildStagerTask with files mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+		}
+	})
+
+	// Case (b): files = nil — the files block is ABSENT (byte-identity to case (a) MINUS the block segment).
+	t.Run("files nil", func(t *testing.T) {
+		const want = "Stage, but do NOT commit, all changes in this repository that match this concept:\n" +
+			"\n" +
+			"Refactor auth middleware\n" +
+			"Stage internal/auth/middleware.go and its callers in internal/api/.\n" +
+			"\n" +
+			guardrails
+
+		got := BuildStagerTask(title, description, nil)
+		if got != want {
+			t.Errorf("BuildStagerTask nil-files mismatch:\n--- got ---\n%q\n--- want ---\n%q", got, want)
+		}
+	})
+}
+
+// TestBuildStagerTask_FilesBlock_OmittedWhenEmpty is the ⚠️§2 regression net: when files is nil OR an
+// empty slice, the files block AND its leading "\n\n" are BOTH omitted (no blank-line artifact), and
+// the two empty variants render byte-identically to each other AND to the legacy no-block shape.
+func TestBuildStagerTask_FilesBlock_OmittedWhenEmpty(t *testing.T) {
+	pNil := BuildStagerTask("T", "D", nil)
+	pEmpty := BuildStagerTask("T", "D", []string{})
+
+	if strings.Contains(pNil, "Files for this concept") {
+		t.Errorf("nil files must NOT contain the files block; got %q", pNil)
+	}
+	if strings.Contains(pEmpty, "Files for this concept") {
+		t.Errorf("empty-slice files must NOT contain the files block; got %q", pEmpty)
+	}
+	if pNil != pEmpty {
+		t.Errorf("nil and []string{} must render byte-identically;\nnil=%q\nempty=%q", pNil, pEmpty)
+	}
+
+	// Legacy no-block shape: NO stray "\n\n" before the guardrails.
+	legacy := stagerInstruction + "\n\n" + "T" + "\n" + "D" + "\n\n" + stagerGuardrails
+	if pNil != legacy {
+		t.Errorf("nil-files output must equal the legacy (no-block) shape;\ngot=%q\nwant=%q", pNil, legacy)
 	}
 }
 
@@ -36,7 +87,8 @@ func TestBuildStagerTask_CanonicalExact(t *testing.T) {
 func TestBuildStagerTask_Properties(t *testing.T) {
 	const title = "TTT"
 	const desc = "DDD"
-	p := BuildStagerTask(title, desc)
+	p := BuildStagerTask(title, desc, nil)
+	pFiles := BuildStagerTask(title, desc, []string{"a.go", "b.go"})
 
 	cases := []struct {
 		name      string
@@ -51,10 +103,10 @@ func TestBuildStagerTask_Properties(t *testing.T) {
 		{"guardrails: `git add <path>` backtick command present", "`git add <path>`", true},
 		{"guardrails: `git apply --cached` backtick command present", "`git apply --cached`", true},
 		{"guardrails: literal <path> token present", "<path>", true},
-		{"guardrails: Stage ONLY clause present", "Stage ONLY changes belonging to this\nconcept", true},
+		{"guardrails: Stage ONLY clause present (new §17.6 wording)", "Stage ONLY the changes the description\nassigns to this concept (the files above are where they live)", true},
 		{"guardrails: hard-guardrails clause present", "Do not commit, do not amend, do not push", true},
 		{"guardrails: 'only update the index' present", "only update the index", true},
-		{"guardrails: reply-with-paths instruction present", "reply with the list of paths you\nstaged and stop", true},
+		{"guardrails: reply-with-paths instruction present", "reply with the list of paths you staged and stop", true},
 
 		// Anti-copy-paste: §17.1 mature elements ABSENT.
 		{"anti-copy-paste: §17.1 'commit message generator' ABSENT", "You are a commit message generator", false},
@@ -89,6 +141,20 @@ func TestBuildStagerTask_Properties(t *testing.T) {
 		}
 	})
 
+	// Files block: header PRESENT (with files).
+	t.Run("files-header PRESENT (with files)", func(t *testing.T) {
+		if !strings.Contains(pFiles, "Files for this concept (where these changes live):") {
+			t.Errorf("files-header missing in files-present variant; got %q", pFiles)
+		}
+	})
+
+	// Files block: per-path rendering PRESENT (with files).
+	t.Run("per-path rendering PRESENT (with files)", func(t *testing.T) {
+		if !strings.Contains(pFiles, "a.go\nb.go") {
+			t.Errorf("per-path rendering missing in files-present variant; got %q", pFiles)
+		}
+	})
+
 	// Title interpolated, in order before description.
 	t.Run("title interpolated before description", func(t *testing.T) {
 		i := strings.Index(p, title)
@@ -117,7 +183,7 @@ func TestBuildStagerTask_Properties(t *testing.T) {
 	// Title is verbatim (symbols/spaces survive).
 	t.Run("title verbatim (symbols/spaces survive)", func(t *testing.T) {
 		weirdTitle := "feat(api): add [x] & y"
-		p := BuildStagerTask(weirdTitle, "desc")
+		p := BuildStagerTask(weirdTitle, "desc", nil)
 		if !strings.Contains(p, weirdTitle) {
 			t.Errorf("weird title %q not found verbatim in prompt", weirdTitle)
 		}
@@ -126,7 +192,7 @@ func TestBuildStagerTask_Properties(t *testing.T) {
 	// Multi-line description: internal newlines survive.
 	t.Run("multi-line description: internal newlines survive", func(t *testing.T) {
 		multiDesc := "line1\nline2"
-		p := BuildStagerTask("title", multiDesc)
+		p := BuildStagerTask("title", multiDesc, nil)
 		if !strings.Contains(p, "line1\nline2") {
 			t.Errorf("multi-line description internal newlines not preserved; got %q", near(p, "line1"))
 		}
@@ -156,7 +222,7 @@ func TestBuildStagerTask_EdgeCases(t *testing.T) {
 				t.Fatalf("BuildStagerTask(\"\", \"desc\") panicked: %v", r)
 			}
 		}()
-		p := BuildStagerTask("", "desc")
+		p := BuildStagerTask("", "desc", nil)
 		if !strings.HasPrefix(p, stagerInstruction) {
 			t.Error("empty-title output must still start with the instruction")
 		}
@@ -171,7 +237,7 @@ func TestBuildStagerTask_EdgeCases(t *testing.T) {
 				t.Fatalf("BuildStagerTask(\"title\", \"\") panicked: %v", r)
 			}
 		}()
-		p := BuildStagerTask("title", "")
+		p := BuildStagerTask("title", "", nil)
 		if !strings.HasPrefix(p, stagerInstruction) {
 			t.Error("empty-description output must still start with the instruction")
 		}
@@ -186,7 +252,7 @@ func TestBuildStagerTask_EdgeCases(t *testing.T) {
 				t.Fatalf("BuildStagerTask(\"\", \"\") panicked: %v", r)
 			}
 		}()
-		p := BuildStagerTask("", "")
+		p := BuildStagerTask("", "", nil)
 		if !strings.HasPrefix(p, stagerInstruction) {
 			t.Error("both-empty output must still start with the instruction")
 		}

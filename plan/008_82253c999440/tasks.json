@@ -133,14 +133,14 @@
       "type": "Phase",
       "id": "P2",
       "title": "Planner files + soft target + mode-conditional prompt (FR-M3/M3b/M4)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Make the planner's partition machine-actionable and count-aware. The planner JSON now carries per-concept files[]; a deterministic non-fatal coverage check logs unclaimed paths (the arbiter reconciles them); the count is guided by a soft max_commits/2 target with a mode-conditional rules block (auto-decompose leans toward SEVERAL; forced-count has its own rules). The stager receives the concept's files block. All work is inside internal/prompt + internal/decompose; no new config keys/CLI flags (soft target is derived from existing max_commits; files is automatic in the JSON).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P2.M1",
           "title": "PlannerCommit.Files + coverage check + mode-conditional prompt + stager files block",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Three tasks: (T1) the PlannerCommit.Files data field + parse round-trip + the FR-M3b deterministic coverage check (logs, never errors); (T2) the mode-conditional planner system prompt (split shared opener/framing/JSON-contract + swappable auto vs forced-count rules blocks + soft-target interpolation) with the Mode A doc edit; (T3) the stager BuildStagerTask files block + updated guardrails wording.",
           "tasks": [
             {
@@ -229,14 +229,14 @@
               "type": "Task",
               "id": "P2.M1.T3",
               "title": "Stager files block + updated guardrails wording",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The stager (PRD §17.6) now receives the concept's files list as a 'Files for this concept (where these changes live):' block (omitted when empty), and the guardrails wording is updated to reference it. files is guidance (where to look), not a hard constraint (FR-M1c stays the content guarantee).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T3.S1",
                   "title": "BuildStagerTask files param + files block (omit when empty) + guardrails wording + stager.go call-site + tests",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -280,7 +280,7 @@
                   "type": "Subtask",
                   "id": "P3.M1.T1.S1",
                   "title": "README.md: surface v2.2 decompose improvements in the feature list",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1",

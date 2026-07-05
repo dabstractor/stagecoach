@@ -96,7 +96,7 @@ func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) 
 	_, mdl, rsn := config.ResolveRoleModel("stager", deps.Config)
 
 	// 2. Build the §17.6 stager task from the concept's title + description.
-	task := prompt.BuildStagerTask(concept.Title, concept.Description)
+	task := prompt.BuildStagerTask(concept.Title, concept.Description, concept.Files)
 
 	// v3 FR-R5b: the inference provider is the model slash-prefix ("inference/model"),
 	// which Render splits into --provider <inference>. P1.M2 wires real per-role reasoning
