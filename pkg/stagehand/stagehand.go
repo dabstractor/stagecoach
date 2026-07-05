@@ -542,9 +542,88 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		break
 	}
 	if !success {
-		return Result{}, &generate.RescueError{
-			Kind: generate.ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
-			Candidate: candidate, Cause: lastCause,
+		// ---- FR-T1 multi-turn fallback trigger gate (PRD §9.24) — ported from CommitStaged (generate.go:290-374). ----
+		// Multi-turn activates ONLY when one-shot exhausted (already true here at !success — condition a)
+		// AND multi_turn_fallback is enabled (c) AND the resolved manifest declares session_mode="append"
+		// (d). Condition (b) (payload exceeds one chunk) is evaluated below. If any condition fails, fall
+		// through to the existing byte-identical rescue (FR-T7).
+		//
+		// FR-T12 (PRD §9.24): multi-turn deliberately IGNORES token_limit — the whole point is lossless
+		// delivery of a payload that exceeded what one request could carry. When token_limit is set
+		// (non-zero) it truncated the one-shot `diff`/`payload` above; for the multi-turn path we
+		// RE-CAPTURE the diff with TokenLimit=0 and rebuild the payload from the UNTRUNCATED diff.
+		if cfg.MultiTurnFallback &&
+			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
+
+			// FR-T2/Issue4: mtPayload is ALWAYS rebuilt from the untruncated `diff` via BuildUserPayload
+			// (NOT reused from the one-shot `payload`, which may carry the retryInstr corrective preamble
+			// from a failed parse — multi-turn has its own priming preamble, FR-T4). When token_limit is
+			// set (non-zero), the one-shot `diff` was truncated, so we RE-CAPTURE with TokenLimit=0 below
+			// and rebuild from the untruncated fullDiff. When token_limit is unset (0), `diff` is already
+			// untruncated, so we rebuild from it directly (avoids a redundant StagedDiff call).
+			mtPayload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
+			if cfg.TokenLimit != 0 { // FR-T12: re-capture with TokenLimit=0
+				fullDiff, derr := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
+					MaxDiffBytes:        cfg.MaxDiffBytes,
+					MaxMDLines:          cfg.MaxMdLines,
+					BinaryExtensions:    cfg.BinaryExtensions,
+					Excludes:            deps.Excludes,
+					TokenLimit:          0, // FR-T12: multi-turn ignores token_limit
+					DiffContext:         cfg.DiffContextValue(),
+					PromptReserveTokens: 0, // multi-turn chunking doesn't use the one-shot reserve
+				})
+				if derr == nil {
+					mtPayload = prompt.BuildUserPayload(fullDiff, cfg.Context, rejected)
+				}
+				// On re-capture error, fall back to the one-shot payload (best-effort).
+			}
+
+			// Condition (b): the (now-untruncated) payload must exceed one chunk for multi-turn to help.
+			if git.EstimateTokens(mtPayload) > cfg.MultiTurnChunkTokens {
+				// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
+				// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
+				turns := generate.ChunkCount(mtPayload, cfg.MultiTurnChunkTokens) + 1 // N chunks + 1 final turn
+				totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
+				if totalMin < 1 {
+					totalMin = 1
+				}
+				fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total\n",
+					turns, cfg.MultiTurnChunkTokens, totalMin) // Issue 3 format (per-chunk token estimate)
+
+				// FR-T11: verbose trigger line (per-turn verbose is emitted by provider.Execute inside Run).
+				deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")
+
+				// FR-T2/FR-T4: lossless N+1-turn delivery of the UNTRUNCATED payload (FR-T12).
+				msg2, ok2, cause := generate.Run(ctx, deps, cfg, deps.Manifest, sysPrompt, mtPayload, msgModel, msgReasoning)
+
+				if cause == nil && ok2 {
+					// Dedupe the multi-turn result. §9.7 judges the FINAL subject → finalize BEFORE dedupe
+					// (one-shot parity; avoids the template-duplicate-slip bug — D3).
+					finalMsg := generate.FinalizeMessage(msg2, cfg)
+					signal.SetCandidate(finalMsg)
+					if !generate.IsDuplicate(generate.ExtractSubject(finalMsg), recent) {
+						msg = finalMsg
+						success = true // multi-turn won → skip the rescue return
+					} else {
+						// Duplicate → rescue with the finalized candidate (one-shot parity: candidate = m post-finalize).
+						candidate = finalMsg
+					}
+				} else {
+					// cause != nil (turn error/timeout) OR ok2==false (final parse empty) → rescue.
+					if cause != nil {
+						lastCause = cause // the multi-turn failure supersedes one-shot's lastCause
+					}
+					if msg2 != "" {
+						candidate = msg2 // raw parse output (one-shot parse-fail parity: candidate = m raw)
+					}
+				}
+			}
+		}
+		if !success {
+			return Result{}, &generate.RescueError{
+				Kind: generate.ErrRescue, TreeSHA: treeSHA, ParentSHA: parentSHA,
+				Candidate: candidate, Cause: lastCause,
+			}
 		}
 	}
 

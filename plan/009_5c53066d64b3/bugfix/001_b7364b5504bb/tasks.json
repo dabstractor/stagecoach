@@ -89,14 +89,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Major Fix — Dry-Run Path Multi-Turn Propagation (Issue 1)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Propagate the FR-T1 multi-turn trigger gate (now corrected in M1) into runPipeline in pkg/stagehand/stagehand.go. This is the MAJOR bug: when stagehand --dry-run is run on a large diff whose one-shot generation exhausts, multi-turn should activate identically to the commit path (FR49 requires --dry-run to 'run the full pipeline'). Currently runPipeline has its own pre-multi-turn generation loop with zero multi-turn references, so --dry-run fails where the commit path succeeds.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Wire FR-T1 multi-turn gate into runPipeline",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Hoist the loop-scoped payload variable to function scope (structural prerequisite), then insert the FR-T1 multi-turn trigger gate between the loop's exhaustion point and the RescueError return — mirroring the corrected CommitStaged gate from M1. The gate copies the Issue 4 fix (rebuild mtPayload from diff) and Issue 3 fix (per-chunk token estimate in progress line) since it copies from the corrected reference.",
               "subtasks": [
                 {
@@ -116,7 +116,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Insert FR-T1 multi-turn trigger gate into runPipeline with dedupe and verbose",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -139,21 +139,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Minor Fix — Hook Exec Multi-Turn Propagation (Issue 2)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Propagate the FR-T1 multi-turn gate (corrected in M1) into hook.Run in internal/hook/exec.go. The hook exec path has its own generation loop with zero multi-turn references. On a large diff, the one-shot loop exhausts, the hook exits 0 (FR-H5 never-block), and the user gets an empty editor. Propagate the gate while preserving FR-H5: multi-turn failure still exits 0 with the msg-file untouched.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Wire FR-T1 multi-turn gate into hook.Run preserving FR-H5",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Bind the resolved manifest (for SessionMode), hoist the payload variable, and insert the FR-T1 gate between the loop's exhaustion point and the exhaustion error return. On multi-turn success, call WriteMessageFile (the only write site). On any failure (cause != nil, parse empty, or duplicate), fall through to the existing exhaustion error, which the cmd layer maps to exit 0 (neverBlock). FR-H5 is preserved: the msg-file is written ONLY on success.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Bind resolved manifest and hoist payload in hook.Run loop",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 0.5,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/009_5c53066d64b3/bugfix/001_b7364b5504bb/architecture/research_hook_exec.md §2 (the loop), §4 (variables in scope), §5 (CommitStaged vs hook diff), and resolution_strategy.md (ISSUE 2, Edit 1 + Edit 2 + Edit 3). The hook loop is at internal/hook/exec.go:157-205. Line 151: `retryInstr := *deps.Manifest.Resolve().RetryInstruction` — the resolved manifest is created inline and discarded (only RetryInstruction is extracted). The gate needs resolved.SessionMode, so the manifest must be bound to a variable. Line 158: `payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)` — loop-scoped with `:=`, must be hoisted.\n2. INPUT: No external data dependency. The existing line 151 (inline Resolve) and lines 154-155 (var rejected/parseFail block) and line 158 (loop-scoped payload).\n3. LOGIC: (a) Replace line 151 `retryInstr := *deps.Manifest.Resolve().RetryInstruction` with two lines: `resolved := deps.Manifest.Resolve()` then `retryInstr := *resolved.RetryInstruction`. (b) Add `var payload string // hoisted: survives the loop for the FR-T1 gate` after line 155 (after `var parseFail bool`). (c) Change line 158 from `payload := prompt.BuildUserPayload(diff, cfg.Context, rejected)` to `payload = prompt.BuildUserPayload(diff, cfg.Context, rejected)` (switch `:=` to `=`). Run `go vet` and `go build ./...` to verify no shadowing. Run existing hook tests (`go test ./internal/hook/...`) to confirm no behavioral change.\n4. OUTPUT: The resolved manifest bound to a variable and payload hoisted to function scope in hook.Run, available for the FR-T1 gate. Consumed by P1.M3.T1.S2.\n5. DOCS: none — pure refactor (variable binding + scoping), no user-facing/config/API surface change.",
@@ -166,7 +166,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Insert FR-T1 multi-turn gate into hook.Run preserving FR-H5 never-block",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",

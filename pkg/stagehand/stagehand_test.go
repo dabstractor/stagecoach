@@ -3,6 +3,7 @@ package stagehand
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -1293,6 +1294,82 @@ func TestBuildDeps_MessageProviderOverride(t *testing.T) {
 	}
 }
 
+// stageLargeDiff writes a ~60-line staged file (≈ 600 tokens) into dir so EstimateTokens(payload) ≫
+// MultiTurnChunkTokens (cond b true). Mirrors generate_multiturn_test.go's big.txt builder.
+func stageLargeDiff(t *testing.T, dir string) {
+	t.Helper()
+	var b strings.Builder
+	for i := 0; i < 60; i++ {
+		fmt.Fprintf(&b, "line %02d: padding content for a large diff\n", i)
+	}
+	writeFile(t, dir, "big.txt", b.String())
+	stageFile(t, dir, "big.txt")
+}
+
+// appendMultiTurnConfig returns a config.Config wired for the FR-T1 multi-turn dry-run tests. The stub
+// provider is registered in script (call-varying) mode with session_mode="append" (cond d); cfg carries
+// MultiTurnFallback=true (cond c) and MaxDuplicateRetries=0 (so the one-shot runs EXACTLY once and
+// exhausts on "", forcing the FR-T1 gate). chunkTokens sets cfg.MultiTurnChunkTokens (cond b threshold).
+// When sessionMode="" the provider is left NON-append (cond d false) for the skip test.
+//
+// This mirrors internal/generate's appendScriptManifest (direct manifest) at the pkg/stagehand boundary:
+// here the config flows through GenerateCommit → config.Load (skipped via Options.Config) → registry, and
+// the registry-built stub manifest supports multi-turn because RenderMultiTurn is a method on
+// provider.Manifest (render.go:203) and SessionMode is a TOML/config field (manifest.go:66).
+func appendMultiTurnConfig(t *testing.T, bin, script, counter string, sessionMode string, chunkTokens int) config.Config {
+	t.Helper()
+	cfg := config.Defaults()
+	cfg.Provider = "stub"
+	cfg.MaxDuplicateRetries = 0 // exactly 1 one-shot call ⇒ exhaust on "", then multi-turn fires
+	cfg.MultiTurnFallback = true
+	if chunkTokens > 0 {
+		cfg.MultiTurnChunkTokens = chunkTokens // tiny ⇒ N≥2 (cond b true for a large diff)
+	}
+	providerEntry := map[string]any{
+		"command":          bin,
+		"prompt_delivery":  "stdin",
+		"output":           "raw",
+		"strip_code_fence": true,
+		"env": map[string]any{
+			"STAGEHAND_STUB_SCRIPT":  script,
+			"STAGEHAND_STUB_COUNTER": counter,
+		},
+	}
+	if sessionMode != "" {
+		providerEntry["session_mode"] = sessionMode // "append" ⇒ cond (d) true
+	}
+	cfg.Providers = map[string]map[string]any{"stub": providerEntry}
+	return cfg
+}
+
+// setupScriptedStubRepo builds a temp git repo with one initial commit (headSubject), chdirs into it,
+// and returns (repoDir, bin, scriptPath, counterPath) wired for call-varying stub responses. The test
+// builds its own config.Config via appendMultiTurnConfig and passes it via Options.Config.
+func setupScriptedStubRepo(t *testing.T, headSubject string, responses []string) (string, string, string, string) {
+	t.Helper()
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	aux := t.TempDir()
+	script := aux + "/script.txt"
+	if err := os.WriteFile(script, []byte(strings.Join(responses, "\n")), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	counter := aux + "/counter"
+
+	initRepo(t, repo)
+	commitRaw(t, repo, headSubject)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir %s: %v", repo, err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+	return repo, bin, script, counter
+}
+
 // TestBuildDeps_NoMessageOverride_InheritsGlobal proves the back-compatible path: with no
 // message-role provider override, buildDeps selects the global provider manifest.
 func TestBuildDeps_NoMessageOverride_InheritsGlobal(t *testing.T) {
@@ -1310,5 +1387,127 @@ func TestBuildDeps_NoMessageOverride_InheritsGlobal(t *testing.T) {
 	}
 	if deps.Manifest.Name != "alpha" {
 		t.Errorf("no-override regression: Manifest.Name = %q, want %q (global)", deps.Manifest.Name, "alpha")
+	}
+}
+
+// --- FR-T1 multi-turn dry-run tests (P1.M2.T1.S2) — Issue 1 fix ---
+//
+// These mirror internal/generate/generate_multiturn_test.go + generate_multiturn_failure_test.go at
+// the pkg/stagehand (runPipeline / DryRun) boundary. The central fix (Issue 1, FR49): `stagehand
+// --dry-run` on a large diff with an append-mode provider now activates multi-turn (previously it
+// rescued — exit 1 — where the commit path succeeded via multi-turn).
+
+// TestGenerateCommit_DryRun_MultiTurnSuccess proves Issue 1 is fixed: a DryRun on a large diff whose
+// one-shot generation exhausts activates the FR-T1 multi-turn fallback, produces a message, and returns
+// it WITHOUT committing (CommitSHA == ""). Before S2 this path rescued (exit 1).
+//
+// Setup: scripted-append repo (session_mode="append" + multi_turn_chunk_tokens=4); a ~60-line staged
+// diff (≈600 tokens ≫ 4 ⇒ cond b true, N≥2). Script responses: one-shot returns "" (exhausts), then
+// the multi-turn turns return "ok"/"ok" priming, and the final turn returns the message.
+func TestGenerateCommit_DryRun_MultiTurnSuccess(t *testing.T) {
+	// Script: call 0 = "" (one-shot parse-fail ⇒ exhaust ⇒ gate fires); calls 1..N-1 = "ok" priming;
+	// the FINAL call is clamped-to-last ⇒ turn N+1 emits "feat: multi-turn result".
+	repoDir, bin, script, counter := setupScriptedStubRepo(t, "initial",
+		[]string{"", "ok", "ok", "feat: multi-turn result"})
+	stageLargeDiff(t, repoDir)
+	cfg := appendMultiTurnConfig(t, bin, script, counter, "append", 4)
+
+	ctx := context.Background()
+	res, err := GenerateCommit(ctx, Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err != nil {
+		t.Fatalf("GenerateCommit DryRun: %v (want nil — multi-turn should win, Issue 1 fix)", err)
+	}
+	if res.CommitSHA != "" {
+		t.Errorf("CommitSHA = %q, want \"\" (dry-run must not commit)", res.CommitSHA)
+	}
+	if res.Subject != "feat: multi-turn result" {
+		t.Errorf("Subject = %q, want %q (the multi-turn final-turn message)", res.Subject, "feat: multi-turn result")
+	}
+	if res.Message == "" {
+		t.Error("Message empty — multi-turn message did not land")
+	}
+}
+
+// TestGenerateCommit_DryRun_MultiTurnSkipped_NonAppend proves cond (d) gating: with a NON-append
+// provider (session_mode unset), the gate is skipped even on a large diff, and the byte-identical
+// rescue fires (FR-T7).
+func TestGenerateCommit_DryRun_MultiTurnSkipped_NonAppend(t *testing.T) {
+	// session_mode="" ⇒ cond (d) false. Large diff + chunkTokens=4 ⇒ cond (b) true; cond (d) is the
+	// ONLY failing condition.
+	repoDir, bin, script, counter := setupScriptedStubRepo(t, "initial", []string{""})
+	stageLargeDiff(t, repoDir)
+	cfg := appendMultiTurnConfig(t, bin, script, counter, "", 4)
+
+	ctx := context.Background()
+	_, err := GenerateCommit(ctx, Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err == nil {
+		t.Fatal("expected error (non-append ⇒ no multi-turn ⇒ rescue), got nil")
+	}
+	var re *RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %v, want *RescueError (non-append ⇒ no multi-turn ⇒ rescue)", err)
+	}
+	if re.Kind != ErrRescue {
+		t.Errorf("re.Kind = %v, want ErrRescue", re.Kind)
+	}
+}
+
+// TestGenerateCommit_DryRun_MultiTurnSmallPayloadSkip proves cond (b) gating: with an append-mode
+// provider but a TINY diff (EstimateTokens(payload) ≤ MultiTurnChunkTokens), the gate is skipped and
+// the byte-identical rescue fires.
+func TestGenerateCommit_DryRun_MultiTurnSmallPayloadSkip(t *testing.T) {
+	// chunkTokens=0 ⇒ appendMultiTurnConfig leaves cfg.MultiTurnChunkTokens at its 32000 default.
+	// A 1-line diff ⇒ EstimateTokens ≪ 32000 ⇒ cond (b) false.
+	repoDir, bin, script, counter := setupScriptedStubRepo(t, "initial", []string{""})
+	writeFile(t, repoDir, "tiny.txt", "hi\n") // tiny diff ⇒ cond (b) false
+	stageFile(t, repoDir, "tiny.txt")
+	cfg := appendMultiTurnConfig(t, bin, script, counter, "append", 0)
+
+	ctx := context.Background()
+	_, err := GenerateCommit(ctx, Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err == nil {
+		t.Fatal("expected error (small payload ⇒ no multi-turn ⇒ rescue), got nil")
+	}
+	var re *RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %v, want *RescueError (small payload ⇒ no multi-turn ⇒ rescue)", err)
+	}
+	if re.Kind != ErrRescue {
+		t.Errorf("re.Kind = %v, want ErrRescue", re.Kind)
+	}
+}
+
+// TestGenerateCommit_DryRun_MultiTurnMidTurnFailure proves FR-T7: any multi-turn turn failure → rescue.
+// Mechanism (mirrors generate_multiturn_failure_test.go): global STAGEHAND_STUB_EXIT=1 ⇒ the one-shot
+// exits 1 but its stdout is "" (script[0]) ⇒ parse-fail ⇒ exhaust ⇒ gate fires ⇒ Run's turn 1 exits 1
+// ⇒ Run aborts ⇒ byte-identical rescue.
+func TestGenerateCommit_DryRun_MultiTurnMidTurnFailure(t *testing.T) {
+	repoDir, bin, script, counter := setupScriptedStubRepo(t, "initial",
+		[]string{"", "ok", "ok", "feat: unreachable"})
+	stageLargeDiff(t, repoDir)
+	cfg := appendMultiTurnConfig(t, bin, script, counter, "append", 4)
+	// Global exit-1 ⇒ every stub call exits non-zero. The one-shot's exit-1 is swallowed (non-zero-exit
+	// branch falls through to ParseOutput("") ⇒ ok=false ⇒ exhaust); Run's turn-1 exit-1 ⇒ Run aborts
+	// (FR-T7) ⇒ rescue.
+	cfg.Providers["stub"]["env"] = map[string]any{
+		"STAGEHAND_STUB_SCRIPT":  script,
+		"STAGEHAND_STUB_COUNTER": counter,
+		"STAGEHAND_STUB_EXIT":    "1",
+	}
+
+	ctx := context.Background()
+	_, err := GenerateCommit(ctx, Options{Config: &cfg, Provider: "stub", DryRun: true})
+	if err == nil {
+		t.Fatal("expected error (mid-turn failure ⇒ rescue), got nil")
+	}
+	var re *RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %v, want *RescueError (FR-T7: turn failure ⇒ rescue)", err)
+	}
+	if re.Kind != ErrRescue {
+		t.Errorf("re.Kind = %v, want ErrRescue (FR-T7 byte-identical rescue)", re.Kind)
+	}
+	if re.Cause == nil {
+		t.Errorf("Cause = nil, want the wrapped *exec.ExitError from the failed multi-turn turn (FR-T7)")
 	}
 }
