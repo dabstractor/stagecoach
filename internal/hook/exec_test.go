@@ -12,6 +12,7 @@ import (
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/stubtest"
 	"github.com/dustin/stagehand/internal/ui"
 )
@@ -310,5 +311,140 @@ func TestRun_NoPlumbing(t *testing.T) {
 				t.Errorf("exec.go:%d: forbidden reference %q in: %s", i+1, f, trimmed)
 			}
 		}
+	}
+}
+
+// appendScriptManifest builds an append-mode (SessionMode="append") scripted stub manifest: the stub
+// emits `responses` sequentially across calls (one-shot + multi-turn turns). Replicates generate's
+// appendScriptManifest (internal/generate/generate_test.go:857) — it is NOT exported, so the hook test
+// needs its own copy. Use for the multi-turn success/small-payload tests.
+func appendScriptManifest(t *testing.T, bin string, responses []string) provider.Manifest {
+	t.Helper()
+	m := stubtest.NewScript(t, bin, responses)
+	appendMode := "append"
+	m.SessionMode = &appendMode
+	return m
+}
+
+// TestRun_MultiTurnSuccess_WritesMessageFile: one-shot exhausts (call 1 = ""), the FR-T1 gate fires
+// (conditions a–d hold), generate.Run consumes the scripted turns, and the final returns the message →
+// WriteMessageFile writes it. chunkTokens=4 keeps N bounded but > 1 while the multi-line diff exceeds it.
+func TestRun_MultiTurnSuccess_WritesMessageFile(t *testing.T) {
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+	// A diff large enough to exceed MultiTurnChunkTokens=4 (the diff body — diff --git/+++/@@/+lines — is
+	// well over 4 tokens even for one file, as in generate's TestCommitStaged_MultiTurnFallbackSuccess).
+	mustWriteFile(t, filepath.Join(repoDir, "big.go"), []byte(strings.Repeat("// line\n", 20)))
+	runGit(t, repoDir, "add", "big.go")
+
+	// script[0]="" ⇒ one-shot parse-fail ⇒ exhaust (MaxDuplicateRetries=0 ⇒ 1 attempt). Then multi-turn
+	// consumes ["ok","ok","feat: multi-turn win"] across its turns; the final returns the message.
+	m := appendScriptManifest(t, stubBin, []string{"", "ok", "ok", "feat: multi-turn win"})
+	cfg := config.Config{
+		Timeout:              10 * time.Second,
+		MaxDuplicateRetries:  0, // one-shot: 1 attempt (the "")
+		MultiTurnFallback:    true,
+		MultiTurnChunkTokens: 4, // low ⇒ the diff exceeds one chunk ⇒ condition (b) true
+		TokenLimit:           0,
+	}
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	mustWriteFile(t, msgFile, []byte("# original comments\n"))
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err != nil {
+		t.Fatalf("expected multi-turn success (nil err), got: %v", err)
+	}
+	data, _ := os.ReadFile(msgFile)
+	if !strings.HasPrefix(string(data), "feat: multi-turn win") {
+		t.Errorf("msg-file should start with the generated message; got:\n%s", string(data))
+	}
+}
+
+// TestRun_MultiTurnFailure_NeverBlock: an append-mode EXIT-1 stub — one-shot exhausts (exit 1), the
+// gate fires, generate.Run fails (turn exit 1 → cause!=nil) → fall through → exhaustion error; the
+// msg-file is BYTE-IDENTICAL to its pre-Run content (FR-H5).
+func TestRun_MultiTurnFailure_NeverBlock(t *testing.T) {
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+	mustWriteFile(t, filepath.Join(repoDir, "big.go"), []byte(strings.Repeat("// line\n", 20)))
+	runGit(t, repoDir, "add", "big.go")
+
+	// stubtest.Manifest (single-response, exits 1) + manually set SessionMode="append" so the gate fires.
+	m := stubtest.Manifest(stubBin, stubtest.Options{Exit: 1, Out: ""})
+	appendMode := "append"
+	m.SessionMode = &appendMode
+	cfg := config.Config{
+		Timeout:              10 * time.Second,
+		MaxDuplicateRetries:  0,
+		MultiTurnFallback:    true,
+		MultiTurnChunkTokens: 4,
+	}
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	orig := "# original comments\n"
+	mustWriteFile(t, msgFile, []byte(orig))
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err == nil {
+		t.Fatal("expected exhaustion error (multi-turn failed), got nil")
+	}
+	if !strings.Contains(err.Error(), "hook generation failed") {
+		t.Errorf("expected the exhaustion error, got: %v", err)
+	}
+	data, _ := os.ReadFile(msgFile)
+	if string(data) != orig {
+		t.Errorf("FR-H5 violated: msg-file modified on multi-turn failure; got:\n%s", string(data))
+	}
+}
+
+// TestRun_MultiTurnSkipped_NonAppend: stubtest.NewScript ⇒ SessionMode nil (NOT append) ⇒ the gate's
+// outer if (condition d) is false ⇒ skip → existing exhaustion error.
+func TestRun_MultiTurnSkipped_NonAppend(t *testing.T) {
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+	mustWriteFile(t, filepath.Join(repoDir, "big.go"), []byte(strings.Repeat("// line\n", 20)))
+	runGit(t, repoDir, "add", "big.go")
+
+	// RAW NewScript ⇒ SessionMode nil (NOT append) ⇒ condition (d) false ⇒ gate skips.
+	m := stubtest.NewScript(t, stubBin, []string{""})
+	cfg := config.Config{
+		Timeout:              10 * time.Second,
+		MaxDuplicateRetries:  0,
+		MultiTurnFallback:    true,
+		MultiTurnChunkTokens: 4,
+	}
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	mustWriteFile(t, msgFile, []byte("# original comments\n"))
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err == nil || !strings.Contains(err.Error(), "hook generation failed") {
+		t.Errorf("expected the exhaustion error (non-append skip), got: %v", err)
+	}
+}
+
+// TestRun_MultiTurnSmallPayloadSkip: an append provider but a TINY diff + huge chunkTokens ⇒ condition
+// (b) (EstimateTokens(payload) > chunkTokens) is false ⇒ skip → exhaustion error.
+func TestRun_MultiTurnSmallPayloadSkip(t *testing.T) {
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+	mustWriteFile(t, filepath.Join(repoDir, "tiny.txt"), []byte("x\n")) // a 1-char change ⇒ tiny payload
+	runGit(t, repoDir, "add", "tiny.txt")
+
+	m := appendScriptManifest(t, stubBin, []string{""}) // SessionMode="append" (cond d true)
+	cfg := config.Config{
+		Timeout:              10 * time.Second,
+		MaxDuplicateRetries:  0,
+		MultiTurnFallback:    true,
+		MultiTurnChunkTokens: 100000, // huge ⇒ EstimateTokens(payload) ≤ chunkTokens ⇒ cond (b) false
+	}
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	mustWriteFile(t, msgFile, []byte("# original comments\n"))
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err == nil || !strings.Contains(err.Error(), "hook generation failed") {
+		t.Errorf("expected the exhaustion error (small-payload skip), got: %v", err)
 	}
 }

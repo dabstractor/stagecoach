@@ -139,14 +139,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Minor Fix — Hook Exec Multi-Turn Propagation (Issue 2)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Propagate the FR-T1 multi-turn gate (corrected in M1) into hook.Run in internal/hook/exec.go. The hook exec path has its own generation loop with zero multi-turn references. On a large diff, the one-shot loop exhausts, the hook exits 0 (FR-H5 never-block), and the user gets an empty editor. Propagate the gate while preserving FR-H5: multi-turn failure still exits 0 with the msg-file untouched.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Wire FR-T1 multi-turn gate into hook.Run preserving FR-H5",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Bind the resolved manifest (for SessionMode), hoist the payload variable, and insert the FR-T1 gate between the loop's exhaustion point and the exhaustion error return. On multi-turn success, call WriteMessageFile (the only write site). On any failure (cause != nil, parse empty, or duplicate), fall through to the existing exhaustion error, which the cmd layer maps to exit 0 (neverBlock). FR-H5 is preserved: the msg-file is written ONLY on success.",
               "subtasks": [
                 {
@@ -166,7 +166,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Insert FR-T1 multi-turn gate into hook.Run preserving FR-H5 never-block",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -203,7 +203,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Update docs/how-it-works.md hook-mode and multi-turn sections",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S2",

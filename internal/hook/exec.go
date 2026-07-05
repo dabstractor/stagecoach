@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/generate"
@@ -203,6 +204,66 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 		return WriteMessageFile(msgFile, m)
 	}
 
-	// Step G: exhaustion after bounded retries.
+	// FR-T1 multi-turn fallback (PRD §9.24). The one-shot loop above exhausted; if the provider is
+	// multi-turn-capable (append session mode) and the untruncated payload exceeds one chunk, retry as a
+	// lossless N+1-turn session. On success the message is written to the msg-file (the ONLY write site);
+	// on ANY failure (turn error, empty final parse, or duplicate subject) fall through to the exhaustion
+	// error below — the cmd layer's neverBlock maps that to exit 0 + an untouched msg-file (FR-H5 always).
+	// Mirrors the canonical gate in internal/generate/generate.go (CommitStaged), with hook adaptations:
+	// generate.ChunkCount (exported), generate.Run (exported), nil-guarded Verbose, WriteMessageFile-on-
+	// success / fall-through-on-failure, NO signal/rescue.
+	if cfg.MultiTurnFallback &&
+		resolved.SessionMode != nil && *resolved.SessionMode == "append" {
+
+		// FR-T2/FR-T12 (Issue 4): mtPayload is ALWAYS rebuilt from the untruncated `diff` (NOT reused from
+		// the one-shot `payload`, which may carry the retryInstr corrective preamble from a failed parse).
+		// When token_limit is set (non-zero) the one-shot `diff` was truncated → RE-CAPTURE with TokenLimit=0.
+		mtPayload := prompt.BuildUserPayload(diff, cfg.Context, rejected)
+		if cfg.TokenLimit != 0 {
+			fullDiff, derr := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
+				MaxDiffBytes:        cfg.MaxDiffBytes,
+				MaxMDLines:          cfg.MaxMdLines,
+				BinaryExtensions:    cfg.BinaryExtensions,
+				Excludes:            deps.Excludes,
+				TokenLimit:          0, // FR-T12: multi-turn ignores token_limit
+				DiffContext:         cfg.DiffContextValue(),
+				PromptReserveTokens: 0, // multi-turn chunking doesn't use the one-shot reserve
+			})
+			if derr == nil {
+				mtPayload = prompt.BuildUserPayload(fullDiff, cfg.Context, rejected)
+			}
+			// On re-capture error, fall back to the (possibly-truncated) one-shot diff's payload (best-effort).
+		}
+
+		// Condition (b): the (now-untruncated) payload must exceed one chunk for multi-turn to help.
+		if git.EstimateTokens(mtPayload) > cfg.MultiTurnChunkTokens {
+			turns := generate.ChunkCount(mtPayload, cfg.MultiTurnChunkTokens) + 1 // N chunks + 1 final turn
+			totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
+			if totalMin < 1 {
+				totalMin = 1
+			}
+			fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total\n",
+				turns, cfg.MultiTurnChunkTokens, totalMin)
+
+			// FR-T11 verbose trigger line (per-turn verbose is emitted inside generate.Run).
+			if deps.Verbose != nil { // hook nil-guard (CommitStaged assumes non-nil; the hook does not)
+				deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")
+			}
+
+			// FR-T2/FR-T4: lossless N+1-turn delivery of the UNTRUNCATED payload (FR-T12).
+			msg2, ok2, cause := generate.Run(ctx, deps, cfg, deps.Manifest, sysPrompt, mtPayload, msgModel, msgReasoning)
+
+			if cause == nil && ok2 {
+				finalMsg := generate.FinalizeMessage(msg2, cfg)
+				if !generate.IsDuplicate(generate.ExtractSubject(finalMsg), recent) {
+					return WriteMessageFile(msgFile, finalMsg) // SUCCESS — the ONLY write site (FR-H4)
+				}
+				// Duplicate subject → fall through to exhaustion (FR-H5: exit 0, msg-file untouched).
+			}
+			// cause != nil (turn error/timeout) OR ok2==false (final parse empty) OR duplicate → fall through.
+		}
+	}
+
+	// Step G: exhaustion after bounded retries (also the FR-T1 gate's fall-through on any failure).
 	return fmt.Errorf("stagehand: hook generation failed after %d retries", cfg.MaxDuplicateRetries)
 }
