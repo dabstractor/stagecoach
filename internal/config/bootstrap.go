@@ -284,7 +284,13 @@ const generationCommented = `
 # ---------------------------------------------------------------------------
 # [generation] — diff capture & output tuning (PRD §16.2)
 # ---------------------------------------------------------------------------
-# [generation]
+# The [generation] header below is intentionally UNCOMMENTED (while every key stays
+# commented). Reason: in TOML a key attaches to the most-recent active table header, so
+# if this header were commented, a user uncommenting a single key (e.g. token_limit)
+# would silently drop it under the WRONG table ([role.arbiter]) and it would be ignored.
+# Keeping the header active means uncommenting any one key lands it in the right place.
+# An all-commented-keys section is an inert empty table — built-in defaults still apply.
+[generation]
 # max_diff_bytes        = 300000  # byte cap on the non-markdown diff section; ignored when token_limit is set (FR3d)
 # max_md_lines          = 100     # per-file line cap for markdown diffs; ignored when token_limit is set (FR3d)
 # token_limit           = 0       # holistic token budget for the WHOLE payload (prompt+examples+diff); 0 = unset ⇒ use the legacy caps above. Set to your model's context window, e.g. 120000, so the payload always fits without a per-model registry (FR3d)
