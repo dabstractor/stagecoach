@@ -478,6 +478,127 @@ func TestRender_ReasoningTooledMode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// RenderMultiTurn tests (S3 — multi-turn fallback renderer, PRD §9.24 FR-T6 / FR-T8 / FR-T9)
+// ---------------------------------------------------------------------------
+
+// mtPiManifest is a pi-shape Manifest literal with SessionMode="append" (the gate-passing capability).
+// S3's unit tests set SessionMode directly in a literal — they are code-independent of S2 (merge) / S4
+// (the shipped pi builtin value).
+func mtPiManifest() Manifest {
+	return Manifest{
+		Name:             "pi",
+		Command:          strPtr("pi"),
+		ProviderFlag:     strPtr("--provider"),
+		ModelFlag:        strPtr("--model"),
+		SystemPromptFlag: strPtr("--system-prompt"),
+		PrintFlag:        strPtr("-p"),
+		PromptDelivery:   strPtr("stdin"),
+		SessionMode:      strPtr("append"),
+		BareFlags:        []string{"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session"},
+	}
+}
+
+// TestRenderMultiTurn_PiTurn1_Golden is the byte-for-byte FR-T9 pin: --no-session dropped, --session-id
+// <id> added (before -p), --system-prompt <sys> present on turn 1, Stdin = payload only.
+func TestRenderMultiTurn_PiTurn1_Golden(t *testing.T) {
+	spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagehand-test", 1)
+	if err != nil {
+		t.Fatalf("RenderMultiTurn: %v", err)
+	}
+	wantArgs := []string{
+		"--provider", "zai", "--model", "glm-5.2",
+		"--system-prompt", "<sys>",
+		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files",
+		// NOTE: "--no-session" is ABSENT (filtered).
+		"--session-id", "stagehand-test",
+		"-p", // print_flag LAST
+	}
+	if spec.Command != "pi" {
+		t.Errorf("Command = %q, want "+"\"pi\"", spec.Command)
+	}
+	if !reflect.DeepEqual(spec.Args, wantArgs) {
+		t.Errorf("turn1 Args =\n got %v\nwant %v", spec.Args, wantArgs)
+	}
+	if spec.Stdin != "<payload>" {
+		t.Errorf("turn1 Stdin = %q, want <payload>", spec.Stdin)
+	}
+	// Belt + suspenders on the FR-T6 swap.
+	if !containsToken(spec.Args, "--session-id") {
+		t.Errorf("--session-id missing: %v", spec.Args)
+	}
+	if containsToken(spec.Args, "--no-session") {
+		t.Errorf("--no-session present: %v", spec.Args)
+	}
+}
+
+// TestRenderMultiTurn_PiTurn2_NoSysPromptFlag_NoPrepend proves turn>1 ⇒ no --system-prompt flag AND no
+// sys prepend — even though sysPrompt is passed non-empty. The single turnSys local makes both guards
+// turn-correct; this is the load-bearing turn-1-only assertion.
+func TestRenderMultiTurn_PiTurn2_NoSysPromptFlag_NoPrepend(t *testing.T) {
+	spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagehand-test", 2)
+	if err != nil {
+		t.Fatalf("RenderMultiTurn: %v", err)
+	}
+	wantArgs := []string{
+		"--provider", "zai", "--model", "glm-5.2",
+		// NOTE: NO "--system-prompt","<sys>" (turn>1 ⇒ turnSys="" ⇒ flag suppressed).
+		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files",
+		"--session-id", "stagehand-test",
+		"-p",
+	}
+	if !reflect.DeepEqual(spec.Args, wantArgs) {
+		t.Errorf("turn2 Args =\n got %v\nwant %v", spec.Args, wantArgs)
+	}
+	if containsToken(spec.Args, "--system-prompt") {
+		t.Errorf("turn2 leaked --system-prompt: %v", spec.Args)
+	}
+	if spec.Stdin != "<payload>" {
+		t.Errorf("turn2 Stdin = %q, want <payload> (no prepend)", spec.Stdin)
+	}
+}
+
+// TestRenderMultiTurn_NonAppendProviderErrors proves the capability gate fires for a provider whose
+// SessionMode is not "append" (nil → Resolve defaults to "" → gate fires).
+func TestRenderMultiTurn_NonAppendProviderErrors(t *testing.T) {
+	m := Manifest{
+		Name:             "pi",
+		Command:          strPtr("pi"),
+		ProviderFlag:     strPtr("--provider"),
+		ModelFlag:        strPtr("--model"),
+		SystemPromptFlag: strPtr("--system-prompt"),
+		PrintFlag:        strPtr("-p"),
+		PromptDelivery:   strPtr("stdin"),
+		SessionMode:      strPtr(""), // explicit "" (non-append) — gate must fire
+		BareFlags:        []string{"--no-session"},
+	}
+	spec, err := m.RenderMultiTurn("zai/glm-5.2", "<sys>", "<p>", "", "id", 1)
+	if err == nil {
+		t.Fatal("want error for non-append provider, got nil")
+	}
+	if !strings.Contains(err.Error(), "session_mode") {
+		t.Errorf("error message missing expected text: %v", err)
+	}
+	if spec != nil {
+		t.Errorf("spec = %v, want nil on error", spec)
+	}
+}
+
+// TestRenderMultiTurn_DoesNotMutateManifest proves the filtered session-flags block builds a FRESH slice
+// (did not assign into / re-slice r.BareFlags). m.BareFlags must still contain "--no-session" after the
+// call.
+func TestRenderMultiTurn_DoesNotMutateManifest(t *testing.T) {
+	m := mtPiManifest()
+	wantBare := append([]string(nil), m.BareFlags...)
+	_, _ = m.RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagehand-test", 1)
+	if !reflect.DeepEqual(m.BareFlags, wantBare) {
+		t.Errorf("BareFlags mutated:\n got %v\nwant %v", m.BareFlags, wantBare)
+	}
+	if !containsToken(m.BareFlags, "--no-session") {
+		t.Errorf("m.BareFlags should still contain --no-session: %v", m.BareFlags)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

@@ -181,3 +181,111 @@ func (m Manifest) Render(model, sysPrompt, userPayload, reasoning string, mode .
 
 	return spec, nil
 }
+
+// RenderMultiTurn renders ONE turn of the multi-turn generation fallback (PRD §9.24 FR-T6) against an
+// existing session id. It is a SIBLING of Render (not a RenderMode): the variadic `mode ...RenderMode`
+// carries no place for a session id, so widening Render (24+ call sites) or adding a mode value is
+// rejected (research-provider.md §2 Option B). Render and every existing caller stay byte-for-byte
+// unchanged.
+//
+// The argv is §12.2 with three multi-turn deltas (FR-T6, verified for pi 2026-07-05 — see
+// architecture/fr-t9-verification.md):
+//  1. capability gate (FR-T8/T9): errors unless *r.SessionMode == "append";
+//  2. turn-1-only system prompt (FR-T6): the session carries it after turn 1 — a `turnSys` local
+//     (= sysPrompt iff turn==1 else "") keys BOTH the flag-emission guard and the prepend-fallback guard;
+//  3. session-flags block (FR-T6): BareFlags MINUS the exact "--no-session" token, PLUS "--session-id",
+//     sessionID (a FRESH slice — r.BareFlags is never mutated).
+//
+// print_flag stays LAST; the payload+delivery switch + Env are identical to Render. On turns > 1 no
+// system_prompt_flag is emitted AND the payload is not prepended with sys. `--continue`/`-c` is NEVER used
+// (FR-T6: incompatible with `--session-id`). Like Render, this performs NO spawning — os.Environ() for Env
+// is the sole side effect. P1.M1.T3.S2 calls this once per turn (N+1 calls).
+func (m Manifest) RenderMultiTurn(model, sysPrompt, userPayload, reasoning, sessionID string, turn int) (*CmdSpec, error) {
+	if err := m.Validate(); err != nil {
+		return nil, fmt.Errorf("provider render %q: %w", m.Name, err)
+	}
+	r := m.Resolve()
+
+	// FR-T8/T9 capability gate: only an "append"-capable provider may multi-turn. Resolve guarantees
+	// *r.SessionMode is non-nil (S1 default ""), so the deref is safe.
+	if *r.SessionMode != "append" {
+		return nil, fmt.Errorf("provider %q: multi-turn render requires session_mode=\"append\"", m.Name)
+	}
+
+	modelToUse := model
+	if modelToUse == "" {
+		modelToUse = *r.DefaultModel
+	}
+
+	// FR-T6 turn-1-only system prompt: one local keys both the flag guard and the prepend guard.
+	turnSys := sysPrompt
+	if turn != 1 {
+		turnSys = ""
+	}
+
+	args := make([]string, 0, 16)
+	args = append(args, r.Subcommand...)
+
+	if *r.ProviderFlag != "" && modelToUse != "" {
+		if i := strings.Index(modelToUse, "/"); i >= 0 {
+			args = append(args, *r.ProviderFlag, modelToUse[:i])
+			modelToUse = modelToUse[i+1:]
+		} else {
+			return nil, fmt.Errorf(
+				"provider render %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"",
+				m.Name, modelToUse, m.Name)
+		}
+	}
+	if *r.ModelFlag != "" && modelToUse != "" {
+		args = append(args, *r.ModelFlag, modelToUse)
+	}
+
+	if reasoning != "" && len(r.ReasoningLevels[reasoning]) > 0 {
+		args = append(args, r.ReasoningLevels[reasoning]...)
+	}
+
+	if *r.SystemPromptFlag != "" && turnSys != "" {
+		args = append(args, *r.SystemPromptFlag, turnSys)
+	}
+
+	// FR-T6 session-flags block: BareFlags MINUS "--no-session", PLUS "--session-id", sessionID.
+	// Fresh slice — never mutate r.BareFlags (it may alias the caller's underlying array).
+	sessionArgs := make([]string, 0, len(r.BareFlags)+2)
+	for _, f := range r.BareFlags {
+		if f == "--no-session" {
+			continue
+		}
+		sessionArgs = append(sessionArgs, f)
+	}
+	sessionArgs = append(sessionArgs, "--session-id", sessionID)
+	args = append(args, sessionArgs...)
+
+	if *r.PrintFlag != "" {
+		args = append(args, *r.PrintFlag) // LAST per §12.2
+	}
+
+	payload := userPayload
+	if *r.SystemPromptFlag == "" && turnSys != "" {
+		payload = turnSys + "\n\n" + userPayload
+	}
+
+	spec := &CmdSpec{Command: *r.Command, Args: args}
+	switch *r.PromptDelivery {
+	case "stdin":
+		spec.Stdin = payload
+	case "positional":
+		spec.Args = append(spec.Args, payload)
+	case "flag":
+		spec.Args = append(spec.Args, *r.PromptFlag, payload)
+	default:
+		return nil, fmt.Errorf("provider render %q: unsupported prompt_delivery %q", m.Name, *r.PromptDelivery)
+	}
+
+	env := os.Environ()
+	for k, v := range r.Env {
+		env = append(env, k+"="+v)
+	}
+	spec.Env = env
+
+	return spec, nil
+}
