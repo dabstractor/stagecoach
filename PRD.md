@@ -357,7 +357,7 @@ Each requirement has an ID (FR-n), a priority (P0 = must for v1, P1 = should for
 
 ### 9.13 Verbosity & color (P1)
 
-- **FR50.** `--verbose` / `-v` / `STAGEHAND_VERBOSE=1` — print the resolved provider command, the raw agent stdout, and each retry attempt to stderr.
+- **FR50.** `--verbose` / `-v` / `STAGEHAND_VERBOSE=1` — print, per generation attempt to stderr: the resolved provider command; the **payload size** being delivered (byte count + a `chars/4` token estimate — the size only, never the contents; see §19); the raw agent **stdout**; the raw agent **stderr**; and each retry attempt with its reason. Stderr is surfaced because providers (pi, opencode, …) emit their real failure diagnostics — upstream errors, rate-limit notices, context-length rejections — to **stderr**, not stdout, and a request the model rejects returns **empty stdout**; without stderr such a failure presents only as an unexplained "no valid commit message," with the actual reason captured-then-discarded. (The provider executor captures `cmd.Stderr` into a separate buffer on every invocation; `--verbose` emits it alongside the stdout it already logged.) The payload size exposes whether the token-limit gate (§9.1 FR3d) actually ran — a silently-ignored `token_limit` (e.g. a key in the wrong TOML section) is otherwise indistinguishable from a working one.
 - **FR51.** Color output when stdout is a TTY; disable with `--no-color` or `NO_COLOR`. Progress messages go to stderr so stdout stays clean for piping.
 - **FR51b. Progress label shows the resolved model and provider.** The `↳ Generating…` / `↳ Decomposing…` progress line (stderr, FR51) names the resolved model invocation: `<Verb> with <model> in <provider>…`. The model string already carries the inference provider where relevant (FR-R5b), so no special formatting is needed — e.g. `Generating with sonnet in claude…`, `Generating with zai/glm-5.2 in pi…`, `Decomposing with anthropic/claude-sonnet-4 in opencode…`. When `model` is empty (the provider's own default), show `<provider>` alone. On the single-commit path the role is `message`; for decompose the label surfaces the **planner** role's resolved config, and `--verbose` prints all four roles (planner/stager/message/arbiter).
 
@@ -369,8 +369,9 @@ Each requirement has an ID (FR-n), a priority (P0 = must for v1, P1 = should for
 - **FR-M1d. Arbiter freeze parity (the concurrency invariant, completed).** FR-M1b names the planner, the stager, the one-file/single shortcuts, and "the arbiter's leftover staging" as drawing strictly from `T_start`; FR-M1c enforces it for the stager after each staging step. The arbiter's resolution (FR-M10) is the **third freeze surface** and is held to the identical invariant: its **gate**, the **diff** it is shown, and the **trees** it commits are all derived from `T_start` and `tipTree` (both frozen SHAs) — never from a live re-read of the working tree. (1) The gate is the *frozen leftover* `diff-names(tipTree, T_start)`, **not** `git status --porcelain`. (2) The arbiter is shown `TreeDiff(tipTree, T_start)`. (3) Staging uses `T_start` content exclusively. A file created or modified after `T_start` was captured therefore cannot enter any arbiter commit; it is left untouched in the working tree, exactly as for the stager. Because the loop only ever commits `T_start` content (FR-M1c), `tipTree ⊆ T_start`; folding *all* frozen leftovers into the tip therefore yields exactly `T_start`, which FR-M10's resolution exploits. (In v2.0–v2.1 the arbiter gate read live `git status --porcelain` and the resolution ran `git add -A` / `git add` against the live tree, so a concurrent change during the planner call was silently swept into an arbiter commit; FR-M1d closes that loophole.)
 - **FR-M2. Modes.** (a) **Auto-decompose (default):** the planner decides the count *and* the partition; if it judges one commit is correct it emits the message in the same call (single-call shortcut, FR-M11). (b) **Forced count** `--commits N` (N ≥ 2): the count question is skipped; the planner only partitions into exactly N. (c) **Single (escape hatch)** `--single` / `--no-decompose` / `--commits 1`: the planner is bypassed entirely; v1 behavior (`git add -A` → one `CommitStaged`).
 - **FR-M2b. One-file short-circuit (auto mode).** In auto-decompose mode, if the working tree has **exactly one** changed file (a single path in `git status --porcelain`), the planner is bypassed entirely: stagehand stages that file's `T_start` content (FR-M1b), generates one commit message via the message role, and commits — the same outcome as the FR-M11 single shortcut but with **no planner agent call at all**. A single file cannot be sensibly partitioned into multiple commits, so invoking the planner is pure churn; this check is deterministic (changed-path count), not model judgment. An explicit `--commits N` (N ≥ 2) overrides this short-circuit — a forced count is honored even for one file (hunk-level staging may still partition).
-- **FR-M3. Planner agent (bare).** Receives the full working-tree diff snapshot (with binary placeholders per FR3c) plus the style examples from §9.3. Returns a structured partition as JSON (the planner output is structured, so JSON is justified here — unlike free-form commit messages, §17.4): `{"count": N, "single": bool, "commits": [{"title": "…", "description": "what belongs in this commit"}, …], "message"?: "…"}`. `message` is present only when `single == true`.
-- **FR-M4. Safety cap.** Refuse to create more than `max_commits` commits in one run (default 12) unless the user explicitly sets a higher `--commits` / `--max-commits`. Guards against a runaway planner producing dozens of micro-commits.
+- **FR-M3. Planner agent (bare).** Receives the full working-tree diff snapshot (with binary placeholders per FR3c) plus the style examples from §9.3. Returns a structured partition as JSON (the planner output is structured, so JSON is justified here — unlike free-form commit messages, §17.4): `{"count": N, "single": bool, "commits": [{"title": "…", "description": "…", "files": ["…", …]}, …], "message"?: "…"}`. `message` is present only when `single == true`. Each commit's `files` lists every path that commit touches, and `description` says — per file — WHICH change belongs to that commit, so a stager can find the exact hunks and a single file split across two concepts can be disambiguated by naming it in both and saying which part belongs where. The planner does **not** emit hunks or line numbers: it produces the *semantic* partition; the stager resolves the exact hunks mechanically (FR-M5). The system prompt's rules block is mode-conditional (FR-M2): auto-decompose leans toward splitting unrelated changes, while forced-count treats the count as fixed (§17.5).
+- **FR-M3b. Planner coverage (deterministic, non-fatal).** After the planner returns, stagehand unions the `files` declared across all concepts and compares against the frozen changed-path set (`DiffTreeNames(baseTree, T_start)`). Any path the planner left unclaimed is logged (verbose) as a likely leftover — the arbiter (FR-M9) reconciles it after the loop. This is a diagnostic only: it never aborts the run and does not hard-constrain the stager (FR-M1c remains the sole content guarantee). Its purpose is stager *precision*, not correctness — `files`' real job is telling each concept's stager where to look (FR-M5).
+- **FR-M4. Safety cap + soft target.** Refuse to create more than `max_commits` commits in one run (default 12) unless the user explicitly sets a higher `--commits` / `--max-commits` (the **hard cap**). Guards against a runaway planner producing dozens of micro-commits. In auto-decompose mode the planner is also guided toward a **soft target** of `max_commits / 2` (default 6): ordinary mixed trees should land at or below it, and the count should approach the hard cap only when the changes genuinely span many unrelated concerns. The soft target is interpolated into the planner prompt at build time (§17.5) and is guidance, not enforcement — it never errors; only the hard cap does.
 - **FR-M5. Stager agent (tooled).** For concept *i*, invoke a **tooled** agent bound to the repo (tools on, git allowed, non-interactive; §12.2 tooled mode) with the concept's title + description as its task. It finds *all* changes related to that concept and stages them (`git add <path>`, and hunk-staging via `git apply --cached` / the agent's patch application). It **must not commit, move refs, or push**; stagehand owns all ref mutations. This is the single exception to stagehand's "agent never touches git" rule, scoped strictly to staging.
 - **FR-M6. Per-concept snapshot + overlapped generation.** After stager *i* returns, freeze `tree[i] = git write-tree` **before** stager *i+1* is allowed to start; then start the **message** agent for concept *i* using the concept diff `git diff tree[i-1] tree[i]` (tree-to-tree; never index-vs-HEAD). Stager *i+1* may run in parallel with that generation. All staging in this loop draws from `T_start` (FR-M1b) — the live working tree is never read for content after the run begins.
 - **FR-M7. Serialized publication.** Commit *i* = `commit-tree -p newSHA[i-1] tree[i] msg[i]`; then `update-ref HEAD newSHA[i] newSHA[i-1]` (CAS). Commits land in strict order (each CAS requires HEAD == the previous newSHA); generation may overlap, publication may not.
@@ -1199,7 +1200,7 @@ Decomposition is a multi-agent pipeline. Each role is a distinct invocation, ind
 
 | Role | Mode | Job | Output contract |
 |---|---|---|---|
-| **planner** | bare | analyze the full working-tree diff; decide count (unless forced) + partition into concepts; if single, also write the message | JSON `{count, single, commits:[{title,description}], message?}` (§17.5) |
+| **planner** | bare | analyze the full working-tree diff; decide count (unless forced) + partition into concepts (each concept carries `files` + a per-file `description`); if single, also write the message | JSON `{count, single, commits:[{title,description,files}], message?}` (§17.5) |
 | **stager** | **tooled** (runs git in the repo) | for one concept, find **all** related changes and stage them (`git add`, hunk-stage via `git apply --cached`) | exits 0; mutates the index; returns a short confirmation |
 | **message** | bare | generate one commit message for one frozen snapshot — this **is** the §13.1–§13.5 agent, unchanged | raw text (the message) |
 | **arbiter** | bare | after all commits, if changes remain, decide which just-made commit (by SHA) the leftovers belong to, or "new" | JSON `{target: "<sha>" \| null}` (§17.7) |
@@ -1451,7 +1452,7 @@ With no command, runs the default action: commit staged changes (auto-staging al
 | `--edit` | — | — | `false` | Open `$EDITOR` on the message before the atomic commit; staging stays safe during the edit (§9.22, FR-E1–E4). |
 | `--push` | `STAGEHAND_PUSH` | `stagehand.push` | `false` | Plain `git push` after a fully-successful run; never prompts (FR-P1–P3). |
 | `--dry-run` | — | — | `false` | Generate and print the message; do not commit. |
-| `--verbose`, `-v` | `STAGEHAND_VERBOSE` | — | `false` | Print resolved command, raw output, retries. |
+| `--verbose`, `-v` | `STAGEHAND_VERBOSE` | — | `false` | Print resolved command, payload size, raw stdout+stderr, retries (FR50). |
 | `--no-color` | `STAGEHAND_NO_COLOR` | — | TTY-aware | Disable color. Respects `NO_COLOR`. |
 | `--version` | — | — | — | Print version and exit. |
 | `--help`, `-h` | — | — | — | Help. |
@@ -1756,34 +1757,65 @@ JSON mode remains available (`output = "json"`, `json_field = "result"`) for age
 
 ### 17.5 Planner prompt (v2; §13.6.2, FR-M3)
 
-The planner is **bare** and receives the full working-tree diff (with binary placeholders) plus the §17.1 style examples. Its job: decide whether this changeset is one commit or many, partition accordingly, and — only if one — produce the message. Because the output is structured (a list), a **JSON contract** is justified here (unlike free-form commit messages, §17.4), with a robust parse + one retry.
+The planner is **bare** and receives the full working-tree diff (with binary placeholders) plus the §17.1 style examples. Its job: decide whether this changeset is one commit or many, partition accordingly, and — only if one — produce the message. Because the output is structured (a list), a **JSON contract** is justified here (unlike free-form commit messages, §17.4), with a robust parse + one retry. The planner does **not** emit hunks or line numbers — it produces the *semantic* partition (which concept is which, and which files each touches); the stager resolves the exact hunks mechanically (FR-M5, §17.6).
 
-System prompt (sketch):
+The system prompt's **rules block is mode-conditional** (FR-M2): the opener, the "UNSTAGED" framing line, and the JSON contract are shared; only the `Rules:` block changes. **Auto-decompose** leans toward splitting unrelated changes (the planner runs only when nothing was staged and the tree is dirty — that precondition is itself the user's signal that they want the changes organized into commits for them, so the prompt names it explicitly). **Forced-count** (`--commits N`) treats the count as fixed. The counterweight to "lean toward SEVERAL" is a *soft* count target of `max_commits / 2` (FR-M4): split when warranted, but don't fan a tree out into a dozen micro-commits.
+
+System prompt — auto-decompose (sketch):
 ```
 You are a commit-planning assistant. Given a diff of un-staged changes, decide whether they
 form ONE coherent commit or SEVERAL, and partition them into logical units.
 
+These changes were left UNSTAGED on purpose and handed to you to organize — finding the real
+commit boundaries is the job you were asked to do, not a fallback to resist.
+
 Rules:
-- Prefer FEWER commits. A single commit is correct unless the changes clearly span
-  unrelated concerns. Do not manufacture tiny commits.
-- Each commit must be independently meaningful and reviewable. Group tightly-coupled
-  changes (a function + its test, a refactor + its callers) together.
+- Split changes that serve DIFFERENT purposes into separate commits. Two changes you would
+  describe with different verbs, or explain to a reviewer in separate sentences, almost always
+  belong in separate commits. When torn between one commit and several, lean toward SEVERAL.
+- Do not manufacture tiny commits. Group changes that only make sense together (a function plus
+  its test, a refactor plus the callers it updates). A single commit is correct only when the
+  whole changeset pursues ONE purpose.
+- Keep the count modest: in ordinary cases at or below 6 (half the max of 12). Only exceed that
+  when the changes genuinely span many unrelated concerns; do not approach the max casually.
+- Account for every changed path: each file in the diff should appear in some commit's "files".
+  A single file may be split across two concepts — name it in both and say, per file, WHICH
+  part belongs here.
+- Each commit must be independently meaningful and reviewable.
 - Respect dependencies: if change B depends on change A, A comes first.
 - Match the repository's commit style shown below (format/tone), but NEVER reuse wording.
 
 Respond with ONLY JSON, no prose, no code fences:
-{"count": <int>, "single": <bool>, "commits": [{"title": "<short concept>", "description": "<precisely which files/hunks belong here, by path>"}, ...]}
+{"count": <int>, "single": <bool>, "commits": [{"title": "<short concept>", "description": "<which change belongs here, per file>", "files": ["<path>", ...]}, ...]}
 - If single is true, set count=1 and ALSO include "message": "<the full commit message>".
-- The "description" must be specific enough that a staging agent can find the exact changes.
+- "files" must list every path this commit touches; "description" must say, per file, WHICH
+  change belongs to this commit so a stager can find the exact hunks. Do NOT emit hunks or
+  line numbers.
 
 <style examples>
 ```
+
+Forced-count mode (`--commits N`) swaps ONLY the `Rules:` block above for this one (the opener, framing line, and JSON contract are unchanged):
+```
+Rules:
+- You MUST partition into EXACTLY the requested number of commits. Do not return more or fewer,
+  and do not reconsider the count.
+- Split changes that serve DIFFERENT purposes into separate commits; group changes that only
+  make sense together (a function plus its test, a refactor plus its callers).
+- Account for every changed path (each file in the diff in some commit's "files"); name it in
+  both if a single file is split across two concepts, and say WHICH part per file.
+- Each commit must be independently meaningful and reviewable.
+- Respect dependencies: if change B depends on change A, A comes first.
+- Match the repository's commit style shown below (format/tone), but NEVER reuse wording.
+```
+
+The `<6>` and `<12>` in the soft-target line are interpolated from `max_commits` at build time (default 12 → "6"), mirroring §17.1's `~50` subject-target interpolation. The builder emits exactly one rules block — auto-decompose unless `--commits N` — then appends the style examples (FR-F5 / §17.8) or the format scaffold.
 
 User payload: `"Decompose these un-staged changes into commits:\n\n<diff>"`. Forced-count mode prepends: `"Produce EXACTLY N commits from these changes (do not reconsider the count):"`. Retry instruction (unparseable JSON): `"Respond with ONLY the JSON object described, no other text."`
 
 ### 17.6 Stager task prompt (v2; §13.6.2, FR-M5)
 
-The stager is **tooled** (git access, repo-scoped). It receives one concept's title + description (from the planner) as a *task*, not a system-prompt-and-diff. It must stage exactly that concept's changes and stop.
+The stager is **tooled** (git access, repo-scoped). It receives one concept's title + description + files (from the planner, §17.5) as a *task*, not a system-prompt-and-diff. It must stage exactly that concept's changes and stop. The `files` list is guidance (where the concept's changes live), not a hard constraint — FR-M1c (content ⊆ `T_start`) remains the sole content guarantee; an empty list simply omits the files block.
 
 Task prompt (delivered as the user payload; system prompt minimal/empty):
 ```
@@ -1792,11 +1824,14 @@ Stage, but do NOT commit, all changes in this repository that match this concept
 <title>
 <description>
 
+Files for this concept (where these changes live):
+<files>
+
 Use git to stage the relevant files and hunks (`git add <path>`, and for partial files apply
-only the relevant hunks via `git apply --cached`). Stage ONLY changes belonging to this
-concept; leave unrelated changes unstaged. Do not commit, do not amend, do not push, do not
-modify file contents — only update the index. When done, reply with the list of paths you
-staged and stop.
+only the relevant hunks via `git apply --cached`). Stage ONLY the changes the description
+assigns to this concept (the files above are where they live); leave everything else unstaged.
+Do not commit, do not amend, do not push, do not modify file contents — only update the index.
+When done, reply with the list of paths you staged and stop.
 ```
 
 The hard guardrails (no commit/amend/push/ref-mutation) are restated in the prompt AND enforced structurally: the stager runs with a git-scoped tool profile (`tooled_flags`, §12.1) and stagehand performs every ref operation itself. A stager that nevertheless attempts a commit is a best-effort concern — it cannot move stagehand's refs (stagehand owns those via `update-ref`), and the user-visible HEAD only advances through stagehand's CAS.
@@ -1929,7 +1964,7 @@ The non-zero exit code is distinct from the commit-failure codes so scripts can 
 ## 19. Security considerations
 
 - **No shell interpolation.** Commands are built as `[]string` and run via `exec.Command` directly, never via `sh -c` / `zsh -c`. The diff payload is delivered via stdin, never interpolated into an argument. This eliminates the entire class of shell-injection bugs that a naive port could introduce. (The original `commit-pi` ran under `zsh -c` because of the git-alias mechanism; Stagehand execs directly and is safer.)
-- **No secret handling.** Stagehand never reads, logs, or transmits the agent's credentials. The agent owns its own auth; Stagehand only spawns it with the inherited environment (plus any manifest-declared `[env]` additions). Logs in `--verbose` print the command and flags but never stdin contents unless `STAGEHAND_VERBOSE=2`.
+- **No secret handling.** Stagehand never reads, logs, or transmits the agent's credentials. The agent owns its own auth; Stagehand only spawns it with the inherited environment (plus any manifest-declared `[env]` additions). Logs in `--verbose` print the command and flags and the **payload size** (byte count + token estimate — the size only), but never the stdin **contents** unless `STAGEHAND_VERBOSE=2`.
 - **Diff content is local.** The diff never leaves the machine except via the user's own agent over the user's own authenticated channel. Stagehand makes no network calls itself.
 - **Config file trust.** Config files are user-owned (`~/.config` and repo-local). A repo-local `.stagehand.toml` could be committed by an attacker to change a user's provider — but it can only redirect commit generation to another *installed* agent the user already trusts; it cannot exfiltrate credentials or run arbitrary commands (manifests specify a `command` + flags, not arbitrary shell). Still, Stagehand will print a one-line notice when a repo-local config is loaded that overrides the provider, so the redirection is visible. (Hardening for v1.1: restrict repo-local configs to non-`command` fields unless `STAGEHAND_TRUST_REPO_CONFIG=1`.)
 - **`--dangerously-*` flags never auto-set.** Stagehand will not pass `--dangerously-skip-permissions` or equivalent to any agent. Bare mode means "no tools, no session, no chrome" — not "skip safety checks." For agents where disabling tools requires an empty allowlist (Claude's `--tools ""`), we use that; we never use the bypass-permissions flags.
@@ -1984,7 +2019,7 @@ This harness is the regression net for the behaviors that only manifest against 
 
 ### 21.1 Build
 
-Go modules. `make build` → `./bin/stagehand`. `make test`, `make lint`, `make coverage`. Version injected via `-ldflags "-X main.version=…"` at release.
+Go modules. `make build` → `./bin/stagehand`. `make test`, `make lint`, `make coverage`. Version injected via `-ldflags "-X main.version=…"` at release (goreleaser sets it to the tag; `make build VERSION=vX.Y.Z` overrides). A build with no `VERSION` override (bare `go install`, default `make install`) leaves `version = "dev"`; in that case `--version` enriches it from the VCS info Go 1.18+ embeds automatically (`debug.ReadBuildInfo` → `vcs.revision` + `vcs.modified`) — e.g. `stagehand version dev (19f4df7-dirty)` — so every build self-identifies by commit and clean/dirty state without ldflags discipline. A tagged release prints its real version verbatim; a build with no embedded VCS (`-buildvcs=false`, or a non-VCS tarball) falls back to plain `dev`.
 
 ### 21.2 goreleaser
 
