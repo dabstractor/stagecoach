@@ -289,49 +289,80 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	}
 	if !success {
 		// FR-T1 multi-turn fallback trigger gate (PRD §9.24). Multi-turn activates ONLY when one-shot
-		// exhausted (already true here at !success — condition a) AND the captured payload exceeds one
-		// chunk (b) AND multi_turn_fallback is enabled (c) AND the resolved manifest declares
-		// session_mode="append" (d). If any condition fails, fall through to the existing rescue
-		// (byte-identical, FR-T7). The captured payload is passed UNCHANGED (FR-T12 — no token_limit
-		// re-truncation; D2). Finalize happens BEFORE dedupe (§9.7 judges the final subject; D3).
+		// exhausted (already true here at !success — condition a) AND the payload exceeds one chunk (b)
+		// AND multi_turn_fallback is enabled (c) AND the resolved manifest declares session_mode="append"
+		// (d). If any condition fails, fall through to the existing rescue (byte-identical, FR-T7).
+		// Finalize happens BEFORE dedupe (§9.7 judges the final subject; D3).
+		//
+		// FR-T12 (PRD §9.24): multi-turn deliberately IGNORES token_limit — the whole point is lossless
+		// delivery of a payload that exceeded what one request could carry. When token_limit is set
+		// (non-zero) it truncated the one-shot `diff`/`payload` above; for the multi-turn path we
+		// RE-CAPTURE the diff with TokenLimit=0 and rebuild the payload from the UNTRUNCATED diff, so
+		// the feature delivers its headline benefit even when token_limit truncates the one-shot
+		// payload below the chunk threshold. When token_limit is unset (0) the re-capture is skipped
+		// (the captured payload is already untruncated), keeping the fast path fast.
 		if cfg.MultiTurnFallback &&
-			git.EstimateTokens(payload) > cfg.MultiTurnChunkTokens &&
 			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
-			// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
-			// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
-			turns := len(chunkPayload(payload, cfg.MultiTurnChunkTokens)) + 1 // N chunks + 1 final turn
-			totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
-			if totalMin < 1 {
-				totalMin = 1
+			// FR-T12 re-capture: if token_limit is set, the one-shot `payload` is truncated and unsuitable.
+			// Re-capture the diff honoring FR-T12 (TokenLimit=0) and rebuild the payload from it. When
+			// token_limit is unset, `payload` is already untruncated (derived from the untruncated diff)
+			// so we use it directly and avoid the second StagedDiff call.
+			mtPayload := payload
+			if cfg.TokenLimit != 0 {
+				fullDiff, derr := deps.Git.StagedDiff(ctx, git.StagedDiffOptions{
+					MaxDiffBytes:        cfg.MaxDiffBytes,
+					MaxMDLines:          cfg.MaxMdLines,
+					BinaryExtensions:    cfg.BinaryExtensions,
+					Excludes:            deps.Excludes,
+					TokenLimit:          0, // FR-T12: multi-turn ignores token_limit
+					DiffContext:         cfg.DiffContextValue(),
+					PromptReserveTokens: 0, // multi-turn chunking doesn't use the one-shot reserve
+				})
+				if derr == nil {
+					mtPayload = prompt.BuildUserPayload(fullDiff, cfg.Context, rejected)
+				}
+				// On re-capture error, fall back to the one-shot payload (best-effort: it is still a
+				// valid, if possibly-truncated, diff — multi-turn will still attempt delivery with it).
 			}
-			fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns, ~%dm total\n", turns, totalMin)
 
-			// FR-T11: verbose trigger line (per-turn verbose is emitted by provider.Execute inside Run).
-			deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")
+			// Condition (b): the (now-untruncated) payload must exceed one chunk for multi-turn to help.
+			if git.EstimateTokens(mtPayload) > cfg.MultiTurnChunkTokens {
+				// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
+				// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
+				turns := len(chunkPayload(mtPayload, cfg.MultiTurnChunkTokens)) + 1 // N chunks + 1 final turn
+				totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
+				if totalMin < 1 {
+					totalMin = 1
+				}
+				fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns, ~%dm total\n", turns, totalMin)
 
-			// FR-T2/FR-T4: lossless N+1-turn delivery of the captured payload (FR-T12: NOT re-truncated).
-			msg2, ok2, cause := Run(ctx, deps, cfg, deps.Manifest, sysPrompt, payload, msgModel, msgReasoning)
+				// FR-T11: verbose trigger line (per-turn verbose is emitted by provider.Execute inside Run).
+				deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")
 
-			if cause == nil && ok2 {
-				// Dedupe the multi-turn result. §9.7 judges the FINAL subject → finalize BEFORE dedupe
-				// (one-shot parity; avoids the template-duplicate-slip bug — D3).
-				finalMsg := FinalizeMessage(msg2, cfg)
-				signal.SetCandidate(finalMsg)
-				if !IsDuplicate(ExtractSubject(finalMsg), recent) {
-					msg = finalMsg
-					success = true // multi-turn succeeded → skip the rescue return
+				// FR-T2/FR-T4: lossless N+1-turn delivery of the UNTRUNCATED payload (FR-T12).
+				msg2, ok2, cause := Run(ctx, deps, cfg, deps.Manifest, sysPrompt, mtPayload, msgModel, msgReasoning)
+
+				if cause == nil && ok2 {
+					// Dedupe the multi-turn result. §9.7 judges the FINAL subject → finalize BEFORE dedupe
+					// (one-shot parity; avoids the template-duplicate-slip bug — D3).
+					finalMsg := FinalizeMessage(msg2, cfg)
+					signal.SetCandidate(finalMsg)
+					if !IsDuplicate(ExtractSubject(finalMsg), recent) {
+						msg = finalMsg
+						success = true // multi-turn succeeded → skip the rescue return
+					} else {
+						// Duplicate → rescue with the finalized candidate (one-shot parity: candidate = m post-finalize).
+						candidate = finalMsg
+					}
 				} else {
-					// Duplicate → rescue with the finalized candidate (one-shot parity: candidate = m post-finalize).
-					candidate = finalMsg
-				}
-			} else {
-				// cause != nil (turn error/timeout) OR ok2==false (final parse empty) → rescue.
-				if cause != nil {
-					lastCause = cause // the multi-turn failure supersedes one-shot's lastCause
-				}
-				if msg2 != "" {
-					candidate = msg2 // raw parse output (one-shot parse-fail parity: candidate = m raw)
+					// cause != nil (turn error/timeout) OR ok2==false (final parse empty) → rescue.
+					if cause != nil {
+						lastCause = cause // the multi-turn failure supersedes one-shot's lastCause
+					}
+					if msg2 != "" {
+						candidate = msg2 // raw parse output (one-shot parse-fail parity: candidate = m raw)
+					}
 				}
 			}
 		}

@@ -4,21 +4,21 @@
       "type": "Phase",
       "id": "P1",
       "title": "Multi-turn generation fallback (v2.3, G21)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Implement the lossless multi-turn generation fallback (PRD §9.24, FR-T1–FR-T12) for the MESSAGE role on the single-commit path (§13.1–§13.5). When a one-shot generation of a large diff fails (provider per-request unreliability below the advertised context window), losslessly re-deliver the FULL captured diff across request-sized provider session turns so a single commit message can still be produced — without truncation and without decomposing into multiple commits. This is strictly a fallback inserted between one-shot-retry-exhaustion and the existing rescue protocol; it reuses parse/dedupe/rescue/CAS/lock UNCHANGED and changes NO CLI flags, exit codes, or rescue messages. Scope is message-role only (planner/stager/arbiter and the decompose path are out of scope per FR-T10). FR-T9 (the pi `session_mode = \"append\"` append-turn rendering) is already verified empirically — see plan/009_5c53066d64b3/architecture/fr-t9-verification.md.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Lossless multi-turn fallback for the message role",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Deliver the four implementing requirements (R1 provider surface, R2 config surface, R3 generate core, R4 tests) plus a final Mode B documentation sync. Each requirement composes onto the existing one-shot pipeline without forking parse/dedupe/rescue. On completion, a pi-backed run whose one-shot generation exhausts on a large diff will transparently fall back to N+1 session turns, produce a single commit message from the full diff, and on any failure degrade to the identical rescue a one-shot failure would produce.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Provider surface: session_mode manifest field + pi value + multi-turn render variant (R1)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add the `session_mode` manifest field (FR-T8), set pi's shipped value to \"append\" (FR-T6/T9 — already verified), and add a multi-turn render variant that drops pi's `--no-session`, adds `--session-id <id>`, and emits the system-prompt flag on turn 1 only. This task is the foundation: R3's trigger gate condition (d) and the multi-turn protocol both depend on the new field and render path. Reuses Manifest's pointer-scalar convention, MergeManifest's regime-1 scalar merge, and Render's §12.2 token pipeline; adds a SIBLING RenderMultiTurn method (not a widened Render signature) to keep all 24+ existing Render call sites byte-identical.",
               "subtasks": [
                 {
@@ -72,7 +72,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S4",
                   "title": "Set SessionMode=\"append\" on pi builtin + providers/pi.toml (FR-T9 verified)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P1.M1.T1.S1"

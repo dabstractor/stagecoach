@@ -292,9 +292,10 @@ the run is no worse off than a one-shot failure.
 
 **`token_limit` does not apply (FR-T12).** `token_limit` governs only the one-shot path (it truncates the
 payload to fit one request). Multi-turn deliberately ignores it: the whole point is lossless delivery of a
-large payload. (Caveat: in this release the multi-turn path operates on the payload captured for the
-one-shot attempt, so when `token_limit` is set and the diff exceeds it, multi-turn receives the already-
-truncated payload rather than re-capturing the full diff. The chunking itself never consults `token_limit`.)
+large payload. So when `token_limit` is set, the multi-turn path re-captures the diff with `token_limit`
+disabled and delivers the **untruncated** diff across the N+1 turns — the chunking itself never consults
+`token_limit`. (The re-capture is skipped when `token_limit` is unset, since the one-shot payload is
+already untruncated in that case.)
 
 ## Hook mode vs the snapshot-based flow
 

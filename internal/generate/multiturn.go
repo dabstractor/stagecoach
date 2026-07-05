@@ -101,10 +101,6 @@ func advanceRunes(s string, start, n int) int {
 	return end
 }
 
-// ceilDiv returns the ceiling of n/d for n≥0, d>0: (n+d-1)/d. Local copy — git.ceilDiv (internal/git/
-// tokens.go:37) is unexported. Kept for parity with the estimator's convention (EstimateTokens = ceil(runes/4)).
-func ceilDiv(n, d int) int { return (n + d - 1) / d }
-
 // preambleFmt is the turn-1 priming preamble (PRD §9.24 FR-T4, VERBATIM with N interpolated). The model
 // is told to expect N parts and to reply "ok" to each, deferring the commit message until the final turn.
 const preambleFmt = "I will send a git diff in %d parts. After each part, reply with exactly: ok. Do not analyze or write any commit message until I explicitly ask at the end."

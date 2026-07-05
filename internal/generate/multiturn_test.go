@@ -288,7 +288,8 @@ func TestRun_NonAppendManifest(t *testing.T) {
 // PART i/N prefix format + strict 1..N monotonicity; (d) the 4-condition FR-T1 trigger truth table driven
 // through CommitStaged (the gate is INLINE in generate.go — there is NO standalone predicate fn, so the
 // table observes the gate's VerboseWarn trigger in the captured *ui.Verbose buffer); and (e) the FR-T12
-// token_limit non-interaction (pure-helper + gate-level, with the S3 captured-payload caveat documented).
+// token_limit non-interaction (pure-helper + gate-level, with the FR-T12 re-capture verified at
+// gate-level by TestMultiTurnGate_TokenLimitTruncated_Recaptures).
 
 // TestChunkPayload_CeilMath: a table of VERIFIED exact-N payloads. chunkPayload's forward-newline anchor
 // makes N depend on line structure (a naive ceil(ET/CT) is wrong for arbitrary payloads — the anchor
@@ -393,9 +394,10 @@ func TestChunkPayload_PartPrefixMonotonic(t *testing.T) {
 // chunkTokens int) — TokenLimit is NOT a parameter, so no TokenLimit value can change N for a given
 // (payload, chunkTokens). This is the strongest claim testable at the pure-helper layer.
 //
-// NOTE: at the CommitStaged layer, StagedDiff DOES consult cfg.TokenLimit to BUILD the diff — see
-// TestMultiTurnGate_TokenLimitNotATerm + the FR-T12 caveat in how-it-works.md. The claim here is the
-// TRUE non-interaction: the chunking algorithm itself never reads TokenLimit.
+// NOTE: at the CommitStaged layer, StagedDiff DOES consult cfg.TokenLimit to BUILD the one-shot
+// diff — see TestMultiTurnGate_TokenLimitNotATerm and TestMultiTurnGate_TokenLimitTruncated_Recaptures
+// for the FR-T12 re-capture (multi-turn re-captures with TokenLimit=0). The claim here is the TRUE
+// non-interaction: the chunking algorithm itself never reads TokenLimit.
 func TestChunkPayload_TokenLimitNonInteraction(t *testing.T) {
 	payload := strings.Repeat("abcd\n", 8) // 40 runes
 	n := len(chunkPayload(payload, 5))
@@ -479,16 +481,15 @@ func TestMultiTurnTriggerGate_TruthTable(t *testing.T) {
 	}
 }
 
-// TestMultiTurnGate_TokenLimitNotATerm (FR-T12, gate-level): the FR-T1 gate reads only
-// (MultiTurnFallback, EstimateTokens(payload), MultiTurnChunkTokens, SessionMode) — TokenLimit is NOT a
-// term. With NON-truncating TokenLimit values (the small test diff ≪ TokenLimit, so StagedDiff passes it
-// through), multi-turn fires identically regardless of the TokenLimit value: the trigger is present and
-// the run succeeds for every value.
+// TestMultiTurnGate_TokenLimitNotATerm (FR-T12, gate-level): the FR-T1 gate's payload-size term is
+// computed from the UNTRUNCATED payload — TokenLimit is NOT a term. With NON-truncating TokenLimit values
+// (the small test diff ≪ TokenLimit, so the one-shot StagedDiff passes it through), multi-turn fires
+// identically regardless of the TokenLimit value: the trigger is present and the run succeeds.
 //
-// CAVEAT (FR-T12 ↔ S3 D2): when TokenLimit WOULD truncate the diff, S3's captured-payload decision hands
-// multi-turn the already-truncated payload — a known divergence from FR-T12's literal "untruncated"
-// wording, documented in how-it-works.md and deferred to a future re-capture fix. We do NOT assert the
-// full-diff chunk count when TokenLimit would truncate (that case is integration territory — P1.M1.T4).
+// FR-T12 (honored): when TokenLimit WOULD truncate the one-shot diff, the multi-turn path RE-CAPTURES
+// the diff with TokenLimit=0 and chunk/deliver the UNTRUNCATED payload — so the feature fires and succeeds
+// even in that configuration. That truncating case is asserted directly by
+// TestMultiTurnGate_TokenLimitTruncated_Recaptures below (the headline verification of the FR-T12 fix).
 func TestMultiTurnGate_TokenLimitNotATerm(t *testing.T) {
 	for _, tl := range []int{0, 1000, 100000} { // all NON-truncating for the small test diff
 		bin := stubtest.Build(t)
@@ -514,6 +515,49 @@ func TestMultiTurnGate_TokenLimitNotATerm(t *testing.T) {
 		if !strings.Contains(buf.String(), "multi-turn fallback") {
 			t.Errorf("TokenLimit=%d: trigger absent; want present (gate must fire regardless of TokenLimit)", tl)
 		}
+	}
+}
+
+// TestMultiTurnGate_TokenLimitTruncated_Recaptures (FR-T12, gate-level, headline verification): when
+// token_limit truncates the one-shot diff BELOW multi_turn_chunk_tokens, multi-turn must STILL fire and
+// succeed — because the FR-T1 gate's payload-size term is computed from the RE-CAPTURED (TokenLimit=0)
+// untruncated diff, not the truncated one-shot payload. Without the FR-T12 re-capture, condition (b)
+// (EstimateTokens > chunk_tokens) would be false on the truncated payload and multi-turn would be
+// skipped in favor of rescue — the exact regression this test pins.
+//
+// Setup: a diff whose UNTRUNCATED estimate (~24 tokens) exceeds chunk_tokens (4) but whose TRUNCATED
+// estimate (token_limit=4 ⇒ ~4 tokens, ≤ 4) does NOT. token_limit is the smallest value that still
+// truncates, so the one-shot diff is materially smaller than the untruncated diff.
+func TestMultiTurnGate_TokenLimitTruncated_Recaptures(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	// ~96 runes ⇒ untruncated ET≈24 (> chunk_tokens=4). token_limit=4 truncates the one-shot diff to
+	// ~4 tokens (≤ chunk_tokens), so condition (b) is FALSE on the truncated payload — the gate would
+	// skip multi-turn WITHOUT the re-capture.
+	writeFile(t, repo, "new.txt", strings.Repeat("change line\n", 8))
+	stageFile(t, repo, "new.txt")
+
+	m := stubAppendManifest(t, bin, []string{"", "ok", "ok", "feat: mt win"}, false) // SessionMode="append"
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0
+	cfg.MultiTurnChunkTokens = 4 // small so the untruncated diff clearly exceeds it
+	cfg.TokenLimit = 4          // truncates the one-shot diff BELOW chunk_tokens
+
+	var buf bytes.Buffer
+	_, err := CommitStaged(context.Background(), Deps{
+		Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(&buf, true),
+	}, cfg)
+
+	// FR-T12 headline: multi-turn MUST fire (the re-capture made condition (b) true on the untruncated
+	// payload) and the run MUST succeed (commit lands), NOT rescue.
+	if !strings.Contains(buf.String(), "multi-turn fallback") {
+		t.Errorf("trigger absent; want present (FR-T12 re-capture must make multi-turn fire even when "+
+			"token_limit truncates the one-shot payload). buf tail: %q", tail(buf.String(), 200))
+	}
+	if err != nil {
+		t.Errorf("CommitStaged err = %v, want nil (FR-T12: multi-turn must succeed on the untruncated diff)", err)
 	}
 }
 
