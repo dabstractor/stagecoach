@@ -904,6 +904,93 @@ func TestDecompose_ConcurrentChangeExclusion(t *testing.T) {
 	}
 }
 
+// TestDecompose_ArbiterFoldsOnlyTStart is the permanent FR-M1d / PRD §20.2 "Arbiter freeze parity"
+// regression net for the NON-EMPTY-frozen-leftover case — the success-path sibling of
+// TestDecompose_ConcurrentChangeExclusion (which has an EMPTY leftover and the arbiter SKIPPED).
+// Here concept-1's stager is a no-op (FR-M8 empty-skip) so b.go is a legitimate unclaimed leftover;
+// the freeze-safe arbiter gate (DiffTreeNames(tipTree, tStart) == {b.go}, non-empty) is SATISFIED and
+// the arbiter RUNS (null target → resolveNewCommit). This asserts the three §20.2 invariants for
+// the arbiter-RUNS case:
+//   - "Arbiter freeze parity" (3b): the arbiter commit's tree is EXACTLY T_start (HEAD^{tree} ==
+//     expectedTStart) — it folds ONLY the frozen leftover (b.go), never the post-freeze sentinel.
+//   - "Start-of-run freeze" (3a): concurrent.txt appears in NO commit and remains untracked.
+//   - Arbiter ran (not skipped): dcmLogCount == 2 (1 loop + 1 arbiter; unborn ⇒ no seed). Proven via
+//     dcmLogCount, NOT result.Amended (Amended is 0 for null-path — Decision D5).
+func TestDecompose_ArbiterFoldsOnlyTStart(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// NO initial commit (unborn repo) — mirrors TestDecompose_ConcurrentChangeExclusion / _ArbiterWiring.
+
+	// Two un-staged changes (dirty tree triggers decompose). On an unborn repo these two files ARE
+	// the entire working tree, so FreezeWorkingTree's internal `git add -A; write-tree` equals the
+	// hand-built expectedTStart below.
+	dcmWriteFile(t, repo, "a.go", "package a\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n")
+
+	// Capture the EXACTLY-T_start oracle BEFORE the run: tree of {a.go, b.go} on the unborn base,
+	// then restore a clean index (mirrors chnBuildChain's `rm --cached --ignore-unmatch` restore).
+	dcmRunGit(t, repo, "add", "a.go", "b.go")
+	expectedTStart := dcmGitOut(t, repo, "write-tree")
+	dcmRunGit(t, repo, "rm", "--cached", "--ignore-unmatch", "a.go", "b.go")
+
+	// Planner returns 2 concepts: concept-1 "add b" is SKIPPED by the seam (empty slice ⇒ FR-M8
+	// empty-concept skip, consumes NO message); concept-2 "add a" stages a.go ⇒ the loop makes ONE
+	// commit ({a.go}); tipTree == {a.go}; DiffTreeNames(tipTree, tStart) == {b.go} ⇒ arbiter RUNS.
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add b","description":"b.go"},{"title":"add a","description":"a.go"}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	// Message script call order: "add b" is SKIPPED ⇒ no message; concept-2 "add a" ⇒ message[0];
+	// arbiter null-path resolveNewCommit ⇒ message[1]. One defensive extra (dedupe-retry safety).
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: arbiter leftover", "feat: defensive extra"})
+
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
+	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // IS invoked (leftover non-empty)
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	deps := dcmDeps(t, repo, roles)
+
+	// Reuse concurrentSentinelSeam VERBATIM: "add b" no-op (empty slice) ⇒ b.go unclaimed leftover;
+	// "add a" stages a.go. The sentinel ("concurrent.txt") is written UNSTAGED on the FIRST concept
+	// processed ("add b") — post-freeze ⇒ excluded from every commit.
+	deps.stager = concurrentSentinelSeam(t, repo,
+		map[string][]string{"add b": {}, "add a": {"a.go"}},
+		"concurrent.txt",
+	)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(arbiter folds only T_start): %v", err)
+	}
+
+	// (a) EXACTLY-T_start: the arbiter commit's tree (HEAD^{tree}) is EXACTLY T_start — it folded
+	// ONLY the frozen leftover (b.go), never the post-freeze sentinel. Contract: "each arbiter
+	// commit's tree (HEAD^{tree}) is exactly T_start (FR-M1d/M9/M10)".
+	headTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	if headTree != expectedTStart {
+		t.Errorf("arbiter commit tree = %s, want EXACTLY T_start = %s", headTree, expectedTStart)
+	}
+
+	// (b) concurrent.txt in NO commit across the whole run (loop commit + arbiter commit).
+	if logNames := dcmGitOut(t, repo, "log", "--name-only", "--format="); strings.Contains(logNames, "concurrent.txt") {
+		t.Errorf("concurrent.txt appears in a commit — FR-M1d freeze should exclude it:\n%s", logNames)
+	}
+
+	// (c) concurrent.txt REMAINS untracked — the run left the post-freeze change untouched.
+	if status := dcmStatusPorcelain(t, repo); !strings.Contains(status, "?? concurrent.txt") {
+		t.Errorf("status = %q, want it to contain '?? concurrent.txt'", status)
+	}
+
+	// (d) Arbiter RAN (folded the leftover, not skipped): exactly 2 commits (1 loop + 1 arbiter;
+	// unborn ⇒ no seed). A skipped arbiter would leave 1 commit; a non-freeze-safe arbiter would
+	// ALSO sweep concurrent.txt into the arbiter commit (caught by (b) above).
+	if got := dcmLogCount(t, repo); got != 2 {
+		t.Errorf("commit count = %d, want exactly 2 (1 loop + 1 arbiter; arbiter ran via null-path)", got)
+	}
+	if len(result.Commits) != 2 {
+		t.Errorf("result.Commits len = %d, want 2", len(result.Commits))
+	}
+}
+
 // TestDecompose_TStartCompleteness (PRD §20.2 "T_start completeness" invariant, FR-M1d contract
 // 3c): after a fully-successful decompose run, EVERY T_start path landed in HEAD, and the live
 // working tree is non-empty ONLY from paths OUTSIDE T_start (the post-freeze sentinel), which are

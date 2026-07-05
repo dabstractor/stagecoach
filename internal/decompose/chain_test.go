@@ -132,6 +132,25 @@ func chnBuildChain(t *testing.T, repo string) (commits []CommitInfo, chainData [
 	return commits, chainData, tStart, leftoverPaths
 }
 
+// chnBuildChainWithSentinel is chnBuildChain PLUS a post-freeze sentinel.go (untracked, NOT in
+// tStart). It exists to prove resolveArbiter builds every arbiter commit's tree from tStart ONLY —
+// the sentinel, written AFTER tStart was captured, can never be swept in (FR-M1d / PRD §20.2
+// "Arbiter freeze parity").
+//
+// This is a SEPARATE variant (not an in-place extension of chnBuildChain) because 7 existing
+// TestResolveArbiter_* tests assert `git status == ""` (clean) against chnBuildChain's output;
+// writing an untracked sentinel in-place would break all of them (Decision D1).
+func chnBuildChainWithSentinel(t *testing.T, repo string) (commits []CommitInfo, chainData []ChainEntry, tStart string, leftoverPaths []string) {
+	t.Helper()
+	commits, chainData, tStart, leftoverPaths = chnBuildChain(t, repo)
+	// Post-freeze sentinel: written UNSTAGED (NO git add). chnBuildChain already restored the
+	// index == tree2 (clean) and captured tStart = tree2 + leftover.go, so an unstaged sentinel.go
+	// is outside tStart by construction AND outside the index. resolveArbiter builds every arbiter
+	// tree from tStart / frozen tree[j] ONLY, so sentinel.go can never enter any commit.
+	chnWriteFile(t, repo, "sentinel.go", "package sentinel\n")
+	return commits, chainData, tStart, leftoverPaths
+}
+
 // --- Tests ---
 
 func TestResolveArbiter_NullNewCommit(t *testing.T) {
@@ -513,4 +532,71 @@ func TestResolveArbiter_CleanTreePostcondition(t *testing.T) {
 		t.Errorf("index tree %q != HEAD tree %q", indexTree, headTree)
 	}
 	// 3. working tree == index (no unstaged changes — already verified by clean status)
+}
+
+// TestResolveArbiter_FreezeParitySentinelExcluded is the permanent FR-M1d / PRD §20.2 "Arbiter
+// freeze parity" regression net for the arbiter's three resolution paths (new / tip-amend /
+// mid-chain). It proves that EVERY arbiter commit's tree is built strictly from tStart (or an
+// OverlayTreePaths overlay of frozen trees): a sentinel.go written AFTER tStart capture
+// (post-freeze, NOT in tStart) is swept into NO arbiter commit and remains untracked, while the
+// legitimate frozen leftover (leftover.go, IS in tStart) IS folded. HEAD^{tree} == tStart is a
+// UNIFORM invariant across all three paths (null/tip set treePrime := tStart; mid rebuilds the
+// tip via OverlayTreePaths(tree[N-1], tStart, leftoverPaths) which equals tStart).
+//
+// Fresh repo per target: resolveArbiter advances HEAD via UpdateRefCAS, so a second call on the
+// same repo would read a STALE tipSHA from chainData and fail the CAS (Decision D4).
+func TestResolveArbiter_FreezeParitySentinelExcluded(t *testing.T) {
+	bin := stubtest.Build(t)
+	targets := []struct {
+		name   string
+		target func(c []CommitInfo) *string
+	}{
+		// Path A (new commit): target nil → resolveNewCommit, treePrime := tStart.
+		{"null", func(_ []CommitInfo) *string { return nil }},
+		// Path B (tip amend): target &C2.SHA (idx == N-1) → resolveTipAmend, treePrime := tStart.
+		{"tip", func(c []CommitInfo) *string { s := c[2].SHA; return &s }},
+		// Path C (mid-chain rebuild): target &C1.SHA (idx < N-1) → resolveMidChain,
+		// treePrime = OverlayTreePaths(tree[j], tStart, leftoverPaths) per j ⇒ tip == tStart.
+		{"mid", func(c []CommitInfo) *string { s := c[1].SHA; return &s }},
+	}
+	for _, tc := range targets {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			chnInitRepo(t, repo) // FRESH repo per target — resolveArbiter advances HEAD
+			commits, chainData, tStart, leftoverPaths := chnBuildChainWithSentinel(t, repo)
+
+			// Only the Message role is exercised (null path's generateMessage; tip/mid reuse the
+			// original message verbatim and never call the agent).
+			deps := chnDeps(t, repo, stubtest.Manifest(bin, stubtest.Options{Out: "chore: arbiter leftover"}))
+
+			target := tc.target(commits)
+			if err := resolveArbiter(context.Background(), deps, target, commits, chainData, tStart, leftoverPaths); err != nil {
+				t.Fatalf("resolveArbiter(%s): %v", tc.name, err)
+			}
+
+			// (a) HEAD^{tree} == tStart — the "exactly T_start" proof, UNIFORM across all three
+			// paths (for mid it is also the "rebuilt tip == T_start" proof; Decision D2).
+			if got := chnRunGit(t, repo, "rev-parse", "HEAD^{tree}"); got != tStart {
+				t.Errorf("%s: HEAD^{tree} = %s, want exactly tStart = %s", tc.name, got, tStart)
+			}
+
+			// (b) sentinel.go in NO commit (covers loop commits + arbiter commit + every rebuilt
+			// Cj'^{tree} for mid — Decision D3).
+			if names := chnRunGit(t, repo, "log", "--name-only", "--format="); strings.Contains(names, "sentinel.go") {
+				t.Errorf("%s: sentinel.go swept into a commit (freeze parity violated):\n%s", tc.name, names)
+			}
+
+			// (c) sentinel.go REMAINS untracked — ReadTree(tStart) synced the index to tStart, which
+			// excludes the post-freeze sentinel; the run left it untouched in the working tree.
+			if status := chnRunGit(t, repo, "status", "--porcelain"); !strings.Contains(status, "?? sentinel.go") {
+				t.Errorf("%s: status = %q, want it to contain '?? sentinel.go'", tc.name, status)
+			}
+
+			// (d) leftover.go DID land in HEAD^{tree} — proves the arbiter folded the legitimate
+			// frozen leftover (it ran, not a no-op). Distinguishes this proof from an arbiter skip.
+			if ls := chnRunGit(t, repo, "ls-tree", "-r", "--name-only", "HEAD"); !strings.Contains(ls, "leftover.go") {
+				t.Errorf("%s: leftover.go missing from HEAD tree — arbiter did not fold the frozen leftover:\n%s", tc.name, ls)
+			}
+		})
+	}
 }
