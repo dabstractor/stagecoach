@@ -196,6 +196,13 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 		return DecomposeResult{}, err // ErrPlannerFailed wrap OR safety-cap error — both non-rescue (§G-PLANNER-NONRESCUE)
 	}
 
+	// FR-M3b: deterministic, NON-FATAL planner coverage check. Unions concept.Files and logs (verbose) any
+	// frozen changed-path the planner left unclaimed — a likely arbiter leftover. Diagnostic ONLY: never
+	// aborts, never hard-constrains the stager (FR-M1c/verifyFreezeSubset remains the sole content guarantee).
+	if !out.Single && len(out.Commits) > 0 {
+		checkPlannerCoverage(ctx, deps, baseTree, tStart, out.Commits)
+	}
+
 	// (4) FR-M11 single-SHORTCUT: planner judged N=1 + supplied a message.
 	if out.Single {
 		return runSingleShortcut(ctx, deps, out.Message, preRunHEAD, isUnborn, baseTree, tStart)
@@ -244,6 +251,37 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 
 	// (9) Return.
 	return DecomposeResult{Commits: commits, Amended: amended}, nil
+}
+
+// checkPlannerCoverage implements PRD §9.14 FR-M3b: a deterministic, NON-FATAL planner coverage check.
+// It unions the paths declared across all concept.Files and compares against the frozen changed-path set
+// DiffTreeNames(baseTree, tStart); each frozen path the planner left unclaimed is logged (verbose) as a
+// likely arbiter leftover.
+//
+// DIAGNOSTIC ONLY (FR-M3b): this NEVER aborts the run and NEVER hard-constrains the stager. FR-M1c
+// (verifyFreezeSubset in runLoop) is the SOLE content guarantee; this check is about planner PRECISION
+// (did it account for every path?), not correctness. On any error it logs "coverage check skipped: <err>"
+// and returns — best-effort, void.
+//
+// DiffTreeNames does NOT apply excludes (consistent with the arbiter gate, which also uses the full frozen
+// path-set): an excluded-but-changed file legitimately shows as unclaimed and flows to the arbiter.
+func checkPlannerCoverage(ctx context.Context, deps Deps, baseTree, tStart string, concepts []prompt.PlannerCommit) {
+	claimed := make(map[string]bool)
+	for _, c := range concepts {
+		for _, f := range c.Files {
+			claimed[f] = true
+		}
+	}
+	changed, err := deps.Git.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		deps.Verbose.VerboseRawOutput(fmt.Sprintf("coverage check skipped: %v", err))
+		return // best-effort — NEVER propagate
+	}
+	for _, p := range changed {
+		if !claimed[p] {
+			deps.Verbose.VerboseRawOutput(fmt.Sprintf("decompose: path %q not claimed by any concept (likely leftover for the arbiter)", p))
+		}
+	}
 }
 
 // runSingleEscape is the v1 single-commit path (Config.Single || Commits==1): planner is BYPASSED

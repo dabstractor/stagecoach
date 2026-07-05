@@ -147,7 +147,7 @@
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "PlannerCommit.Files field + parse + FR-M3b coverage check",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add the Files []string field to PlannerCommit (FR-M3) and the deterministic, non-fatal coverage check (FR-M3b) that unions concept.Files and compares to the frozen changed-path set DiffTreeNames(baseTree, tStart), logging unclaimed paths as likely leftovers. Files is guidance only (FR-M1c remains the sole content guarantee); the coverage check never aborts and never hard-constrains the stager.",
               "subtasks": [
                 {
@@ -169,7 +169,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T1.S2",
                   "title": "FR-M3b deterministic non-fatal coverage check (logs unclaimed paths)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -194,7 +194,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T2.S1",
                   "title": "Split plannerSystemPrompt into shared + auto/forced rules + soft-target interpolation + BuildPlannerSystemPrompt signature + call-site + prompt tests",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T1.S1"

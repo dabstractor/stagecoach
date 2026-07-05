@@ -2497,3 +2497,60 @@ func TestDecompose_SentinelAfterFreezeExcluded(t *testing.T) {
 		}
 	}
 }
+
+// TestDecompose_PlannerCoverageLogsUnclaimed (PRD §9.14 FR-M3b) verifies the deterministic, NON-FATAL
+// planner coverage check. A stub planner partitions a 3-file changeset into 2 concepts that deliberately
+// omit c.txt from BOTH files lists. The run MUST still succeed (the arbiter commits the leftover via
+// null-target → resolveNewCommit), AND the capturing verbose buffer MUST contain the FR-M3b diagnostic
+// line naming the unclaimed path. The check never aborts and never constrains the stager (FR-M1c is the
+// sole content guarantee) — this test proves both halves: success + the log line.
+func TestDecompose_PlannerCoverageLogsUnclaimed(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// 3 changed files vs base (unborn → baseTree = empty tree). DiffTreeNames(baseTree, tStart)
+	// = [a.txt, b.txt, c.txt].
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	// Planner: 2 concepts claiming ONLY a.txt + b.txt — c.txt deliberately omitted from both files lists.
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"d1","files":["a.txt"]},{"title":"c2","description":"d2","files":["b.txt"]}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	// Message script: 2 loop commits + the arbiter's null→new commit (+ defensive extras for dedupe retries).
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add leftover", "feat: add leftover", "feat: add leftover"})
+
+	// Arbiter: null target → c.txt becomes a new arbiter commit (the realistic "planner missed a file" path).
+	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
+
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	deps := dcmDeps(t, repo, roles)
+	// Stager seam stages only the CLAIMED files (c1→a.txt, c2→b.txt); c.txt is left for the arbiter.
+	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
+		"c1": {"a.txt"},
+		"c2": {"b.txt"},
+	})
+
+	// Capturing verbose writer — the FR-M3b diagnostic lands here.
+	var lb lockedBuffer
+	deps.Verbose = ui.NewVerbose(&lb, true)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	// 2 loop commits + 1 arbiter null→new commit for the unclaimed c.txt.
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3 (2 loop + 1 arbiter leftover)", len(result.Commits))
+	}
+
+	// FR-M3b: the diagnostic MUST name the unclaimed path. Match on the substring regardless of the
+	// "DEBUG: raw output:\n" prefix that VerboseRawOutput prepends.
+	want := `decompose: path "c.txt" not claimed by any concept (likely leftover for the arbiter)`
+	if !strings.Contains(lb.String(), want) {
+		t.Errorf("verbose buffer missing FR-M3b coverage line\nwant substring: %s\ngot: %s", want, lb.String())
+	}
+}
