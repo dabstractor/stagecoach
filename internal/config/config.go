@@ -125,6 +125,18 @@ type Config struct {
 	// --dry-run, the exit-2 path, and any rescue/CAS abort (FR-P3). See cmd.runPush + git.Git.Push.
 	Push bool `toml:"push"`
 
+	// NoVerify is the §9.25 FR-V5 --no-verify hook bypass (mirrors `git commit --no-verify`).
+	// When true, skips pre-commit and commit-msg hooks (prepare-commit-msg and post-commit still run).
+	// Full 5-layer precedence: --no-verify / STAGEHAND_NO_VERIFY / stagehand.no_verify / [generation].no_verify,
+	// default false — hooks run by default; --no-verify is the deliberate exception. FILE LAYER LIMITATION
+	// (same as Push): only-true-propagates — a file setting `no_verify = false` is a no-op; the flag/env
+	// layers can set it false. See cmd root.go + hooks.RunCommitHooks (M3).
+	NoVerify bool `toml:"no_verify"`
+
+	// HookTimeout is the §9.25 FR-V6 per-hook execution timeout. Bounds each hook invocation so a wedged
+	// hook cannot hang a commit. Defaults: 10m. File-only (no env/flag/git-config) per arch §2 decision.
+	HookTimeout time.Duration `toml:"hook_timeout"`
+
 	// [provider.<name>] user-defined / override provider definitions (PRD §16.2, §12.8).
 	// Carried as a RAW map: the provider MANIFEST type lives in internal/provider, so config must not import
 	// it (import-cycle risk). The registry (P1.M2.T3) consumes this map — for each name it re-encodes the
@@ -181,15 +193,17 @@ func Defaults() Config {
 		SubjectTargetChars:   50,
 		Output:               nil,
 		StripCodeFence:       nil,
-		Format:               "auto", // §9.19 FR-F1 default (NON-empty; validateFormat would reject "" — must be set here)
-		Locale:               "",     // §9.19 FR-F6 default (empty = no locale instruction)
-		Template:             "",     // §9.19 FR-F8 default (empty = no template; validateTemplate accepts "")
-		MaxCommits:           12,     // §9.14 FR-M4 default safety cap on auto-decompose
-		BinaryExtensions:     nil,    // nil ⇒ built-in denylist only (§9.1 FR3a)
-		Exclude:              nil,    // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
-		Context:              "",     // §9.19 FR-F7 default (empty = no context block)
-		Edit:                 false,  // §9.22 FR-E1 default (false = non-interactive; no editor gate)
-		Push:                 false,  // §9.22 FR-P1 default (false = no auto-push)
+		Format:               "auto",           // §9.19 FR-F1 default (NON-empty; validateFormat would reject "" — must be set here)
+		Locale:               "",               // §9.19 FR-F6 default (empty = no locale instruction)
+		Template:             "",               // §9.19 FR-F8 default (empty = no template; validateTemplate accepts "")
+		MaxCommits:           12,               // §9.14 FR-M4 default safety cap on auto-decompose
+		BinaryExtensions:     nil,              // nil ⇒ built-in denylist only (§9.1 FR3a)
+		Exclude:              nil,              // §9.18 FR-X1: no built-in exclude globs at Layer 1 (denylist lives in git.go)
+		Context:              "",               // §9.19 FR-F7 default (empty = no context block)
+		Edit:                 false,            // §9.22 FR-E1 default (false = non-interactive; no editor gate)
+		Push:                 false,            // §9.22 FR-P1 default (false = no auto-push)
+		NoVerify:             false,            // §9.25 FR-V5 default (hooks run by default)
+		HookTimeout:          10 * time.Minute, // §9.25 FR-V6 default per-hook timeout
 		Providers:            nil,
 		Roles:                nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:        0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved

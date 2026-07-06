@@ -64,6 +64,8 @@ type fileGeneration struct {
 	Locale               string   `toml:"locale"`            // V2.1 — §9.19 FR-F6 message locale (free-form, never validated)
 	Template             string   `toml:"template"`          // V2.1 — §9.19 FR-F8 message template (validated at Load)
 	Push                 bool     `toml:"push"`              // §9.22 FR-P1 — push after clean run (default false)
+	NoVerify             bool     `toml:"no_verify"`         // §9.25 FR-V5 — only-true-propagates (mirrors Push)
+	HookTimeout          string   `toml:"hook_timeout"`      // §9.25 FR-V6 — duration string "10m", parsed in loadTOML
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +183,17 @@ func loadTOML(path string) (*Config, error) {
 		}
 	}
 
-	return materialize(&fc, timeout), nil
+	// §9.25 FR-V6 — parse the [generation].hook_timeout duration string up front (mirrors Timeout:
+	// a malformed value must fail at LOAD with the path in the error, not at merge/run time).
+	var hookTimeout time.Duration
+	if fc.Generation.HookTimeout != "" {
+		hookTimeout, err = time.ParseDuration(fc.Generation.HookTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("parse config %s: invalid hook_timeout %q: %w", path, fc.Generation.HookTimeout, err)
+		}
+	}
+
+	return materialize(&fc, timeout, hookTimeout), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -189,11 +201,11 @@ func loadTOML(path string) (*Config, error) {
 // ---------------------------------------------------------------------------
 
 // materialize copies the NON-ZERO fields of a fileConfig into a fresh *Config.
-// Pure: receives an already-parsed duration. Non-zero overlay semantics mean
+// Pure: receives already-parsed durations. Non-zero overlay semantics mean
 // a file cannot override a field to its zero value (false, 0, ""). See the v1
 // limitation documented on Config.Providers and in the PRP design call #3.
-func materialize(fc *fileConfig, timeout time.Duration) *Config {
-	c := &Config{Timeout: timeout} // zero if file didn't set one (overlay skips zero — correct)
+func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
+	c := &Config{Timeout: timeout, HookTimeout: hookTimeout} // zero if file didn't set one (overlay skips zero — correct)
 	d, g := &fc.Defaults, &fc.Generation
 
 	if d.Provider != "" {
@@ -275,6 +287,10 @@ func materialize(fc *fileConfig, timeout time.Duration) *Config {
 	if g.Push {
 		c.Push = true
 	}
+	// §9.25 FR-V5 — no_verify from file (only-true-propagates, mirrors Push — a file cannot set it false).
+	if g.NoVerify {
+		c.NoVerify = true
+	}
 	// V2 top-level metadata — non-zero copy (the §9.17 advisory is P1.M4.T1's job, not here).
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
@@ -331,6 +347,14 @@ func overlay(dst, src *Config) {
 	// §9.22 FR-P1 — push
 	if src.Push {
 		dst.Push = true
+	}
+	// §9.25 FR-V5 — no_verify (only-true-propagates, same as Push)
+	if src.NoVerify {
+		dst.NoVerify = true
+	}
+	// §9.25 FR-V6 — hook_timeout (duration-zero guard, same as Timeout)
+	if src.HookTimeout != 0 {
+		dst.HookTimeout = src.HookTimeout
 	}
 	// [generation]
 	if src.MaxDiffBytes != 0 {

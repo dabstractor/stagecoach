@@ -834,7 +834,7 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range materializeCases {
 		t.Run("materialize/"+tc.name, func(t *testing.T) {
 			fc := &fileConfig{Generation: fileGeneration{DiffContext: tc.fileDC, TokenLimit: tc.fileTL}}
-			c := materialize(fc, 0)
+			c := materialize(fc, 0, 0)
 			if tc.wantDC == nil {
 				if c.DiffContext != nil {
 					t.Errorf("DiffContext = %v, want nil (materialize must not seed a default)", c.DiffContext)
@@ -887,9 +887,9 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range overlayCases {
 		t.Run("overlay/"+tc.name, func(t *testing.T) {
 			cfg := Defaults() // DiffContext = intPtr(1); TokenLimit = 0
-			g := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0)
+			g := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0, 0)
 			overlay(&cfg, g)
-			r := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0)
+			r := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0, 0)
 			overlay(&cfg, r)
 			if cfg.DiffContext == nil {
 				t.Fatalf("DiffContext = nil after overlay; Defaults() must seed intPtr(1) so nil is impossible here")

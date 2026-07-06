@@ -113,6 +113,8 @@ model = "sonnet"
 # format                = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
 # locale                = ""       # free-form language name or BCP-47 tag; never validated
 # template              = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"
+# hook_timeout          = "10m"    # per-hook execution timeout (§9.25 FR-V6); file + default only
+# no_verify             = false    # skip pre-commit and commit-msg hooks (§9.25 FR-V5; mirrors `git commit --no-verify`); CANNOT disable-via-file is N/A (default is already false)
 # ...
 ```
 
@@ -143,8 +145,14 @@ These are the values when no config file, env var, git-config key, or flag sets 
 | `locale` | `""` | `config.Defaults()` (§9.19 FR-F6) |
 | `template` | `""` | `config.Defaults()` (§9.19 FR-F8) |
 | `push` | `false` | `config.Defaults()` (§9.22 FR-P1) |
+| `hook_timeout` | `10m` | `config.Defaults()` (§9.25 FR-V6 — per-hook execution timeout; file + default only) |
+| `no_verify` | `false` | `config.Defaults()` (§9.25 FR-V5 — skip pre-commit/commit-msg hooks; mirrors `git commit --no-verify`) |
 
 `NoColor` is TTY-aware at runtime (set by the UI layer); it is not a file field and has no config-file key.
+
+> **Hook execution knobs.** Two `[generation]` knobs control the §9.25 hook-execution surface (pre-commit / prepare-commit-msg / commit-msg / post-commit):
+> - **`hook_timeout`** (default `10m`) — bounds each hook invocation so a wedged hook cannot hang a commit (§9.25 FR-V6). A duration string (e.g. `"30s"`, `"10m"`); malformed values fail at config load. **File + default only** (no env var, no flag, no git-config key) — set it in a config file.
+> - **`no_verify`** (default `false`) — the `--no-verify` bypass (§9.25 FR-V5): when true, skips `pre-commit` and `commit-msg` hooks (`prepare-commit-msg` and `post-commit` still run). It resolves through the full 5-layer precedence (`--no-verify` / `STAGEHAND_NO_VERIFY` / `stagehand.no_verify` / `[generation].no_verify`). The `[generation].no_verify` file key uses the same only-true-propagates limitation as `push`: a file setting `no_verify = false` is a no-op (false is already the default); use the flag/env layers to set it false explicitly.
 
 The `output` and `strip_code_fence` settings apply to **parsing** of agent output. Setting `output = "json"` makes Stagehand parse the agent's stdout as JSON (extracting the `json_field` value) across all providers. These `[generation]` values are an **opt-in override**: when `[generation]` (and git-config) omit them, the per-provider `[provider.<name>]` value is honored, falling back to the §12.1 manifest defaults (`output = "raw"`, `strip_code_fence = true`). Set `output = "json"` here only to force JSON parsing across ALL providers.
 
