@@ -1,0 +1,241 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Hook execution on the commit path (v2.4, FR-V1–V8, → G22)",
+      "status": "Researching",
+      "description": "Implement PRD §9.25: thread the repository's standard commit hooks (pre-commit → prepare-commit-msg → commit-msg, then post-commit) around every plumbing-path commit, in git's documented order, WITHOUT surrendering the snapshot-based atomic-commit core (§8, §13). The stage-while-generating freeze (FR-V3) and the CAS atomic-commit core (§18.1) must survive. Add --no-verify (mirrors git commit --no-verify: skips pre-commit+commit-msg only) and hook_timeout (default 10m). Entirely unimplemented (verified: zero NoVerify/hook_timeout symbols). Research findings in plan/010_49117f1f30ab/architecture/.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Configuration + CLI surface: NoVerify, HookTimeout, --no-verify",
+          "status": "Planned",
+          "description": "Add the two config knobs (FR-V5 NoVerify, FR-V6 HookTimeout) with full 5-layer precedence, and register the --no-verify CLI flag. Mirrors the established Push (5-layer bool) and Timeout (5-layer duration) patterns exactly. This is the user-facing surface; no behavior change yet (the fields are unread until the runner lands in M3).",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Add NoVerify + HookTimeout config fields with full 5-layer precedence",
+              "status": "Planned",
+              "description": "Add Config.NoVerify (bool, toml \"no_verify\") mirroring Push, and Config.HookTimeout (time.Duration, toml \"hook_timeout\") mirroring Timeout. Wire through Defaults, fileConfig (file.go), materialize/overlay, env (STAGEHAND_NO_VERIFY), git-config (stagehand.no_verify), and flag resolution (load.go). NoVerify is 5-layer (flag/env/git-config/file/default=false); HookTimeout is file+default only (no env/flag/git-config per FR-V6 — mirrors multi_turn_chunk_tokens).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Config struct fields + Defaults + fileConfig/materialize/overlay",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.41", "h3.75", "h3.76", "h3.71"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see plan/010_49117f1f30ab/architecture/codebase_reality.md §2 — the EXACT templates are Push (config.go Push bool toml:\"push\", Defaults Push:false, file.go fileGeneration.Push, materialize `if g.Push { c.Push = true }`, overlay `if src.Push { dst.Push = true }`) and Timeout (config.go Timeout time.Duration, Defaults 120*time.Second, file.go fileDefaults.Timeout string parsed via time.ParseDuration, materialize/overlay `!= 0` duration-zero guard). Mirror these byte-for-byte.\n2. INPUT: the existing config.go Config struct, Defaults(), file.go (fileConfig/fileGeneration/fileDefaults/materialize/overlay). No dependency on other subtasks.\n3. LOGIC: (a) Config.go — add `NoVerify bool toml:\"no_verify\"` (FR-V5) with a doc comment citing §9.25 FR-V5 (mirrors Push's comment style); add `HookTimeout time.Duration toml:\"hook_timeout\"` (FR-V6) citing §9.25 FR-V6 (mirrors Timeout's comment style). Defaults(): NoVerify=false, HookTimeout=10*time.Minute. (b) file.go — add fileGeneration.NoVerify bool + fileGeneration.HookTimeout string (duration string \"10m\", parsed like fileDefaults.Timeout); materialize() copies NoVerify via only-true-propagates (`if g.NoVerify { c.NoVerify = true }`) and HookTimeout via `!= 0` (parse the string in loadTOML next to the existing timeout parse, OR parse in materialize — match how Timeout is parsed: loadTOML parses fileDefaults.Timeout; add the hook_timeout parse alongside). overlay() copies NoVerify via only-true-propagates and HookTimeout via `!= 0`. The only-true-propagates limitation for NoVerify (cannot set false via file) is ACCEPTED — document it in the field comment like Push.\n4. OUTPUT: Config.NoVerify + Config.HookTimeout resolve through the file layer (Layers 2-4). The env/flag layers land in S2. No behavior yet (unread until M3).\n5. DOCS: [Mode A] Update docs/configuration.md — add `hook_timeout` (duration, default 10m, one-line: \"per-hook execution timeout (§9.25 FR-V6)\") to the [generation] table (near the `push` row ~line 145) and to the commented [generation] template block (~line 104); note `no_verify` is a [defaults]/flag bool (not [generation]) if the doc distinguishes. This rides WITH the work, do not create a separate docs subtask."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "Env (STAGEHAND_NO_VERIFY) + git-config + flag resolution in load.go",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": ["h3.41", "h3.75", "h3.24", "h3.71"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §2 — loadEnv() reads STAGEHAND_PUSH via strconv.ParseBool with DIRECT set (`cfg.Push = b`); loadFlags() reads --push via fs.Changed(\"push\") + fs.GetBool with DIRECT set. The git-config layer (loadGitConfig in internal/config/git.go) reads stagehand.* keys — mirror how stagehand.push is read (loadGitConfig overlays a *Config; NoVerify would be set via the same bool-reading path Push uses — verify loadGitConfig's bool handling; if it uses overlay, the only-true-propagates limitation applies, which is consistent). HookTimeout has NO env/flag/git-config source (FR-V6: file+default only, like multi_turn_chunk_tokens).\n2. INPUT: Config.NoVerify + Config.HookTimeout fields from P1.M1.T1.S1; the existing loadEnv()/loadFlags()/loadGitConfig() in internal/config.\n3. LOGIC: (a) loadEnv() — add STAGEHAND_NO_VERIFY handling: `if v, ok := os.LookupEnv(\"STAGEHAND_NO_VERIFY\"); ok && v != \"\" { b, err := strconv.ParseBool(v); if err != nil { return fmt.Errorf(\"STAGEHAND_NO_VERIFY: %w\", err) }; cfg.NoVerify = b }` (DIRECT set, mirrors STAGEHAND_PUSH). NO STAGEHAND_HOOK_TIMEOUT (FR-V6). (b) loadFlags() — add `if fs.Changed(\"no-verify\") { if v, err := fs.GetBool(\"no-verify\"); err == nil { cfg.NoVerify = v } }` (DIRECT set, mirrors the push block). NO --hook-timeout flag handling. (c) loadGitConfig (internal/config/git.go) — add stagehand.no_verify reading mirroring stagehand.push (verify the exact pattern; it likely builds a *Config and overlays, so NoVerify propagates only-true — consistent). NO stagehand.hook_timeout git key.\n4. OUTPUT: NoVerify resolves through all 5 layers (flag>env>git-config>file>default=false); HookTimeout resolves through file+default only. The --no-verify flag is registered in P1.M1.T2.S1 (this subtask only handles the loadFlags reader; the flag var registration is T2).\n5. DOCS: none — no user-facing/config surface change beyond S1's configuration.md update (the --no-verify flag row is P1.M1.T2.S1's Mode A doc)."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Register --no-verify CLI flag",
+              "status": "Planned",
+              "description": "Register the --no-verify persistent flag in internal/cmd/root.go (mirrors --push/--edit at lines 200-212), bound to a package var, with help text citing §9.25 FR-V5 and the exact 'skips pre-commit and commit-msg only (prepare-commit-msg and post-commit still run)' semantics. config.Load's loadFlags (P1.M1.T1.S2) reads it via fs.Changed.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "root.go --no-verify flag definition + help text + cli.md row",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S2"],
+                  "prd_selectors": ["h3.41", "h3.71", "h2.5"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §2 — root.go has `var flagPush bool` (~line 100) and `pf.BoolVar(&flagPush, \"push\", false, \"…\")` at line 206 with a multi-line help string citing §9.22 FR-P1. The --edit flag is at line 200. --no-verify goes right after --push (~line 212). The flag var is read ONLY via fs.Changed/fs.GetBool in loadFlags (P1.M1.T1.S2) — never read directly (same discipline as flagPush).\n2. INPUT: the loadFlags reader from P1.M1.T1.S2 (which does `fs.Changed(\"no-verify\")` + `fs.GetBool`).\n3. LOGIC: (a) Add `var flagNoVerify bool` next to flagPush/flagEdit (~line 100). (b) Add `pf.BoolVar(&flagNoVerify, \"no-verify\", false, \"<help>\")` after the --push registration (~line 212). Help text MUST state: \"Bypass pre-commit and commit-msg hooks for this commit (mirrors git commit --no-verify; prepare-commit-msg and post-commit still run). (env STAGEHAND_NO_VERIFY, git stagehand.no_verify; default false.) (§9.25 FR-V5)\" — mirror --push's help structure (env/git-config/default citation).\n4. OUTPUT: --no-verify is a registered persistent flag, resolvable through config.Load → cfg.NoVerify. No behavior yet (the runner in M3 consumes it).\n5. DOCS: [Mode A] Update docs/cli.md global-flags table — add a `--no-verify` row (after the `--push` row at line 43) with: bool, default false, env STAGEHAND_NO_VERIFY, git stagehand.no_verify, and the precise 'skips pre-commit + commit-msg only (prepare-commit-msg and post-commit still run)' semantics + §9.25 FR-V5 citation. This rides WITH the work."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M2",
+          "title": "Git primitives for scoped hook execution (the hard part)",
+          "status": "Planned",
+          "description": "Add the git-layer primitives that let pre-commit run against a FROZEN TREE via a throwaway index (so the stage-while-generating freeze holds), plus the FR-V3 subset enforcement (a hook that stages a path NOT in the snapshot is a hard error). This is the single hardest mechanism problem — the existing run()/runWithInput() exec seams (git.go:389/430) NEVER set cmd.Env, and GIT_INDEX_FILE appears nowhere in internal/. See architecture/external_deps.md §7-8 and codebase_reality.md §1,§3.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M2.T1",
+              "title": "Env-passing exec seam + scoped-index git primitives",
+              "status": "Planned",
+              "description": "Add runWithEnv (the env-passing exec seam — the ONLY new exec entry point) and the thin scoped ReadTreeInto/WriteTreeFrom variants that accept a GIT_INDEX_FILE. These operate on a throwaway index file, never touching the live .git/index, so pre-commit can run scoped to the frozen tree.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
+                  "title": "runWithEnv exec seam in internal/git",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.41", "h2.19"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §1 — internal/git/git.go:389 run() is `exec.CommandContext(ctx, gitPath, \"-C\", repo, args...)` with cmd.Env NEVER set (child inherits parent env); runWithInput() (git.go:430) is identical + stdin. There is NO env-passing variant. The new seam ADDS to os.Environ() (a superset — does not break the documented 'inherits parent env' guarantee at git.go:426-427).\n2. INPUT: the existing run() implementation (git.go:389) — copy its structure (LookPath, -C repo, []string args no shell, separate stdout/stderr buffers, return (stdout, stderr, code, err)).\n3. LOGIC: add `func (g *gitRunner) runWithEnv(ctx context.Context, repo string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int, err error)` — identical to run() EXCEPT `cmd.Env = append(os.Environ(), extraEnv...)`. Add a sibling interface method on the Git interface (git.go:87) OR keep it unexported if only used by the scoped variants below (P1.M2.T1.S2) — PREFER keeping runWithEnv unexported and exposing the scoped variants as the public surface (cleaner interface). Add the method to the Git interface only if the runner (internal/hooks, M3) needs to call it directly; otherwise the scoped variants are sufficient.\n4. OUTPUT: runWithEnv lets a git subprocess run with extra env (GIT_INDEX_FILE=<abs tmp>, GIT_EDITOR=:). No behavior change (unused until S2).\n5. DOCS: none — internal exec seam, no user-facing/config/API surface change."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S2",
+                  "title": "Scoped ReadTreeInto/WriteTreeFrom variants (GIT_INDEX_FILE-aware)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M2.T1.S1"],
+                  "prd_selectors": ["h3.41", "h3.64"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §3 — ReadTree (git.go:1222) runs `git read-tree <tree>` REPLACING .git/index (no custom index); WriteTree (git.go:492) reads .git/index (no custom index). These must NOT be used for scoped pre-commit (they'd touch the live index). The scoped variants route through runWithEnv (P1.M2.T1.S1) with GIT_INDEX_FILE=<abs tmp>.\n2. INPUT: runWithEnv from P1.M2.T1.S1; the existing ReadTree/WriteTree signatures as the API template.\n3. LOGIC: add to the Git interface (git.go:87) and gitRunner: (a) `ReadTreeInto(ctx, tree, indexFile string) error` — runs `GIT_INDEX_FILE=<abs indexFile> git read-tree <tree>` via runWithEnv (extraEnv = []string{\"GIT_INDEX_FILE=\" + abs(indexFile)}). NOTE: indexFile MUST be absolute (external_deps.md §8 gotcha — a relative value resolves against the hook's CWD). (b) `WriteTreeFrom(ctx, indexFile string) (sha string, err error)` — runs `GIT_INDEX_FILE=<abs indexFile> git write-tree` via runWithEnv, returns the tree SHA. (c) Optionally `UpdateIndexCacheInfo`/scoped Add if a hook needs to re-stage into the throwaway index — but typically the hook itself runs `git add` which honors GIT_INDEX_FILE from its env, so the runner just sets the env on the hook subprocess; the scoped ReadTreeInto/WriteTreeFrom are for stagehand's OWN read-tree (prime) and write-tree (capture). Reuse the existing DiffTreeNames (git.go:1582, read-only, index-agnostic) for the subset check (P1.M2.T2.S1) — it compares two tree SHAs.\n4. OUTPUT: ReadTreeInto(tree, indexFile) primes a throwaway index from a frozen tree; WriteTreeFrom(indexFile) captures the post-hook tree. Both leave the live .git/index UNTOUCHED. MOCKING: unit-test with a temp repo + temp index file; assert the live .git/index is byte-identical before/after.\n5. DOCS: none — internal git primitives."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T2",
+              "title": "FR-V3 subset-enforcement + post-hook tree capture",
+              "status": "Planned",
+              "description": "The FR-V3 invariant: pre-commit may mutate paths already in the snapshot (formatter re-stages → re-tree, git-commit parity), but a hook that stages a path NOT in the snapshot is a HARD ERROR (it would sweep concurrent work into the commit, violating the freeze — mirrors the stager's FR-M1c). Add the subset-check helper and the re-tree-on-permitted-mutation logic.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T2.S1",
+                  "title": "Subset-check helper + re-tree-on-permitted-mutation logic",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M2.T1.S2"],
+                  "prd_selectors": ["h3.41", "h3.67", "h3.64"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see external_deps.md §8 + open_questions.md §1. The subset check compares the post-hook tree's changed paths against the snapshot's path set. The existing DiffTreeNames (git.go:1582, read-only) returns sorted/deduped []string of paths that differ between two tree SHAs — index-agnostic. DiffTreeNameStatus (git.go:1813) returns raw A/M/D/R/C lines. The snapshot's path set = all paths in the frozen tree (treeSHA on single-commit; tree[i]/T_start on decompose). The hard error mirrors the stager's FR-M1c discipline (decompose freeze enforcement) — reuse the same error-reporting shape if one exists.\n2. INPUT: the frozen snapshot tree SHA (treeSHA), the post-hook tree SHA (postTree from WriteTreeFrom, P1.M2.T1.S2), and the git.Git interface (DiffTreeNames/DiffTreeNameStatus).\n3. LOGIC: implement a helper (in internal/git or internal/hooks — PREFER internal/hooks since it's policy, not a primitive): `enforceSubset(ctx, g, snapshotTree, postTree string) error`. Compute changedPaths = DiffTreeNameStatus(snapshotTree, postTree). For each changed path: if its status is 'A' (added — a path NOT in the snapshot) AND the path is not present in the snapshot tree → hard error: return a typed error like `ErrHookSweptConcurrentWork` naming the offending path (\"pre-commit staged a path not in the snapshot: <path> — refusing to sweep concurrent work into the commit (FR-V3)\"). A path that is 'M' (modified — a snapshot path reformatted) is PERMITTED → the commit uses postTree (re-tree). A deletion ('D') of a snapshot path is permitted (the hook removed a staged file). The check is: postTree's path set must be a SUBSET of snapshotTree's path set (no new paths introduced). NOTE: a formatter that adds a NEW file (not in snapshot) is a hard error; a formatter that modifies an EXISTING snapshot file is fine.\n4. OUTPUT: enforceSubset returns nil (permitted mutation → use postTree) or a hard error (sweep → abort). The re-tree decision: if postTree != snapshotTree AND enforceSubset passed → the commit's tree = postTree (git-commit parity: the commit reflects the hook's output). If postTree == snapshotTree → no mutation, use snapshotTree as-is.\n5. DOCS: none — internal invariant enforcement. (The FR-V3 behavior is documented in how-it-works.md via M3.T2.S1's Mode A subsection.)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M3",
+          "title": "Commit-hooks runner + wiring into all commit chokepoints",
+          "status": "Planned",
+          "description": "Build the RunCommitHooks runner (new module internal/hooks, distinct from the §9.20 hook-mode internal/hook), then wire it into the three commit chokepoints: generate.CommitStaged (single-commit COMMIT path), pkg/stagehand.runPipeline (single-commit DRY-RUN path — FR-V8a: commit-msg only), and decompose.publishCommit (multi-commit path). Reuse the existing *RescueError/FormatRescue/exit-3 path UNCHANGED for hook failures (FR-V7). post-commit is best-effort after UpdateRefCAS.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M3.T1",
+              "title": "RunCommitHooks runner module (new internal/hooks)",
+              "status": "Planned",
+              "description": "The new module that executes the repo's commit hooks in git's documented order (pre-commit → prepare-commit-msg → commit-msg, then post-commit after publication), scoped to the frozen snapshot (FR-V3), with --no-verify (FR-V5), recursion prevention (FR-V4), per-hook timeout (FR-V6), and failure→*RescueError (FR-V7). Distinct from internal/hook (the §9.20 hook-MODE install/exec). Imports internal/hook only for Marker/Detect (recursion prevention) and internal/git for the primitives + scoped-index helper.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S1",
+                  "title": "Runner core — sequence, --no-verify, absent-hook skip, timeout, env, failure→rescue, post-commit",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M2.T2.S1", "P1.M1.T1.S1"],
+                  "prd_selectors": ["h3.41", "h3.89", "h3.90", "h2.19"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see external_deps.md §1-8 + system_context.md + open_questions.md §1,4,6. Git's order is pre-commit → prepare-commit-msg → commit-msg (before commit-tree), then post-commit (after update-ref). --no-verify skips pre-commit + commit-msg ONLY (git-commit(1) confirmed). A non-executable/absent hook is silently skipped (git access(X_OK)). Each hook runs with GIT_DIR, GIT_INDEX_FILE (scoped for pre-commit only), GIT_EDITOR=: (no-op), CWD=worktree, stdin=/dev/null, stdout/stderr pass-through, bounded by cfg.HookTimeout. Failure (non-zero exit or timeout) from pre/prepare/commit-msg → *generate.RescueError{Kind: ErrRescue, TreeSHA, ParentSHA, Candidate, Cause} (byte-identical to a generation failure; exit 3; FR-V7). post-commit exit code is DISREGARDED (commit already landed) — log at --verbose, never undo.\n2. INPUT: the git.Git interface (HooksPath at git.go:1752, ReadTreeInto/WriteTreeFrom from P1.M2.T1.S2, enforceSubset from P1.M2.T2.S1), cfg.NoVerify (P1.M1.T1.S1), cfg.HookTimeout (P1.M1.T1.S1), the frozen snapshotTree SHA, the generated message, parentSHA, and a dryRun flag (FR-V8a).\n3. LOGIC: new package internal/hooks. Core function: `RunCommitHooks(ctx, g git.Git, cfg config.Config, snapshotTree, parentSHA, msg string, opts HookOpts) (finalTree, finalMsg string, err error)` where HookOpts carries {DryRun bool, Verbose *ui.Verbose}. Sequence: (a) hooksDir = g.HooksPath(ctx). (b) PRE-COMMIT (skip if cfg.NoVerify || opts.DryRun): if <hooksDir>/pre-commit exists+executable → prime throwaway index (ReadTreeInto(snapshotTree, tmpIndex)), run pre-commit with env {GIT_INDEX_FILE=<abs tmp>, GIT_EDITOR=:, GIT_DIR=<gitdir>}, capture postTree=WriteTreeFrom(tmpIndex), enforceSubset(snapshotTree, postTree) (hard error on sweep), finalTree = postTree (re-tree on permitted mutation). Non-zero/timeout → *RescueError. (c) PREPARE-COMMIT-MSG (runs even under --no-verify and --dry-run): write msg to a temp file, detect recursion (S2's hook.Detect — if StatusStagehand, skip; else run prepare-commit-msg <msgfile> [\"\"|file-only per open_questions.md §3]), read back, strip #-comments. Non-zero → *RescueError. (d) COMMIT-MSG (skip if cfg.NoVerify; runs under --dry-run per FR-V8a): run commit-msg <msgfile>, read back as finalMsg. Non-zero/timeout → *RescueError. Return (finalTree, finalMsg, nil). post-commit is a SEPARATE function `RunPostCommit(ctx, g, cfg, opts)` called by the caller AFTER update-ref succeeds (best-effort).\n4. OUTPUT: RunCommitHooks returns the (possibly re-treed) finalTree and the (possibly hook-annotated) finalMsg for commit-tree; or a *RescueError. RunPostCommit runs after publication, logs warnings only. MOCKING: unit-test with a temp repo + real shell-script hooks (a pre-commit that git-adds a snapshot file; one that exits non-zero; a commit-msg that appends; an absent hook). Assert the live .git/index is untouched by the scoped pre-commit.\n5. DOCS: none here — the feature documentation lands in M3.T2.S1 (Mode A how-it-works.md subsection) and M4.T1.S1 (Mode B headline rewrite)."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S2",
+                  "title": "Recursion prevention (hook.Detect skip) + message-file lifecycle",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M3.T1.S1"],
+                  "prd_selectors": ["h3.41", "h3.36"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §4 — internal/hook.Marker = \"# stagehand prepare-commit-msg hook v1\" (script.go:15); hook.Detect(hooksDir) (hook.go:62) returns Status (StatusNone/StatusStagehand/StatusForeign) via strings.Contains(data, Marker). FR-V4: if stagehand's OWN prepare-commit-msg is installed, SKIP it on the plumbing path (the message is already generated; invoking it would exec `stagehand hook exec` and recurse). A FOREIGN prepare-commit-msg runs and may annotate the message (append a ticket ref, branch name) — stagehand reads the file back.\n2. INPUT: the runner core from P1.M3.T1.S1; internal/hook.Detect + hook.Marker + hook.HookFilename.\n3. LOGIC: in RunCommitHooks's prepare-commit-msg step: `status, _ := hook.Detect(hooksDir)`; if status == StatusStagehand → skip prepare-commit-msg entirely (log at --verbose: \"skipping stagehand's own prepare-commit-msg hook on the plumbing path (FR-V4 recursion prevention)\"). If status == StatusForeign → run it with the message file; on non-zero exit → *RescueError (git parity, FR-V2); on success → read the file back, strip #-comment lines (honor core.commentChar — read via git config core.commentChar, default '#'), use as finalMsg. If StatusNone → no prepare-commit-msg, skip. MESSAGE-FILE LIFECYCLE: write the generated+deduped+--edit-finalized msg to a temp file in os.TempDir() (e.g. stagehand-hookmsg-<random>); defer os.Remove; prepare-commit-msg and commit-msg both operate on this same file; the final read-back (after commit-msg) is the finalMsg passed to commit-tree. Strip #-comment lines on read-back (git's default cleanup=strip).\n4. OUTPUT: recursion is prevented; foreign prepare-commit-msg annotation is honored; the message-file round-trip is faithful. MOCKING: unit-test with a stagehand-marker prepare-commit-msg (assert skipped), a foreign one that appends (assert annotation read back), an absent one (assert no-op).\n5. DOCS: none — internal runner logic."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M3.T2",
+              "title": "Wire RunCommitHooks into the single-commit path (CommitStaged + runPipeline)",
+              "status": "Planned",
+              "description": "Insert RunCommitHooks into generate.CommitStaged (the COMMIT path) between EditMessage (line 389) and CommitTree (line 399), with post-commit after UpdateRefCAS (line 410). Handle the DRY-RUN path in pkg/stagehand.runPipeline (FR-V8a: commit-msg only, skip pre/post-commit). Includes the staged-during-generation sentinel invariant test (the FR-V3 freeze holds under hooks).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T2.S1",
+                  "title": "generate.CommitStaged wiring + post-commit + staged-during-generation sentinel invariant",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M3.T1.S2"],
+                  "prd_selectors": ["h3.41", "h3.25", "h3.67", "h3.93", "h3.96", "h2.5"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §5 + system_context.md. generate.CommitStaged (generate.go) pipeline: EditMessage at line 389 → CommitTree at 399 → UpdateRefCAS at 410 → signal.ClearSnapshot at 428 → DiffTree at the success path. The hooks insert BETWEEN 389 (EditMessage, the --edit gate produces the finalized msg) and 399 (CommitTree). post-commit runs AFTER 410 (UpdateRefCAS success) and BEFORE/AROUND 428 (ClearSnapshot) — best-effort. signal.SetSnapshot (step 4) arms rescue — hooks run INSIDE the armed window, so a Ctrl-C during a hook triggers the existing rescue (no signal change).\n2. INPUT: RunCommitHooks + RunPostCommit from P1.M3.T1.S1/S2; the finalized msg (post-EditMessage) and frozen treeSHA from CommitStaged's earlier steps; cfg (NoVerify, HookTimeout); deps.Git, deps.Verbose.\n3. LOGIC: in generate.CommitStaged, after EditMessage (line 389) and BEFORE CommitTree (line 399): `finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, cfg, treeSHA, parentSHA, msg, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})`; if herr != nil → return Result{}, herr (it's a *RescueError → existing handleGenError → exit 3 + FormatRescue, byte-identical to a generation failure, FR-V7). Then CommitTree(finalTree, parents, finalMsg) and UpdateRefCAS as before (using finalTree instead of treeSHA, finalMsg instead of msg). After UpdateRefCAS succeeds (after line 410, before ClearSnapshot@428): `hooks.RunPostCommit(ctx, deps.Git, cfg, hooks.HookOpts{Verbose: deps.Verbose})` — best-effort: a non-zero exit is logged via deps.Verbose as a warning, NEVER undoes the commit (FR-V7). Note: CommitStaged is NOT dry-run-aware (the common !DryRun path delegates to it; DryRun uses runPipeline in S2). Add a Deps field or pass cfg/hooks via existing deps — the generate.Deps struct (generate.go) may need a hook runner dependency (inject it, mirroring how Manifest is injected, for testability).\n4. OUTPUT: every CommitStaged commit runs the repo's hooks scoped to the frozen snapshot; a hook abort is a rescue; post-commit fires best-effort. ACCEPTANCE INVARIANT (the §20.2/§20.5 freeze test, folded here per SOW §3): a sentinel file written to the live index AFTER write-tree (simulating staging-during-generation) is NOT swept into the commit when pre-commit runs (the scoped throwaway index excludes it) — assert via a temp repo + a pre-commit hook that the commit's tree omits the sentinel AND the live index retains it staged. This is the headline freeze-safety test.\n5. DOCS: [Mode A] Add a new subsection \"Commit hooks on the plumbing path\" to docs/how-it-works.md under the snapshot-flow section (~before the \"Hook mode vs the snapshot-based flow\" section at line 303): hooks run in git's order around every stagehand commit, scoped to the frozen snapshot (freeze holds); --no-verify skips pre-commit/commit-msg; a hook abort is a rescue (exit 3); post-commit is best-effort. Cross-link §9.25 and the Mode B rewrite in M4. This rides WITH the work."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T2.S2",
+                  "title": "pkg/stagehand.runPipeline dry-run wiring (FR-V8a: commit-msg only)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M3.T2.S1"],
+                  "prd_selectors": ["h3.41", "h3.28"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §5 + open_questions.md §4. pkg/stagehand.runPipeline (stagehand.go:411) is the self-contained path for opts.DryRun || opts.SystemExtra != \"\" (the common !DryRun && SystemExtra==\"\" path delegates to generate.CommitStaged at line 148). runPipeline mirrors CommitStaged but skips CommitTree/UpdateRefCAS under DryRun (the dangling tree is intentional/harmless). FR-V8a: under --dry-run, pre-commit and post-commit are SKIPPED (nothing is committed), but commit-msg RUNS against the would-be message so the user sees lint results.\n2. INPUT: RunCommitHooks from P1.M3.T1.S1 (which takes a DryRun flag in HookOpts); the runPipeline flow; opts.DryRun.\n3. LOGIC: in runPipeline, at the point where the message is finalized (post-EditMessage equivalent), call RunCommitHooks with HookOpts{DryRun: opts.DryRun}. Under DryRun: RunCommitHooks skips pre-commit (DryRun flag) and the caller skips post-commit (nothing committed); prepare-commit-msg + commit-msg run on the would-be message. The runPipeline dry-run path already skips CommitTree/UpdateRefCAS — so the hook runner's commit-msg result is used for the printed message (the user sees what commit-msg would accept/reject). Confirm RunCommitHooks's DryRun handling matches: DryRun → skip pre-commit + skip post-commit-caller-side, run prepare-commit-msg + commit-msg. If commit-msg exits non-zero under dry-run, surface it (the PRD FR-V8a intent: 'the user still sees lint results') — decide: warn-and-continue (print the would-be message + a lint-failed notice) vs. exit 1. Lean toward warn-and-print (dry-run is a preview; a commit-msg rejection is information, not a failure).\n4. OUTPUT: --dry-run runs commit-msg (and prepare-commit-msg for annotation) on the would-be message but skips pre-commit/post-commit. MOCKING: unit-test runPipeline dry-run with a commit-msg hook that rejects — assert the message is still printed + the lint result surfaced.\n5. DOCS: none beyond M3.T2.S1's how-it-works.md subsection (which covers the --dry-run composition)."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M3.T3",
+              "title": "Wire RunCommitHooks into the decompose path (publishCommit + arbiter)",
+              "status": "Planned",
+              "description": "Wire the hook runner into decompose.publishCommit (the single chokepoint for all per-concept + arbiter new/tip commits), scoped to each commit's tree (FR-V8c: per-concept pre-commit sees only that concept's tree subset). The arbiter's silent mid-chain rebuild (resolveMidChain) SKIPS hooks (open_questions.md §2 — confirmed: running prepare-commit-msg on a verbatim-reused msg[j] risks breaking the §20.2 mid-chain amend fidelity invariant).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T3.S1",
+                  "title": "decompose.publishCommit wiring (per-concept scoped; arbiter new/tip run; mid-chain skips) + mid-chain-fidelity invariant",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M3.T2.S1"],
+                  "prd_selectors": ["h3.41", "h3.68", "h4.7", "h3.93"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §5 + open_questions.md §2. decompose.publishCommit (message.go:219) is the single chokepoint: CommitTree(tree, parents, msg) → newSHA → UpdateRefCAS(HEAD, newSHA, expectedOld). It's called by: main loop publish closure (decompose.go:484), runSingleShortcut (:390), runOneFileShortcut (:336). The arbiter's resolveNewCommit (chain.go:81) and resolveTipAmend (chain.go:137) produce user-facing commits — they SHOULD run hooks (route through the hook-bearing publish path). resolveMidChain (chain.go:186) does its OWN CommitTree+UpdateRefCAS (chain.go:203/215) reusing msg[j] verbatim via OverlayTreePaths — it does NOT go through publishCommit, so it naturally skips hooks (DO NOT wire the runner into resolveMidChain). runSingleEscape delegates to generate.CommitStaged (covered by M3.T2.S1 — do not double-run).\n2. INPUT: RunCommitHooks + RunPostCommit from P1.M3.T1; publishCommit's (tree, parentSHA, msg) inputs; deps.Git, deps.Config (NoVerify, HookTimeout), deps.Verbose; the decompose.Deps struct.\n3. LOGIC: extend publishCommit (or add a wrapping helper it calls) to run RunCommitHooks between receiving (tree, parentSHA, msg) and CommitTree: `finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, tree, parentSHA, msg, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})`; on herr → return the *RescueError (the decompose runLoop's FR-M12 handling already maps *generate.RescueError). Then CommitTree(finalTree, parents, finalMsg) + UpdateRefCAS. After UpdateRefCAS: RunPostCommit (best-effort). The per-concept scoping is automatic: each publishCommit call passes THAT concept's tree[i], so pre-commit sees only that concept's staged subset (FR-V8c). CONFIRM resolveNewCommit/resolveTipAmend route through publishCommit (or add the hook runner to their CommitTree calls too — they produce user-facing commits). resolveMidChain stays hook-free (it doesn't use publishCommit).\n4. OUTPUT: every per-concept + arbiter-new + arbiter-tip decompose commit runs hooks scoped to its tree; the mid-chain rebuild is silent (no hooks, msg[j] verbatim, fidelity preserved). ACCEPTANCE INVARIANT (§20.2 mid-chain amend fidelity, folded here): after an arbiter mid-chain rebuild, the non-target commits are byte-identical (same tree, same message) to the originals — running NO hooks on resolveMidChain guarantees this. MOCKING: integration-test with a stub planner/stager/arbiter + a temp repo + a prepare-commit-msg hook that appends — assert per-concept commits get the annotation but the mid-chain rebuild does not mutate msg[j].\n5. DOCS: none beyond M3.T2.S1's how-it-works.md subsection (decompose composition is covered there)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M4",
+          "title": "Changeset-level documentation sync (Mode B)",
+          "status": "Planned",
+          "description": "The final Mode B documentation sweep: rewrite the now-FALSE 'Bypasses pre-commit hooks' framing in docs/how-it-works.md (the headline doc change) and add a README.md feature mention. This task depends on ALL implementing subtasks (the whole feature must be in place before the overview docs summarize it). Per SOW §5 Mode B, this is the catch-all that prevents a coherent delta from shipping with stale overview docs.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M4.T1",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Rewrite docs/how-it-works.md 'Hook mode vs the snapshot-based flow' (line 303) — the current text explicitly says the snapshot flow 'Bypasses pre-commit hooks' and frames hook mode as the way to get hooks; BOTH are now FALSE. Reframe: the snapshot flow is atomic + stage-while-generating AND honors the repo's hooks (--no-verify skips pre-commit/commit-msg); hook mode (§9.20) remains for plain git commit from IDEs. Update 'When to use which': the two modes compose. Add a one-line README.md feature mention.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M4.T1.S1",
+                  "title": "how-it-works.md headline rewrite + README.md feature mention",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T2.S1", "P1.M2.T2.S1", "P1.M3.T1.S2", "P1.M3.T2.S1", "P1.M3.T2.S2", "P1.M3.T3.S1"],
+                  "prd_selectors": ["h3.41", "h3.36", "h2.1", "h2.5", "h3.10"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §8. docs/how-it-works.md:303 '## Hook mode vs the snapshot-based flow' has a 'Trade-off inversion (FR-H7)' subsection. Line 312 explicitly states under 'Snapshot-based flow': '- **Bypasses pre-commit hooks**: because the commit is built via plumbing (not `git commit`), tools like husky, lint-staged, and `.pre-commit-config.yaml` do NOT run on the generated commit.' — this is now FALSE. The 'Hook mode' block (line 316+) says '- **Pre-commit hooks honored**: the commit flows through the standard `git commit` path...' — this framing (hook mode as the ONLY way to get hooks) is now misleading. The 'When to use which' section (lines 327-329) also needs reframing. The README.md (top-level, ~21KB) has a feature/safety surface area.\n2. INPUT: the full implemented feature (all of M1-M3 must be done). The new 'Commit hooks on the plumbing path' subsection was added in M3.T2.S1 (Mode A) — this task REFRAMES the existing comparison section to be consistent with it.\n3. LOGIC: (a) docs/how-it-works.md — REWRITE the 'Snapshot-based flow' bullet at line 312 from 'Bypasses pre-commit hooks' to: '- **Honors pre-commit hooks**: the repository's pre-commit → prepare-commit-msg → commit-msg → post-commit hooks run around every stagehand commit, scoped to the frozen snapshot (so the stage-while-generating freeze holds). `--no-verify` skips pre-commit + commit-msg (mirrors `git commit --no-verify`).' REFRAME the 'Hook mode' block: it is no longer the way to get hooks — it remains the bridge for plain `git commit` from IDEs (hooks honored there too, but no snapshot guarantees, generation latency inside the commit). UPDATE 'When to use which': the two modes COMPOSE — a user who always invokes `stagehand` gets hook coverage without installing hook mode; hook mode covers `git commit` from an IDE. Cross-link the M3.T2.S1 subsection and §9.25. (b) README.md — add a one-line feature mention in the feature/safety surface area: hooks run on every stagehand commit (atomic + stage-while-generating preserved); `--no-verify` mirrors git. Keep it to a sentence or two.\n4. OUTPUT: docs/how-it-works.md and README.md reflect that the plumbing path honors hooks; no stale 'bypasses' framing remains. VERIFY: grep the whole docs/ tree for 'bypass'/'Bypasses'/'pre-commit hooks do NOT run' and confirm every stale claim is updated.\n5. DOCS: this IS the documentation task (Mode B). It depends on every implementing subtask (M1-M3) so it runs last."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
