@@ -381,21 +381,206 @@ func TestHookExecutable(t *testing.T) {
 	}
 }
 
-// --- 13. stripCommentLines unit ---
+// --- 13. stripCommentLines unit (parameterized by core.commentChar; default '#') ---
 
 func TestStripCommentLines(t *testing.T) {
 	in := "feat: x\n# a comment\n\nbody line\n# another"
 	want := "feat: x\n\nbody line"
-	got := stripCommentLines(in)
+	got := stripCommentLines(in, "#")
 	if got != want {
 		t.Errorf("stripCommentLines = %q, want %q", got, want)
 	}
 }
 
-// --- 14. shouldSkipStagehandPrepareCommitMsg stub (S2 seam) returns false ---
+// --- 14. shouldSkipStagehandPrepareCommitMsg — FR-V4 seam via hook.Detect ---
+//
+// S1 stubbed this false; S2 fills it via hook.Detect(hooksDir) == hook.StatusStagehand. A repo whose
+// prepare-commit-msg contains the stagehand Marker ⇒ StatusStagehand ⇒ skip; a foreign (no Marker)
+// hook ⇒ StatusForeign ⇒ don't skip; no hook ⇒ StatusNone ⇒ don't skip.
 
-func TestShouldSkipStagehandPrepareCommitMsg_S1StubFalse(t *testing.T) {
-	if shouldSkipStagehandPrepareCommitMsg("/anywhere") {
-		t.Errorf("shouldSkipStagehandPrepareCommitMsg = true; want false (S1 stub; S2 fills via hook.Detect)")
+func TestShouldSkipStagehandPrepareCommitMsg_StagehandMarker_True(t *testing.T) {
+	dir := t.TempDir()
+	hooks := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The Marker line baked into stagehand's own prepare-commit-msg hook (internal/hook.Marker).
+	body := "#!/bin/sh\n# stagehand prepare-commit-msg hook v1\nexec stagehand hook exec \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(hooks, "prepare-commit-msg"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !shouldSkipStagehandPrepareCommitMsg(hooks) {
+		t.Errorf("shouldSkipStagehandPrepareCommitMsg = false for stagehand's own hook; want true (recursion)")
+	}
+}
+
+func TestShouldSkipStagehandPrepareCommitMsg_ForeignOrAbsent_False(t *testing.T) {
+	t.Run("foreign", func(t *testing.T) {
+		dir := t.TempDir()
+		hooks := filepath.Join(dir, "hooks")
+		if err := os.MkdirAll(hooks, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// A foreign hook (no stagehand Marker) ⇒ StatusForeign ⇒ don't skip (it may annotate).
+		body := "#!/bin/sh\necho foreign\n"
+		if err := os.WriteFile(filepath.Join(hooks, "prepare-commit-msg"), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if shouldSkipStagehandPrepareCommitMsg(hooks) {
+			t.Errorf("shouldSkipStagehandPrepareCommitMsg = true for a foreign hook; want false")
+		}
+	})
+	t.Run("absent", func(t *testing.T) {
+		dir := t.TempDir() // no hooks dir at all ⇒ StatusNone ⇒ don't skip
+		hooks := filepath.Join(dir, "hooks")
+		if shouldSkipStagehandPrepareCommitMsg(hooks) {
+			t.Errorf("shouldSkipStagehandPrepareCommitMsg = true when no hook is installed; want false")
+		}
+	})
+}
+
+// --- 15. FR-V4 contract scenarios (recursion skip / foreign annotate / absent no-op) ---
+
+// TestRunCommitHooks_PrepareCommitMsg_StagehandMarker_Skipped verifies FR-V4 recursion prevention:
+// a prepare-commit-msg that IS stagehand's own (the Marker line present) is SKIPPED on the plumbing
+// path — the message is unchanged and the hook's mutation (which would recurse via `stagehand hook
+// exec`) did NOT run. NoVerify=true isolates prepare-commit-msg (no commit-msg).
+func TestRunCommitHooks_PrepareCommitMsg_StagehandMarker_Skipped(t *testing.T) {
+	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
+	// Install stagehand's OWN prepare-commit-msg (Marker present) that WOULD mutate the file if run.
+	installHook(t, repo, "prepare-commit-msg",
+		`# stagehand prepare-commit-msg hook v1`+"\n"+`echo 'RECURRED' >> "$1"`)
+	cfg := defaultCfg()
+	cfg.NoVerify = true // isolate prepare-commit-msg (skip pre-commit + commit-msg)
+
+	finalTree, finalMsg, err := RunCommitHooks(context.Background(), g, cfg, snapshotTree, parentSHA,
+		"feat: test", HookOpts{})
+	if err != nil {
+		t.Fatalf("expected nil err (skip), got: %v", err)
+	}
+	_ = finalTree
+	if strings.Contains(finalMsg, "RECURRED") {
+		t.Errorf("stagehand's own prepare-commit-msg was NOT skipped (recursion): %q", finalMsg)
+	}
+	if finalMsg != "feat: test" {
+		t.Errorf("msg changed despite skip: %q", finalMsg)
+	}
+}
+
+// TestRunCommitHooks_PrepareCommitMsg_Foreign_AnnotationReadBack verifies a FOREIGN
+// prepare-commit-msg's appended annotation is read back from the shared file into finalMsg.
+func TestRunCommitHooks_PrepareCommitMsg_Foreign_AnnotationReadBack(t *testing.T) {
+	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
+	// A foreign prepare-commit-msg (no stagehand Marker) that appends a ticket ref.
+	installHook(t, repo, "prepare-commit-msg", `echo 'Refs: #123' >> "$1"`)
+	cfg := defaultCfg()
+	cfg.NoVerify = true // isolate prepare (no commit-msg)
+
+	_, finalMsg, err := RunCommitHooks(context.Background(), g, cfg, snapshotTree, parentSHA,
+		"feat: test", HookOpts{})
+	if err != nil {
+		t.Fatalf("expected nil err, got: %v", err)
+	}
+	if !strings.Contains(finalMsg, "Refs: #123") {
+		t.Errorf("foreign prepare-commit-msg annotation not read back: %q", finalMsg)
+	}
+}
+
+// TestRunCommitHooks_PrepareCommitMsg_Absent_NoOp verifies an absent prepare-commit-msg is a no-op
+// (msg unchanged). NoVerify=true isolates the prepare stage.
+func TestRunCommitHooks_PrepareCommitMsg_Absent_NoOp(t *testing.T) {
+	_, snapshotTree, parentSHA, g := primeRunnerRepo(t) // no hooks installed
+	cfg := defaultCfg()
+	cfg.NoVerify = true
+
+	_, finalMsg, err := RunCommitHooks(context.Background(), g, cfg, snapshotTree, parentSHA,
+		"feat: test", HookOpts{})
+	if err != nil {
+		t.Fatalf("expected nil err, got: %v", err)
+	}
+	if finalMsg != "feat: test" {
+		t.Errorf("absent prepare-commit-msg should be a no-op: %q", finalMsg)
+	}
+}
+
+// --- 16. stripCommentLines honors the comment char (pure table) ---
+
+func TestStripCommentLines_HonorsCommentChar(t *testing.T) {
+	cases := []struct {
+		name, in, char, want string
+	}{
+		{"hash strips # lines", "feat: x\n# comment\nbody", "#", "feat: x\nbody"},
+		{"semicolon strips ; lines", "feat: x\n; comment\nbody", ";", "feat: x\nbody"},
+		{"empty char defaults to hash", "feat: x\n# c\nbody", "", "feat: x\nbody"},
+		{"no comment lines unchanged", "feat: x\nbody", "#", "feat: x\nbody"},
+		{"multi-char prefix", "feat: x\n// note\nbody", "//", "feat: x\nbody"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripCommentLines(tc.in, tc.char); got != tc.want {
+				t.Errorf("stripCommentLines(%q, %q) = %q, want %q", tc.in, tc.char, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- 17. CommentChar reads core.commentChar via the Git interface (default '#' on unset) ---
+
+func TestGitRunner_CommentChar(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := git.New(repo)
+
+	t.Run("unset defaults to hash", func(t *testing.T) {
+		got, err := g.CommentChar(context.Background())
+		if err != nil {
+			t.Fatalf("CommentChar err = %v, want nil (unset should default)", err)
+		}
+		if got != "#" {
+			t.Errorf("CommentChar (unset) = %q, want %q", got, "#")
+		}
+	})
+	t.Run("explicit semicolon", func(t *testing.T) {
+		execGit(t, repo, "config", "core.commentChar", ";")
+		got, err := g.CommentChar(context.Background())
+		if err != nil {
+			t.Fatalf("CommentChar err = %v, want nil", err)
+		}
+		if got != ";" {
+			t.Errorf("CommentChar (set ;) = %q, want %q", got, ";")
+		}
+	})
+	t.Run("auto resolves to hash", func(t *testing.T) {
+		execGit(t, repo, "config", "core.commentChar", "auto")
+		got, err := g.CommentChar(context.Background())
+		if err != nil {
+			t.Fatalf("CommentChar err = %v, want nil", err)
+		}
+		if got != "#" {
+			t.Errorf("CommentChar (auto) = %q, want %q (common-case default)", got, "#")
+		}
+	})
+}
+
+// --- 18. FR-V2 lifecycle: commit-msg sees prepare-commit-msg's output (ONE shared file) ---
+
+// TestRunCommitHooks_PrepareAndCommitMsg_SharedFile verifies the shared message-file lifecycle:
+// prepare-commit-msg appends a marker, then commit-msg (running on the SAME file) appends a SECOND
+// marker visible only because prepare's output is on the same file. Both markers land in finalMsg.
+func TestRunCommitHooks_PrepareAndCommitMsg_SharedFile(t *testing.T) {
+	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
+	installHook(t, repo, "prepare-commit-msg", `echo 'PREPARED' >> "$1"`)
+	installHook(t, repo, "commit-msg", `echo 'LINTED' >> "$1"`)
+
+	_, finalMsg, err := RunCommitHooks(context.Background(), g, defaultCfg(), snapshotTree, parentSHA,
+		"feat: test", HookOpts{})
+	if err != nil {
+		t.Fatalf("RunCommitHooks err = %v, want nil", err)
+	}
+	if !strings.Contains(finalMsg, "PREPARED") {
+		t.Errorf("prepare annotation missing from finalMsg: %q", finalMsg)
+	}
+	if !strings.Contains(finalMsg, "LINTED") {
+		t.Errorf("commit-msg annotation missing from finalMsg: %q", finalMsg)
 	}
 }

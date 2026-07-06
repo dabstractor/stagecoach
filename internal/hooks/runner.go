@@ -25,6 +25,7 @@ import (
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/hook"
 	"github.com/dustin/stagehand/internal/ui"
 )
 
@@ -90,21 +91,46 @@ func RunCommitHooks(ctx context.Context, g git.Git, cfg config.Config, snapshotT
 		}
 	}
 
-	// (c) PREPARE-COMMIT-MSG — ALWAYS runs (NoVerify + DryRun do NOT gate it; FR-V1/FR-V8a).
-	finalMsg, err = runPrepareCommitMsg(ctx, cfg, opts, hooksDir, gitDir, workTree,
-		snapshotTree, parentSHA, finalMsg)
+	// (c)+(d) MESSAGE-FILE LIFECYCLE — ONE shared temp file for prepare-commit-msg + commit-msg (FR-V2
+	// git parity: commit-msg sees prepare's output). Strip ONLY at the final read-back (git cleanup=strip,
+	// honoring core.commentChar) — NEVER between the two hooks.
+	msgFile, err := os.CreateTemp("", "stagehand-hookmsg-*.txt")
 	if err != nil {
-		return "", "", err // *RescueError
+		return "", "", fmt.Errorf("hooks: create message file: %w", err)
+	}
+	msgPath := msgFile.Name()
+	defer os.Remove(msgPath)
+	if _, werr := msgFile.WriteString(finalMsg); werr != nil {
+		msgFile.Close()
+		return "", "", fmt.Errorf("hooks: write message file: %w", werr)
+	}
+	msgFile.Close()
+
+	// (c) PREPARE-COMMIT-MSG — ALWAYS runs (NoVerify + DryRun do NOT gate it; FR-V1/FR-V8a). Skipped if
+	// absent/non-exec OR stagehand's OWN hook (FR-V4 recursion prevention).
+	if cerr := runPrepareCommitMsg(ctx, cfg, opts, hooksDir, gitDir, workTree, msgPath); cerr != nil {
+		return "", "", &generate.RescueError{Kind: generate.ErrRescue, TreeSHA: snapshotTree,
+			ParentSHA: parentSHA, Candidate: finalMsg, Cause: fmt.Errorf("prepare-commit-msg: %w", cerr)}
 	}
 
 	// (d) COMMIT-MSG — skip if --no-verify (FR-V5); RUNS under --dry-run (FR-V8a: lint the would-be msg).
 	if !cfg.NoVerify {
-		finalMsg, err = runCommitMsg(ctx, cfg, opts, hooksDir, gitDir, workTree,
-			snapshotTree, parentSHA, finalMsg)
-		if err != nil {
-			return "", "", err // *RescueError
+		if cerr := runCommitMsg(ctx, cfg, opts, hooksDir, gitDir, workTree, msgPath); cerr != nil {
+			return "", "", &generate.RescueError{Kind: generate.ErrRescue, TreeSHA: snapshotTree,
+				ParentSHA: parentSHA, Candidate: finalMsg, Cause: fmt.Errorf("commit-msg: %w", cerr)}
 		}
 	}
+
+	// Final read-back (after commit-msg) + strip comment lines (git cleanup=strip; honor core.commentChar).
+	commentChar, ccErr := g.CommentChar(ctx)
+	if ccErr != nil || commentChar == "" {
+		commentChar = "#" // best-effort default — NEVER block the commit on a commentChar read failure
+	}
+	data, rErr := os.ReadFile(msgPath)
+	if rErr != nil {
+		return "", "", fmt.Errorf("hooks: read back message file: %w", rErr)
+	}
+	finalMsg = stripCommentLines(string(data), commentChar)
 
 	return finalTree, finalMsg, nil
 }
@@ -149,60 +175,35 @@ func runPreCommitScoped(ctx context.Context, g git.Git, cfg config.Config, opts 
 	return postTree, nil // permitted mutation → re-tree (git-commit parity)
 }
 
-// runPrepareCommitMsg writes msg to a temp file, runs prepare-commit-msg <msgfile> "" (PRD FR-V2;
-// VERIFIED argc=2 for a plain commit — external_deps.md §2), reads back stripped of #-comments.
-// ALWAYS runs (NoVerify/DryRun don't gate it). [SEAM] shouldSkipStagehandPrepareCommitMsg stubs false
-// here; S2 (P1.M3.T1.S2) fills it via hook.Detect(hooksDir) == hook.StatusStagehand.
+// runPrepareCommitMsg runs prepare-commit-msg <msgPath> "" (PRD FR-V2; VERIFIED argc=2 for a plain
+// commit — external_deps.md §2) on the SHARED message file. ALWAYS runs (NoVerify/DryRun don't gate it —
+// the caller gates the OTHER hooks). Skipped if absent/non-exec OR stagehand's OWN hook (FR-V4 recursion
+// prevention — invoking stagehand's own prepare-commit-msg would exec `stagehand hook exec` and recurse).
+// Returns the CAUSE error on non-zero/timeout (the caller wraps the full-context *RescueError).
 func runPrepareCommitMsg(ctx context.Context, cfg config.Config, opts HookOpts,
-	hooksDir, gitDir, workTree, snapshotTree, parentSHA, msg string) (string, error) {
+	hooksDir, gitDir, workTree, msgPath string) error {
 	hookPath := filepath.Join(hooksDir, "prepare-commit-msg")
-	if !hookExecutable(hookPath) || shouldSkipStagehandPrepareCommitMsg(hooksDir) { // §8 seam — S2 fills
-		return msg, nil // absent/non-exec OR stagehand's own hook (recursion) → skip
+	if !hookExecutable(hookPath) {
+		return nil // absent/non-exec → silent skip
 	}
-	readBack, err := runMsgHook(ctx, cfg, opts, hookPath, gitDir, workTree,
-		snapshotTree, parentSHA, msg, []string{""}) // PRD FR-V2: <msgfile> "" (VERIFIED argc=2 for a plain commit)
-	if err != nil {
-		return "", err // *RescueError
+	if shouldSkipStagehandPrepareCommitMsg(hooksDir) { // FR-V4: stagehand's OWN hook → skip (recursion)
+		if opts.Verbose != nil { // nil-safe
+			opts.Verbose.VerboseWarn("skipping stagehand's own prepare-commit-msg hook on the plumbing path (FR-V4 recursion prevention)")
+		}
+		return nil
 	}
-	return stripCommentLines(readBack), nil
+	return runHook(ctx, cfg.HookTimeout, hookPath, []string{msgPath, ""}, gitDir, workTree, nil, opts)
 }
 
-// runCommitMsg runs commit-msg <msgfile>, reads back. Skipped only by --no-verify (NOT dry-run).
+// runCommitMsg runs commit-msg <msgPath> on the SHARED message file (sees prepare's output). Returns the
+// CAUSE error on non-zero/timeout (the caller wraps the full-context *RescueError).
 func runCommitMsg(ctx context.Context, cfg config.Config, opts HookOpts,
-	hooksDir, gitDir, workTree, snapshotTree, parentSHA, msg string) (string, error) {
+	hooksDir, gitDir, workTree, msgPath string) error {
 	hookPath := filepath.Join(hooksDir, "commit-msg")
 	if !hookExecutable(hookPath) {
-		return msg, nil
+		return nil
 	}
-	return runMsgHook(ctx, cfg, opts, hookPath, gitDir, workTree,
-		snapshotTree, parentSHA, msg, nil) // commit-msg: 1 arg <msgfile>
-}
-
-// runMsgHook writes msg to a temp file, runs <hook> <msgfile> [extra...], reads back. Non-zero/timeout
-// → *RescueError carrying the full rescue context (snapshotTree/parentSHA/msg — byte-identical to a
-// generation failure, FR-V7).
-func runMsgHook(ctx context.Context, cfg config.Config, opts HookOpts, hookPath, gitDir, workTree,
-	snapshotTree, parentSHA, msg string, extraArgs []string) (string, error) {
-	tmpMsg, err := os.CreateTemp("", "stagehand-msg-*.txt")
-	if err != nil {
-		return "", fmt.Errorf("hooks: create message file: %w", err)
-	}
-	tmpMsgPath := tmpMsg.Name()
-	defer os.Remove(tmpMsgPath)
-	if _, werr := tmpMsg.WriteString(msg); werr != nil {
-		tmpMsg.Close()
-		return "", fmt.Errorf("hooks: write message file: %w", werr)
-	}
-	tmpMsg.Close()
-	args := append([]string{tmpMsgPath}, extraArgs...)
-	if exitErr := runHook(ctx, cfg.HookTimeout, hookPath, args, gitDir, workTree, nil, opts); exitErr != nil {
-		return "", rescueErr(snapshotTree, parentSHA, msg, filepath.Base(hookPath), exitErr) // *RescueError
-	}
-	data, rerr := os.ReadFile(tmpMsgPath)
-	if rerr != nil {
-		return "", fmt.Errorf("hooks: read back message file: %w", rerr)
-	}
-	return string(data), nil
+	return runHook(ctx, cfg.HookTimeout, hookPath, []string{msgPath}, gitDir, workTree, nil, opts)
 }
 
 // RunPostCommit runs post-commit AFTER update-ref succeeds (best-effort). 0 args; the same env MINUS
@@ -285,15 +286,15 @@ func hookExecutable(path string) bool {
 	return info.Mode().Perm()&0o100 != 0 // owner-executable bit
 }
 
-// shouldSkipStagehandPrepareCommitMsg is the S2 SEAM: skip stagehand's OWN prepare-commit-msg hook
-// (it would `exec stagehand hook exec`, regenerating/recursing). S1 STUBS false (foreign hooks run —
-// S1's tests use foreign prepare-commit-msg hooks; the recursion scenario is S2's).
-//
-// TODO(P1.M3.T1.S2): return hook.Detect(hooksDir) == hook.StatusStagehand (the existing
-// internal/hook.Detect returns StatusStagehand if the marker is present).
+// shouldSkipStagehandPrepareCommitMsg implements FR-V4 recursion prevention: if the installed
+// prepare-commit-msg is stagehand's OWN (detected by its Marker line via hook.Detect), skip it on the
+// plumbing path — the message is already generated and invoking it would exec `stagehand hook exec`
+// and recurse. A foreign hook (StatusForeign) RUNS and may annotate; absent (StatusNone) is a no-op.
+// Pure (returns bool; the verbose log is in the caller, runPrepareCommitMsg). A Detect read error ⇒
+// StatusNone ⇒ don't skip (conservative: run rather than recurse-stall on a rare read failure).
 func shouldSkipStagehandPrepareCommitMsg(hooksDir string) bool {
-	_ = hooksDir
-	return false
+	status, _ := hook.Detect(hooksDir)
+	return status == hook.StatusStagehand
 }
 
 // rescueErr maps a hook failure (non-zero/timeout) to *generate.RescueError — byte-identical to a
@@ -309,12 +310,16 @@ func rescueErr(snapshotTree, parentSHA, msg, hookName string, cause error) error
 	}
 }
 
-// stripCommentLines drops git message-file comment lines (lines beginning with "#", the default
-// core.commentChar) introduced by prepare-commit-msg's commented metadata (external_deps.md §6).
-func stripCommentLines(s string) string {
+// stripCommentLines drops git message-file comment lines (lines beginning with commentChar, default
+// '#') — git's default cleanup=strip, honoring core.commentChar. Used on the final read-back of the
+// shared message file (after prepare-commit-msg + commit-msg have run on it).
+func stripCommentLines(s, commentChar string) string {
+	if commentChar == "" {
+		commentChar = "#"
+	}
 	var b strings.Builder
 	for _, line := range strings.Split(s, "\n") {
-		if strings.HasPrefix(line, "#") {
+		if strings.HasPrefix(line, commentChar) {
 			continue
 		}
 		b.WriteString(line)

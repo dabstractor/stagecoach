@@ -330,6 +330,14 @@ type Git interface {
 	// (external_deps.md §7).
 	ConfigGlobalGet(ctx context.Context, key string) (value string, found bool, err error)
 
+	// CommentChar returns the commit-message comment character from git config (core.commentChar),
+	// defaulting to "#" when unset/empty/"auto". Used by the commit-hooks runner (§9.25) to strip comment
+	// lines from the message-file read-back (git's cleanup=strip honors core.commentChar). It runs
+	// `git config --get core.commentChar` (LOCAL then global): exit 0 = found (trimmed; may be multi-char);
+	// exit 1 = unset → "#"; empty or "auto" → "#" (the common-case default; "auto" resolution is out of
+	// scope); else wrapped error incl. stderr. Read-only w.r.t. refs and the index (PRD §18.1).
+	CommentChar(ctx context.Context) (char string, err error)
+
 	// ConfigGlobalSet writes a key/value to git's GLOBAL config via
 	// `git config --global <key> <value>` (PRD §9.21 FR-I4). git performs the .gitconfig
 	// edit itself (so the FR-I3 file machinery is unnecessary). value is passed as a
@@ -1821,6 +1829,29 @@ func (g *gitRunner) ConfigGlobalGet(ctx context.Context, key string) (string, bo
 		return "", false, nil // missing key — NOT an error
 	default:
 		return "", false, fmt.Errorf("git config --global --get %s: exit %d: %s", key, code, strings.TrimSpace(stderr))
+	}
+}
+
+// CommentChar returns core.commentChar (default "#") via `git config --get core.commentChar` (LOCAL scope,
+// not --global). exit 0 = found (trimmed; may be multi-char); exit 1 = unset → "#"; empty or "auto" → "#"
+// (the common-case default; "auto" resolution is out of scope); other exit → wrapped error. Read-only
+// (PRD §18.1).
+func (g *gitRunner) CommentChar(ctx context.Context) (string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "config", "--get", "core.commentChar")
+	if err != nil {
+		return "", err // git binary missing / context cancel / start failure (code == -1)
+	}
+	switch code {
+	case 0:
+		c := strings.TrimSpace(stdout)
+		if c == "" || c == "auto" {
+			return "#", nil // empty or "auto" → git's default
+		}
+		return c, nil
+	case 1:
+		return "#", nil // unset → git's default
+	default:
+		return "", fmt.Errorf("git config --get core.commentChar: exit %d: %s", code, strings.TrimSpace(stderr))
 	}
 }
 
