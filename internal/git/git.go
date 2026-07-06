@@ -94,6 +94,15 @@ type Git interface {
 	// when the index has unresolved merge conflicts (git exit 128).
 	WriteTree(ctx context.Context) (sha string, err error)
 
+	// WriteTreeFrom captures the tree SHA of a THROWAWAY index at indexFile via GIT_INDEX_FILE-scoped
+	// `git write-tree` — the scoped sibling of WriteTree. It is the capture half of the v2.4 hook scoped-
+	// index mechanism (FR-V3): after ReadTreeInto primes a throwaway index from T_start and the pre-commit
+	// hook (run with GIT_INDEX_FILE in its env) may re-stage fixes into it, WriteTreeFrom captures the
+	// resulting tree. It READS indexFile, NOT .git/index — the live index is UNTOUCHED. indexFile is made
+	// absolute (external_deps.md §8 #1: a relative GIT_INDEX_FILE resolves against the hook's CWD). Like
+	// WriteTree, ALL non-zero exits are errors (incl. the scoped ls-files -u merge-conflict probe).
+	WriteTreeFrom(ctx context.Context, indexFile string) (sha string, err error)
+
 	// CommitTree creates a commit object for tree with the given parents and message (delivered
 	// via stdin with -F -). parents==nil/empty ⇒ root commit (no -p). Returns the new commit SHA.
 	CommitTree(ctx context.Context, tree string, parents []string, msg string) (sha string, err error)
@@ -167,6 +176,14 @@ type Git interface {
 	// non-zero exit (128 = bad/unresolvable tree SHA, not-a-repo, corrupt object) is a real error — the
 	// SAME convention as AddAll / WriteTree / CommitTree (mutations never special-case 128 as "unborn").
 	ReadTree(ctx context.Context, tree string) error
+
+	// ReadTreeInto primes a THROWAWAY index at indexFile from <tree> via GIT_INDEX_FILE-scoped
+	// `git read-tree` — the scoped sibling of ReadTree. It is the prime half of the v2.4 hook scoped-index
+	// mechanism (FR-V3): pre-commit runs against T_start (the snapshot tree), NOT the live staging area, so
+	// the §5 stage-while-generating freeze holds. It WRITES indexFile, NOT .git/index — the live index is
+	// UNTOUCHED. indexFile is made absolute (external_deps.md §8 #1). ALL non-zero exits are errors (the
+	// shared mutation convention — no 128-as-non-error special-case, same as ReadTree).
+	ReadTreeInto(ctx context.Context, tree, indexFile string) error
 
 	// TreeDiff returns the concept diff between two tree SHAs via `git diff <treeA> <treeB>` — the
 	// per-concept tree-to-tree diff the multi-commit message agent reasons over (PRD §13.6.3 invariant 2:
@@ -548,6 +565,30 @@ func (g *gitRunner) WriteTree(ctx context.Context) (sha string, err error) {
 			return "", errors.New("unresolved merge conflicts in the index — resolve them first, then re-run stagehand")
 		}
 		return "", fmt.Errorf("git write-tree failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// WriteTreeFrom is the scoped sibling of WriteTree: identical except it reads the throwaway index at
+// indexFile (via GIT_INDEX_FILE) instead of .git/index. The live index is NEVER touched (FR-V3 scoped
+// pre-commit). indexFile is made absolute (external_deps.md §8 #1 — a relative value resolves against
+// the hook's CWD). Mirrors WriteTree's ls-files -u merge-conflict probe, scoped to the throwaway index.
+func (g *gitRunner) WriteTreeFrom(ctx context.Context, indexFile string) (sha string, err error) {
+	absIndex, err := filepath.Abs(indexFile)
+	if err != nil {
+		return "", fmt.Errorf("git write-tree (scoped): resolve index path: %w", err)
+	}
+	env := []string{"GIT_INDEX_FILE=" + absIndex}
+	stdout, stderr, code, err := g.runWithEnv(ctx, g.workDir, env, "write-tree")
+	if err != nil {
+		return "", err // git binary missing / context cancelled / start failure (runWithEnv sets code=-1)
+	}
+	if code != 0 {
+		// Scoped merge-conflict probe (mirror WriteTree, scoped to the throwaway index).
+		if lsOut, _, _, lsErr := g.runWithEnv(ctx, g.workDir, env, "ls-files", "-u"); lsErr == nil && strings.TrimSpace(lsOut) != "" {
+			return "", errors.New("unresolved merge conflicts in the scoped index — resolve them first")
+		}
+		return "", fmt.Errorf("git write-tree (scoped) failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return strings.TrimSpace(stdout), nil
 }
@@ -1272,6 +1313,27 @@ func (g *gitRunner) ReadTree(ctx context.Context, tree string) error {
 	if code != 0 {
 		// ALL non-zero exits are errors (mutation convention — like AddAll). NO 128 special-case.
 		return fmt.Errorf("git read-tree: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+// ReadTreeInto is the scoped sibling of ReadTree: identical except it writes the throwaway index at
+// indexFile (via GIT_INDEX_FILE) instead of .git/index. The live index is NEVER touched (FR-V3 scoped
+// pre-commit primes T_start into a throwaway index). indexFile is made absolute (external_deps.md §8 #1
+// — a relative value resolves against the hook's CWD).
+func (g *gitRunner) ReadTreeInto(ctx context.Context, tree, indexFile string) error {
+	absIndex, err := filepath.Abs(indexFile)
+	if err != nil {
+		return fmt.Errorf("git read-tree (scoped): resolve index path: %w", err)
+	}
+	_, stderr, code, err := g.runWithEnv(ctx, g.workDir,
+		[]string{"GIT_INDEX_FILE=" + absIndex}, "read-tree", tree) // stdout unused (read-tree prints nothing)
+	if err != nil {
+		return err // git binary missing / context cancelled / start failure — UNWRAPPED
+	}
+	if code != 0 {
+		// ALL non-zero exits are errors (mutation convention — like ReadTree). NO 128 special-case.
+		return fmt.Errorf("git read-tree (scoped): failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return nil
 }

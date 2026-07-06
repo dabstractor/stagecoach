@@ -86,14 +86,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Git primitives for scoped hook execution (the hard part)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add the git-layer primitives that let pre-commit run against a FROZEN TREE via a throwaway index (so the stage-while-generating freeze holds), plus the FR-V3 subset enforcement (a hook that stages a path NOT in the snapshot is a hard error). This is the single hardest mechanism problem — the existing run()/runWithInput() exec seams (git.go:389/430) NEVER set cmd.Env, and GIT_INDEX_FILE appears nowhere in internal/. See architecture/external_deps.md §7-8 and codebase_reality.md §1,§3.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Env-passing exec seam + scoped-index git primitives",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add runWithEnv (the env-passing exec seam — the ONLY new exec entry point) and the thin scoped ReadTreeInto/WriteTreeFrom variants that accept a GIT_INDEX_FILE. These operate on a throwaway index file, never touching the live .git/index, so pre-commit can run scoped to the frozen tree.",
               "subtasks": [
                 {
@@ -113,7 +113,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Scoped ReadTreeInto/WriteTreeFrom variants (GIT_INDEX_FILE-aware)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -130,14 +130,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "FR-V3 subset-enforcement + post-hook tree capture",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The FR-V3 invariant: pre-commit may mutate paths already in the snapshot (formatter re-stages → re-tree, git-commit parity), but a hook that stages a path NOT in the snapshot is a HARD ERROR (it would sweep concurrent work into the commit, violating the freeze — mirrors the stager's FR-M1c). Add the subset-check helper and the re-tree-on-permitted-mutation logic.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Subset-check helper + re-tree-on-permitted-mutation logic",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S2"
