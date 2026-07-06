@@ -36,6 +36,7 @@ import (
 	"github.com/dustin/stagehand/internal/config"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/hooks"
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 )
@@ -221,7 +222,17 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 	if parentSHA != "" {
 		parents = []string{parentSHA}
 	}
-	newSHA, err := deps.Git.CommitTree(ctx, tree, parents, msg)
+	// Run the repo's commit hooks scoped to THIS concept's tree (PRD §9.25 FR-V1/V3/V7/V8c). The
+	// caller passes tree[i]/tStart, so pre-commit sees only that concept's staged subset via the
+	// runner's throwaway index (FR-V3/V8c — no caller edit needed). A hook abort returns
+	// *generate.RescueError (FR-V7) and propagates to the runLoop's FR-M12 handling. DryRun:false —
+	// decompose always commits (the dry-run path is single-commit runPipeline, P1.M3.T2.S2).
+	finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, tree, parentSHA, msg,
+		hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
+	if herr != nil {
+		return "", herr // *generate.RescueError (FR-V7) — propagate DIRECTLY (not wrapped)
+	}
+	newSHA, err := deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)
 	if err != nil {
 		return "", fmt.Errorf("%w: commit-tree: %w", ErrPublicationFailed, err)
 	}
@@ -242,6 +253,8 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 		}
 		return "", err // non-CAS infra — propagate verbatim (matches CommitStaged)
 	}
+	// Best-effort post-commit AFTER update-ref succeeded (FR-V7 — exit disregarded; commit stands).
+	_ = hooks.RunPostCommit(ctx, deps.Git, deps.Config, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
 	return newSHA, nil
 }
 

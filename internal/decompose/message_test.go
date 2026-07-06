@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -380,5 +381,89 @@ func TestGenerateMessage_ResolvesSubProvider(t *testing.T) {
 	}
 	if strings.Contains(cmd, "--provider pi") {
 		t.Errorf("message command emits manifest name as sub-provider (conflation)\ngot: %s", cmd)
+	}
+}
+
+// --- publishCommit hook wiring tests (P1.M3.T3.S1 — PRD §9.25 FR-V1/V7/V8c) ---
+
+// msgInstallHook writes an executable hook script to <repo>/.git/hooks/<name>, mode 0755 (the
+// owner-exec bit is what hookExecutable checks — without it the hook is skipped and the test is
+// vacuous). Mirrors internal/generate/hooks_freeze_test.go's hook-install idiom.
+func msgInstallHook(t *testing.T, repo, name, body string) {
+	t.Helper()
+	hooksDir := filepath.Join(repo, ".git", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("mkdir hooks: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, name), []byte(body), 0o755); err != nil {
+		t.Fatalf("write %s hook: %v", name, err)
+	}
+}
+
+// TestPublishCommit_PrepareCommitMsgAnnotates proves publishCommit runs the repo's commit hooks
+// around CommitTree: a prepare-commit-msg that appends a marker to the message file lands a commit
+// whose committed message carries the append (hooks ran + the annotated finalMsg was committed).
+// PRD §9.25 FR-V1/V8c.
+func TestPublishCommit_PrepareCommitMsgAnnotates(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	msgInitRepo(t, repo)
+	msgCommitRaw(t, repo, "initial")
+	parentSHA := msgHeadSHA(t, repo)
+
+	msgWriteFile(t, repo, "new.txt", "hello\n")
+	msgStageFile(t, repo, "new.txt")
+	tree := msgGitOut(t, repo, "write-tree")
+
+	// Install a prepare-commit-msg that appends a marker line to the message file ($1).
+	msgInstallHook(t, repo, "prepare-commit-msg", "#!/bin/sh\necho '[HOOK-RAN]' >> \"$1\"\n")
+
+	deps := messageDeps(t, repo, stubtest.Manifest(bin, stubtest.Options{}))
+
+	if _, err := publishCommit(context.Background(), deps, tree, parentSHA, "feat: add new"); err != nil {
+		t.Fatalf("publishCommit: %v", err)
+	}
+
+	logMsg := msgGitOut(t, repo, "log", "--format=%B", "-n1")
+	if !strings.Contains(logMsg, "[HOOK-RAN]") {
+		t.Errorf("committed message = %q, want it to carry the [HOOK-RAN] append (hooks ran)", logMsg)
+	}
+}
+
+// TestPublishCommit_PreCommitAbort_RescueError proves a non-zero pre-commit aborts the commit via
+// the existing rescue recipe (FR-V7): publishCommit returns *generate.RescueError (propagated
+// DIRECTLY, not wrapped in ErrPublicationFailed) and HEAD is unchanged (no CommitTree/update-ref ran).
+func TestPublishCommit_PreCommitAbort_RescueError(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	msgInitRepo(t, repo)
+	msgCommitRaw(t, repo, "initial")
+	parentSHA := msgHeadSHA(t, repo)
+
+	msgWriteFile(t, repo, "new.txt", "hello\n")
+	msgStageFile(t, repo, "new.txt")
+	tree := msgGitOut(t, repo, "write-tree")
+
+	// Install a pre-commit that exits 1.
+	msgInstallHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
+
+	deps := messageDeps(t, repo, stubtest.Manifest(bin, stubtest.Options{}))
+
+	_, err := publishCommit(context.Background(), deps, tree, parentSHA, "feat: add new")
+	if err == nil {
+		t.Fatal("expected error on pre-commit abort, got nil")
+	}
+
+	var re *generate.RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("error type = %T, want *generate.RescueError (FR-V7)", err)
+	}
+	if errors.Is(err, ErrPublicationFailed) {
+		t.Error("RescueError was wrapped in ErrPublicationFailed — should be propagated DIRECTLY")
+	}
+
+	// HEAD UNCHANGED — no CommitTree/update-ref ran (FR-V7 idempotent).
+	if got := msgHeadSHA(t, repo); got != parentSHA {
+		t.Errorf("HEAD = %q, want %q (unchanged — FR-V7 rescue leaves HEAD untouched)", got, parentSHA)
 	}
 }

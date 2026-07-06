@@ -8,6 +8,7 @@ import (
 
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/hooks"
 )
 
 // ErrArbiterResolutionFailed is the sentinel for arbiter-RESOLUTION infra failures (AddAll/Add/
@@ -111,7 +112,15 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if tipSHA != "" {
 		parents = []string{tipSHA}
 	}
-	newSHA, err := deps.Git.CommitTree(ctx, treePrime, parents, msg)
+	// Run the repo's commit hooks scoped to treePrime (PRD §9.25 FR-V1/V3/V7). hookParent=tipSHA
+	// (the new commit's parent = current HEAD). On herr → return the *RescueError DIRECTLY
+	// (propagates unwrapped, matching generateMessage's pattern). DryRun:false (decompose commits).
+	finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, treePrime, tipSHA, msg,
+		hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
+	if herr != nil {
+		return herr
+	}
+	newSHA, err := deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)
 	if err != nil {
 		return fmt.Errorf("%w: commit-tree: %w", ErrArbiterResolutionFailed, err)
 	}
@@ -123,6 +132,8 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		return handleUpdateRefErr(ctx, deps, treePrime, expectedOld, msg, err)
 	}
+	// Best-effort post-commit AFTER update-ref succeeded (FR-V7 — exit disregarded; commit stands).
+	_ = hooks.RunPostCommit(ctx, deps.Git, deps.Config, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
 	// 5. FR-M1d (3): sync the index to T_start so git status is clean (index == HEAD.tree == T_start).
 	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
 		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
@@ -141,12 +152,23 @@ func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry, tSt
 
 	// FR-M1d: treePrime := T_start (the frozen tree). NO AddAll/WriteTree — those read the live tree.
 	treePrime := tStart
-	// Reuse the tip's message VERBATIM (no regeneration). Parent = tipParent (the amend); root if "".
+	// Reuse the tip's message VERBATIM as the hook INPUT (no regeneration). Parent = tipParent
+	// (the amend); root if "".
 	var parents []string
 	if tipParent != "" {
 		parents = []string{tipParent}
 	}
-	newSHA, err := deps.Git.CommitTree(ctx, treePrime, parents, tipMsg)
+	// Run the repo's commit hooks scoped to treePrime (PRD §9.25 FR-V1/V3/V7). hookParent=tipParent
+	// (the amended commit's parent = the original tip's parent). amend parity: the tip message is the
+	// hook INPUT and prepare-commit-msg MAY annotate it — mirrors `git commit --amend` re-running the
+	// msg hooks. §20.2 constrains ONLY resolveMidChain's non-target commits; the tip IS the target, so
+	// its message MAY change (§5). DryRun:false (decompose commits).
+	finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, treePrime, tipParent, tipMsg,
+		hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
+	if herr != nil {
+		return herr
+	}
+	newSHA, err := deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)
 	if err != nil {
 		return fmt.Errorf("%w: commit-tree: %w", ErrArbiterResolutionFailed, err)
 	}
@@ -158,6 +180,8 @@ func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry, tSt
 	if err := deps.Git.UpdateRefCAS(ctx, "HEAD", newSHA, expectedOld); err != nil {
 		return handleUpdateRefErr(ctx, deps, treePrime, expectedOld, tipMsg, err)
 	}
+	// Best-effort post-commit AFTER update-ref succeeded (FR-V7 — exit disregarded; commit stands).
+	_ = hooks.RunPostCommit(ctx, deps.Git, deps.Config, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
 	// FR-M1d (3): sync the index to T_start so git status is clean (index == HEAD.tree == T_start).
 	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
 		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)

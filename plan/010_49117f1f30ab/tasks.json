@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Hook execution on the commit path (v2.4, FR-V1–V8, → G22)",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Implement PRD §9.25: thread the repository's standard commit hooks (pre-commit → prepare-commit-msg → commit-msg, then post-commit) around every plumbing-path commit, in git's documented order, WITHOUT surrendering the snapshot-based atomic-commit core (§8, §13). The stage-while-generating freeze (FR-V3) and the CAS atomic-commit core (§18.1) must survive. Add --no-verify (mirrors git commit --no-verify: skips pre-commit+commit-msg only) and hook_timeout (default 10m). Entirely unimplemented (verified: zero NoVerify/hook_timeout symbols). Research findings in plan/010_49117f1f30ab/architecture/.",
       "milestones": [
         {
@@ -157,7 +157,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Commit-hooks runner + wiring into all commit chokepoints",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Build the RunCommitHooks runner (new module internal/hooks, distinct from the §9.20 hook-mode internal/hook), then wire it into the three commit chokepoints: generate.CommitStaged (single-commit COMMIT path), pkg/stagehand.runPipeline (single-commit DRY-RUN path — FR-V8a: commit-msg only), and decompose.publishCommit (multi-commit path). Reuse the existing *RescueError/FormatRescue/exit-3 path UNCHANGED for hook failures (FR-V7). post-commit is best-effort after UpdateRefCAS.",
           "tasks": [
             {
@@ -249,14 +249,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Wire RunCommitHooks into the decompose path (publishCommit + arbiter)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Wire the hook runner into decompose.publishCommit (the single chokepoint for all per-concept + arbiter new/tip commits), scoped to each commit's tree (FR-V8c: per-concept pre-commit sees only that concept's tree subset). The arbiter's silent mid-chain rebuild (resolveMidChain) SKIPS hooks (open_questions.md §2 — confirmed: running prepare-commit-msg on a verbatim-reused msg[j] risks breaking the §20.2 mid-chain amend fidelity invariant).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "decompose.publishCommit wiring (per-concept scoped; arbiter new/tip run; mid-chain skips) + mid-chain-fidelity invariant",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T2.S1"
@@ -277,21 +277,21 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Changeset-level documentation sync (Mode B)",
-          "status": "Planned",
+          "status": "Ready",
           "description": "The final Mode B documentation sweep: rewrite the now-FALSE 'Bypasses pre-commit hooks' framing in docs/how-it-works.md (the headline doc change) and add a README.md feature mention. This task depends on ALL implementing subtasks (the whole feature must be in place before the overview docs summarize it). Per SOW §5 Mode B, this is the catch-all that prevents a coherent delta from shipping with stale overview docs.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Rewrite docs/how-it-works.md 'Hook mode vs the snapshot-based flow' (line 303) — the current text explicitly says the snapshot flow 'Bypasses pre-commit hooks' and frames hook mode as the way to get hooks; BOTH are now FALSE. Reframe: the snapshot flow is atomic + stage-while-generating AND honors the repo's hooks (--no-verify skips pre-commit/commit-msg); hook mode (§9.20) remains for plain git commit from IDEs. Update 'When to use which': the two modes compose. Add a one-line README.md feature mention.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "how-it-works.md headline rewrite + README.md feature mention",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S1",

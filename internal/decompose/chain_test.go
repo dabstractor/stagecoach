@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -598,5 +599,114 @@ func TestResolveArbiter_FreezeParitySentinelExcluded(t *testing.T) {
 				t.Errorf("%s: leftover.go missing from HEAD tree — arbiter did not fold the frozen leftover:\n%s", tc.name, ls)
 			}
 		})
+	}
+}
+
+// --- resolveArbiter hook wiring tests (P1.M3.T3.S1 — PRD §9.25 FR-V1/V8c + §20.2 fidelity) ---
+
+// chnInstallHook writes an executable hook script to <repo>/.git/hooks/<name>, mode 0755 (the
+// owner-exec bit is what hookExecutable checks — without it the hook is skipped and the test is
+// vacuous). Mirrors internal/generate/hooks_freeze_test.go's hook-install idiom.
+func chnInstallHook(t *testing.T, repo, name, body string) {
+	t.Helper()
+	hooksDir := filepath.Join(repo, ".git", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("mkdir hooks: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, name), []byte(body), 0o755); err != nil {
+		t.Fatalf("write %s hook: %v", name, err)
+	}
+}
+
+// chnBuildChainWithHook runs chnBuildChain then installs a prepare-commit-msg that appends
+// [HOOK-RAN] to the message file. Returns everything chnBuildChain does. Used by the three hook
+// tests so they share the SAME setup (only the target differs).
+func chnBuildChainWithHook(t *testing.T, repo string) (commits []CommitInfo, chainData []ChainEntry, tStart string, leftoverPaths []string) {
+	t.Helper()
+	commits, chainData, tStart, leftoverPaths = chnBuildChain(t, repo)
+	chnInstallHook(t, repo, "prepare-commit-msg", "#!/bin/sh\necho '[HOOK-RAN]' >> \"$1\"\n")
+	return commits, chainData, tStart, leftoverPaths
+}
+
+// TestResolveArbiter_NullNewCommit_RunsHooks proves resolveNewCommit (path A, null target) runs the
+// repo's commit hooks: the N+1 commit's message carries the [HOOK-RAN] append (hooks ran + the
+// annotated finalMsg was committed). PRD §9.25 FR-V1/V8c.
+func TestResolveArbiter_NullNewCommit_RunsHooks(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	chnInitRepo(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChainWithHook(t, repo)
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "chore: leftover"})
+	deps := chnDeps(t, repo, m)
+
+	if err := resolveArbiter(context.Background(), deps, nil, commits, chainData, tStart, leftoverPaths); err != nil {
+		t.Fatalf("resolveArbiter(nil): %v", err)
+	}
+
+	// The N+1 commit's message should carry the [HOOK-RAN] append.
+	headMsg := chnRunGit(t, repo, "log", "--format=%B", "-1")
+	if !strings.Contains(headMsg, "[HOOK-RAN]") {
+		t.Errorf("HEAD message = %q, want it to carry [HOOK-RAN] (resolveNewCommit ran hooks)", headMsg)
+	}
+}
+
+// TestResolveArbiter_TipAmend_RunsHooks proves resolveTipAmend (path B, target==tip) runs the repo's
+// commit hooks: the amended tip's message carries the [HOOK-RAN] append. amend parity (§5): the tip
+// message is the hook INPUT and prepare-commit-msg MAY annotate it — mirrors `git commit --amend`
+// re-running the msg hooks. The tip is the arbiter's TARGET, so its message MAY change.
+func TestResolveArbiter_TipAmend_RunsHooks(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	chnInitRepo(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChainWithHook(t, repo)
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "SHOULD NOT BE USED"})
+	deps := chnDeps(t, repo, m)
+
+	tipSHA := chainData[len(chainData)-1].SHA
+	target := tipSHA
+	if err := resolveArbiter(context.Background(), deps, &target, commits, chainData, tStart, leftoverPaths); err != nil {
+		t.Fatalf("resolveArbiter(&tipSHA): %v", err)
+	}
+
+	// The amended tip's message should carry the [HOOK-RAN] append (amend re-runs msg hooks).
+	headMsg := chnRunGit(t, repo, "log", "--format=%B", "-1")
+	if !strings.Contains(headMsg, "[HOOK-RAN]") {
+		t.Errorf("amended tip message = %q, want it to carry [HOOK-RAN] (resolveTipAmend ran hooks — amend parity)", headMsg)
+	}
+}
+
+// TestResolveArbiter_MidChain_SkipsHooks is THE §20.2 mid-chain-fidelity acceptance test. It proves
+// resolveMidChain (path C, target==earlier commit[i], i<N-1) is HOOK-FREE: a prepare-commit-msg that
+// appends [HOOK-RAN] does NOT touch the rebuilt commits' messages (msg[j] reused VERBATIM). If a
+// rebuilt commit carries the marker, resolveMidChain was wired to hooks — the §20.2 invariant
+// (rebuilt non-target commits are byte-identical to the originals) is broken.
+func TestResolveArbiter_MidChain_SkipsHooks(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	chnInitRepo(t, repo)
+	commits, chainData, tStart, leftoverPaths := chnBuildChainWithHook(t, repo)
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "SHOULD NOT BE USED"})
+	deps := chnDeps(t, repo, m)
+
+	// Target C1 (index 1, i=1 < N-1=2) ⇒ mid-chain rebuild. resolveMidChain rebuilds C1' and C2'.
+	target := chainData[1].SHA
+	if err := resolveArbiter(context.Background(), deps, &target, commits, chainData, tStart, leftoverPaths); err != nil {
+		t.Fatalf("resolveArbiter(&sha1): %v", err)
+	}
+
+	// Walk the rebuilt commits (from C1' onward) and assert NONE carry the [HOOK-RAN] marker.
+	// resolveMidChain reused msg[j] VERBATIM (no hooks) ⇒ byte-identical messages (§20.2).
+	shas := strings.Split(chnRunGit(t, repo, "log", "--format=%H", "--reverse"), "\n")
+	if len(shas) != 3 {
+		t.Fatalf("expected 3 SHAs, got %d", len(shas))
+	}
+	for j := 1; j < len(shas); j++ { // j=1 (C1') and j=2 (C2') — the rebuilt commits
+		msg := chnRunGit(t, repo, "log", "--format=%B", "-1", shas[j])
+		if strings.Contains(msg, "[HOOK-RAN]") {
+			t.Errorf("rebuilt commit[%d] message carries [HOOK-RAN] — resolveMidChain must be hook-free (§20.2 fidelity): %q", j, msg)
+		}
 	}
 }
