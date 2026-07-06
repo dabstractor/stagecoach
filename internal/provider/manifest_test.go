@@ -310,6 +310,82 @@ func TestValidate_NilEnumsAreOK(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestValidateModel_* — Finding 2: ValidateModel mirrors Render's FR-R5b slash
+// check (and Validate) WITHOUT building a CmdSpec, so callers can reject a
+// misconfigured model up front (before the optimistic "↳ Generating…" label).
+// ---------------------------------------------------------------------------
+
+func TestValidateModel_BareModelOnProviderFlagProvider_Errors(t *testing.T) {
+	// pi-shaped: provider_flag set → bare model (no "/") is a hard error.
+	m := Manifest{
+		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
+		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
+		DefaultModel: strPtr("zai/glm-5.2"),
+	}
+	err := m.ValidateModel("glm-5.2")
+	if err == nil {
+		t.Fatal("ValidateModel err = nil, want no-slash error")
+	}
+	if !strings.Contains(err.Error(), "must be inference/model") {
+		t.Errorf("err = %v, want it to mention inference/model", err)
+	}
+}
+
+func TestValidateModel_SlashModelOnProviderFlagProvider_OK(t *testing.T) {
+	m := Manifest{
+		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
+		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
+		DefaultModel: strPtr("zai/glm-5.2"),
+	}
+	if err := m.ValidateModel("zai/glm-5.2"); err != nil {
+		t.Errorf("slash model should be OK: %v", err)
+	}
+}
+
+func TestValidateModel_DefaultModelNoSlash_Errors(t *testing.T) {
+	// Empty explicit model → falls back to DefaultModel; if THAT has no slash, error.
+	m := Manifest{
+		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
+		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
+		DefaultModel: strPtr("glm-5.2"),
+	}
+	if err := m.ValidateModel(""); err == nil {
+		t.Fatal("want no-slash error on default_model fallback")
+	}
+}
+
+func TestValidateModel_BareModelOnSingleBackendProvider_OK(t *testing.T) {
+	// claude-shaped: no provider_flag → model passed verbatim, bare model is fine.
+	m := Manifest{
+		Name: "claude", Command: strPtr("claude"), PromptDelivery: strPtr("stdin"),
+		ModelFlag: strPtr("--model"), DefaultModel: strPtr("sonnet"),
+	}
+	if err := m.ValidateModel("sonnet"); err != nil {
+		t.Errorf("claude bare model should be OK: %v", err)
+	}
+}
+
+func TestValidateModel_NoModelOnProviderFlagProvider_OK(t *testing.T) {
+	// No explicit model AND no DefaultModel → Render would surface a missing-model
+	// error downstream; ValidateModel does NOT (it only checks the slash format).
+	m := Manifest{
+		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
+		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
+	}
+	if err := m.ValidateModel(""); err != nil {
+		t.Errorf("empty model + empty default should be OK here: %v", err)
+	}
+}
+
+func TestValidateModel_InvalidManifest_Errors(t *testing.T) {
+	// Validate is still run; a nameless manifest errors.
+	m := Manifest{Command: strPtr("x"), ProviderFlag: strPtr("--provider")}
+	if err := m.ValidateModel("zai/glm-5.2"); err == nil {
+		t.Fatal("want Validate error for nameless manifest")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestDetectCommand_* — Detect > Command > ""
 // ---------------------------------------------------------------------------
 

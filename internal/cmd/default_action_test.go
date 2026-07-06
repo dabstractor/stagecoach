@@ -1190,6 +1190,33 @@ func TestRouting_StagedCommitsOnlyStaged_NoDecompose(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestRunDefault_NegativeCommits_Rejected — Finding 5: --commits with a negative value
+// is a usage error and must be rejected up front (exit 1) rather than silently falling through
+// to the auto-stage path (dry-run) or reaching the planner with forcedCount<0 (real run).
+// ---------------------------------------------------------------------------
+func TestRunDefault_NegativeCommits_Rejected(t *testing.T) {
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	repo := setupStubRepo(t, "feat: negative commits")
+	writeFile(t, repo, "new.txt", "content")
+	stageFile(t, repo, "new.txt")
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"--provider", "stub", "--commits", "-1", "--dry-run"})
+
+	err := Execute(context.Background())
+	if err == nil {
+		t.Fatal("Execute err = nil, want non-nil for negative --commits")
+	}
+	if !strings.Contains(err.Error(), "commits") || !strings.Contains(err.Error(), ">= 0") {
+		t.Errorf("err = %v, want it to name 'commits' and '>= 0'", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestRunDefault_RepoLocalNoticeOnce_Issue5 proves Issue 5 is fixed: a repo-local .stagehand.toml
 // that sets provider prints the §19 notice "repo-local config (.stagehand.toml) sets provider to"
 // EXACTLY ONCE (strings.Count == 1; was 2 before S1/S2's single-Load fix).
@@ -1374,6 +1401,72 @@ tooled_flags = ["--yes"]
 			t.Errorf("git log subject = %q, want 'feat: decompose path provider render'", logMsg)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// TestRunDefault_BareModelOnProviderFlag_RejectedBeforeProgressLabel — Finding 2:
+// a bare model (no "/") on a provider_flag provider (pi) must be rejected UP FRONT with a clean
+// error, WITHOUT first printing the misleading "↳ Generating…" progress label. Previously the
+// label was emitted before Render ran, so a misconfiguration read as "started then failed".
+// ---------------------------------------------------------------------------
+func TestRunDefault_BareModelOnProviderFlag_RejectedBeforeProgressLabel(t *testing.T) {
+	bin := stubtest.Build(t)
+
+	origArgs, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	body := fmt.Sprintf(`config_version = 3
+
+[defaults]
+provider = "pi"
+
+[provider.pi]
+command = %q
+detect = %q
+provider_flag = "--provider"
+model_flag = "--model"
+default_model = "openrouter/gpt-5.4-nano"
+system_prompt_flag = "--system"
+prompt_delivery = "stdin"
+print_flag = "-p"
+output = "raw"
+tooled_flags = ["--yes"]
+`, bin, bin)
+	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	t.Setenv("STAGEHAND_CONFIG", cfgPath)
+
+	repo := t.TempDir()
+	initRepo(t, repo)
+	chdir(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "new.txt", "content")
+	stageFile(t, repo, "new.txt")
+
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	// Bare model on a provider_flag provider — FR-R5b violation.
+	rootCmd.SetArgs([]string{"--provider", "pi", "--model", "glm-5.2", "--dry-run"})
+
+	err := Execute(context.Background())
+	if err == nil {
+		t.Fatal("Execute err = nil, want non-nil for bare model on provider_flag provider")
+	}
+
+	// G1: the FR-R5b error is surfaced (returned to the caller, which main prints as "stagehand: …").
+	if !strings.Contains(err.Error(), "must be inference/model") {
+		t.Errorf("err = %v, want it to mention inference/model", err)
+	}
+	// G2 (the Finding 2 fix): the optimistic progress label was NOT emitted before the error.
+	if strings.Contains(errBuf.String(), "↳ Generating") {
+		t.Errorf("stderr = %q, must NOT contain the '↳ Generating' progress label (should reject up front)", errBuf.String())
+	}
 }
 
 // ---------------------------------------------------------------------------

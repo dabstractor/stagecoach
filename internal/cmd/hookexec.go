@@ -106,7 +106,7 @@ func runHookExec(cmd *cobra.Command, args []string) error {
 	if !ok {
 		return neverBlock(fmt.Errorf("unknown provider %q", name))
 	}
-	if verr := m.Validate(); verr != nil {
+	if verr := m.ValidateModel(msgModel); verr != nil {
 		return neverBlock(fmt.Errorf("provider %q: %w", name, verr))
 	}
 	if !reg.IsInstalled(m) {

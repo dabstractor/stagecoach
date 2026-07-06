@@ -4,21 +4,21 @@
       "type": "Phase",
       "id": "P1",
       "title": "Hook execution on the commit path (v2.4, FR-V1–V8, → G22)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Implement PRD §9.25: thread the repository's standard commit hooks (pre-commit → prepare-commit-msg → commit-msg, then post-commit) around every plumbing-path commit, in git's documented order, WITHOUT surrendering the snapshot-based atomic-commit core (§8, §13). The stage-while-generating freeze (FR-V3) and the CAS atomic-commit core (§18.1) must survive. Add --no-verify (mirrors git commit --no-verify: skips pre-commit+commit-msg only) and hook_timeout (default 10m). Entirely unimplemented (verified: zero NoVerify/hook_timeout symbols). Research findings in plan/010_49117f1f30ab/architecture/.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Configuration + CLI surface: NoVerify, HookTimeout, --no-verify",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Add the two config knobs (FR-V5 NoVerify, FR-V6 HookTimeout) with full 5-layer precedence, and register the --no-verify CLI flag. Mirrors the established Push (5-layer bool) and Timeout (5-layer duration) patterns exactly. This is the user-facing surface; no behavior change yet (the fields are unread until the runner lands in M3).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Add NoVerify + HookTimeout config fields with full 5-layer precedence",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add Config.NoVerify (bool, toml \"no_verify\") mirroring Push, and Config.HookTimeout (time.Duration, toml \"hook_timeout\") mirroring Timeout. Wire through Defaults, fileConfig (file.go), materialize/overlay, env (STAGEHAND_NO_VERIFY), git-config (stagehand.no_verify), and flag resolution (load.go). NoVerify is 5-layer (flag/env/git-config/file/default=false); HookTimeout is file+default only (no env/flag/git-config per FR-V6 — mirrors multi_turn_chunk_tokens).",
               "subtasks": [
                 {
@@ -40,7 +40,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Env (STAGEHAND_NO_VERIFY) + git-config + flag resolution in load.go",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"

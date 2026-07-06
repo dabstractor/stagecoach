@@ -1183,6 +1183,40 @@ func TestValidateDiffContext(t *testing.T) {
 	}
 }
 
+// validateCommits tests (Finding 5: --commits / STAGEHAND_COMMITS / stagehand.commits must be >= 0).
+// Pure (no I/O); mirrors the validateDiffContext table style.
+func TestValidateCommits(t *testing.T) {
+	cases := []struct {
+		name    string
+		n       int
+		wantErr bool
+	}{
+		{"auto_decompose_0", 0, false}, // 0 = auto-decompose (VALID)
+		{"single_1", 1, false},         // 1 ≡ --single (VALID, normalized upstream)
+		{"force_2", 2, false},          // N>=2 = force N (VALID)
+		{"force_5", 5, false},
+		{"negative_one", -1, true}, // the report's example
+		{"negative_three", -3, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCommits(tc.n)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("validateCommits(%d) = nil, want error", tc.n)
+				}
+				if !strings.Contains(err.Error(), ">= 0") {
+					t.Errorf("error %q should name the >= 0 constraint", err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("validateCommits(%d) = %v, want nil", tc.n, err)
+			}
+		})
+	}
+}
+
 func TestValidateTemplate(t *testing.T) {
 	validTemplates := []string{"", "$msg", "$msg (#205)", "[skip ci] $msg"}
 	for _, tpl := range validTemplates {

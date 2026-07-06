@@ -185,6 +185,12 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	if err := validateDiffContext(cfg.DiffContext); err != nil {
 		return nil, fmt.Errorf("diff_context: %w", err)
 	}
+	// Finding 5: --commits / STAGEHAND_COMMITS / stagehand.commits must be >= 0. A negative value is
+	// meaningless (0 = auto-decompose, 1 = --single, N>=2 = force N). Surface it as a usage error at
+	// load time rather than letting it fall through to downstream behavior.
+	if err := validateCommits(cfg.Commits); err != nil {
+		return nil, fmt.Errorf("commits: %w", err)
+	}
 
 	// Self-hosting guard (FR-SH1). "stub" (cmd/stubagent) is a TEST-ONLY provider double that echoes
 	// $STAGEHAND_STUB_OUT verbatim as the "generated" message. It is valid ONLY when selected
@@ -485,6 +491,18 @@ func validateTemplate(tpl string) error {
 		return nil
 	}
 	return fmt.Errorf("invalid template %q: must contain the literal $msg (e.g. %q)", tpl, "$msg (#205)")
+}
+
+// validateCommits rejects a nonsensical negative forced commit count (Finding 5). Semantics after
+// Load's normalization: 0 ⇒ auto-decompose (valid), 1 ⇒ --single (valid, normalized), ≥2 ⇒ force N
+// (valid). A negative value is meaningless and currently falls through silently (--dry-run hits the
+// auto-stage path; a real run reaches the planner with forcedCount<0). Reject it up front. PURE (no I/O)
+// so it is unit-testable; called ONCE at the tail of Load() on the fully-merged cfg.Commits.
+func validateCommits(n int) error {
+	if n < 0 {
+		return fmt.Errorf("invalid commits %d: must be >= 0 (0 = auto-decompose, 1 = --single, N>=2 = force N)", n)
+	}
+	return nil
 }
 
 // configVersionNotice returns the PRD §9.17 FR-B4 advisory text when a loaded config file's schema version

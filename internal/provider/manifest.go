@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // PRD §12.1 default values (applied by Resolve to nil optional fields).
@@ -121,6 +122,32 @@ func (m Manifest) Validate() error {
 	if m.SessionMode != nil {
 		if *m.SessionMode != "" && *m.SessionMode != "append" {
 			return fmt.Errorf("provider manifest %q: session_mode %q must be \"\" or \"append\"", m.Name, *m.SessionMode)
+		}
+	}
+	return nil
+}
+
+// ValidateModel performs the model-format checks Render would run, WITHOUT building the full
+// CmdSpec. It exists so callers can surface FR-R5b errors (a bare model on a provider_flag provider,
+// e.g. "glm-5.2" on pi instead of "zai/glm-5.2") BEFORE emitting an optimistic "↳ Generating…" label
+// — otherwise the user sees "started then failed" instead of a clean up-front rejection (Finding 2).
+// Empty model is allowed here (Render falls back to DefaultModel; a missing default surfaces as a
+// downstream Execute error, not a render error). Byte-for-byte mirrors Render's slash check.
+func (m Manifest) ValidateModel(model string) error {
+	if err := m.Validate(); err != nil {
+		return fmt.Errorf("provider render %q: %w", m.Name, err)
+	}
+	r := m.Resolve()
+	modelToUse := model
+	if modelToUse == "" {
+		modelToUse = *r.DefaultModel
+	}
+	// FR-R5b: a provider_flag provider requires "inference/model". A bare model (no "/") is a hard error.
+	if *r.ProviderFlag != "" && modelToUse != "" {
+		if i := strings.Index(modelToUse, "/"); i < 0 {
+			return fmt.Errorf(
+				"provider render %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"",
+				m.Name, modelToUse, m.Name)
 		}
 	}
 	return nil
