@@ -22,6 +22,20 @@ import (
 	"github.com/dustin/stagehand/internal/ui"
 )
 
+// CommitHookRunner runs the repo's commit hooks around the plumbing commit path (PRD §9.25
+// FR-V1/V2/V3/V7). Injected into Deps (NOT called as hooks.RunCommitHooks) to break the
+// generate↔hooks import cycle (internal/hooks imports internal/generate for RescueError). The
+// CLI (pkg/stagehand.buildDeps) wires hooks.DefaultRunner; tests inject a stub OR nil (nil ⇒
+// hooks skipped — back-compatible with the legacy no-hooks CommitStaged tests). dryRun + verbose
+// are INLINED (not a hooks.HookOpts) so generate need not import internal/hooks — zero
+// information loss (HookOpts is exactly those two fields). git.Git/config.Config/*ui.Verbose are
+// all already imported by this package.
+type CommitHookRunner interface {
+	RunCommitHooks(ctx context.Context, g git.Git, cfg config.Config, snapshotTree, parentSHA, msg string,
+		dryRun bool, verbose *ui.Verbose) (finalTree, finalMsg string, err error)
+	RunPostCommit(ctx context.Context, g git.Git, cfg config.Config, dryRun bool, verbose *ui.Verbose) error
+}
+
 // Deps carries the runtime collaborators that vary by environment/test. Injected
 // (not resolved inside CommitStaged) so tests can pass a stub Manifest (stubtest.Manifest)
 // and the real git.Git, while the CLI resolves the manifest via the registry.
@@ -34,6 +48,14 @@ type Deps struct {
 	// never called by CommitStaged). runHookExec sets it to emit the "Generating…" line
 	// only when generation is about to run.
 	Progress func()
+	// Hooks runs the repo's commit hooks around the commit (PRD §9.25 FR-V1/V2/V3/V7). Injected
+	// (not called as hooks.RunCommitHooks) to break the generate↔hooks import cycle (hooks imports
+	// generate for RescueError). nil ⇒ hooks skipped (no-op) — back-compatible with the legacy
+	// no-hooks CommitStaged tests (which construct Deps without Hooks). Wired by
+	// pkg/stagehand.buildDeps (hooks.DefaultRunner{}); the dry-run path (runPipeline) and the
+	// decompose path (publishCommit) thread it separately. CommitStaged is the !DryRun path, so
+	// it always passes dryRun=false.
+	Hooks CommitHookRunner
 }
 
 // Result is the outcome of a successful CommitStaged. Carries everything the CLI
@@ -391,6 +413,24 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		return Result{}, err // ErrEmptyMessage propagates BARE → exitcode.For() → exit 1 (NOT rescue)
 	}
 
+	// §9.25 FR-V1/V2/V3/V7: run the repo's pre-commit → prepare-commit-msg → commit-msg hooks
+	// scoped to the frozen snapshot, between the finalized message and commit-tree. Injected via
+	// Deps.Hooks to break the generate↔hooks import cycle (nil ⇒ no hooks — back-compatible).
+	// CommitStaged is the !DryRun path, so dryRun=false. A hook abort returns BEFORE CommitTree
+	// (no dangling commit; HEAD + live index untouched) as a *RescueError (FR-V7 → exit 3, byte-
+	// identical to a generation failure) or ErrHookSweptConcurrentWork (FR-V3 freeze backstop).
+	// signal is still armed here (RestoreDefault runs only before UpdateRefCAS), so a Ctrl-C during
+	// a hook rescues with the ORIGINAL snapshot. On success, treeSHA/msg are REASSIGNED so ALL
+	// downstream (CommitTree, CASError recovery, Result Subject/Message) use the hook-adjusted
+	// values (a permitted pre-commit mutation re-trees; prepare/commit-msg may annotate).
+	if deps.Hooks != nil {
+		ft, fm, herr := deps.Hooks.RunCommitHooks(ctx, deps.Git, cfg, treeSHA, parentSHA, msg, false, deps.Verbose)
+		if herr != nil {
+			return Result{}, herr // *RescueError (FR-V7) or ErrHookSweptConcurrentWork (FR-V3)
+		}
+		treeSHA, msg = ft, fm // hook may have re-treed (permitted mutation) + annotated the msg
+	}
+
 	// Step 7: commit-tree — build the DANGLING commit object from the FROZEN tree.
 	var parents []string
 	if !isUnborn {
@@ -422,6 +462,13 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			}
 		}
 		return Result{}, err // non-CAS infra error — propagate
+	}
+
+	// §9.25 FR-V1: post-commit runs AFTER update-ref succeeded (best-effort; its exit code is
+	// DISREGARDED — FR-V7). The commit already landed; RunPostCommit logs a non-zero exit as a
+	// --verbose warning and NEVER undoes (git itself disregards post-commit's exit). nil-guarded.
+	if deps.Hooks != nil {
+		_ = deps.Hooks.RunPostCommit(ctx, deps.Git, cfg, false, deps.Verbose)
 	}
 
 	// Step 9: diff-tree — "what landed" for the FR42 report.

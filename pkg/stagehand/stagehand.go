@@ -20,6 +20,7 @@ import (
 	"github.com/dustin/stagehand/internal/exclude"
 	"github.com/dustin/stagehand/internal/generate"
 	"github.com/dustin/stagehand/internal/git"
+	"github.com/dustin/stagehand/internal/hooks"
 	"github.com/dustin/stagehand/internal/prompt"
 	"github.com/dustin/stagehand/internal/provider"
 	"github.com/dustin/stagehand/internal/signal"
@@ -383,7 +384,7 @@ func buildDeps(cfg config.Config, repoDir string) (generate.Deps, error) {
 		m.StripCodeFence = cfg.StripCodeFence
 	}
 
-	return generate.Deps{Git: git.New(repoDir), Manifest: m}, nil
+	return generate.Deps{Git: git.New(repoDir), Manifest: m, Hooks: hooks.DefaultRunner{}}, nil
 }
 
 // buildSysPrompt constructs the system prompt. On unborn or CommitCount≤1 → fallback;

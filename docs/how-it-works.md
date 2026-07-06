@@ -300,6 +300,31 @@ disabled and delivers the **untruncated** diff across the N+1 turns — the chun
 `token_limit`. (The re-capture is skipped when `token_limit` is unset, since the one-shot payload is
 already untruncated in that case.)
 
+## Commit hooks on the plumbing path
+
+As of v2.4, the snapshot-based flow runs your repository's standard commit hooks itself — you no longer
+need hook mode (§9.20) just to get `pre-commit`, `commit-msg`, or `post-commit` to fire on a `stagehand`
+commit. Hooks run in git's documented order around every commit produced by the plumbing path:
+`pre-commit` → `prepare-commit-msg` → `commit-msg` before the commit object is created, and `post-commit`
+after it is published.
+
+The snapshot freeze still holds: `pre-commit` runs against a throwaway index primed from the frozen
+`write-tree` snapshot, never the live index — so files you stage *while* the hook runs are never swept
+into the in-flight commit (the core stage-while-generating guarantee). A `pre-commit` may modify paths
+already in the snapshot (a formatter re-staging its output) and stagehand includes those fixes, exactly
+like `git commit`; a `pre-commit` that stages a brand-new path aborts the run (it would sweep in
+concurrent work).
+
+`--no-verify` mirrors `git commit --no-verify`: it skips `pre-commit` and `commit-msg` only
+(`prepare-commit-msg` and `post-commit` still run). A hook that exits non-zero or times out aborts the
+run as a **rescue** (exit code 3) — no commit is created, HEAD and the index are byte-for-byte
+unchanged, and the rescue recipe is printed. `post-commit` is best-effort: its exit code is logged as a
+warning but cannot undo an already-landed commit (git itself disregards it).
+
+See PRD §9.25 (FR-V1–V8) for the full specification. (The "Hook mode vs the snapshot-based flow"
+framing below is being reconciled in the v2.4 docs rewrite — hook mode remains the bridge for plain
+`git commit` from IDEs, and the two modes now compose.)
+
 ## Hook mode vs the snapshot-based flow
 
 ### Trade-off inversion (FR-H7)
