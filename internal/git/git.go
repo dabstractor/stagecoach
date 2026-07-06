@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -454,6 +455,50 @@ func (g *gitRunner) runWithInput(ctx context.Context, repo string, stdin io.Read
 	}
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) { // non-zero git exit → capture code, err stays nil
+		return stdout, stderr, exitErr.ExitCode(), nil
+	}
+	return stdout, stderr, -1, runErr // start / I/O failure
+}
+
+// runWithEnv is run() plus a scoped child environment. It exists because run()/runWithInput()
+// leave cmd.Env unset (the child inherits the parent env), and the v2.4 hook feature (FR-V3:
+// pre-commit scoped to the snapshot tree T_start) needs git primitives that operate on a
+// THROWAWAY index via GIT_INDEX_FILE=<abs tmp>. It is co-located with run()/runWithInput()
+// and shares their structure exactly (LookPath → -C repo → []string args, NO shell → separate
+// buffers → errors.As(ExitError) with err==nil for non-zero exits). run() and runWithInput()
+// are intentionally left unmodified (see research §1).
+//
+// Additive: cmd.Env = append(os.Environ(), extraEnv...) — a SUPERSET of the parent env. The
+// documented "child inherits the parent environment" guarantee (runWithInput doc) is preserved;
+// PATH/HOME/identity env are NOT clobbered. Only the scoped vars (e.g. GIT_INDEX_FILE,
+// GIT_EDITOR) are added.
+func (g *gitRunner) runWithEnv(ctx context.Context, repo string, extraEnv []string, args ...string) (stdout string, stderr string, exitCode int, err error) {
+	gitPath, lerr := exec.LookPath("git")
+	if lerr != nil {
+		return "", "", -1, fmt.Errorf("git binary not found in PATH: %w", lerr)
+	}
+
+	full := make([]string, 0, len(args)+2)
+	full = append(full, "-C", repo) // repo via flag, not cmd.Dir (gotcha G1)
+	full = append(full, args...)
+
+	cmd := exec.CommandContext(ctx, gitPath, full...) // []string args, NO shell (PRD §19)
+	cmd.Env = append(os.Environ(), extraEnv...)       // ← the one difference from run(): scoped child env
+	var out, errb bytes.Buffer
+	cmd.Stdout = &out  // separate buffer
+	cmd.Stderr = &errb // separate buffer
+
+	runErr := cmd.Run()
+	stdout, stderr = out.String(), errb.String()
+
+	if runErr == nil {
+		return stdout, stderr, 0, nil
+	}
+	if cerr := ctx.Err(); cerr != nil { // context cancelled (timeout/signal) — not a git exit
+		return stdout, stderr, -1, cerr
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) { // non-zero git exit → capture code, err stays nil (gotcha G2)
 		return stdout, stderr, exitErr.ExitCode(), nil
 	}
 	return stdout, stderr, -1, runErr // start / I/O failure

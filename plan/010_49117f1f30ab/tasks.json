@@ -93,14 +93,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Env-passing exec seam + scoped-index git primitives",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Add runWithEnv (the env-passing exec seam — the ONLY new exec entry point) and the thin scoped ReadTreeInto/WriteTreeFrom variants that accept a GIT_INDEX_FILE. These operate on a throwaway index file, never touching the live .git/index, so pre-commit can run scoped to the frozen tree.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "runWithEnv exec seam in internal/git",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §1 — internal/git/git.go:389 run() is `exec.CommandContext(ctx, gitPath, \"-C\", repo, args...)` with cmd.Env NEVER set (child inherits parent env); runWithInput() (git.go:430) is identical + stdin. There is NO env-passing variant. The new seam ADDS to os.Environ() (a superset — does not break the documented 'inherits parent env' guarantee at git.go:426-427).\n2. INPUT: the existing run() implementation (git.go:389) — copy its structure (LookPath, -C repo, []string args no shell, separate stdout/stderr buffers, return (stdout, stderr, code, err)).\n3. LOGIC: add `func (g *gitRunner) runWithEnv(ctx context.Context, repo string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int, err error)` — identical to run() EXCEPT `cmd.Env = append(os.Environ(), extraEnv...)`. Add a sibling interface method on the Git interface (git.go:87) OR keep it unexported if only used by the scoped variants below (P1.M2.T1.S2) — PREFER keeping runWithEnv unexported and exposing the scoped variants as the public surface (cleaner interface). Add the method to the Git interface only if the runner (internal/hooks, M3) needs to call it directly; otherwise the scoped variants are sufficient.\n4. OUTPUT: runWithEnv lets a git subprocess run with extra env (GIT_INDEX_FILE=<abs tmp>, GIT_EDITOR=:). No behavior change (unused until S2).\n5. DOCS: none — internal exec seam, no user-facing/config/API surface change.",
@@ -113,7 +113,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Scoped ReadTreeInto/WriteTreeFrom variants (GIT_INDEX_FILE-aware)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

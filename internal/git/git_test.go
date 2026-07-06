@@ -73,6 +73,27 @@ func TestRun_HappyPath(t *testing.T) {
 	}
 }
 
+func TestGitRunner_RunWithEnv_PassesEnv(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	g := &gitRunner{workDir: repo} // white-box; mirror TestRun_HappyPath (unexported method access)
+	// Inject a config key via git's env-var protocol (GIT_CONFIG_COUNT/KEY/VALUE): deterministic,
+	// never in the parent env (no duplicate-key risk), and needs no commit (git config --get works
+	// unborn). If cmd.Env is NOT set, the child never sees GIT_CONFIG_COUNT → config --get exits 1
+	// with empty output, failing the test loudly.
+	out, _, code, err := g.runWithEnv(context.Background(), repo, []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=stagehand.envtest",
+		"GIT_CONFIG_VALUE_0=passed-via-env",
+	}, "config", "--get", "stagehand.envtest")
+	if err != nil || code != 0 {
+		t.Fatalf("runWithEnv config --get: code=%d err=%v (cmd.Env likely not set)", code, err)
+	}
+	if got := strings.TrimSpace(out); got != "passed-via-env" {
+		t.Errorf("extraEnv did not reach the child: got %q, want %q (cmd.Env not set?)", got, "passed-via-env")
+	}
+}
+
 func TestRun_CapturesExitCodeAndSeparateBuffers(t *testing.T) {
 	repo := t.TempDir()
 	initRepo(t, repo)
