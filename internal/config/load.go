@@ -300,6 +300,15 @@ func loadEnv(cfg *Config) error {
 		cfg.Push = b // DIRECT set — can be false (escape hatch)
 	}
 
+	// §9.25 FR-V5 — no_verify via env (presence-semantic, DIRECT set — can be false, the escape hatch).
+	if v, ok := os.LookupEnv("STAGEHAND_NO_VERIFY"); ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("STAGEHAND_NO_VERIFY: %w", err)
+		}
+		cfg.NoVerify = b // DIRECT set — can be false (escape hatch, mirrors STAGEHAND_PUSH)
+	}
+
 	return nil
 }
 
@@ -423,6 +432,13 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	if fs.Changed("push") {
 		if v, err := fs.GetBool("push"); err == nil {
 			cfg.Push = v // DIRECT set
+		}
+	}
+
+	// §9.25 FR-V5 — --no-verify flag (DIRECT set; mirrors --push). Flag var registered in P1.M1.T2.S1.
+	if fs.Changed("no-verify") {
+		if v, err := fs.GetBool("no-verify"); err == nil {
+			cfg.NoVerify = v // DIRECT set
 		}
 	}
 }

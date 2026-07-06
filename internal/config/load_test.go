@@ -148,6 +148,7 @@ func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	t.Setenv("STAGEHAND_TIMEOUT", "60s")
 	t.Setenv("STAGEHAND_VERBOSE", "true")
 	t.Setenv("STAGEHAND_NO_COLOR", "true")
+	t.Setenv("STAGEHAND_NO_VERIFY", "true")
 
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
@@ -167,12 +168,16 @@ func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	if !cfg.NoColor {
 		t.Errorf("NoColor=false want true")
 	}
+	if !cfg.NoVerify {
+		t.Errorf("NoVerify=false want true (STAGEHAND_NO_VERIFY=true)")
+	}
 }
 
 func TestLoadEnv_BoolFalseEscape(t *testing.T) {
-	cfg := Config{Verbose: true, NoColor: true} // start with true
+	cfg := Config{Verbose: true, NoColor: true, NoVerify: true} // start with true
 	t.Setenv("STAGEHAND_VERBOSE", "false")
 	t.Setenv("STAGEHAND_NO_COLOR", "false")
+	t.Setenv("STAGEHAND_NO_VERIFY", "false")
 
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
@@ -182,6 +187,9 @@ func TestLoadEnv_BoolFalseEscape(t *testing.T) {
 	}
 	if cfg.NoColor {
 		t.Errorf("NoColor=true want false (DIRECT set escape hatch)")
+	}
+	if cfg.NoVerify {
+		t.Errorf("NoVerify=true want false (DIRECT set escape hatch)")
 	}
 }
 
@@ -1316,6 +1324,30 @@ func TestLoadFlags_Push(t *testing.T) {
 	loadFlags(&cfg2, fs2)
 	if cfg2.Push {
 		t.Errorf("Push=true want false (--push not changed)")
+	}
+}
+
+func TestLoadFlags_NoVerify(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	// Register --no-verify flag (newFlagSet does NOT register it by default yet; P1.M1.T2.S1
+	// registers it in root.go — S2 writes only this loadFlags reader).
+	fs.Bool("no-verify", false, "")
+	if err := fs.Set("no-verify", "true"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if !cfg.NoVerify {
+		t.Errorf("NoVerify=false want true (--no-verify set)")
+	}
+
+	// Not changed → no-op
+	cfg2 := Defaults()
+	fs2 := newFlagSet(t)
+	fs2.Bool("no-verify", false, "")
+	loadFlags(&cfg2, fs2)
+	if cfg2.NoVerify {
+		t.Errorf("NoVerify=true want false (--no-verify not changed)")
 	}
 }
 

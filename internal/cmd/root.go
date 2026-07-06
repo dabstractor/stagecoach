@@ -99,6 +99,9 @@ var flagEdit bool
 // §9.22 FR-P1 — --push flag (full 5-layer precedence; resolved by config.Load via fs.Changed).
 var flagPush bool
 
+// §9.25 FR-V5 — --no-verify flag (full 5-layer precedence; resolved by config.Load via fs.Changed).
+var flagNoVerify bool
+
 // §9.19 FR-F1/FR-F6/FR-F8 — format/locale/template flags (resolved by config.Load via fs.Changed).
 var (
 	flagFormat   string
@@ -210,6 +213,10 @@ func init() {
 			"push failed\" prints, and stagehand exits 1. Skipped on --dry-run, the nothing-to-commit "+
 			"exit, and any rescue/CAS abort. (env STAGEHAND_PUSH, git stagehand.push, config "+
 			"[generation].push; default false.) (§9.22 FR-P1)")
+	pf.BoolVar(&flagNoVerify, "no-verify", false,
+		"Bypass pre-commit and commit-msg hooks for this commit (mirrors git commit --no-verify; "+
+			"prepare-commit-msg and post-commit still run). (env STAGEHAND_NO_VERIFY, git "+
+			"stagehand.no_verify; default false.) (§9.25 FR-V5)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")

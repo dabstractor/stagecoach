@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Configuration + CLI surface: NoVerify, HookTimeout, --no-verify",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add the two config knobs (FR-V5 NoVerify, FR-V6 HookTimeout) with full 5-layer precedence, and register the --no-verify CLI flag. Mirrors the established Push (5-layer bool) and Timeout (5-layer duration) patterns exactly. This is the user-facing surface; no behavior change yet (the fields are unread until the runner lands in M3).",
           "tasks": [
             {
@@ -59,14 +59,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Register --no-verify CLI flag",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Register the --no-verify persistent flag in internal/cmd/root.go (mirrors --push/--edit at lines 200-212), bound to a package var, with help text citing §9.25 FR-V5 and the exact 'skips pre-commit and commit-msg only (prepare-commit-msg and post-commit still run)' semantics. config.Load's loadFlags (P1.M1.T1.S2) reads it via fs.Changed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "root.go --no-verify flag definition + help text + cli.md row",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2"
@@ -100,7 +100,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "runWithEnv exec seam in internal/git",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: see codebase_reality.md §1 — internal/git/git.go:389 run() is `exec.CommandContext(ctx, gitPath, \"-C\", repo, args...)` with cmd.Env NEVER set (child inherits parent env); runWithInput() (git.go:430) is identical + stdin. There is NO env-passing variant. The new seam ADDS to os.Environ() (a superset — does not break the documented 'inherits parent env' guarantee at git.go:426-427).\n2. INPUT: the existing run() implementation (git.go:389) — copy its structure (LookPath, -C repo, []string args no shell, separate stdout/stderr buffers, return (stdout, stderr, code, err)).\n3. LOGIC: add `func (g *gitRunner) runWithEnv(ctx context.Context, repo string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int, err error)` — identical to run() EXCEPT `cmd.Env = append(os.Environ(), extraEnv...)`. Add a sibling interface method on the Git interface (git.go:87) OR keep it unexported if only used by the scoped variants below (P1.M2.T1.S2) — PREFER keeping runWithEnv unexported and exposing the scoped variants as the public surface (cleaner interface). Add the method to the Git interface only if the runner (internal/hooks, M3) needs to call it directly; otherwise the scoped variants are sufficient.\n4. OUTPUT: runWithEnv lets a git subprocess run with extra env (GIT_INDEX_FILE=<abs tmp>, GIT_EDITOR=:). No behavior change (unused until S2).\n5. DOCS: none — internal exec seam, no user-facing/config/API surface change.",
