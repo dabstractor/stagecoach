@@ -1,12 +1,12 @@
-## Stagehand — build, test, lint, coverage, and install targets. (PRD §21.1)
+## Stagecoach — build, test, lint, coverage, and install targets. (PRD §21.1)
 ##
 ## Usage:  make <target>
 ##
 ## Targets:
-##   build          Compile the stagehand binary to ./bin/stagehand
-##   install        Install stagehand into $GOPATH/bin
-##   build-test     Compile a test binary as ./bin/stagehand-test (side-by-side, same source)
-##   install-test   Install stagehand-test where the official binary lives (on PATH, like `stagehand`)
+##   build          Compile the stagecoach binary to ./bin/stagecoach
+##   install        Install stagecoach into $GOPATH/bin
+##   build-test     Compile a test binary as ./bin/stagecoach-test (side-by-side, same source)
+##   install-test   Install stagecoach-test where the official binary lives (on PATH, like `stagecoach`)
 ##   test           Run all tests with the race detector enabled
 ##   coverage       Run tests and print per-function coverage
 ##   coverage-gate  Fail if any of internal/{git,provider,generate,config} < 85% (PRD §20.3)
@@ -25,16 +25,16 @@ VERSION ?= dev
 
 # --- Paths & flags --------------------------------------------------------------
 BIN_DIR  := bin
-BIN      := $(BIN_DIR)/stagehand
-BIN_TEST := $(BIN_DIR)/stagehand-test
-MAIN_PKG := ./cmd/stagehand
+BIN      := $(BIN_DIR)/stagecoach
+BIN_TEST := $(BIN_DIR)/stagecoach-test
+MAIN_PKG := ./cmd/stagecoach
 LDFLAGS  := -X main.version=$(VERSION)
 
 # --- Install dir for the -test variant ----------------------------------------
 # The official `make install` runs `go install`, dropping the binary in $GOBIN
-# (defaults to $GOPATH/bin). On PATH it is reached via a ~/.local/bin/stagehand symlink.
-# `go install` can't rename, so install-test mirrors that exactly: build -> $GOBIN/stagehand-test,
-# then a matching ~/.local/bin/stagehand-test symlink puts it on PATH.
+# (defaults to $GOPATH/bin). On PATH it is reached via a ~/.local/bin/stagecoach symlink.
+# `go install` can't rename, so install-test mirrors that exactly: build -> $GOBIN/stagecoach-test,
+# then a matching ~/.local/bin/stagecoach-test symlink puts it on PATH.
 GOBIN ?= $(shell go env GOBIN)
 ifeq ($(strip $(GOBIN)),)
 GOBIN := $(shell go env GOPATH)/bin
@@ -49,20 +49,20 @@ COVERAGE_PKGS     := ./internal/git/... ./internal/provider/... ./internal/gener
 
 .PHONY: build build-test install install-test test coverage coverage-gate lint clean help
 
-build: ## Compile the stagehand binary to ./bin/stagehand
+build: ## Compile the stagecoach binary to ./bin/stagecoach
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) $(MAIN_PKG)
 
-build-test: ## Compile a test binary as ./bin/stagehand-test (side-by-side with the real one)
+build-test: ## Compile a test binary as ./bin/stagecoach-test (side-by-side with the real one)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_TEST) $(MAIN_PKG)
 
-install: ## Install stagehand into $GOPATH/bin
+install: ## Install stagecoach into $GOPATH/bin
 	go install -ldflags "$(LDFLAGS)" $(MAIN_PKG)
 
-install-test: build-test ## Install stagehand-test where the official binary lives (on PATH, like `stagehand`)
+install-test: build-test ## Install stagecoach-test where the official binary lives (on PATH, like `stagecoach`)
 	@mkdir -p "$(GOBIN)" "$(HOME)/.local/bin"
-	install -m 0755 "$(BIN_TEST)" "$(GOBIN)/stagehand-test"
-	ln -sfn "$(GOBIN)/stagehand-test" "$(HOME)/.local/bin/stagehand-test"
-	@echo "installed → $(GOBIN)/stagehand-test   (PATH: ~/.local/bin/stagehand-test)"
+	install -m 0755 "$(BIN_TEST)" "$(GOBIN)/stagecoach-test"
+	ln -sfn "$(GOBIN)/stagecoach-test" "$(HOME)/.local/bin/stagecoach-test"
+	@echo "installed → $(GOBIN)/stagecoach-test   (PATH: ~/.local/bin/stagecoach-test)"
 
 test: ## Run all tests with the race detector enabled
 	go test -race ./...
