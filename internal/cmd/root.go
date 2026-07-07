@@ -237,20 +237,20 @@ func init() {
 	// Wrap flag-usage text to the live terminal width. Cobra's default usage template calls
 	// pflag.FlagUsages() (== FlagUsagesWrapped(0)); pflag v1.0.x treats cols=0 as "do not wrap",
 	// so long flag descriptions render as single un-justified lines that a terminal then
-	// soft-wraps raggedly. We swap that call for the stagehandFlagUsages template func (registered
+	// soft-wraps raggedly. We swap that call for the stagecoachFlagUsages template func (registered
 	// just below), which wraps each FlagSet's usage to helpWrapWidth() (live screen width, capped
 	// at maxHelpWidth, minus a right margin) and keeps continuation lines left-aligned at the
 	// description column. We derive the template from Cobra's own default via a targeted string
 	// swap (not a full copy), so we stay in lock-step with Cobra's layout. Applies to every
 	// subcommand: SetUsageTemplate on root is inherited by children via (*Command).UsageTemplate().
-	cobra.AddTemplateFunc("stagehandFlagUsages", flagUsagesWrapped)
+	cobra.AddTemplateFunc("stagecoachFlagUsages", flagUsagesWrapped)
 	rootCmd.SetUsageTemplate(strings.NewReplacer(
-		".LocalFlags.FlagUsages ", "stagehandFlagUsages .LocalFlags ",
-		".InheritedFlags.FlagUsages ", "stagehandFlagUsages .InheritedFlags ",
+		".LocalFlags.FlagUsages ", "stagecoachFlagUsages .LocalFlags ",
+		".InheritedFlags.FlagUsages ", "stagecoachFlagUsages .InheritedFlags ",
 	).Replace(rootCmd.UsageTemplate()))
 }
 
-// flagUsagesWrapped is the stagehandFlagUsages template func: it renders fs's usage block wrapped
+// flagUsagesWrapped is the stagecoachFlagUsages template func: it renders fs's usage block wrapped
 // to helpWrapWidth() columns. pflag.FlagUsagesWrapped(cols) wraps the WHOLE line (flag column +
 // description) at cols, indenting continuation lines to the description column — so feeding it the
 // screen-derived total lets descriptions fill whatever space is left after the flag column and stay
