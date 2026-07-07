@@ -37,7 +37,7 @@ issues:
       linters: [errcheck]
     - path: internal/git/stagediff_test.go
       linters: [errcheck]
-    - path: pkg/stagehand/stagehand_test.go
+    - path: pkg/stagecoach/stagecoach_test.go
       linters: [errcheck, unused]
     - path: internal/cmd/root_test.go
       linters: [errcheck]

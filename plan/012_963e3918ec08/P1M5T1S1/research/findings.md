@@ -1,178 +1,169 @@
 # P1.M5.T1.S1 — Research Findings
-## Bulk rename stagehand → stagecoach in plan/ historical artifacts (Layer 5.5; excludes plan/012)
+## plan/ historical rename — VERIFIED NO-OP on the in-scope surface (already renamed); residue only in forbidden tasks.json
 
 ---
 
-## 0. Task contract (verbatim from item_description)
+## 0. Task contract (verbatim summary)
 
-Mode B (historical-artifacts) mechanical rename. The plan/ directory's PRIOR changesets (plan/001_* –
-plan/011_*) contain ~622 tracked files (task breakdowns, PRPs, architecture research) with `stagehand`
-references. They are git-tracked but never compiled/executed/shipped. With M1–M4 complete (source, build,
-CI, docs renamed), this task sweeps the historical plan/ surface.
-
-LOGIC (the contract's literal command): `find plan/ -name '*.md' -o -name '*.go' -o -name '*.toml' -o -name
-'*.txt' | xargs grep -l 'stagehand' | xargs sed -i 's/stagehand/stagecoach/g; s/Stagehand/Stagecoach/g;
-s/STAGEHAND/STAGECOACH/g'`.
-
-CAUTION: do NOT modify plan/012_963e3918ec08/ (it intentionally references BOTH names as the rename
-documentation). OUTPUT: all plan/ files except 012_* use 'stagecoach' throughout.
+Mode B mechanical rename. The plan/ directory's PRIOR changesets (plan/001_* – plan/011_*) allegedly
+contain ~622 tracked files with `stagehand` references (RESEARCH NOTE citing critical_findings.md F8).
+LOGIC: bulk sed `s/stagehand/stagecoach/g; s/Stagehand/Stagecoach/g; s/STAGEHAND/STAGECOACH/g` across
+.md/.go/.toml/.txt. CAUTION: do NOT modify plan/012_963e3918ec08 (documents the rename, references both
+names). OUTPUT: all plan/ files except 012_* use 'stagecoach' throughout.
 
 ---
 
-## 1. CRITICAL: the contract's literal command has THREE correctness gaps
+## 1. ⚠️ HEADLINE FINDING — the in-scope surface is ALREADY CLEAN (verified)
 
-The contract's command is a starting sketch, NOT safe to run verbatim. Three gaps, each independently
-breaks the task if unfixed:
+A case-insensitive recursive grep across plan/ (excluding plan/012) for the contract's FOUR extensions
+(.md/.go/.toml/.txt) returns **ZERO** files with stagehand refs:
 
-### Gap 1 — plan/012 exclusion is MISSING (would corrupt the rename documentation)
-The contract's `find plan/ …` includes plan/012_963e3918ec08/. Running the sed on it would transform
-"rename **stagehand** → **stagecoach**" into "rename **stagecoach** → **stagecoach**" — destroying the very
-rename record this changeset produces. **VERIFIED**: plan/012 contains stagehand references (grep found 11
-files; spot-checked: "part of the stagehand→stagecoach project rename", "github.com/dustin/stagehand …
-404 occurrences", "Rename stagehand.* git-config keys → stagecoach.*"). These MUST be preserved.
-**FIX**: prune plan/012 from the find: `-path plan/012_963e3918ec08 -prune -o …`.
+```
+$ find plan -path plan/012_963e3918ec08 -prune -o -type f \
+    \( -name '*.md' -o -name '*.go' -o -name '*.toml' -o -name '*.txt' \) -print \
+  | xargs grep -li 'stagehand' 2>/dev/null | wc -l
+0
+```
+- The corrected `find` enumerates **716** in-scope files (≈ the contract's "~622") — the find WORKS; the
+  716 files simply no longer contain `stagehand`.
+- plan/001 alone has **147** files containing `stagecoach` (already renamed) and only **3** with stagehand
+  — and those 3 are `tasks.json` (see §2).
+- The historical plan/ text files (.md/.go/.toml/.txt) were renamed by EARLIER rename layers (M1–M4 ran
+  repo-wide text passes that swept plan/ too). The contract's "~622 files with stagehand references" is
+  STALE — it described the pre-rename state.
 
-### Gap 2 — `grep -l 'stagehand'` is case-SENSITIVE (misses Stagehand/STAGEHAND-only files)
-The grep filter lists files containing lowercase `stagehand` only. A historical file whose ONLY old-name
-refs are capitalized (`Stagehand` title, `STAGEHAND_*` env var docs) would be EXCLUDED from the sed list
-and left stale. **FIX**: `grep -li 'stagehand'` (case-insensitive) so all three case variants are caught
-and renamed.
-
-### Gap 3 — `xargs sed -i …` with empty input (no-input guard)
-If grep lists zero files (already renamed, or the historical dirs absent in the run env), the second xargs
-receives no input and `sed -i` would error (sed with no file args) or, on some xargs, run sed on stdin.
-**FIX**: `xargs -r sed …` (GNU `--no-run-if-empty`); BSD fallback: guard with a test or accept the no-op.
-
-### Bonus — find `-o` grouping
-Empirically (tested on GNU find in this env): the UNGROUPED form `find . -name '*.md' -o -name '*.go' -o
--name '*.txt'` DOES print all three extensions (GNU find's implicit `-print` covers the whole OR
-expression when no explicit action is present). BUT once `-path … -prune -o` is added (Gap 1's fix) plus
-an explicit `-print`, the `-name` conditions MUST be grouped `\( … \)` for the prune/print logic to bind
-correctly. Grouping is also portable to BSD find. **FIX**: always use the grouped form in the corrected
-command.
+**Conclusion**: the contract's bulk-rename command, run on the actual current file set, renames **ZERO**
+in-scope files. The task is a **verified no-op on the .md/.go/.toml/.txt surface**.
 
 ---
 
-## 2. The CORRECTED command (the heart of this PRP)
+## 2. The ONLY remaining stagehand residue is in orchestrator-owned `tasks.json` (FORBIDDEN)
 
-```bash
-# Linux / GNU sed + GNU xargs (the CI environment):
+Across ALL of plan/ excluding 012, exactly **19** files still contain `stagehand` — and **all 19 are
+`tasks.json`** (`.json`, not one of the contract's 4 extensions):
+
+```
+$ grep -rli 'stagehand' plan/ | grep -vE '^plan/012_963e3918ec08/' | sed 's|.*/||' | sort | uniq -c
+     19 tasks.json
+$ grep -rli 'stagehand' plan/ | grep -vE '^plan/012_963e3918ec08/' | grep -ciE '\.(md|go|toml|txt)$'
+0
+```
+
+`tasks.json` is:
+1. `.json` — NOT in the contract's `.md/.go/.toml/.txt` list (the contract's own command would skip it).
+2. **Orchestrator-owned and FORBIDDEN** — the task's FORBIDDEN OPERATIONS: "NEVER MODIFY: `**/tasks.json`
+   - Any tasks.json file anywhere (owned by orchestrator)."
+
+→ This task MUST NOT touch the 19 tasks.json files. They are out of scope by BOTH the contract's extension
+list AND the FORBIDDEN OPERATIONS. **Flag for the orchestrator** (P1.M5.T2.S1's whole-repo audit will see
+them; renaming tasks.json is the orchestrator's call, not this task's).
+
+---
+
+## 3. plan/012 is the preserve target (VERIFIED) — and now the ONLY .md stagehand surface
+
+plan/012_963e3918ec08 is the CURRENT changeset (this rename project). **44** files there contain stagehand
+(deliberately — they document the rename: "rename stagehand.* git-config keys → stagecoach.*", "part of the
+stagehand→stagecoach project rename", "github.com/dustin/stagehand … 404 occurrences"). These MUST be
+preserved.
+
+**Critical consequence of §1 + §3**: since plan/001–011 text files are clean, the ONLY `.md`/`.go`/`.toml`/
+`.txt` files in all of plan/ that still contain `stagehand` are in **plan/012**. Therefore:
+- The contract's UNFIXED command (no plan/012 prune) would find stagehand refs ONLY in plan/012 and RENAME
+  THEM — **corrupting the rename documentation** ("stagehand → stagecoach" ⇒ "stagecoach → stagecoach").
+- The CORRECTED command (with the prune) finds ZERO files and renames NOTHING — which is correct.
+
+So the plan/012 prune is not just a nicety — it is the difference between a correct no-op and active
+corruption, because plan/012 is now the sole remaining in-scope stagehand surface.
+
+---
+
+## 4. The 3 gaps in the contract's literal command (still documented — they are the verification tool)
+
+Even though the command renames 0 files today, it is the task's VERIFICATION gate and a SAFETY NET if the
+state differs at implementation time (a different branch, a partial revert, a re-added file). The corrected
+form fixes three gaps in the contract's sketch:
+
+| gap | contract (unsafe) | corrected |
+|-----|-------------------|-----------|
+| plan/012 exclusion | (absent — would corrupt plan/012, the ONLY remaining in-scope stagehand surface) | `-path plan/012_963e3918ec08 -prune -o` |
+| grep case | `grep -l 'stagehand'` (case-sensitive; misses Stagehand/STAGEHAND) | `grep -li 'stagehand'` |
+| empty input | `xargs sed -i …` (errors on empty — and it WILL be empty today) | `xargs -r sed -i …` |
+
+The corrected command (Linux/GNU):
+```
 find plan -path plan/012_963e3918ec08 -prune -o -type f \
   \( -name '*.md' -o -name '*.go' -o -name '*.toml' -o -name '*.txt' \) -print \
   | xargs grep -li 'stagehand' 2>/dev/null \
   | xargs -r sed -i 's/stagehand/stagecoach/g; s/Stagehand/Stagecoach/g; s/STAGEHAND/STAGECOACH/g'
 ```
-- `-path plan/012_963e3918ec08 -prune -o` → excludes the current changeset's docs (Gap 1).
-- `grep -li 'stagehand'` → case-insensitive (Gap 2).
-- `xargs -r` → no-op on empty input (Gap 3).
-- grouped `\( -name … \)` → prune logic + portability (bonus).
-- THREE sed arms → lowercase / Capitalized / ALL-CAPS (the contract's three).
-
-**macOS / BSD sed variant** (if run locally on a Mac): `sed -i '' 's/.../.../g; ...'` (empty backup-ext
-arg). BSD xargs lacks `-r`; replace the last pipe with `| xargs sed -i '' …` and accept that an empty
-grep result is an error-free no-op only if grep found ≥1 file (verify the count first).
+(The `xargs -r` is ESSENTIAL today: the grep returns nothing, so without `-r` the `sed -i` would error or
+read stdin. With `-r` it is a clean no-op.)
 
 ---
 
-## 3. Why the blanket sed is SAFE across all historical files (no compound-token risk)
+## 5. Why the blanket sed is SAFE whenever it DOES find files (no compound-token risk)
 
-The previous single-file rename (P1.M4.T2.S2, FUTURE_SPEC.md) verified no compound tokens before trusting
-the blanket sed. Across ~622 historical files that exhaustive check is infeasible, BUT the analysis shows
-EVERY `stagehand` substring in these artifacts is a token that SHOULD be renamed:
-- `.stagehand.toml` → `.stagecoach.toml` (config filename, renamed P1.M2.T2.S1) ✓ desired
-- `.stagehandignore` → `.stagecoachignore` (ignore file, renamed P1.M2.T2.S2) ✓ desired
-- `stagehand.no_verify` / `stagehand.noVerify` → `stagecoach.*` (git-config keys, renamed P1.M2.T1.S2) ✓
-- `STAGEHAND_PROVIDER` / `STAGEHAND_MODEL` / etc. → `STAGECOACH_*` (env vars, renamed P1.M2.T1.S1) ✓
-- `github.com/dustin/stagehand` → `github.com/dustin/stagecoach` (module/import path, renamed P1.M1.T1) ✓
-  — the contract explicitly says "the sed handles those too."
-- `cmd/stagehand`, `pkg/stagehand`, `stagehand` (the binary/prose name) → `stagecoach` ✓
-- `commit-pi` (the originating tool) → NOT touched (no `stagehand` substring; sed arms don't match it) ✓
-
-There is NO token in this codebase where a `stagehand` substring should be partially preserved. The three
-sed arms are CASE-DISJOINT and order-safe (verified by reasoning): arm 1 `s/stagehand/` matches only
-lowercase-initial; arm 2 `s/Stagehand/` needs lowercase `tagehand` after `S` so it does NOT match
-`STAGEHAND` (which has `TAGEHAND`); arm 3 `s/STAGEHAND/` matches all-caps. None re-creates another's
-pattern (`stagecoach` has no `hand`). **DEFENSIVE**: still run a post-rename sanity grep for any unexpected
-residual compound token (Level 4 check) — vanishingly unlikely but cheap to confirm.
+Every `stagehand` substring in this codebase is a token that SHOULD be renamed: `.stagehand.toml`→
+`.stagecoach.toml`; `.stagehandignore`→`.stagecoachignore`; `stagehand.no_verify`/`noVerify`→`stagecoach.*`;
+`STAGEHAND_*` env→`STAGECOACH_*`; `github.com/dustin/stagehand`→`stagecoach` (contract: "the sed handles
+those too"). `commit-pi` (the originating tool) has NO stagehand substring and is untouched. The three sed
+arms are case-disjoint + order-safe (arm 1 lowercase `s`; arm 2 `Stagehand` needs lowercase `tagehand` so
+it misses `STAGEHAND`; arm 3 all-caps). No arm re-creates another's pattern.
 
 ---
 
-## 4. The plan/012 preserve target (VERIFIED)
+## 6. The plan/012 architecture docs (the contract's RESEARCH NOTE references — verified present)
 
-plan/012_963e3918ec08/ is the CURRENT changeset (the stagehand→stagecoach rename project). Its files
-INTENTIONALLY reference both names — they DOCUMENT the rename (e.g. "rename stagehand.* git-config keys →
-stagecoach.*", "the prefix appears as 404 occurrences", "github.com/dustin/stagehand"). Transforming these
-would erase the historical record. Confirmed: 11 files in plan/012 contain `stagehand`. **The corrected
-command prunes plan/012 so it is untouched.** Post-rename validation CONFIRMS plan/012 still has stagehand
-refs (the exclusion worked).
-
-NOTE: the PRP being written (this file) and its sibling PRPs live in plan/012 — they MUST keep both names.
-This is why the exclusion is non-negotiable.
-
----
-
-## 5. Research-environment caveat (transparency)
-
-The research clone at `/home/dustin/projects/stagecoach` is an EXCERPT: it contains ONLY plan/012_963e3918ec08/
-and is NOT a git repository (`git rev-parse` → "fatal: not a git repository"; `git ls-files plan/` → 0;
-no `.git`). The historical dirs plan/001_*–plan/011_* described by the contract (~622 files) are ABSENT
-here. Therefore:
-- The "~622 files" figure is taken from the contract; the implementing agent MUST verify the live file set
-  as the FIRST task (the count + a sample), in the full repo where the rename runs.
-- The validation gates below are given in TWO forms: git-based (for the full tracked repo the contract
-  describes) AND git-independent grep-based (work in any clone, including this excerpt).
-
-The contract is the source of truth for the implementation environment ("tracked in git but never
-compiled, executed, or shipped"). The PRP assumes the full repo matches that description.
+The contract cites critical_findings.md F8. Verified in the live repo (plan/012_963e3918ec08/architecture/):
+- **critical_findings.md §F8** ("Historical plan/ files are tracked but non-functional"): "The plan/001_*
+  through plan/011_* directories contain previous task breakdowns, PRP files, and architecture research …
+  They reference 'stagehand' extensively but are never compiled, never executed, and never shipped …
+  should be renamed for completeness but are the lowest priority." → describes the PRE-rename state; this
+  task verifies the rename is now complete on the in-scope surface.
+- **rename_surface_map.md** Layer 5 (Documentation): lists 5.1 README, 5.2 docs/, 5.3 providers, 5.4
+  FUTURE_SPEC; verification gate 5 = whole-repo `grep -ri stagehand … == 0`. plan/ historical is the
+  implicit remainder; this task is its sweep (now verified clean on .md/.go/.toml/.txt).
 
 ---
 
-## 6. Validation (two forms — git-based + git-independent)
+## 7. Validation (the corrected command IS the verification; expect a clean no-op)
 
 ```bash
-# ── BEFORE: verify the scope (run in the full repo) ──
-# Count historical plan files with any case-variant stagehand ref (must EXCLUDE 012):
+# PRIMARY GATE — zero in-scope residue (the corrected command's grep leg, expect 0):
 find plan -path plan/012_963e3918ec08 -prune -o -type f \
   \( -name '*.md' -o -name '*.go' -o -name '*.toml' -o -name '*.txt' \) -print \
-  | xargs grep -li 'stagehand' 2>/dev/null | wc -l
-# (Record this N; the contract says ~622 files total, fewer have stagehand. Sample a few to confirm.)
+  | xargs grep -li 'stagehand' 2>/dev/null | wc -l      # expect: 0
 
-# ── AFTER: zero residue OUTSIDE plan/012 (git-independent) ──
-find plan -path plan/012_963e3918ec08 -prune -o -type f \
-  \( -name '*.md' -o -name '*.go' -o -name '*.toml' -o -name '*.txt' \) -print \
-  | xargs grep -li 'stagehand' 2>/dev/null | wc -l     # expect: 0
+# PRESERVATION — plan/012 still has stagehand refs (the prune worked; the rename docs are intact):
+grep -rli 'stagehand' plan/012_963e3918ec08/ 2>/dev/null | wc -l   # expect: > 0
 
-# ── AFTER: plan/012 PRESERVED (still has stagehand refs — the exclusion worked) ──
-grep -rli 'stagehand' plan/012_963e3918ec08/ 2>/dev/null | wc -l   # expect: > 0 (the rename docs intact)
+# SCOPE — no file touched (it's a verified no-op): git status should show NO plan/ changes (or only the
+# expected ones if the safety-net found a straggler):
+git -C /home/dustin/projects/stagehand status --porcelain plan/ | head
 
-# ── AFTER (git-based, if tracked): scope of the diff ──
-git diff --name-only | grep -E '^plan/' | grep -v '^plan/012_963e3918ec08/' | wc -l   # the renamed files
-git diff --name-only | grep -E '^plan/012_963e3918ec08/'                              # expect: EMPTY (012 untouched)
+# FORBIDDEN-FILE AUDIT — the 19 tasks.json residue files (DO NOT TOUCH; flag for the orchestrator):
+grep -rli 'stagehand' plan/ 2>/dev/null | grep -vE '^plan/012_963e3918ec08/'   # expect: 19 tasks.json paths
 
-# ── AFTER (sanity, defensive): no unexpected compound-token residue repo-wide ──
-# (the final whole-repo zero-residue audit is P1.M5.T2.S1; this is a quick sanity grep)
-grep -rli 'stagehand' plan/ --include='*.md' --include='*.go' --include='*.toml' --include='*.txt' \
-  | grep -v '^plan/012_963e3918ec08/' | wc -l    # expect: 0
-
-# ── Regression check (historical plan/ is NOT compiled) ──
-go build ./... && go test ./...   # expect: green, unaffected (plan/ is not in the module build)
+# Regression (historical plan/ is not compiled):
+go build ./... && go test ./...    # expect: green, unaffected
 ```
 
 ---
 
-## 7. Confidence & risks
+## 8. Confidence & the task's real deliverable
 
-**Confidence: 9/10.** The corrected command is deterministic and the three gaps are precisely identified
-and fixed. The preserve-target (plan/012) is verified. The no-compound-token safety is established by
-analysis (every substring is a desired rename) with a defensive post-check.
+**Confidence: 9.5/10.** The state is grep-verified, unambiguous, and reproducible.
 
-**Risks:**
-- **Environment mismatch.** The research clone lacks plan/001–011 + git; the implementing agent must
-  verify the live file set first (Task 1). If the historical dirs are absent in the run env too, the task
-  is a verified no-op (document it — the contract allows "reviewed, no changes needed" framing).
-- **Case-only-variant files missed by a naive grep.** Mitigated by `grep -li` (Gap 2). If the contract's
-  literal `grep -l` is used instead, capitalized-only files stay stale — the PRP forbids this.
-- **plan/012 corruption.** Mitigated by the `-prune` exclusion (Gap 1). The PRP's validation asserts
-  plan/012 STILL contains stagehand refs post-rename.
-- **BSD vs GNU sed (local macOS runs).** `sed -i ''` + no `xargs -r`. The CI is Linux (GNU); local Mac
-  runs need the BSD variant. PRP notes both.
+**The real deliverable is a VERIFICATION + DOCUMENTATION, not a 622-file rename:**
+1. RUN the corrected command (it renames 0 in-scope files — confirming the surface is clean). The `xargs -r`
+   makes the empty case a clean no-op (without it, the empty grep would error).
+2. ASSERT zero in-scope residue (the primary gate) + plan/012 preservation (the prune worked).
+3. DOCUMENT: the in-scope plan/ surface (.md/.go/.toml/.txt, excluding 012) is already renamed (0 residue);
+   the only remaining stagehand refs are 19 orchestrator-owned `tasks.json` files (FORBIDDEN — out of
+   scope); flag them for the orchestrator / P1.M5.T2.S1.
+4. DO NOT modify tasks.json. DO NOT modify plan/012.
+
+**Risk to flag for the orchestrator**: P1.M5.T2.S1's whole-repo zero-residue audit (`grep -ri stagehand`)
+will report the 19 tasks.json files as residue. That is NOT a failure of THIS task — tasks.json is
+orchestrator-owned. The orchestrator must decide whether to rename tasks.json (outside this task's scope).

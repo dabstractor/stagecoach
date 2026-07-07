@@ -387,7 +387,7 @@ type Git interface {
 
 	// GitDir returns the absolute path to the repository's .git directory via `git rev-parse
 	// --absolute-git-dir` (honors worktrees + commondir; git 2.13+, universally available). Used by the
-	// --edit editor gate (§9.22 FR-E1) to locate .git/STAGEHAND_EDITMSG. `--absolute-git-dir` succeeds on
+	// --edit editor gate (§9.22 FR-E1) to locate .git/STAGECOACH_EDITMSG. `--absolute-git-dir` succeeds on
 	// an UNBORN repo, so exit 128 here is a REAL error (non-repo/corrupt) — mirror HooksPath's convention
 	// (branch on code != 0, NOT on code == 128). Read-only w.r.t. refs and the index (PRD §18.1).
 	GitDir(ctx context.Context) (dir string, err error)

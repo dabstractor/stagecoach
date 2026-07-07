@@ -440,14 +440,14 @@
               "type": "Task",
               "id": "P1.M5.T1",
               "title": "Historical plan artifacts rename",
-              "status": "Complete",
+              "status": "Ready",
               "description": "Rename stagehand references in the plan/ directory's historical planning documents (task breakdowns, PRP files, architecture research from previous implementation phases).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T1.S1",
                   "title": "Bulk rename stagehand references in plan/ directory files",
-                  "status": "Complete",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T2.S2"
@@ -463,14 +463,14 @@
               "type": "Task",
               "id": "P1.M5.T2",
               "title": "Comprehensive verification (grep audit + full test suite)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Perform a final grep audit to ensure zero 'stagehand' references remain in any tracked file, and run the full build and test suite to confirm the renamed project works correctly.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T2.S1",
                   "title": "Final grep audit: zero stagehand references in tracked files",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M5.T1.S1"
@@ -484,7 +484,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T2.S2",
                   "title": "Full build + test suite passes with stagecoach identity",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T3.S2"

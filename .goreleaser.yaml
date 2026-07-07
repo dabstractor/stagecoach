@@ -1,4 +1,4 @@
-# .goreleaser.yaml — Stagehand release config (goreleaser v2). PRD §21.2.
+# .goreleaser.yaml — Stagecoach release config (goreleaser v2). PRD §21.2.
 # Docs: https://goreleaser.com/customization/
 # Validate: `goreleaser check`  then  `goreleaser release --snapshot --clean` (publishes NOTHING).
 #
