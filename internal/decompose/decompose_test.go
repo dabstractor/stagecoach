@@ -2554,3 +2554,103 @@ func TestDecompose_PlannerCoverageLogsUnclaimed(t *testing.T) {
 		t.Errorf("verbose buffer missing FR-M3b coverage line\nwant substring: %s\ngot: %s", want, lb.String())
 	}
 }
+
+// assembledPromptSeparatorTokens is the Render stdin-separator allowance (the decompose-package copy;
+// distinct from the generate-package constant of the same value — the two packages do not cross-import).
+// provider.Render prepends `sysPrompt + "\n\n" + userPayload` to the stub's stdin when the manifest
+// has no system_prompt_flag (render.go:158). The FR3j MeasureAssembled closure measures
+// `EstimateTokens(sysPrompt + payload)` (Go `+`, NO separator). So capturedStdin = closure_measurement
+// + "\n\n", and EstimateTokens rises by <=1 (ceil(runes/4) on +2 runes). FR3j guarantees
+// closure_measurement <= tokenLimit, therefore capturedStdin <= tokenLimit + 1. The +1 is the bounded
+// separator artifact, NOT a violation of FR3j (whose invariant is on the separator-free assembled
+// prompt). Equal to git.EstimateTokens("\n\n") = ceil(2/4) = 1.
+const assembledPromptSeparatorTokens = 1
+
+// TestDecompose_TokenLimitInvariant_PlannerPromptFits (PRD §9.1 FR3j / §20.5) is the SECOND consumer
+// path of the closed-loop invariant: the decompose PLANNER's assembled prompt (TreeDiff-gated) fits
+// token_limit. A decompose run invokes the stub multiple times (planner -> stager -> message ->
+// arbiter), and STAGEHAND_STUB_STDINFILE captures only the LAST invocation's stdin, so the planner's
+// stdin is isolated via role-specific Env: ONLY the planner manifest's Env map carries
+// STAGEHAND_STUB_STDINFILE (the stager/message/arbiter manifests do not, so their stub invocations
+// drain to io.Discard and never touch the planner's file). The closed loop is forced to run by making
+// the untruncated assembled prompt (~884 tokens: ~497 planner sysPrompt + ~388 payload) exceed
+// tokenLimit (700), while keeping tokenLimit above the sysPrompt floor (~510) so the loop can
+// converge; the "[truncated]" sentinel proves the gate ACTIVELY truncated.
+func TestDecompose_TokenLimitInvariant_PlannerPromptFits(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmCommitRaw(t, repo, "initial") // BORN repo: baseTree = HEAD^{tree}; TreeDiff captures the working-tree changes
+	// Large UNSTAGED working-tree diff (two files so the FR-M2b one-file short-circuit does NOT fire and
+	// the planner is invoked). The body must exceed tokenLimit so the planner's TreeDiff gate truncates.
+	dcmWriteFile(t, repo, "a.go", "package a\n")
+	body := strings.Repeat("change line content here\n", 60) // 23 runes/line x 60 ~= 1380 runes ~= 345 tokens
+	dcmWriteFile(t, repo, "big.go", body)
+
+	// Planner returns FR-M11 single:true + a message => runSingleShortcut uses the planner's message
+	// verbatim (no separate message-agent call needed for the invariant; the planner's TreeDiff is the
+	// gated path under test).
+	plannerJSON := `{"count":1,"single":true,"commits":[{"title":"add big","description":"big.go"}],"message":"feat: add big"}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	// Isolate the planner's stdin via role-specific Env (D2/G4): ONLY the planner manifest carries
+	// STAGEHAND_STUB_STDINFILE. The stager/message/arbiter manifests do not, so their stubs see
+	// os.Getenv("") => drain to io.Discard and never overwrite the planner's file. (Render builds
+	// spec.Env = os.Environ() + manifest.Env at render.go:175-180; the per-role Env is the seam.)
+	plannerStdin := filepath.Join(t.TempDir(), "planner-stdin.txt")
+	plannerM.Env["STAGEHAND_STUB_STDINFILE"] = plannerStdin
+
+	// Stager stub: auto-stage the concept's files so runSingleShortcut can commit. The concept title
+	// "add big" maps to file "big.go"; also stage a.go so the tree is clean post-run.
+	stager := dcmStagerSeam(t, repo, map[string][]string{
+		"add big": {"big.go", "a.go"},
+	})
+
+	messageM := dcmMessageManifest(t, bin, "feat: add big")
+	roles := RoleManifests{Planner: plannerM, Message: messageM}
+
+	cfg := config.Defaults()
+	// The planner system prompt alone is ~497 tokens (BuildPlannerSystemPrompt carries the partition
+	// rules + the single/multi guidance); with even a minimal payload the assembled-prompt floor is
+	// ~510 tokens. tokenLimit MUST sit ABOVE that floor (else the closed loop can never satisfy the
+	// invariant and returns best-effort, i.e. the full diff). 700 is above the floor (510) yet well
+	// below the untruncated assembled prompt (~884) => the water-fill MUST truncate big.go and the
+	// closed loop converges to sysPrompt+payload <= 700.
+	cfg.TokenLimit = 700 // 510 (floor) < 700 < 884 (untruncated) => gate truncates AND fits
+	deps := dcmDepsWithConfig(t, repo, roles, cfg)
+	deps.stager = stager
+
+	if _, err := Decompose(context.Background(), deps); err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+
+	data, err := os.ReadFile(plannerStdin)
+	if err != nil {
+		t.Fatalf("read planner stdin: %v (did the planner run? plannerM.Env had STDINFILE=%s)", err, plannerStdin)
+	}
+	captured := string(data)
+
+	// (FR3j invariant) the planner's assembled prompt fits tokenLimit + separator allowance. The +1 is
+	// the Render "\n\n" separator (render.go:158); the closure measures the separator-free prompt.
+	measured := git.EstimateTokens(captured)
+	if measured > cfg.TokenLimit+assembledPromptSeparatorTokens {
+		t.Errorf("FR3j invariant violated (planner): EstimateTokens(planner stdin) = %d, want <= %d (tokenLimit %d + %d separator)\n"+
+			"captured (first 400 chars): %q", measured, cfg.TokenLimit+assembledPromptSeparatorTokens,
+			cfg.TokenLimit, assembledPromptSeparatorTokens, truncForLogD(captured, 400))
+	}
+
+	// (Gate-ran proof) the closed loop ACTIVELY truncated — the water-fill sentinel is present.
+	if !strings.Contains(captured, "[truncated]") {
+		t.Errorf("expected '[truncated]' sentinel in the planner's stdin (tokenLimit=%d << untruncated~%d) — the gate did not truncate\n"+
+			"captured (first 400 chars): %q", cfg.TokenLimit, git.EstimateTokens(body), truncForLogD(captured, 400))
+	}
+}
+
+// truncForLogD is decompose_test.go's local truncation helper for readable failure messages (the
+// generate package has its own truncForLog; the two packages are distinct and do not cross-import).
+func truncForLogD(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
