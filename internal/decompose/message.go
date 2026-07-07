@@ -86,6 +86,16 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 	}
 	reserve := prompt.MessageReserveTokens(sysPrompt, deps.Config.MaxDuplicateRetries, deps.Config.SubjectTargetChars, deps.Config.Context, git.EstimateTokens)
 
+	// FR3j closed-loop: when token_limit is set, the gate re-measures the ACTUAL assembled prompt
+	// (sysPrompt + BuildUserPayload(gatedDiff)) after water-fill truncation and re-trims until it
+	// fits token_limit. nil when TokenLimit==0 (the gate branch doesn't run; byte-identical legacy path).
+	var measureAssembled func(string) int
+	if deps.Config.TokenLimit != 0 {
+		measureAssembled = func(gatedDiff string) int {
+			return git.EstimateTokens(sysPrompt + prompt.BuildUserPayload(gatedDiff, deps.Config.Context, nil))
+		}
+	}
+
 	// 3. Concept diff (§13.6.3 invariant 2 — tree-to-tree, never index-vs-HEAD). PromptReserveTokens
 	//    carries the worst-case prompt token count for M4.T2's water-fill / M4.T3's gate.
 	diff, err := deps.Git.TreeDiff(ctx, treeA, treeB, git.StagedDiffOptions{
@@ -96,6 +106,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		TokenLimit:          deps.Config.TokenLimit,
 		DiffContext:         deps.Config.DiffContextValue(),
 		PromptReserveTokens: reserve,
+		MeasureAssembled:    measureAssembled,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: tree diff: %w", ErrMessageFailed, err)

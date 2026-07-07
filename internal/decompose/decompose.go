@@ -655,6 +655,17 @@ func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chain
 	arbiterSys := prompt.BuildArbiterSystemPrompt()
 	reserve := prompt.ArbiterReserveTokens(arbiterSys, arbiterCommits, git.EstimateTokens)
 
+	// FR3j closed-loop: when token_limit is set, the gate re-measures the ACTUAL assembled prompt
+	// (arbiterSys + BuildArbiterUserPayload(arbiterCommits, gatedDiff)) after water-fill truncation and
+	// re-trims until it fits token_limit. nil when TokenLimit==0 (the gate branch doesn't run;
+	// byte-identical legacy path).
+	var measureAssembled func(string) int
+	if deps.Config.TokenLimit != 0 {
+		measureAssembled = func(gatedDiff string) int {
+			return git.EstimateTokens(arbiterSys + prompt.BuildArbiterUserPayload(arbiterCommits, gatedDiff))
+		}
+	}
+
 	// FR-M1b: the leftover diff is FROZEN — TreeDiff(tipTree, tStart), not a live WorkingTreeDiff.
 	// tipTree = the last committed tree (HEAD.tree post-loop; == chainData[last].Tree). A concurrent
 	// working-tree change after the freeze is invisible (it's not in tStart).
@@ -668,6 +679,7 @@ func runArbiterPhase(ctx context.Context, deps Deps, commits []CommitInfo, chain
 		TokenLimit:          deps.Config.TokenLimit,
 		DiffContext:         deps.Config.DiffContextValue(),
 		PromptReserveTokens: reserve,
+		MeasureAssembled:    measureAssembled,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("%w: leftover diff: %w", ErrDecomposeFailed, err)

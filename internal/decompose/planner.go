@@ -73,6 +73,16 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 	sysPrompt := prompt.BuildPlannerSystemPrompt(examples, deps.Config.Format, deps.Config.Locale, forcedCount, deps.Config.MaxCommits)
 	reserve := prompt.PlannerReserveTokens(sysPrompt, forcedCount, deps.Config.Context, git.EstimateTokens)
 
+	// FR3j closed-loop: when token_limit is set, the gate re-measures the ACTUAL assembled prompt
+	// (sysPrompt + BuildPlannerUserPayload(gatedDiff)) after water-fill truncation and re-trims until
+	// it fits token_limit. nil when TokenLimit==0 (the gate branch doesn't run; byte-identical legacy path).
+	var measureAssembled func(string) int
+	if deps.Config.TokenLimit != 0 {
+		measureAssembled = func(gatedDiff string) int {
+			return git.EstimateTokens(sysPrompt + prompt.BuildPlannerUserPayload(gatedDiff, deps.Config.Context, forcedCount))
+		}
+	}
+
 	// 3. FR-M1b: the FROZEN concept diff — TreeDiff(baseTree, tStart), with binary placeholders per FR3c.
 	// NOT a live WorkingTreeDiff (a concurrent change after the freeze must be invisible to the planner).
 	// PromptReserveTokens carries the worst-case prompt token count for M4.T2's water-fill / M4.T3's gate.
@@ -84,6 +94,7 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 		TokenLimit:          deps.Config.TokenLimit,
 		DiffContext:         deps.Config.DiffContextValue(),
 		PromptReserveTokens: reserve,
+		MeasureAssembled:    measureAssembled,
 	})
 	if err != nil {
 		return prompt.PlannerOutput{}, fmt.Errorf("%w: tree diff: %w", ErrPlannerFailed, err)
