@@ -1,22 +1,22 @@
 # Configuration
 
-Full reference for the Stagehand configuration system: precedence order, file format, environment variables, git-config keys, built-in defaults, and paths. Matches the shipped `config init` template and the Go source in `internal/config/`.
+Full reference for the Stagecoach configuration system: precedence order, file format, environment variables, git-config keys, built-in defaults, and paths. Matches the shipped `config init` template and the Go source in `internal/config/`.
 
 ## Precedence
 
 ```text
-CLI flags  >  STAGEHAND_* env vars  >  repo git config (stagehand.*)  >
-repo-local .stagehand.toml  >  global config file  >  provider defaults  >  built-in defaults
+CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagecoach.*)  >
+repo-local .stagecoach.toml  >  global config file  >  provider defaults  >  built-in defaults
 ```
 
 From lowest to highest:
 
 1. **Built-in defaults** — hardcoded in `config.Defaults()` (Layer 1).
 2. **Provider defaults** — the manifest's `default_model`, `provider_flag`, etc. (Layer 2).
-3. **Global config file** — `$XDG_CONFIG_HOME/stagehand/config.toml` (Layer 3).
-4. **Repo-local `.stagehand.toml`** — `./.stagehand.toml` in the repo root (Layer 4).
-5. **Repo git config** — `stagehand.*` keys in `.git/config` (Layer 5).
-6. **`STAGEHAND_*` env vars** — environment variables (Layer 6).
+3. **Global config file** — `$XDG_CONFIG_HOME/stagecoach/config.toml` (Layer 3).
+4. **Repo-local `.stagecoach.toml`** — `./.stagecoach.toml` in the repo root (Layer 4).
+5. **Repo git config** — `stagecoach.*` keys in `.git/config` (Layer 5).
+6. **`STAGECOACH_*` env vars** — environment variables (Layer 6).
 7. **CLI flags** — command-line arguments (Layer 7 — highest).
 
 When a `[provider.<name>]` section appears in a config file, its fields are **merged onto** the built-in manifest of the same name (field-by-field: present values override, absent values inherit).
@@ -27,14 +27,14 @@ When a `[provider.<name>]` section appears in a config file, its fields are **me
 
 | Scope | Path | Notes |
 |-------|------|-------|
-| Global | `$XDG_CONFIG_HOME/stagehand/config.toml` (default `~/.config/stagehand/config.toml`) | Written by `stagehand config init`; read as Layer 3. |
-| Repo-local | `./.stagehand.toml` | Gitignored; read as Layer 4; overrides global. |
+| Global | `$XDG_CONFIG_HOME/stagecoach/config.toml` (default `~/.config/stagecoach/config.toml`) | Written by `stagecoach config init`; read as Layer 3. |
+| Repo-local | `./.stagecoach.toml` | Gitignored; read as Layer 4; overrides global. |
 
-Use `stagehand config path` to print the resolved config path (override-aware: honors `--config` / `STAGEHAND_CONFIG`, else the global path).
+Use `stagecoach config path` to print the resolved config path (override-aware: honors `--config` / `STAGECOACH_CONFIG`, else the global path).
 
 ### Bootstrap (`config init`)
 
-`stagehand config init` writes a **populated, working config** to the global path by default. It:
+`stagecoach config init` writes a **populated, working config** to the global path by default. It:
 
 1. Runs cascading provider detection (highest-priority installed built-in, in order: pi, opencode, cursor, agy, gemini, qwen-code, codex, claude).
 2. Writes `[defaults] provider = "<detected>"` and that provider's per-role model defaults UNCOMMENTED (from the FR-D4 table) — EXCEPT for **pi**, whose per-role models are left EMPTY (pi is a multi-backend provider; set the model with an inference-provider prefix, e.g. `model = "zai/glm-5.2"`, FR-R5b). Pi's shipped per-role models are blank so you supply your own backend/model.
@@ -55,20 +55,20 @@ If a config file already exists, it is NOT overwritten unless `--force` is passe
 
 ### Schema versioning (`config upgrade`)
 
-`stagehand config upgrade` rewrites an existing config's top-level `config_version` line to the current schema version (3) in place — For multi-backend providers, the former `default_provider` is folded into a slash-prefix on the model and the key is deleted. Every other line is preserved. Idempotent: running it twice leaves the file unchanged. No flags.
+`stagecoach config upgrade` rewrites an existing config's top-level `config_version` line to the current schema version (3) in place — For multi-backend providers, the former `default_provider` is folded into a slash-prefix on the model and the key is deleted. Every other line is preserved. Idempotent: running it twice leaves the file unchanged. No flags.
 
 ```text
-$ stagehand config upgrade
+$ stagecoach config upgrade
 # Already at version 3 →  "Config at <path> is already at version 3 (no changes)."
 # Upgraded from v1  →  "Upgraded config at <path> to version 3."
-# No file          →  "no config file at <path> (run 'stagehand config init' first)"  (exit 1)
+# No file          →  "no config file at <path> (run 'stagecoach config init' first)"  (exit 1)
 # Not valid TOML   →  "config <path> is not valid TOML: <err>"  (exit 1, file untouched)
 ```
 
-At load time, if `config_version` is missing or older, stagehand prints an advisory to stderr pointing at `config upgrade` (or `config init --force` to regenerate). The current schema (version 3) includes per-role models, reasoning levels (FR-R6), the inference-provider model-prefix (FR-R5b), multi-commit decomposition, and binary filtering.
+At load time, if `config_version` is missing or older, stagecoach prints an advisory to stderr pointing at `config upgrade` (or `config init --force` to regenerate). The current schema (version 3) includes per-role models, reasoning levels (FR-R6), the inference-provider model-prefix (FR-R5b), multi-commit decomposition, and binary filtering.
 
 > [!NOTE]
-> Point discovery at a specific file with `--config <path>` (or the `STAGEHAND_CONFIG` env var). It overrides global and repo-local file discovery and is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagehand --config X config upgrade` upgrades file `X`; `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` directly. A missing explicit path (typo'd `--config` or `STAGEHAND_CONFIG`) fails fast with exit 1; only the discovery default tolerates a missing global file.
+> Point discovery at a specific file with `--config <path>` (or the `STAGECOACH_CONFIG` env var). It overrides global and repo-local file discovery and is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`; `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` directly. A missing explicit path (typo'd `--config` or `STAGECOACH_CONFIG`) fails fast with exit 1; only the discovery default tolerates a missing global file.
 
 ## File format
 
@@ -152,12 +152,12 @@ These are the values when no config file, env var, git-config key, or flag sets 
 
 > **Hook execution knobs.** Two `[generation]` knobs control the §9.25 hook-execution surface (pre-commit / prepare-commit-msg / commit-msg / post-commit):
 > - **`hook_timeout`** (default `10m`) — bounds each hook invocation so a wedged hook cannot hang a commit (§9.25 FR-V6). A duration string (e.g. `"30s"`, `"10m"`); malformed values fail at config load. **File + default only** (no env var, no flag, no git-config key) — set it in a config file.
-> - **`no_verify`** (default `false`) — the `--no-verify` bypass (§9.25 FR-V5): when true, skips `pre-commit` and `commit-msg` hooks (`prepare-commit-msg` and `post-commit` still run). It resolves through the full 5-layer precedence (`--no-verify` / `STAGEHAND_NO_VERIFY` / `stagehand.noVerify` / `[generation].no_verify`). The `[generation].no_verify` file key uses the same only-true-propagates limitation as `push`: a file setting `no_verify = false` is a no-op (false is already the default); use the flag/env layers to set it false explicitly.
+> - **`no_verify`** (default `false`) — the `--no-verify` bypass (§9.25 FR-V5): when true, skips `pre-commit` and `commit-msg` hooks (`prepare-commit-msg` and `post-commit` still run). It resolves through the full 5-layer precedence (`--no-verify` / `STAGECOACH_NO_VERIFY` / `stagecoach.noVerify` / `[generation].no_verify`). The `[generation].no_verify` file key uses the same only-true-propagates limitation as `push`: a file setting `no_verify = false` is a no-op (false is already the default); use the flag/env layers to set it false explicitly.
 
-The `output` and `strip_code_fence` settings apply to **parsing** of agent output. Setting `output = "json"` makes Stagehand parse the agent's stdout as JSON (extracting the `json_field` value) across all providers. These `[generation]` values are an **opt-in override**: when `[generation]` (and git-config) omit them, the per-provider `[provider.<name>]` value is honored, falling back to the §12.1 manifest defaults (`output = "raw"`, `strip_code_fence = true`). Set `output = "json"` here only to force JSON parsing across ALL providers.
+The `output` and `strip_code_fence` settings apply to **parsing** of agent output. Setting `output = "json"` makes Stagecoach parse the agent's stdout as JSON (extracting the `json_field` value) across all providers. These `[generation]` values are an **opt-in override**: when `[generation]` (and git-config) omit them, the per-provider `[provider.<name>]` value is honored, falling back to the §12.1 manifest defaults (`output = "raw"`, `strip_code_fence = true`). Set `output = "json"` here only to force JSON parsing across ALL providers.
 
 > **Token budget & diff context.** Two `[generation]` knobs size and shape the diff payload:
-> - **`token_limit`** (default `0` = unset) — a holistic token budget over the **whole** agent payload (system prompt + style examples + the concatenated diff). When set (e.g. `120000`), Stagehand reserves room for the prompt/examples and truncates the diff to fit using the ≈4 chars/token estimate; after truncation it assembles the actual full prompt, re-measures it, and re-trims until it fits — a closed-loop guarantee (§9.1 FR3j) that the payload never exceeds `token_limit`. The payload always fits your model's context window **without Stagehand maintaining a per-model context registry** (§9.1 FR3d). A non-zero `token_limit` **supersedes** the legacy per-section caps `max_diff_bytes` and `max_md_lines` for that run; the two modes are mutually exclusive. When `0`/unset, the legacy caps apply unchanged.
+> - **`token_limit`** (default `0` = unset) — a holistic token budget over the **whole** agent payload (system prompt + style examples + the concatenated diff). When set (e.g. `120000`), Stagecoach reserves room for the prompt/examples and truncates the diff to fit using the ≈4 chars/token estimate; after truncation it assembles the actual full prompt, re-measures it, and re-trims until it fits — a closed-loop guarantee (§9.1 FR3j) that the payload never exceeds `token_limit`. The payload always fits your model's context window **without Stagecoach maintaining a per-model context registry** (§9.1 FR3d). A non-zero `token_limit` **supersedes** the legacy per-section caps `max_diff_bytes` and `max_md_lines` for that run; the two modes are mutually exclusive. When `0`/unset, the legacy caps apply unchanged.
 > - **`diff_context`** (default `1`) — unchanged context lines surrounding each diff hunk: `0` = changed lines only (maximal savings), `1` = one anchor line (default), `3` = git's default (§9.1 FR3f). Applies in every diff path (staged, multi-commit snapshot, per-concept tree diff). Valid range is 0–3; an out-of-range value is rejected at config load with a clear error (§9.1 FR3f).
 
 > **Multi-turn fallback.** Two `[generation]` knobs control the lossless multi-turn fallback path (§9.24), which activates only after the one-shot retry loop exhausts on a large diff:
@@ -166,42 +166,42 @@ The `output` and `strip_code_fence` settings apply to **parsing** of agent outpu
 
 ## Environment variables
 
-All `STAGEHAND_*` variables override the config file and are overridden by CLI flags:
+All `STAGECOACH_*` variables override the config file and are overridden by CLI flags:
 
 | Variable | Mirrors flag | Description | Example |
 |----------|-------------|-------------|---------|
-| `STAGEHAND_PROVIDER` | `--provider` | Default provider/agent | `STAGEHAND_PROVIDER=claude stagehand` |
-| `STAGEHAND_MODEL` | `--model` | Model override | `STAGEHAND_MODEL=sonnet stagehand` |
-| `STAGEHAND_TIMEOUT` | `--timeout` | Generation timeout | `STAGEHAND_TIMEOUT=60s stagehand` |
-| `STAGEHAND_CONFIG` | `--config` | Config file path | `STAGEHAND_CONFIG=./alt.toml stagehand` |
-| `STAGEHAND_VERBOSE` | `--verbose` | Print resolved command and output | `STAGEHAND_VERBOSE=true stagehand` |
-| `STAGEHAND_NO_COLOR` | `--no-color` | Disable color | `STAGEHAND_NO_COLOR=true stagehand` |
-| `NO_COLOR` | `--no-color` | Universal color-disable (honored when set) | `NO_COLOR=1 stagehand` |
-| `STAGEHAND_COMMITS` | `--commits` | Force N commits (0=auto, 1≡single) | `STAGEHAND_COMMITS=3 stagehand` |
-| `STAGEHAND_PLANNER_PROVIDER` | `--planner-provider` | Per-role: planner provider | `STAGEHAND_PLANNER_PROVIDER=claude stagehand` |
-| `STAGEHAND_PLANNER_MODEL` | `--planner-model` | Per-role: planner model | `STAGEHAND_PLANNER_MODEL=opus stagehand` |
-| `STAGEHAND_STAGER_PROVIDER` | `--stager-provider` | Per-role: stager provider | `STAGEHAND_STAGER_PROVIDER=pi stagehand` |
-| `STAGEHAND_STAGER_MODEL` | `--stager-model` | Per-role: stager model | `STAGEHAND_STAGER_MODEL=gpt-5.4-mini stagehand` |
-| `STAGEHAND_MESSAGE_PROVIDER` | `--message-provider` | Per-role: message provider (env + config only) | `STAGEHAND_MESSAGE_PROVIDER=claude stagehand` |
-| `STAGEHAND_MESSAGE_MODEL` | `--message-model` | Per-role: message model (env + config only) | `STAGEHAND_MESSAGE_MODEL=haiku stagehand` |
-| `STAGEHAND_ARBITER_PROVIDER` | `--arbiter-provider` | Per-role: arbiter provider | `STAGEHAND_ARBITER_PROVIDER=claude stagehand` |
-| `STAGEHAND_ARBITER_MODEL` | `--arbiter-model` | Per-role: arbiter model | `STAGEHAND_ARBITER_MODEL=sonnet stagehand` |
-| `STAGEHAND_REASONING` | `--reasoning` | Global reasoning effort: off\|low\|medium\|high | `STAGEHAND_REASONING=high stagehand` |
-| `STAGEHAND_PLANNER_REASONING` | `--planner-reasoning` | Per-role: planner reasoning | `STAGEHAND_PLANNER_REASONING=high stagehand` |
-| `STAGEHAND_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGEHAND_STAGER_REASONING=low stagehand` |
-| `STAGEHAND_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGEHAND_MESSAGE_REASONING=low stagehand` |
-| `STAGEHAND_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGEHAND_ARBITER_REASONING=low stagehand` |
-| `STAGEHAND_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGEHAND_FORMAT=conventional stagehand` |
-| `STAGEHAND_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGEHAND_LOCALE=ja stagehand` |
-| `STAGEHAND_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGEHAND_TEMPLATE='$msg (#205)' stagehand` |
-| `STAGEHAND_PUSH` | `--push` | Run `git push` after a fully-successful run (true = push; false = disable); on failure commits stand, exit 1 | `STAGEHAND_PUSH=1 stagehand` |
+| `STAGECOACH_PROVIDER` | `--provider` | Default provider/agent | `STAGECOACH_PROVIDER=claude stagecoach` |
+| `STAGECOACH_MODEL` | `--model` | Model override | `STAGECOACH_MODEL=sonnet stagecoach` |
+| `STAGECOACH_TIMEOUT` | `--timeout` | Generation timeout | `STAGECOACH_TIMEOUT=60s stagecoach` |
+| `STAGECOACH_CONFIG` | `--config` | Config file path | `STAGECOACH_CONFIG=./alt.toml stagecoach` |
+| `STAGECOACH_VERBOSE` | `--verbose` | Print resolved command and output | `STAGECOACH_VERBOSE=true stagecoach` |
+| `STAGECOACH_NO_COLOR` | `--no-color` | Disable color | `STAGECOACH_NO_COLOR=true stagecoach` |
+| `NO_COLOR` | `--no-color` | Universal color-disable (honored when set) | `NO_COLOR=1 stagecoach` |
+| `STAGECOACH_COMMITS` | `--commits` | Force N commits (0=auto, 1≡single) | `STAGECOACH_COMMITS=3 stagecoach` |
+| `STAGECOACH_PLANNER_PROVIDER` | `--planner-provider` | Per-role: planner provider | `STAGECOACH_PLANNER_PROVIDER=claude stagecoach` |
+| `STAGECOACH_PLANNER_MODEL` | `--planner-model` | Per-role: planner model | `STAGECOACH_PLANNER_MODEL=opus stagecoach` |
+| `STAGECOACH_STAGER_PROVIDER` | `--stager-provider` | Per-role: stager provider | `STAGECOACH_STAGER_PROVIDER=pi stagecoach` |
+| `STAGECOACH_STAGER_MODEL` | `--stager-model` | Per-role: stager model | `STAGECOACH_STAGER_MODEL=gpt-5.4-mini stagecoach` |
+| `STAGECOACH_MESSAGE_PROVIDER` | `--message-provider` | Per-role: message provider (env + config only) | `STAGECOACH_MESSAGE_PROVIDER=claude stagecoach` |
+| `STAGECOACH_MESSAGE_MODEL` | `--message-model` | Per-role: message model (env + config only) | `STAGECOACH_MESSAGE_MODEL=haiku stagecoach` |
+| `STAGECOACH_ARBITER_PROVIDER` | `--arbiter-provider` | Per-role: arbiter provider | `STAGECOACH_ARBITER_PROVIDER=claude stagecoach` |
+| `STAGECOACH_ARBITER_MODEL` | `--arbiter-model` | Per-role: arbiter model | `STAGECOACH_ARBITER_MODEL=sonnet stagecoach` |
+| `STAGECOACH_REASONING` | `--reasoning` | Global reasoning effort: off\|low\|medium\|high | `STAGECOACH_REASONING=high stagecoach` |
+| `STAGECOACH_PLANNER_REASONING` | `--planner-reasoning` | Per-role: planner reasoning | `STAGECOACH_PLANNER_REASONING=high stagecoach` |
+| `STAGECOACH_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGECOACH_STAGER_REASONING=low stagecoach` |
+| `STAGECOACH_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGECOACH_MESSAGE_REASONING=low stagecoach` |
+| `STAGECOACH_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGECOACH_ARBITER_REASONING=low stagecoach` |
+| `STAGECOACH_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGECOACH_FORMAT=conventional stagecoach` |
+| `STAGECOACH_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGECOACH_LOCALE=ja stagecoach` |
+| `STAGECOACH_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGECOACH_TEMPLATE='$msg (#205)' stagecoach` |
+| `STAGECOACH_PUSH` | `--push` | Run `git push` after a fully-successful run (true = push; false = disable); on failure commits stand, exit 1 | `STAGECOACH_PUSH=1 stagecoach` |
 
 ## Git-config keys
 
 These keys live in `.git/config` (set with `git config --local` or `git config --global`):
 
 ```ini
-[stagehand]
+[stagecoach]
     provider = pi
     model = glm-5.2
     timeout = 120s
@@ -210,27 +210,27 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 
 | Key | Type | Reads with | Description |
 |-----|------|-----------|-------------|
-| `stagehand.provider` | string | `git config --get stagehand.provider` | Default provider |
-| `stagehand.model` | string | `git config --get stagehand.model` | Model override |
-| `stagehand.timeout` | string | `git config --get stagehand.timeout` | Generation timeout (duration string) |
-| `stagehand.auto_stage_all` | bool | `git config --get --bool stagehand.auto_stage_all` | Auto-stage all when nothing staged |
-| `stagehand.output` | string | `git config --get stagehand.output` | Agent output mode: `raw` \| `json` (overrides per-provider default) |
-| `stagehand.stripCodeFence` | bool | `git config --get --bool stagehand.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
-| `stagehand.tokenLimit` | int | `git config --get stagehand.tokenLimit` | Holistic token budget for the whole payload; `0` = unset ⇒ legacy `max_diff_bytes`/`max_md_lines` caps (§9.1 FR3d). Supersedes both legacy caps when >0 (mutually exclusive). |
-| `stagehand.diffContext` | int | `git config --get stagehand.diffContext` | Unchanged context lines per hunk: `0` = changed-lines-only, `1` = one anchor line (default), `3` = git default (§9.1 FR3f). An explicit `0` is honored (changed-lines-only is a first-class value). |
-| `stagehand.format` | string | `git config --get stagehand.format` | Message format: `auto` \| `conventional` \| `gitmoji` \| `plain`. Unknown = hard error (exit 1). |
-| `stagehand.locale` | string | `git config --get stagehand.locale` | Message language (free-form name or BCP-47 tag; never validated). |
-| `stagehand.template` | string | `git config --get stagehand.template` | Message template; the literal `$msg` is replaced with the generated message. Must contain `$msg` (hard error, exit 1). |
-| `stagehand.push` | bool | `git config --get --bool stagehand.push` | Run `git push` after a fully-successful run (§9.22 FR-P1). On failure the commits stand — git's stderr is shown verbatim, "commits created; push failed" prints, exit 1. |
+| `stagecoach.provider` | string | `git config --get stagecoach.provider` | Default provider |
+| `stagecoach.model` | string | `git config --get stagecoach.model` | Model override |
+| `stagecoach.timeout` | string | `git config --get stagecoach.timeout` | Generation timeout (duration string) |
+| `stagecoach.auto_stage_all` | bool | `git config --get --bool stagecoach.auto_stage_all` | Auto-stage all when nothing staged |
+| `stagecoach.output` | string | `git config --get stagecoach.output` | Agent output mode: `raw` \| `json` (overrides per-provider default) |
+| `stagecoach.stripCodeFence` | bool | `git config --get --bool stagecoach.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
+| `stagecoach.tokenLimit` | int | `git config --get stagecoach.tokenLimit` | Holistic token budget for the whole payload; `0` = unset ⇒ legacy `max_diff_bytes`/`max_md_lines` caps (§9.1 FR3d). Supersedes both legacy caps when >0 (mutually exclusive). |
+| `stagecoach.diffContext` | int | `git config --get stagecoach.diffContext` | Unchanged context lines per hunk: `0` = changed-lines-only, `1` = one anchor line (default), `3` = git default (§9.1 FR3f). An explicit `0` is honored (changed-lines-only is a first-class value). |
+| `stagecoach.format` | string | `git config --get stagecoach.format` | Message format: `auto` \| `conventional` \| `gitmoji` \| `plain`. Unknown = hard error (exit 1). |
+| `stagecoach.locale` | string | `git config --get stagecoach.locale` | Message language (free-form name or BCP-47 tag; never validated). |
+| `stagecoach.template` | string | `git config --get stagecoach.template` | Message template; the literal `$msg` is replaced with the generated message. Must contain `$msg` (hard error, exit 1). |
+| `stagecoach.push` | bool | `git config --get --bool stagecoach.push` | Run `git push` after a fully-successful run (§9.22 FR-P1). On failure the commits stand — git's stderr is shown verbatim, "commits created; push failed" prints, exit 1. |
 
 > [!NOTE]
-> The git-config layer has **no** per-role keys (`stagehand.role.*`), no `stagehand.commits`, and no `stagehand.max_commits`. Per-role configuration is available via CLI flags (`--planner-provider`, etc.), env vars (`STAGEHAND_PLANNER_*`), and config-file `[role.*]` blocks only. Decompose settings (`--commits`, `--single`, `--no-decompose`) are flag/env only; `--max-commits` also reads from the `[generation]` config-file section. There is also no `stagehand.exclude` git-config key and no `STAGEHAND_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.
+> The git-config layer has **no** per-role keys (`stagecoach.role.*`), no `stagecoach.commits`, and no `stagecoach.max_commits`. Per-role configuration is available via CLI flags (`--planner-provider`, etc.), env vars (`STAGECOACH_PLANNER_*`), and config-file `[role.*]` blocks only. Decompose settings (`--commits`, `--single`, `--no-decompose`) are flag/env only; `--max-commits` also reads from the `[generation]` config-file section. There is also no `stagecoach.exclude` git-config key and no `STAGECOACH_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.
 
 ### Decompose config keys
 
 | Setting | Flag | Env var | Config file | Default | Notes |
 |---------|------|---------|-------------|---------|-------|
-| Commit count | `--commits <N>` | `STAGEHAND_COMMITS` | — | `0` (auto) | 0=auto-decompose; ≥2=force N; 1≡`--single` |
+| Commit count | `--commits <N>` | `STAGECOACH_COMMITS` | — | `0` (auto) | 0=auto-decompose; ≥2=force N; 1≡`--single` |
 | Single-commit | `--single` / `--no-decompose` | — | — | `false` | Bypass decompose → v1 single-commit |
 | Max commits | `--max-commits <N>` | — | `[generation].max_commits` | `12` | Safety cap on auto-decompose count |
 
@@ -248,33 +248,33 @@ exclude = ["*.min.js", "dist/*"]
 > [!IMPORTANT]
 > This is the **one setting in the whole precedence system that UNIONS instead of overriding** (§16.1). Every other list-valued key (e.g. `[generation].binary_extensions`) REPLACES across layers — a higher layer's list wins outright. `exclude` instead **accumulates**: the resolved set is the global file's globs, followed by the repo file's globs, followed by every `--exclude`/`-x` occurrence, in that order. A repo cannot use its local config to un-exclude a glob a user set globally.
 >
-> There is deliberately **no** `STAGEHAND_EXCLUDE` environment variable and **no** `stagehand.exclude` git-config key — a colon/comma-joined env list is a well-known quoting trap for glob patterns containing those characters. Use the config file for persistent excludes and `--exclude`/`-x` for ad-hoc ones.
+> There is deliberately **no** `STAGECOACH_EXCLUDE` environment variable and **no** `stagecoach.exclude` git-config key — a colon/comma-joined env list is a well-known quoting trap for glob patterns containing those characters. Use the config file for persistent excludes and `--exclude`/`-x` for ad-hoc ones.
 
-### `.stagehandignore`
+### `.stagecoachignore`
 
-A repo can place a `.stagehandignore` file at its root (alongside `.stagehand.toml`) containing one gitignore-style glob per line (§9.18 FR-X1b, FR-X2). Blank lines and `#` comment lines are ignored. The globs are **unioned** with `[generation].exclude` and `--exclude`/`-x` (see [Exclusion globs](#exclusion-globs-generationexclude) above).
+A repo can place a `.stagecoachignore` file at its root (alongside `.stagecoach.toml`) containing one gitignore-style glob per line (§9.18 FR-X1b, FR-X2). Blank lines and `#` comment lines are ignored. The globs are **unioned** with `[generation].exclude` and `--exclude`/`-x` (see [Exclusion globs](#exclusion-globs-generationexclude) above).
 
 > [!WARNING]
 > **Negation (`!`) is NOT supported.** Git pathspec excludes have no re-include mechanism — a `!` line is silently skipped with a `--verbose` warning. This is intentional: the translated `:(exclude,glob)` pathspecs cannot un-exclude.
 
-A missing `.stagehandignore` is a no-op (no warning, no error).
+A missing `.stagecoachignore` is a no-op (no warning, no error).
 
 ## Lock file location
 
 The per-repo run lock (FR52) is stored outside the repository to avoid polluting `git status`, being committable, or being ambiguous across worktrees. The lock file location resolves in this order:
 
-1. `$XDG_RUNTIME_DIR/stagehand/locks/<hash>.lock` — when `XDG_RUNTIME_DIR` is set and absolute
-2. `$XDG_CACHE_HOME/stagehand/locks/<hash>.lock` — when `XDG_CACHE_HOME` is set and absolute
-3. `~/.cache/stagehand/locks/<hash>.lock` — fallback via `os.UserHomeDir()`
+1. `$XDG_RUNTIME_DIR/stagecoach/locks/<hash>.lock` — when `XDG_RUNTIME_DIR` is set and absolute
+2. `$XDG_CACHE_HOME/stagecoach/locks/<hash>.lock` — when `XDG_CACHE_HOME` is set and absolute
+3. `~/.cache/stagecoach/locks/<hash>.lock` — fallback via `os.UserHomeDir()`
 
-Where `<hash>` is the sha256 hex digest of the repo's canonical absolute path (resolved via `filepath.EvalSymlinks` to handle symlinked paths). Relative XDG values are ignored (only absolute paths are honored). If no resolution path exists, stagehand exits with an error — it never falls back to the current working directory or the repo itself.
+Where `<hash>` is the sha256 hex digest of the repo's canonical absolute path (resolved via `filepath.EvalSymlinks` to handle symlinked paths). Relative XDG values are ignored (only absolute paths are honored). If no resolution path exists, stagecoach exits with an error — it never falls back to the current working directory or the repo itself.
 
 **Exclusions are payload-only:** excluded files are hidden from what the agent sees but are still captured and committed normally.
 
 Example:
 
 ```
-# .stagehandignore
+# .stagecoachignore
 *.min.js          # any-depth
 /dist/            # root dist/ dir contents only
 vendor/

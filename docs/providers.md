@@ -1,6 +1,6 @@
 # Provider manifests
 
-Full reference for Stagehand's provider manifest system: the 22-field schema, command-rendering algorithm, the 8 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
+Full reference for Stagecoach's provider manifest system: the 22-field schema, command-rendering algorithm, the 8 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
 
 ## What a manifest is
 
@@ -17,7 +17,7 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 | `name` | string | (required) | Provider identity; set from the `[provider.<name>]` table key. |
 | `detect` | string | `command` | Binary to probe on `$PATH` for auto-detection. |
 | `command` | string | (required) | The executable to run. |
-| `list_models_command` | list of string | `[]` (none) | Full argv that asks the agent CLI to list its reachable models (e.g. `["opencode", "models"]`), used by `stagehand models`. Empty/nil ⇒ stagehand prints its curated per-role tier table instead (FR-L1). Populated only for providers whose CLI exposes a verified listing (opencode, pi, agy, cursor); never an HTTP call (§6.2 N2). |
+| `list_models_command` | list of string | `[]` (none) | Full argv that asks the agent CLI to list its reachable models (e.g. `["opencode", "models"]`), used by `stagecoach models`. Empty/nil ⇒ stagecoach prints its curated per-role tier table instead (FR-L1). Populated only for providers whose CLI exposes a verified listing (opencode, pi, agy, cursor); never an HTTP call (§6.2 N2). |
 | `subcommand` | list of string | `[]` (none) | Inserted between command and flags (e.g. `["run"]`, `["exec"]`). |
 | `prompt_delivery` | string | `"stdin"` | How to deliver the prompt: `stdin`, `positional`, or `flag`. |
 | `prompt_flag` | string | `""` | Flag used when `prompt_delivery` is `"flag"`. |
@@ -39,7 +39,7 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 
 ### Multi-turn capability (`session_mode`)
 
-A provider supports Stagehand's **lossless multi-turn fallback** (§9.24 — used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The `session_mode` manifest field declares this:
+A provider supports Stagecoach's **lossless multi-turn fallback** (§9.24 — used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The `session_mode` manifest field declares this:
 
 - `"append"` — re-invoking the same session id appends a recallable turn (multi-turn available).
 - `""` (default) — the provider cannot append turns across one-shot calls (multi-turn unavailable; the run proceeds one-shot → rescue, unchanged).
@@ -109,7 +109,7 @@ The v2 manifest system has two invocation modes (PRD §11.5):
 The stager's safety is enforced by three layers (PRD §12.7.1):
 
 1. **`tooled_flags`** — claude is **structurally** scoped via a staging-only git allowlist (`--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit`) that makes `git commit`/`push`/`update-ref`/`reset`/`rebase` unreachable. pi is **not** flag-scoped — its tooled profile enables tools with chrome stripped (no git-scoped allowlist), so a misbehaving pi stager CAN run arbitrary Bash. pi's safety is therefore **instructional** (the §17.6 stager task prompt) + a **best-effort HEAD-movement guard** (HEAD is snapshotted before each stager call; the run aborts if HEAD moved), not structural.
-2. **Stagehand's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (§13.6.2/§19). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.
+2. **Stagecoach's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (§13.6.2/§19). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.
 3. **The stager task prompt** (§17.6) — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.
 
 ## Per-role default models (FR-D4)
@@ -162,13 +162,13 @@ output             = "raw"
 Verify the merged manifest:
 
 ```bash
-stagehand providers show myagent
+stagecoach providers show myagent
 ```
 
 Use it:
 
 ```bash
-stagehand --provider myagent
+stagecoach --provider myagent
 ```
 
 ## Output parsing

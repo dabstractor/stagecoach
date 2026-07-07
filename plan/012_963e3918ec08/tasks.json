@@ -335,14 +335,14 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Documentation Rename",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Rename all stagehand references in user-facing documentation: README.md (title, hero, badges, examples, install instructions), docs/*.md (cli.md, configuration.md, how-it-works.md, providers.md, README.md), providers/*.toml (manifest comment references), and FUTURE_SPEC.md.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "User documentation rename (README.md and docs/)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Replace all stagehand references in the primary user-facing documentation files.",
               "subtasks": [
                 {
@@ -369,7 +369,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Rename docs/*.md (cli.md, configuration.md, how-it-works.md, providers.md, README.md)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -390,14 +390,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Provider manifests and spec docs rename",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Rename stagehand references in provider TOML files and FUTURE_SPEC.md.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Rename providers/*.toml comment references",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T3.S2"
@@ -413,7 +413,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T2.S2",
                   "title": "Rename FUTURE_SPEC.md references",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 0.5,
                   "dependencies": [
                     "P1.M4.T2.S1"
