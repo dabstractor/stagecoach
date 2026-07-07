@@ -138,6 +138,15 @@ func resolveNewCommit(ctx context.Context, deps Deps, commits []CommitInfo, chai
 	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
 		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
 	}
+	// (F1) If a permitted pre-commit mutation re-treed (treePrime != finalTree), the blanket ReadTree
+	// above reset the index to the PRE-hook T_start — losing the hook's formatting for the committed
+	// concept's paths. Reconcile those paths to the committed (post-hook) tree so the index reflects
+	// HEAD for them (git-commit parity for formatter/lint-staged/prettier hooks). Best-effort.
+	if rerr := hooks.ReconcileIndex(ctx, deps.Git, treePrime, finalTree, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose}); rerr != nil {
+		if deps.Verbose != nil {
+			deps.Verbose.VerboseWarn(fmt.Sprintf("post-mutation index reconcile failed (commit stands): %v", rerr))
+		}
+	}
 	return nil
 }
 
@@ -185,6 +194,15 @@ func resolveTipAmend(ctx context.Context, deps Deps, chainData []ChainEntry, tSt
 	// FR-M1d (3): sync the index to T_start so git status is clean (index == HEAD.tree == T_start).
 	if err := deps.Git.ReadTree(ctx, tStart); err != nil {
 		return fmt.Errorf("%w: read-tree sync: %w", ErrArbiterResolutionFailed, err)
+	}
+	// (F1) If a permitted pre-commit mutation re-treed (treePrime != finalTree), the blanket ReadTree
+	// above reset the index to the PRE-hook T_start — losing the hook's formatting for the committed
+	// tip's paths. Reconcile those paths to the committed (post-hook) tree so the index reflects HEAD
+	// for them. Best-effort.
+	if rerr := hooks.ReconcileIndex(ctx, deps.Git, treePrime, finalTree, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose}); rerr != nil {
+		if deps.Verbose != nil {
+			deps.Verbose.VerboseWarn(fmt.Sprintf("post-mutation index reconcile failed (commit stands): %v", rerr))
+		}
 	}
 	return nil
 }

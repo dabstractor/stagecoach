@@ -458,6 +458,12 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	}
 	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4) — both the commit and dry-run paths
 
+	// (F1) snapshotTreeForReconcile is the PRE-hook frozen tree, captured so that AFTER a permitted
+	// pre-commit mutation re-trees (committing treeSHA != snapshot), the live index's snapshot-path
+	// entries can be reconciled to the committed tree. Defaults to treeSHA so ReconcileIndex is a no-op
+	// when no hooks ran or no mutation occurred. See the post-commit reconciliation below.
+	snapshotTreeForReconcile := treeSHA
+
 	// Step 5: recent subjects (built ONCE; for dedupe — NOT needed for the reserve).
 
 	var recent []string
@@ -670,7 +676,10 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 				return Result{}, herr // !dryRun → rescue (FR-V7, exit 3) — mirrors S1's CommitStaged
 			}
 		} else {
-			treeSHA, msg = ft, fm // hook accepted (possibly re-treed + prepare-annotated) → downstream uses these
+			// (F1) capture the PRE-hook frozen tree (before reassignment) so the post-commit reconciliation
+			// can detect a permitted pre-commit re-tree and sync the live index's snapshot-path entries.
+			snapshotTreeForReconcile = treeSHA // the PRE-hook tree (treeSHA is reassigned on the next line)
+			treeSHA, msg = ft, fm              // hook accepted (possibly re-treed + prepare-annotated) → downstream uses these
 		}
 	}
 
@@ -725,6 +734,16 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	// ---- Post-commit hook (PRD §9.25 FR-V7). Reached ONLY when !dryRun (the `if dryRun` block returns above).
 	// Best-effort; the return is DISREGARDED (the commit already landed). Mirrors S1's CommitStaged. ----
 	if deps.Hooks != nil {
+		// (F1) FIRST reconcile the live index's snapshot-path entries to the committed tree when a
+		// permitted pre-commit mutation re-treed (the commit just landed; HEAD now points at the hook's
+		// tree). git-commit parity: a formatter/lint-staged/prettier pre-commit must leave `git status`
+		// clean and the index holding the hook's blob. Best-effort: a non-nil error is logged at --verbose
+		// and NEVER undoes the commit.
+		if rerr := deps.Hooks.ReconcileIndex(ctx, deps.Git, snapshotTreeForReconcile, treeSHA, dryRun, deps.Verbose); rerr != nil {
+			if deps.Verbose != nil {
+				deps.Verbose.VerboseWarn(fmt.Sprintf("post-mutation index reconcile failed (commit stands): %v", rerr))
+			}
+		}
 		_ = deps.Hooks.RunPostCommit(ctx, deps.Git, cfg, dryRun, deps.Verbose)
 	}
 

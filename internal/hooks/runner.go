@@ -248,6 +248,59 @@ func RunPostCommit(ctx context.Context, g git.Git, cfg config.Config, opts HookO
 	return nil // ALWAYS nil — exit code disregarded
 }
 
+// ReconcileIndex syncs the LIVE index entries for the snapshot paths to match the COMMITTED tree
+// (finalTree) after a permitted pre-commit hook mutation re-treed. git-commit parity (PRD §9.25 FR-V3,
+// report Finding F1): when `git commit` runs a pre-commit hook that modifies and re-stages a file
+// (the formatter / lint-staged / prettier workflow), it commits the hook's version AND syncs the
+// index to that version, so `git status` is clean and a subsequent plain `git commit` cannot
+// re-commit the pre-hook blob. stagehand's atomic-commit core builds the commit from a FROZEN tree
+// (PRD §13.2 G4) and runs pre-commit against a THROWAWAY index (FR-V3), so by default the live index
+// retains the pre-hook blob and diverges from HEAD — this reconciles exactly the mutated snapshot
+// paths (DiffTreeNameStatus(snapshotTree, finalTree)) to finalTree, preserving every OTHER staged
+// entry (e.g. files the user staged during generation — PRD §13.2 G4 "stage while generating").
+//
+// DESIGN (why it is surgical, not a blanket `git read-tree HEAD`): a blanket read-tree would CLOBBER
+// any path the user staged during generation that is NOT in the committed tree. SyncIndexPaths updates
+// ONLY the snapshot paths to finalTree's blobs, leaving all other index entries untouched.
+//
+// NO-OP when finalTree == snapshotTree (no hook mutation — the common case: the snapshot already
+// equals the index content at freeze time, so the index is already consistent with HEAD). Also a
+// no-op when DryRun (no commit landed — the caller must NOT call this under --dry-run).
+//
+// FAILURE is best-effort (the commit already landed): a wrapped error is RETURNED for the caller to
+// log at --verbose; it NEVER undoes the commit and is NOT an abort. DiffTreeNameStatus failure or a
+// SyncIndexPaths git error leaves the index as-is (the divergence is cosmetic — `git status` shows
+// MM and a subsequent commit would re-stage the pre-hook blob — but the just-made commit is correct).
+func ReconcileIndex(ctx context.Context, g git.Git, snapshotTree, finalTree string, opts HookOpts) error {
+	if finalTree == snapshotTree {
+		return nil // no hook mutation → index already consistent with HEAD
+	}
+	// The mutated snapshot paths = every path that differs between the frozen snapshot and the
+	// committed (post-hook) tree. DiffTreeNameStatus runs WITHOUT -M/-C, so 'M'/'D'/'T' lines are
+	// exactly the snapshot paths the hook modified/deleted/typechanged (enforceSubset already
+	// guaranteed no 'A' — a permitted mutation adds NO new path). SyncIndexPaths brings each of these
+	// live-index entries to finalTree's blob.
+	nameStatus, err := g.DiffTreeNameStatus(ctx, snapshotTree, finalTree)
+	if err != nil {
+		return fmt.Errorf("hooks: reconcile index: diff-tree-name-status: %w", err)
+	}
+	var paths []string
+	for _, line := range strings.Split(nameStatus, "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		paths = append(paths, fields[len(fields)-1]) // the path (last tab-field)
+	}
+	if err := g.SyncIndexPaths(ctx, finalTree, paths); err != nil {
+		return fmt.Errorf("hooks: reconcile index: %w", err)
+	}
+	return nil
+}
+
 // ---- unexported helpers ----
 
 // runHook execs a hook script directly via os/exec (NOT via git runWithEnv — hooks are USER SCRIPTS,

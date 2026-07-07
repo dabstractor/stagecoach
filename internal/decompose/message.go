@@ -263,6 +263,15 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 		return "", err // non-CAS infra — propagate verbatim (matches CommitStaged)
 	}
 	// Best-effort post-commit AFTER update-ref succeeded (FR-V7 — exit disregarded; commit stands).
+	// (F1) FIRST reconcile the live index's snapshot-path entries to the committed tree when a permitted
+	// pre-commit mutation re-treed (tree != finalTree). git-commit parity for formatter/lint-staged/
+	// prettier hooks in a decompose concept commit. Best-effort: a non-nil error is logged at --verbose
+	// and NEVER undoes the commit.
+	if rerr := hooks.ReconcileIndex(ctx, deps.Git, tree, finalTree, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose}); rerr != nil {
+		if deps.Verbose != nil {
+			deps.Verbose.VerboseWarn(fmt.Sprintf("post-mutation index reconcile failed (commit stands): %v", rerr))
+		}
+	}
 	_ = hooks.RunPostCommit(ctx, deps.Git, deps.Config, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose})
 	return newSHA, nil
 }

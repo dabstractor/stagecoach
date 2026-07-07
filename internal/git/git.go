@@ -319,6 +319,24 @@ type Git interface {
 	// ⇒ a wrapped error (code != 0; NO 128-as-non-error special case — mirror ReadTree/DiffTreeNames).
 	OverlayTreePaths(ctx context.Context, baseTree, sourceTree string, paths []string) (treeSHA string, err error)
 
+	// SyncIndexPaths reconciles the LIVE index entries for each path in paths to match tree,
+	// WITHOUT touching any other index entry and WITHOUT touching the working tree or any ref.
+	// For each path in paths:
+	//   - present in tree → the live index entry is set to tree's (mode, blob)
+	//     (git update-index --add --cacheinfo <mode>,<blob>,<path>).
+	//   - absent in tree  → the live index entry is removed (deletion)
+	//     (git update-index --force-remove <path>).
+	// The (mode, blob) pairs come from ONE `git ls-tree -r --full-tree <tree> -- <paths...>`.
+	// EMPTY paths ⇒ no-op early return (NO index mutation). Unlike OverlayTreePaths it operates
+	// directly on the LIVE .git/index (no preceding read-tree reset, no trailing write-tree), so
+	// every OTHER staged entry (e.g. files the user staged during generation) is preserved — this
+	// is the index reconciliation for the permitted pre-commit-mutation re-tree path (PRD §9.25
+	// FR-V3; git-commit parity: after a hook mutates snapshot paths, `git commit` syncs the index
+	// to the committed tree for exactly those paths). It mutates ONLY .git/index; NEVER the worktree;
+	// NEVER a ref. Bad/unresolvable tree SHA ⇒ a wrapped error (code != 0; NO 128-as-non-error
+	// special case — mirror OverlayTreePaths/ReadTree/DiffTreeNames).
+	SyncIndexPaths(ctx context.Context, tree string, paths []string) error
+
 	// ConfigGlobalGet reads a key from git's GLOBAL config (not repo-local) via
 	// `git config --global --get <key>` (PRD §9.21 FR-I4). Exit-code semantics (mirrors
 	// config/git.go gitConfigGet): 0 = found (trimmed value); 1 = not found (found=false,
@@ -1802,6 +1820,47 @@ func (g *gitRunner) OverlayTreePaths(ctx context.Context, baseTree, sourceTree s
 	}
 	// 4. write-tree → new tree SHA.
 	return g.WriteTree(ctx)
+}
+
+// SyncIndexPaths reconciles the LIVE index entries for each path in paths to match tree, preserving
+// every other index entry. See the interface doc comment for the full contract. It is the index-
+// reconciliation half of OverlayTreePaths: the SAME per-path update-index ls-tree → cacheinfo/
+// force-remove loop, but WITHOUT the surrounding read-tree (it operates on the live .git/index as-is)
+// and WITHOUT a trailing write-tree (it leaves the index staged, not a new tree). EMPTY paths ⇒ early
+// no-op (NO index mutation). Mirrors the mutation exit-code convention of OverlayTreePaths/ReadTree:
+// err != nil ⇒ git binary missing / context cancelled / start failure → propagate UNWRAPPED;
+// code != 0 ⇒ wrap with stderr. NEVER touches the working tree; NEVER moves a ref.
+func (g *gitRunner) SyncIndexPaths(ctx context.Context, tree string, paths []string) error {
+	if len(paths) == 0 {
+		return nil // early no-op — no index mutation
+	}
+	// 1. ONE ls-tree tree for the requested paths (fresh backing array — don't mutate a shared slice).
+	lsArgs := append([]string{"ls-tree", "-r", "--full-tree", tree, "--"}, paths...)
+	lsOut, stderr, code, err := g.run(ctx, g.workDir, lsArgs...)
+	if err != nil {
+		return err // UNWRAPPED
+	} else if code != 0 {
+		return fmt.Errorf("git ls-tree (sync index): failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	blobs := parseLsTree(lsOut)
+	// 2. per-path update-index on the LIVE index: cacheinfo if present in tree; force-remove if absent.
+	for _, p := range paths {
+		if ent, ok := blobs[p]; ok {
+			if _, stderr, code, err := g.run(ctx, g.workDir, "update-index", "--add", "--cacheinfo",
+				fmt.Sprintf("%s,%s,%s", ent.mode, ent.blob, p)); err != nil {
+				return err // UNWRAPPED
+			} else if code != 0 {
+				return fmt.Errorf("git update-index --cacheinfo %s: failed (exit %d): %s", p, code, strings.TrimSpace(stderr))
+			}
+		} else {
+			if _, stderr, code, err := g.run(ctx, g.workDir, "update-index", "--force-remove", p); err != nil {
+				return err // UNWRAPPED
+			} else if code != 0 {
+				return fmt.Errorf("git update-index --force-remove %s: failed (exit %d): %s", p, code, strings.TrimSpace(stderr))
+			}
+		}
+	}
+	return nil
 }
 
 // HooksPath returns the ABSOLUTE path to this repo's hooks directory (PRD §9.20 FR-H1). It runs

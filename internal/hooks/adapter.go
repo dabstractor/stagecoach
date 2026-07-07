@@ -39,3 +39,11 @@ func (DefaultRunner) RunPostCommit(ctx context.Context, g git.Git, cfg config.Co
 	dryRun bool, verbose *ui.Verbose) error {
 	return RunPostCommit(ctx, g, cfg, HookOpts{DryRun: dryRun, Verbose: verbose})
 }
+
+// ReconcileIndex delegates to the package-level ReconcileIndex (report Finding F1), translating the
+// inlined (dryRun, verbose) to HookOpts. Best-effort: the caller logs a non-nil error at --verbose
+// and NEVER undoes the commit (the commit already landed).
+func (DefaultRunner) ReconcileIndex(ctx context.Context, g git.Git, snapshotTree, finalTree string,
+	dryRun bool, verbose *ui.Verbose) error {
+	return ReconcileIndex(ctx, g, snapshotTree, finalTree, HookOpts{DryRun: dryRun, Verbose: verbose})
+}

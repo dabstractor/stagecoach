@@ -315,7 +315,11 @@ The snapshot freeze still holds: `pre-commit` runs against a throwaway index pri
 into the in-flight commit (the core stage-while-generating guarantee). A `pre-commit` may modify paths
 already in the snapshot (a formatter re-staging its output) and stagehand includes those fixes, exactly
 like `git commit`; a `pre-commit` that stages a brand-new path aborts the run (it would sweep in
-concurrent work).
+concurrent work). After the commit lands, stagehand **reconciles the live index** for exactly those
+mutated snapshot paths to the committed tree, so `git status` is clean and the index holds the
+formatter's output (not the pre-hook blob) — matching `git commit`. The reconcile is surgical: it
+updates only the paths the hook changed, so any files you staged *while* generating stay staged
+(the stage-while-generating guarantee holds).
 
 `--no-verify` mirrors `git commit --no-verify`: it skips `pre-commit` and `commit-msg` only
 (`prepare-commit-msg` and `post-commit` still run). A hook that exits non-zero or times out aborts the

@@ -34,6 +34,12 @@ type CommitHookRunner interface {
 	RunCommitHooks(ctx context.Context, g git.Git, cfg config.Config, snapshotTree, parentSHA, msg string,
 		dryRun bool, verbose *ui.Verbose) (finalTree, finalMsg string, err error)
 	RunPostCommit(ctx context.Context, g git.Git, cfg config.Config, dryRun bool, verbose *ui.Verbose) error
+	// ReconcileIndex syncs the live index's snapshot-path entries to the committed tree after a
+	// permitted pre-commit mutation re-treed (PRD §9.25 FR-V3; report Finding F1). Called by the
+	// commit path AFTER update-ref succeeds when finalTree != snapshotTree. Best-effort: a non-nil
+	// error is logged at --verbose and NEVER undoes the commit. dryRun is inlined here (mirroring the
+	// other two methods) so generate need not import internal/hooks.
+	ReconcileIndex(ctx context.Context, g git.Git, snapshotTree, finalTree string, dryRun bool, verbose *ui.Verbose) error
 }
 
 // Deps carries the runtime collaborators that vary by environment/test. Injected
@@ -224,6 +230,12 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	// *** SNAPSHOT TAKEN — HEAD & committed content are frozen w.r.t. this run. ***
 	signal.SetSnapshot(treeSHA, parentSHA, "") // arm rescue (§18.4)
 	lock.SetSnapshot(treeSHA)                  // publish frozen index tree for the FR52 no-op fast path (nil-safe: no-op w/o lock)
+
+	// (F1) snapshotTreeForReconcile is the PRE-hook frozen tree, captured so that AFTER a permitted
+	// pre-commit mutation re-trees (committing treeSHA != snapshot), the live index's snapshot-path
+	// entries can be reconciled to the committed tree. Defaults to treeSHA so ReconcileIndex is a no-op
+	// when no hooks ran or no mutation occurred. See the post-commit reconciliation below.
+	snapshotTreeForReconcile := treeSHA
 
 	// Step 5: recent subjects (fetched ONCE; for dedupe — NOT needed for the reserve).
 	recent, err := recentSubjects(ctx, deps.Git, isUnborn)
@@ -428,7 +440,12 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		if herr != nil {
 			return Result{}, herr // *RescueError (FR-V7) or ErrHookSweptConcurrentWork (FR-V3)
 		}
-		treeSHA, msg = ft, fm // hook may have re-treed (permitted mutation) + annotated the msg
+		// (F1) capture the PRE-hook frozen tree so the post-commit reconciliation (below) can detect a
+		// permitted pre-commit re-tree and sync the live index's snapshot-path entries to the committed
+		// (post-hook) tree. snapshotTreeForReconcile was initialized to treeSHA above; only reassign it
+		// when a hook actually ran (so the no-hooks path stays a no-op reconcile).
+		snapshotTreeForReconcile = treeSHA // the PRE-hook tree (treeSHA is reassigned on the next line)
+		treeSHA, msg = ft, fm              // hook may have re-treed (permitted mutation) + annotated the msg
 	}
 
 	// §9.25 git parity (Issue 4): a prepare-commit-msg / commit-msg hook may have emptied the message
@@ -476,6 +493,17 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	// DISREGARDED — FR-V7). The commit already landed; RunPostCommit logs a non-zero exit as a
 	// --verbose warning and NEVER undoes (git itself disregards post-commit's exit). nil-guarded.
 	if deps.Hooks != nil {
+		// (F1) FIRST reconcile the live index's snapshot-path entries to the committed tree when a
+		// permitted pre-commit mutation re-treed (the commit just landed; HEAD now points at the
+		// hook's tree). git-commit parity: a formatter/lint-staged/prettier pre-commit that modifies and
+		// re-stages a file must leave `git status` clean and the index holding the hook's blob, so a
+		// subsequent plain `git commit` cannot silently re-commit the pre-hook version. Best-effort: a
+		// non-nil error is logged at --verbose and NEVER undoes the commit (it already landed).
+		if rerr := deps.Hooks.ReconcileIndex(ctx, deps.Git, snapshotTreeForReconcile, treeSHA, false, deps.Verbose); rerr != nil {
+			if deps.Verbose != nil {
+				deps.Verbose.VerboseWarn(fmt.Sprintf("post-mutation index reconcile failed (commit stands): %v", rerr))
+			}
+		}
 		_ = deps.Hooks.RunPostCommit(ctx, deps.Git, cfg, false, deps.Verbose)
 	}
 
