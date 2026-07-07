@@ -161,7 +161,7 @@ func init() {
 	pf.BoolVar(&flagNoAutoStage, "no-auto-stage", false, "If nothing is staged, exit instead of auto-staging")
 	pf.BoolVar(&flagDryRun, "dry-run", false, "Generate and print the message; do not commit")
 	pf.StringArrayVarP(&flagExclude, "exclude", "x", nil,
-		"Exclude matching files from the agent payload (unions with .stagehandignore and "+
+		"Exclude matching files from the agent payload (unions with .stagecoachignore and "+
 			"[generation].exclude; never excluded from the commit)")
 	// §15.2 decompose/per-role flags (P4.M1.T1.S1) — bound to package vars; loadFlags reads via fs.Changed.
 	pf.IntVar(&flagCommits, "commits", 0,

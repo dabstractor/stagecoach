@@ -20,7 +20,7 @@
 //   - TreeDiff:             diffArgs = [treeA, treeB]
 //
 // FR-X4 — User-exclude placeholder. Files matched by the user's exclude pathspecs (from
-// .stagehandignore, cfg.Exclude, or --exclude) emit a "<status>\t[excluded] <path>" placeholder
+// .stagecoachignore, cfg.Exclude, or --exclude) emit a "<status>\t[excluded] <path>" placeholder
 // instead of their diff body. The placeholder signals the file changed while hiding its contents.
 // Detection uses a set-difference probe: git diff --name-only with the exclude pathspecs yields the
 // surviving paths; the complement against all changed paths is the excluded set. Empty excludes ⇒

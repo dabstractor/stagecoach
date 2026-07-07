@@ -98,7 +98,7 @@ func (v *Verbose) VerbosePayload(bytes int) {
 	fmt.Fprintf(v.w, "DEBUG: payload: %d bytes (~%d tokens est)\n", bytes, (bytes+3)/4)
 }
 
-// VerboseWarn prints a general warning for diagnostics such as unsupported .stagehandignore
+// VerboseWarn prints a general warning for diagnostics such as unsupported .stagecoachignore
 // negation patterns (PRD §9.18 FR-X2). Format: "DEBUG: <msg>\n". No-op when v==nil, v.w==nil, or !v.on.
 func (v *Verbose) VerboseWarn(msg string) {
 	if v == nil || v.w == nil || !v.on {

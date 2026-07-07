@@ -184,7 +184,7 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "File paths, directory references, and exclusion file constant",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Rename config file discovery paths (the ~/.config/stagehand/ directory and .stagehand.toml repo file), the lock directory path (stagehand/locks), and the .stagehandignore exclusion file constant and its related identifiers.",
               "subtasks": [
                 {
@@ -208,7 +208,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S2",
                   "title": "Rename .stagehandignore to .stagecoachignore and related identifiers",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S2"
@@ -232,7 +232,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T3.S1",
                   "title": "Rename error message prefixes and status/progress strings",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T2.S2"
