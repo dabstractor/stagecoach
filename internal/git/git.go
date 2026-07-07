@@ -71,6 +71,14 @@ type StagedDiffOptions struct {
 	// when TokenLimit > 0. The git layer RECEIVES this (it does not compute it — keeps internal/git
 	// free of internal/prompt imports). Read by the M4 water-fill. See system_context.md §5.
 	PromptReserveTokens int
+
+	// FR3j: closed-loop budget guarantee. When non-nil AND TokenLimit > 0, the diff functions (S2)
+	// call closedLoopGate which measures the ASSEMBLED prompt (system prompt +
+	// BuildUserPayload(gatedDiff)) via this callback and re-trims if over tokenLimit. nil ⇒ first-cut
+	// only (applyWaterFillGate, behavior unchanged). The callback is injected by the consumer
+	// (generate/prompt layers) to avoid an internal/git → internal/prompt import (mirrors
+	// internal/prompt/reserve.go's TokenEstimator injection in reverse). See FR3j.
+	MeasureAssembled func(gatedDiff string) int
 }
 
 // Git is the shell-free boundary to the real git binary. Every method delegates to the private

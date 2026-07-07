@@ -74,6 +74,20 @@ func sectionBody(section string) string {
 // model (vs. the silent no-op). Tunable; kept small so the aggregate stays minimal.
 const minBodyTokens = 8
 
+// maxClosedLoopPasses is the FR3j closed-loop bound: the maximum number of re-trim passes
+// closedLoopGate will perform after the first-cut. The water-fill estimate is already close (the
+// promptReserve + tokenBudgetMargin subtract a conservative upper bound), so convergence typically takes
+// 1–2 passes; 4 is a safety ceiling against a hostile estimator. Beyond it the loop returns the best
+// attempt seen so far (best-effort — an adversarial estimator can always lie; the bound prevents an
+// infinite loop).
+const maxClosedLoopPasses = 4
+
+// closedLoopSlack is the FR3j extra tokens shaved per overshoot when closedLoopGate reduces the
+// effective limit. Without it the second pass could land exactly at the boundary and oscillate (measure
+// says 1 over → trim 1 → measure says 1 over again, burning a pass each time). The slack ensures each
+// pass makes strictly more progress than the raw overshoot, so the loop converges instead of hovering.
+const closedLoopSlack = 64
+
 // applyWaterFillGate is the FR3d/FR3i token-limit gate (PRD §9.1 FR3d/FR3i; system_context.md §5/§6). It
 // replaces the legacy max_md_lines/max_diff_bytes caps with a dynamic water-fill over ALL diff bodies
 // (markdown + non-markdown) sharing ONE body_budget (FR3i: "across files" — one shared budget, NOT two
@@ -154,4 +168,58 @@ func applyWaterFillGate(mdDiffs []string, nmDiff, skeleton string, tokenLimit, p
 		}
 	}
 	return truncateByWaterFill(sections, allotments)
+}
+
+// closedLoopGate is the FR3j closed-loop budget guarantee (PRD §9.1 FR3j; architecture/
+// fr3j_closed_loop.md). It calls applyWaterFillGate for the first-cut, measures the ASSEMBLED prompt
+// via the injected measure callback, and if over tokenLimit, reduces the effective limit by the
+// overshoot + slack and re-runs the gate. Bounded at maxClosedLoopPasses. When measure == nil, it
+// delegates to applyWaterFillGate with NO loop (behavior unchanged — the nil-safe seam that lets a
+// consumer who does not wire the closure get the first-cut, exactly as today).
+//
+// PURE: no git, no ctx, no I/O — it composes only applyWaterFillGate + the injected measure callback
+// (and the input strings). The measure callback captures sysPrompt + the role-specific payload
+// builder (injected by the consumer in S2) so internal/git can measure the WHOLE assembled prompt
+// without importing internal/prompt (the leaf-purity invariant — mirrors internal/prompt/reserve.go's
+// TokenEstimator injection in reverse).
+//
+// Invariant: measure(gatedDiff) ≤ tokenLimit, where gatedDiff is the returned string. The loop is
+// best-effort — an adversarial estimator that always reports over cannot be satisfied, but the
+// maxClosedLoopPasses bound guarantees termination and the best attempt (smallest measured value
+// seen) is returned on exit. The slack (closedLoopSlack) is subtracted alongside the overshoot to
+// prevent boundary oscillation (measure says 1 over → trim 1 → measure says 1 over again); it ensures
+// each pass makes strictly more progress than the raw overshoot so the loop converges.
+//
+// Called by StagedDiff/TreeDiff/WorkingTreeDiff in their opts.TokenLimit>0 branch (S2 wiring) when
+// opts.MeasureAssembled is non-nil.
+func closedLoopGate(mdDiffs []string, nmDiff, skeleton string, tokenLimit, promptReserve int,
+	measure func(string) int) string {
+	if measure == nil {
+		return applyWaterFillGate(mdDiffs, nmDiff, skeleton, tokenLimit, promptReserve)
+	}
+
+	gatedDiff := applyWaterFillGate(mdDiffs, nmDiff, skeleton, tokenLimit, promptReserve)
+	bestDiff := gatedDiff
+	bestMeasured := measure(gatedDiff)
+
+	for pass := 0; pass < maxClosedLoopPasses; pass++ {
+		if bestMeasured <= tokenLimit {
+			return bestDiff // invariant holds — the assembled prompt fits within tokenLimit
+		}
+		overshoot := bestMeasured - tokenLimit
+		effectiveLimit := tokenLimit - overshoot - closedLoopSlack
+		if effectiveLimit < 1 {
+			effectiveLimit = 1 // floor: never below 1 (applyWaterFillGate's minBodyTokens path handles tiny limits)
+		}
+		gatedDiff = applyWaterFillGate(mdDiffs, nmDiff, skeleton, effectiveLimit, promptReserve)
+		measured := measure(gatedDiff)
+		if measured < bestMeasured {
+			bestDiff = gatedDiff
+			bestMeasured = measured
+		}
+		if measured <= tokenLimit {
+			return gatedDiff // invariant holds after this pass
+		}
+	}
+	return bestDiff // best effort after maxClosedLoopPasses (an adversarial estimator can always lie)
 }

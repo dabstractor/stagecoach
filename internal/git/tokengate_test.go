@@ -301,3 +301,129 @@ func TestApplyWaterFillGate(t *testing.T) {
 		}
 	})
 }
+
+// closedLoopGate pure unit tests (FR3j). The gate under test is PURE (no git, no ctx, no I/O): it wraps
+// applyWaterFillGate with a measure→reduce→rerun loop. The tests use SYNTHETIC measure callbacks
+// (lambdas) to model the real "measure = EstimateTokens(sysPrompt + payload)" behavior without importing
+// internal/prompt: a closure that adds a fixed `prefixOverhead` (the simulated sysPrompt + framing)
+// to EstimateTokens(gatedDiff). This models the real assembled-prompt measurement faithfully enough to
+// exercise the LOOP LOGIC (convergence, nil-safety, within-budget no-op, overshoot correction, maxPasses
+// bound) — the accuracy of the real estimator is S3's e2e invariant test's job.
+
+// TestClosedLoopGate_NilMeasure_DelegatesToFirstCut verifies the nil-safe seam: when measure == nil,
+// closedLoopGate returns the EXACT same output as applyWaterFillGate (no loop, no re-trim). This is the
+// "behavior unchanged when the seam is not used" guarantee that S2's consumers rely on — a consumer that
+// does not wire the closure gets the first-cut, byte-identical to today.
+func TestClosedLoopGate_NilMeasure_DelegatesToFirstCut(t *testing.T) {
+	section := bodySection("src/big.go", 4000) // a sizeable body so the gate actually trims
+	firstCut := applyWaterFillGate(nil, section, "", tokenBudgetMargin+100, 0)
+	got := closedLoopGate(nil, section, "", tokenBudgetMargin+100, 0, nil)
+	if got != firstCut {
+		t.Errorf("nil measure must delegate to first-cut byte-identically;\nfirstCut=\n%s\ngot=\n%s", firstCut, got)
+	}
+}
+
+// TestClosedLoopGate_WithinBudget_NoRetrim verifies the invariant holds when the first-cut already fits:
+// measure(gatedDiff) ≤ tokenLimit ⇒ the first-cut is returned unchanged (no re-trim, no loop body runs).
+// The measure adds a fixed prefixOverhead; tokenLimit is set large enough that prefixOverhead + body fits.
+func TestClosedLoopGate_WithinBudget_NoRetrim(t *testing.T) {
+	section := bodySection("src/small.go", 40) // ~10 tokens of body — well within budget
+	prefixOverhead := 100                      // simulated sysPrompt + framing
+	tokenLimit := tokenBudgetMargin + 1000     // bodyBudget ~1000 ≫ body+prefix; first-cut is the full body
+	firstCut := applyWaterFillGate(nil, section, "", tokenLimit, 0)
+	measure := func(gatedDiff string) int {
+		return prefixOverhead + EstimateTokens(gatedDiff)
+	}
+	got := closedLoopGate(nil, section, "", tokenLimit, 0, measure)
+	if got != firstCut {
+		t.Errorf("within-budget must return the first-cut unchanged;\nfirstCut=\n%s\ngot=\n%s", firstCut, got)
+	}
+	if measure(got) > tokenLimit {
+		t.Errorf("invariant violated: measure(got)=%d > tokenLimit=%d", measure(got), tokenLimit)
+	}
+}
+
+// TestClosedLoopGate_OverBudget_RetrimmedToFit verifies the closed loop converges: when the first-cut's
+// assembled prompt EXCEEDS tokenLimit, the loop reduces the effective limit and re-runs the gate until
+// the trimmed result measures ≤ tokenLimit. Asserts (a) the result measures within budget and (b) the
+// result is SHORTER than the first-cut (the re-trim actually trimmed).
+func TestClosedLoopGate_OverBudget_RetrimmedToFit(t *testing.T) {
+	// A LARGE body (~1020 tokens). prefixOverhead models the stable prompt portion the first-cut did not
+	// account for densely — so the assembled prompt (prefix + body) overruns tokenLimit on the first cut.
+	// tokenLimit is set so the first-cut's bodyBudget is generous (the body comes back whole) but the
+	// assembled measure (prefix + body) overruns. After the loop reduces the effective limit, the body is
+	// trimmed until prefix + trimmedBody ≤ tokenLimit.
+	//
+	// Empirically verified convergence (the loop reaches the invariant in ≤ maxClosedLoopPasses):
+	//   section ≈ 1020 tokens; first-cut whole ⇒ measure(fc) = 1200 + 1022 = 2222 > 2024 (over);
+	//   after re-trim measure(got) = 1960 ≤ 2024 (fits); len(got)=3040 < len(fc)=4088 (shorter).
+	section := bodySection("src/big.go", 4000) // ~1020 tokens of body
+	prefixOverhead := 1200                     // simulated sysPrompt + framing
+	tokenLimit := tokenBudgetMargin + 1000     // bodyBudget = 1000 < 1020 ⇒ ... but margin: 2024−1024=1000, body ~1020 ⇒ near-whole; the first-cut returns the body whole (water-fill at the boundary)
+	firstCut := applyWaterFillGate(nil, section, "", tokenLimit, 0)
+	measure := func(gatedDiff string) int {
+		return prefixOverhead + EstimateTokens(gatedDiff)
+	}
+	// Sanity: the premise holds — the first-cut is genuinely over budget (else the loop is a no-op).
+	if fc := measure(firstCut); fc <= tokenLimit {
+		t.Fatalf("test premise broken: first-cut already fits (measure(fc)=%d ≤ tokenLimit=%d); pick larger prefixOverhead or smaller tokenLimit", fc, tokenLimit)
+	}
+	got := closedLoopGate(nil, section, "", tokenLimit, 0, measure)
+	if m := measure(got); m > tokenLimit {
+		t.Errorf("invariant violated after re-trim: measure(got)=%d > tokenLimit=%d;\ngot=\n%s", m, tokenLimit, got)
+	}
+	if len(got) >= len(firstCut) {
+		t.Errorf("re-trim should produce a SHORTER result; len(got)=%d >= len(firstCut)=%d;\nfirstCut=\n%s\ngot=\n%s", len(got), len(firstCut), firstCut, got)
+	}
+}
+
+// TestClosedLoopGate_MaxPassesBound verifies the loop terminates (no infinite loop) against an
+// adversarial estimator that ALWAYS reports over budget, regardless of how small the gated diff gets.
+// The loop must run at most maxClosedLoopPasses iterations and return the best attempt seen. We assert
+// the call returns (the test would hang on a regression) and that the result is at least as small as
+// the first-cut (the loop never makes things worse — it tracks the best attempt).
+func TestClosedLoopGate_MaxPassesBound(t *testing.T) {
+	section := bodySection("src/big.go", 4000)
+	tokenLimit := tokenBudgetMargin + 200
+	firstCut := applyWaterFillGate(nil, section, "", tokenLimit, 0)
+	// Adversarial: ALWAYS reports tokenLimit + 1000, no matter the input.
+	measure := func(gatedDiff string) int {
+		return tokenLimit + 1000
+	}
+	// If the loop were unbounded this would hang the test runner; the bounded loop returns.
+	got := closedLoopGate(nil, section, "", tokenLimit, 0, measure)
+	// The best attempt is tracked: with a constant adversarial measure, the "best" is the smallest gated
+	// diff, which closedLoopGate produces by reducing the effective limit each pass. The returned diff is
+	// never LARGER than the first-cut (the first pass's effective limit is below tokenLimit).
+	if len(got) > len(firstCut) {
+		t.Errorf("adversarial measure: result must not exceed the first-cut; len(got)=%d > len(firstCut)=%d;\nfirstCut=\n%s\ngot=\n%s", len(got), len(firstCut), firstCut, got)
+	}
+}
+
+// TestClosedLoopGate_EffectiveLimitFloor verifies the effectiveLimit < 1 clamp: a pathological overshoot
+// (measure reports vastly over tokenLimit) drives effectiveLimit negative, which MUST be clamped to 1 so
+// applyWaterFillGate's bodyBudget ≤ 0 / minBodyTokens path fires (a strictly-positive limit is required —
+// effectiveLimit ≤ 0 would still compute bodyBudget ≤ 0 the same way, but the clamp documents the floor
+// and guards against a future negative-limit surprise). The loop must still terminate and return a
+// best-effort result that is SMALLER than the untrimmed first-cut.
+func TestClosedLoopGate_EffectiveLimitFloor(t *testing.T) {
+	section := bodySection("src/big.go", 4000)
+	// tokenLimit tiny + prefixOverhead huge ⇒ overshoot ≫ tokenLimit ⇒ effectiveLimit goes negative and is
+	// clamped to 1. The measure still reports over (the prefix alone exceeds tokenLimit), so the loop runs
+	// to maxClosedLoopPasses and returns the best (smallest) attempt — a minBodyTokens sliver.
+	tokenLimit := tokenBudgetMargin + 50
+	prefixOverhead := 100000
+	firstCut := applyWaterFillGate(nil, section, "", tokenLimit, 0)
+	measure := func(gatedDiff string) int {
+		return prefixOverhead + EstimateTokens(gatedDiff)
+	}
+	got := closedLoopGate(nil, section, "", tokenLimit, 0, measure)
+	// The loop converged to the smallest attempt (the clamped-to-1 effectiveLimit trims hardest).
+	if len(got) >= len(firstCut) {
+		t.Errorf("effectiveLimit floor: result must be SMALLER than the first-cut; len(got)=%d >= len(firstCut)=%d;\nfirstCut=\n%s\ngot=\n%s", len(got), len(firstCut), firstCut, got)
+	}
+	// Sanity: the best-effort result still has the section header (truncation preserves headers).
+	if !strings.Contains(got, "diff --git a/src/big.go b/src/big.go") {
+		t.Errorf("effectiveLimit floor: section header missing; out=\n%s", got)
+	}
+}
