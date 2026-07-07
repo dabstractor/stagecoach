@@ -467,3 +467,48 @@ func TestPublishCommit_PreCommitAbort_RescueError(t *testing.T) {
 		t.Errorf("HEAD = %q, want %q (unchanged — FR-V7 rescue leaves HEAD untouched)", got, parentSHA)
 	}
 }
+
+// TestPublishCommit_HookEmptiesMessage_Aborts is the Issue-4 guard on the decompose path: a commit-msg hook
+// that empties the message file must NOT create an empty-message commit. git aborts "Aborting commit due to
+// empty commit message."; stagehand returns the BARE generate.ErrEmptyMessage (exit 1, NOT a rescue — it is
+// neither *RescueError nor *CASError). Mirrors TestPublishCommit_PreCommitAbort_RescueError's structure but
+// swaps the hook (commit-msg `> "$1"; exit 0`) + the assertion (errors.Is(err, generate.ErrEmptyMessage)).
+// FAILS before the guard (publishCommit creates an empty-message commit → err==nil, HEAD moved); PASSES after.
+func TestPublishCommit_HookEmptiesMessage_Aborts(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	msgInitRepo(t, repo)
+	msgCommitRaw(t, repo, "initial")
+	parentSHA := msgHeadSHA(t, repo)
+
+	msgWriteFile(t, repo, "new.txt", "hello\n")
+	msgStageFile(t, repo, "new.txt")
+	tree := msgGitOut(t, repo, "write-tree")
+
+	// A commit-msg hook that empties the message file (exit 0 ⇒ not a hook failure; the guard catches the
+	// EMPTY result). commit-msg is the last hook to touch the file ⇒ finalMsg unambiguously "".
+	msgInstallHook(t, repo, "commit-msg", "#!/bin/sh\n> \"$1\"\nexit 0\n")
+
+	deps := messageDeps(t, repo, stubtest.Manifest(bin, stubtest.Options{}))
+
+	_, err := publishCommit(context.Background(), deps, tree, parentSHA, "feat: add new") // NON-empty msg (the hook empties it)
+	if err == nil {
+		t.Fatal("expected generate.ErrEmptyMessage, got nil (a commit with an empty message was created — the Issue-4 bug)")
+	}
+	if !errors.Is(err, generate.ErrEmptyMessage) {
+		t.Errorf("error type = %T, want generate.ErrEmptyMessage (bare, exit 1 — NOT *RescueError/exit 3, NOT *CASError): %v", err, err)
+	}
+	// The error must NOT be a rescue (exit 3) or a CAS partial — and must NOT be wrapped in ErrPublicationFailed.
+	var re *generate.RescueError
+	if errors.As(err, &re) {
+		t.Errorf("error is *generate.RescueError (exit 3) — the empty-message abort must be the BARE generate.ErrEmptyMessage (exit 1)")
+	}
+	if errors.Is(err, ErrPublicationFailed) {
+		t.Errorf("error is wrapped in ErrPublicationFailed — generate.ErrEmptyMessage must propagate DIRECTLY")
+	}
+
+	// NO commit created (HEAD unchanged — the abort returned before CommitTree+UpdateRefCAS; FR-V7 idempotent).
+	if got := msgHeadSHA(t, repo); got != parentSHA {
+		t.Errorf("HEAD = %q, want %q (unchanged — the empty-message abort returned before CommitTree)", got, parentSHA)
+	}
+}

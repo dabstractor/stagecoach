@@ -232,6 +232,15 @@ func publishCommit(ctx context.Context, deps Deps, tree, parentSHA, msg string) 
 	if herr != nil {
 		return "", herr // *generate.RescueError (FR-V7) — propagate DIRECTLY (not wrapped)
 	}
+	// §9.25 git parity (Issue 4): a prepare-commit-msg / commit-msg hook may have emptied the message file
+	// (a rejection / force-re-edit pattern). git aborts "Aborting commit due to empty commit message.";
+	// mirror it — return the BARE generate.ErrEmptyMessage (exit 1, NOT a rescue), same as the --edit path
+	// (generate.EditMessage), generate.CommitStaged's guard (S1), and runPipeline's guard (S2). The bare
+	// error propagates via runLoop's existing hard-error path (it is not *CASError, so it skips FR-M12b).
+	// HEAD + live index are untouched (the abort returns before CommitTree → no update-ref ran).
+	if strings.TrimSpace(finalMsg) == "" {
+		return "", generate.ErrEmptyMessage
+	}
 	newSHA, err := deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)
 	if err != nil {
 		return "", fmt.Errorf("%w: commit-tree: %w", ErrPublicationFailed, err)

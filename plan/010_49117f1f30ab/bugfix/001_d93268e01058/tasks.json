@@ -104,14 +104,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Post-Hook Empty-Message Guard (Issue 4)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "If prepare-commit-msg or commit-msg empties the message file, git aborts with 'Aborting commit due to empty commit message.' (exit 1, no commit). Stagehand has NO empty-message check after RunCommitHooks returns in any of the 3 commit paths (CommitStaged, runPipeline, publishCommit). An emptied message flows straight to CommitTree and creates an invalid commit. Fix: add a post-hook empty-message guard in all 3 callers, returning the existing ErrEmptyMessage sentinel (non-rescue, exit 1).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Add empty-message guard after RunCommitHooks in all 3 commit paths",
-              "status": "Researching",
+              "status": "Complete",
               "description": "After RunCommitHooks returns successfully in each of the 3 commit paths, check whether the hook-adjusted message is empty (after trimming). If empty, return generate.ErrEmptyMessage (the existing sentinel from finalize.go:45, used by EditMessage) — non-rescue, exit 1, mirroring git's 'Aborting commit due to empty commit message.' HEAD and the index are untouched (no update-ref ran).",
               "subtasks": [
                 {
@@ -150,7 +150,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S3",
                   "title": "Add empty-message guard in decompose.publishCommit after RunCommitHooks",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/010_49117f1f30ab/bugfix/001_d93268e01058/architecture/hooks_runner_and_callers.md §4 caller (c). publishCommit at internal/decompose/message.go:230-235 calls hooks.RunCommitHooks DIRECTLY (not via the CommitHookRunner interface — decompose imports hooks directly). After RunCommitHooks returns, finalTree and finalMsg are assigned, then CommitTree is called at line 235 with NO empty check. publishCommit calls generate.ErrEmptyMessage — decompose already imports generate (for RescueError, CASError).\n2. INPUT: publishCommit function in internal/decompose/message.go. The hooks block at lines 230-234: `finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, tree, parentSHA, msg, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose}); if herr != nil { return \"\", herr }`. After this, finalMsg is the hook-adjusted message (possibly empty). CommitTree is at line 235: `deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)`.\n3. LOGIC: (a) Write a FAILING test first: in internal/decompose/message_test.go, install a commit-msg hook that empties the file (`> \"$1\"`), call publishCommit, assert the error is generate.ErrEmptyMessage (errors.Is) and NO commit was created (git log shows no new commit). Use the existing msgInstallHook helper (message_test.go:407). (b) After the `if herr != nil` block at line 233, add: `if strings.TrimSpace(finalMsg) == \"\" { return \"\", generate.ErrEmptyMessage }`. This is a bare non-rescue error — propagates to runLoop's FR-M12 handling. The strings package is already imported in message.go. HEAD and index are untouched.\n4. OUTPUT: publishCommit returns \"\", generate.ErrEmptyMessage when a hook empties the message. No commit is created. The error propagates to the decompose orchestrator's error handling.\n5. DOCS: [Mode A] none — the abort matches git's behavior and the existing ErrEmptyMessage pattern.",
@@ -170,21 +170,21 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Decompose Test Assertion Tightening (Issue 5)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Three decompose/arbiter hook tests use strings.Contains(logMsg, \"[HOOK-RAN]\") which passes even when the message is corrupted by Issue 2 (marker concatenated onto the subject line instead of on its own line). Tighten these assertions to verify line structure so a regression of the trailing-newline behavior fails the test. This milestone MUST run AFTER P1.M1.T2 (Issue 2 newline fix) — the tightened assertions only pass once the newline fix is in place.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Tighten decompose/arbiter hook test assertions to check line structure",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Replace the loose strings.Contains assertions in the 3 decompose hook tests with assertions that verify the hook's appended marker lands on a SEPARATE line (the git-parity outcome). This guards against a regression of the Issue 2 trailing-newline fix.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Replace strings.Contains with line-structure assertions in 3 decompose hook tests",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
