@@ -258,6 +258,104 @@ func TestHandler_NoChildKill(t *testing.T) {
 	}
 }
 
+// TestHandler_OnRescueExit_PostSnapshot verifies the FR52 §18.5 exit-path-release seam (P1.M2.T2.S1): on the
+// POST-SNAPSHOT signal branch (snapshot armed → Exit 3), OnRescueExit fires EXACTLY ONCE and BEFORE Exit. The
+// ordering is proven by OnRescueExit setting a flag (rescueFired) that Exit reads — since handle() is synchronous
+// in one goroutine, if Exit ran first the flag would still be false. (Contract a.)
+func TestHandler_OnRescueExit_PostSnapshot(t *testing.T) {
+	var rescueCalls int
+	var rescueFired bool
+	var exitCode int
+	var exitSawRescueFired bool
+
+	h := installTestHandler(t, Options{
+		OnRescueExit: func() {
+			rescueCalls++
+			rescueFired = true
+		},
+		Exit: func(code int) {
+			exitCode = code
+			exitSawRescueFired = rescueFired // Exit "checks" the flag OnRescueExit set
+		},
+		Out: new(bytes.Buffer), // keep the rescue print off real stderr
+	})
+
+	SetSnapshot("tree", "parent", "cand") // arm the rescue path (snapTree != "" → post-snapshot branch)
+	h.handle(os.Interrupt)                // direct call — no goroutine timing (handle() is extracted for testing)
+
+	if rescueCalls != 1 {
+		t.Errorf("OnRescueExit calls = %d, want 1 (post-snapshot exit path)", rescueCalls)
+	}
+	if exitCode != 3 {
+		t.Errorf("Exit code = %d, want 3 (post-snapshot rescue)", exitCode)
+	}
+	if !exitSawRescueFired {
+		t.Error("Exit observed rescueFired=false, want true — OnRescueExit must fire BEFORE Exit (FR52 exit-path release)")
+	}
+}
+
+// TestHandler_OnRescueExit_PreSnapshot verifies the seam on the PRE-SNAPSHOT branch (no snapshot → Exit 130):
+// OnRescueExit fires EXACTLY ONCE and BEFORE Exit. The lock is acquired at default_action.go:59 BEFORE the
+// snapshot is armed, so a pre-snapshot Ctrl-C finds the lock HELD → the release must fire here too (both branches
+// need it). Same ordering flag technique as the post-snapshot test. (Contract b.)
+func TestHandler_OnRescueExit_PreSnapshot(t *testing.T) {
+	var rescueCalls int
+	var rescueFired bool
+	var exitCode int
+	var exitSawRescueFired bool
+
+	h := installTestHandler(t, Options{
+		OnRescueExit: func() {
+			rescueCalls++
+			rescueFired = true
+		},
+		Exit: func(code int) {
+			exitCode = code
+			exitSawRescueFired = rescueFired
+		},
+		Out: new(bytes.Buffer),
+	})
+
+	// NO SetSnapshot — snapTree == "" → pre-snapshot branch → Exit(exitCodeForSignal(os.Interrupt)) == 130.
+	h.handle(os.Interrupt)
+
+	if rescueCalls != 1 {
+		t.Errorf("OnRescueExit calls = %d, want 1 (pre-snapshot exit path — lock held since default_action.go:59)", rescueCalls)
+	}
+	if exitCode != 130 {
+		t.Errorf("Exit code = %d, want 130 (SIGINT, pre-snapshot)", exitCode)
+	}
+	if !exitSawRescueFired {
+		t.Error("Exit observed rescueFired=false, want true — OnRescueExit must fire BEFORE Exit (FR52 exit-path release)")
+	}
+}
+
+// TestHandler_OnRescueExit_SkippedAfterRestoreDefault verifies that after RestoreDefault the handler is STOPPED:
+// handle() returns at its first line (if h.stopped.Load()) and never reaches OnRescueExit or Exit. This is correct
+// — RestoreDefault is the SUCCESS path (before update-ref; no os.Exit) → defer locker.Release() runs normally, so
+// the exit-path seam must NOT fire (it would be a redundant double-release). Asserts OnRescueExit NOT called AND
+// Exit NOT called. (Contract c. "No real lock needed — the seam is a recorder.")
+func TestHandler_OnRescueExit_SkippedAfterRestoreDefault(t *testing.T) {
+	var rescueCalls int
+	var exitCalled bool
+
+	h := installTestHandler(t, Options{
+		OnRescueExit: func() { rescueCalls++ },
+		Exit:         func(int) { exitCalled = true },
+		Out:          new(bytes.Buffer),
+	})
+
+	RestoreDefault() // stop signal delivery — handler is now inert (h.stopped == true)
+	h.handle(os.Interrupt)
+
+	if rescueCalls != 0 {
+		t.Errorf("OnRescueExit calls = %d, want 0 (handler stopped after RestoreDefault; success path uses defer Release)", rescueCalls)
+	}
+	if exitCalled {
+		t.Error("Exit was called after RestoreDefault, want no-op (handler stopped; default disposition applies)")
+	}
+}
+
 // contains reports whether s contains substr.
 func contains(s, substr string) bool {
 	for i := 0; i+len(substr) <= len(s); i++ {
