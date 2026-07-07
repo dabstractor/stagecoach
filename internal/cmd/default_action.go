@@ -18,7 +18,7 @@ import (
 	"github.com/dustin/stagecoach/internal/lock"
 	"github.com/dustin/stagecoach/internal/provider"
 	"github.com/dustin/stagecoach/internal/ui"
-	"github.com/dustin/stagecoach/pkg/stagehand"
+	"github.com/dustin/stagecoach/pkg/stagecoach"
 )
 
 // runDefault is the root command's default action (PRD §15.1): commit staged changes, auto-staging all

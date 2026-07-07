@@ -164,7 +164,7 @@ func buildStagehand(t *testing.T) string {
 		}
 		name := "stagehand"
 		out := filepath.Join(dir, name)
-		cmd := exec.Command("go", "build", "-o", out, "github.com/dustin/stagecoach/cmd/stagehand")
+		cmd := exec.Command("go", "build", "-o", out, "github.com/dustin/stagecoach/cmd/stagecoach")
 		if o, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("go build stagehand: %v\n%s", err, o)
 		}

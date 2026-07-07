@@ -62,7 +62,7 @@ func buildStagehand(t *testing.T) string {
 		}
 		stagehandBin = filepath.Join(dir, name)
 		build := exec.Command(goPath, "build", "-o", stagehandBin,
-			"github.com/dustin/stagecoach/cmd/stagehand")
+			"github.com/dustin/stagecoach/cmd/stagecoach")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("go build stagehand: %v\n%s", err, out)
 		}
