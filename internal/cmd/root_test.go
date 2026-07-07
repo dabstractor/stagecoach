@@ -97,7 +97,7 @@ func loadEnvSetup(t *testing.T) (home, repo, globalDir string) {
 	t.Setenv("XDG_CONFIG_HOME", home) // globalConfigPath will use XDG
 	repo = t.TempDir()
 	initRepo(t, repo) // initialize git repo for layer 4
-	globalDir = filepath.Join(home, "stagehand")
+	globalDir = filepath.Join(home, "stagecoach")
 	return home, repo, globalDir
 }
 

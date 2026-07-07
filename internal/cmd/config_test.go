@@ -30,7 +30,7 @@ func setupNoRepo(t *testing.T) (home, plainDir, globalDir string) {
 	t.Setenv("XDG_CONFIG_HOME", home)
 	plainDir = t.TempDir()
 	chdir(t, plainDir)
-	globalDir = filepath.Join(home, "stagehand")
+	globalDir = filepath.Join(home, "stagecoach")
 	return home, plainDir, globalDir
 }
 
@@ -58,9 +58,9 @@ func TestConfigPath_PrintsGlobalPath(t *testing.T) {
 	if got != expected {
 		t.Errorf("config path output = %q, want %q", got, expected)
 	}
-	// Must end with stagehand/config.toml
-	if !strings.HasSuffix(got, filepath.Join("stagehand", "config.toml")) {
-		t.Errorf("config path output = %q, want to end with stagehand/config.toml", got)
+	// Must end with stagecoach/config.toml
+	if !strings.HasSuffix(got, filepath.Join("stagecoach", "config.toml")) {
+		t.Errorf("config path output = %q, want to end with stagecoach/config.toml", got)
 	}
 }
 
@@ -185,7 +185,7 @@ func TestConfigUpgrade_ConfigFlag_UpgradesOverride_NotGlobal(t *testing.T) {
 	}
 
 	// The global config must NOT have been created
-	globalPath := filepath.Join(home, "stagehand", "config.toml")
+	globalPath := filepath.Join(home, "stagecoach", "config.toml")
 	if _, err := os.Stat(globalPath); !os.IsNotExist(err) {
 		t.Errorf("global config %s must NOT exist (upgrade must target the --config file only)", globalPath)
 	}
@@ -690,7 +690,7 @@ func TestConfigInit_MkdirAllParent(t *testing.T) {
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	_, _, globalDir := setupNoRepo(t)
-	// The parent dir (<home>/stagehand) should NOT exist yet (loadEnvSetup doesn't create it)
+	// The parent dir (<home>/stagecoach) should NOT exist yet (loadEnvSetup doesn't create it)
 	if _, err := os.Stat(globalDir); err == nil {
 		t.Fatalf("parent dir %s already exists (test setup issue)", globalDir)
 	}

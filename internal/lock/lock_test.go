@@ -26,7 +26,7 @@ func TestLockDir_RuntimePreferred(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockDir: %v", err)
 	}
-	want := filepath.Join(tmpAbs, "stagehand", "locks")
+	want := filepath.Join(tmpAbs, "stagecoach", "locks")
 	if dir != want {
 		t.Errorf("lockDir = %q, want %q", dir, want)
 	}
@@ -42,13 +42,13 @@ func TestLockDir_CacheFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockDir: %v", err)
 	}
-	want := filepath.Join(tmpAbs, "stagehand", "locks")
+	want := filepath.Join(tmpAbs, "stagecoach", "locks")
 	if dir != want {
 		t.Errorf("lockDir = %q, want %q", dir, want)
 	}
 }
 
-// TestLockDir_HomeFallback verifies ~/.cache/stagehand/locks when both XDG vars are unset.
+// TestLockDir_HomeFallback verifies ~/.cache/stagecoach/locks when both XDG vars are unset.
 func TestLockDir_HomeFallback(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	t.Setenv("XDG_CACHE_HOME", "")
@@ -59,7 +59,7 @@ func TestLockDir_HomeFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockDir: %v", err)
 	}
-	want := filepath.Join(tmpHome, ".cache", "stagehand", "locks")
+	want := filepath.Join(tmpHome, ".cache", "stagecoach", "locks")
 	if dir != want {
 		t.Errorf("lockDir = %q, want %q", dir, want)
 	}
@@ -77,7 +77,7 @@ func TestLockDir_RejectedRelative(t *testing.T) {
 		t.Fatalf("lockDir: %v", err)
 	}
 	// Should fall through to home fallback, NOT use the relative path.
-	want := filepath.Join(tmpHome, ".cache", "stagehand", "locks")
+	want := filepath.Join(tmpHome, ".cache", "stagecoach", "locks")
 	if dir != want {
 		t.Errorf("lockDir = %q, want %q (relative XDG_RUNTIME_DIR should be skipped)", dir, want)
 	}

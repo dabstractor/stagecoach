@@ -326,7 +326,7 @@ func TestModels_NoDefault_NothingDetected(t *testing.T) {
 	t.Setenv("PATH", tmpDir)
 	// Override all built-in commands to nonexistent paths AND pre-write a global config
 	// with empty provider so the bootstrap doesn't set a default.
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 config_version = 3
 [defaults]
 provider = ""
@@ -424,7 +424,7 @@ func TestModels_AllEmpty_Detection(t *testing.T) {
 	t.Setenv("PATH", tmpDir)
 
 	// Write a config that overrides all built-in commands to nonexistent paths
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.claude]
 command = "/nonexistent/claude"
 [provider.pi]

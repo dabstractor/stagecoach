@@ -73,13 +73,13 @@ func runGit(t *testing.T, dir string, args ...string) string {
 var shaRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 
 // ---------------------------------------------------------------------------
-// Test seam helper: sets up a temp git repo with a stub provider in .stagehand.toml
+// Test seam helper: sets up a temp git repo with a stub provider in .stagecoach.toml
 // and the STAGECOACH_STUB_OUT env var.
 // ---------------------------------------------------------------------------
 
-// setupStubRepo creates a temp git repo, writes a .stagehand.toml with the stub
+// setupStubRepo creates a temp git repo, writes a .stagecoach.toml with the stub
 // provider pointing at the compiled stubagent binary, sets STAGECOACH_STUB_OUT so
-// the stub returns the given response, and commits the .stagehand.toml so it's
+// the stub returns the given response, and commits the .stagecoach.toml so it's
 // tracked (not untracked). Returns the repo dir (caller must chdir — already done).
 func setupStubRepo(t *testing.T, stubOut string) string {
 	t.Helper()
@@ -89,7 +89,7 @@ func setupStubRepo(t *testing.T, stubOut string) string {
 	chdir(t, repo)
 	isolateHome(t) // prevent bootstrap from writing to real XDG
 
-	// Write .stagehand.toml with the stub provider (read by BOTH CLI PersistentPreRunE
+	// Write .stagecoach.toml with the stub provider (read by BOTH CLI PersistentPreRunE
 	// and GenerateCommit via DISCOVERY — design §2/§7).
 	toml := fmt.Sprintf(`[provider.stub]
 command = %q
@@ -97,10 +97,10 @@ prompt_delivery = "stdin"
 output = "raw"
 strip_code_fence = true
 `, bin)
-	writeConfigFile(t, repo, ".stagehand.toml", toml)
+	writeConfigFile(t, repo, ".stagecoach.toml", toml)
 
 	// Commit the config so it's tracked and not an untracked file picked up by AddAll
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "init: add stagehand config")
 
 	t.Setenv("STAGECOACH_STUB_OUT", stubOut)
@@ -109,7 +109,7 @@ strip_code_fence = true
 
 // setupStubRepoWithTimeout creates a temp git repo with a stub provider that sleeps
 // for sleepMs milliseconds and returns the given out. Also sets a short timeout in
-// the config. The .stagehand.toml is committed so it's tracked. Returns the repo dir.
+// the config. The .stagecoach.toml is committed so it's tracked. Returns the repo dir.
 func setupStubRepoWithTimeout(t *testing.T, stubOut string, sleepMs int, timeout time.Duration) string {
 	t.Helper()
 	bin := stubtest.Build(t)
@@ -127,10 +127,10 @@ strip_code_fence = true
 [defaults]
 timeout = "%s"
 `, bin, timeout)
-	writeConfigFile(t, repo, ".stagehand.toml", toml)
+	writeConfigFile(t, repo, ".stagecoach.toml", toml)
 
 	// Commit the config so it's tracked
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "init: add stagehand config")
 
 	t.Setenv("STAGECOACH_STUB_OUT", stubOut)
@@ -147,7 +147,7 @@ func isolateHome(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", home)
 }
 
-// setupStubRepoRaw creates a temp git repo with a raw .stagehand.toml (not committed).
+// setupStubRepoRaw creates a temp git repo with a raw .stagecoach.toml (not committed).
 // Used by tests that need precise control over what's tracked.
 func setupStubRepoRaw(t *testing.T, tomlBody string) string {
 	t.Helper()
@@ -155,7 +155,7 @@ func setupStubRepoRaw(t *testing.T, tomlBody string) string {
 	initRepo(t, repo)
 	chdir(t, repo)
 	isolateHome(t) // prevent bootstrap from writing to real XDG
-	writeConfigFile(t, repo, ".stagehand.toml", tomlBody)
+	writeConfigFile(t, repo, ".stagecoach.toml", tomlBody)
 	return repo
 }
 
@@ -235,7 +235,7 @@ func TestRunDefault_RootCommit(t *testing.T) {
 	chdir(t, repo)
 	isolateHome(t) // prevent bootstrap from writing to real XDG
 
-	// Write .stagehand.toml BUT don't commit it — repo is unborn, we test root commit.
+	// Write .stagecoach.toml BUT don't commit it — repo is unborn, we test root commit.
 	// The config file will be part of the root commit's tree.
 	toml := fmt.Sprintf(`[provider.stub]
 command = %q
@@ -243,7 +243,7 @@ prompt_delivery = "stdin"
 output = "raw"
 strip_code_fence = true
 `, bin)
-	writeConfigFile(t, repo, ".stagehand.toml", toml)
+	writeConfigFile(t, repo, ".stagecoach.toml", toml)
 	t.Setenv("STAGECOACH_STUB_OUT", "chore: initial")
 
 	writeFile(t, repo, "first.txt", "content")
@@ -477,7 +477,7 @@ func TestRunDefault_CleanTreeNoAutoStageNotice_Issue7(t *testing.T) {
 	origArgs, origOut, origErr, origRunE := saveRootState(t)
 	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
 
-	// setupStubRepo COMMITS .stagehand.toml, so with NO further writeFile/stageFile the tree is
+	// setupStubRepo COMMITS .stagecoach.toml, so with NO further writeFile/stageFile the tree is
 	// fully clean — exactly the Issue 7 scenario (nothing to auto-stage).
 	repo := setupStubRepo(t, "feat: x")
 
@@ -535,7 +535,7 @@ max_duplicate_retries = 0
 	t.Setenv("STAGECOACH_STUB_OUT", "")
 
 	// Commit the config first, then add test file
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "initial")
 	writeFile(t, repo, "z.txt", "data")
 	stageFile(t, repo, "z.txt")
@@ -682,7 +682,7 @@ max_duplicate_retries = 0
 	t.Setenv("STAGECOACH_STUB_OUT", "")
 
 	// Commit the config first, then add test file
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "initial")
 	writeFile(t, repo, "z.txt", "data")
 	stageFile(t, repo, "z.txt")
@@ -742,7 +742,7 @@ strip_code_fence = true
 `, bin))
 
 	// Commit config + initial commit
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "initial")
 	writeFile(t, repo, "b.txt", "data")
 	stageFile(t, repo, "b.txt")
@@ -815,7 +815,7 @@ func TestRunDefault_MissingProviderCommand_Issue3(t *testing.T) {
 	repo := setupStubRepoRaw(t, toml)
 	// setupStubRepoRaw does not commit; add an initial commit so HEAD exists and the new-file
 	// count-objects guard is meaningful.
-	runGit(t, repo, "add", ".stagehand.toml")
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "initial")
 	writeFile(t, repo, "new.txt", "content") // NEW file — see pkg/stagehand test comment for why
 	stageFile(t, repo, "new.txt")
@@ -943,7 +943,7 @@ func TestRunDefault_ConfigFlagHonored_Issue1(t *testing.T) {
 
 	bin := stubtest.Build(t)
 
-	// Isolate the global layer; fresh repo with NO .stagehand.toml (provider source = --config ONLY).
+	// Isolate the global layer; fresh repo with NO .stagecoach.toml (provider source = --config ONLY).
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
@@ -1217,8 +1217,8 @@ func TestRunDefault_NegativeCommits_Rejected(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRunDefault_RepoLocalNoticeOnce_Issue5 proves Issue 5 is fixed: a repo-local .stagehand.toml
-// that sets provider prints the §19 notice "repo-local config (.stagehand.toml) sets provider to"
+// TestRunDefault_RepoLocalNoticeOnce_Issue5 proves Issue 5 is fixed: a repo-local .stagecoach.toml
+// that sets provider prints the §19 notice "repo-local config (.stagecoach.toml) sets provider to"
 // EXACTLY ONCE (strings.Count == 1; was 2 before S1/S2's single-Load fix).
 func TestRunDefault_RepoLocalNoticeOnce_Issue5(t *testing.T) {
 	origArgs, origOut, origErr, origRunE := saveRootState(t)
@@ -1232,8 +1232,8 @@ func TestRunDefault_RepoLocalNoticeOnce_Issue5(t *testing.T) {
 
 	// Repo-local config: top-level provider= (fires the §19 notice) + [provider.stub] (resolves it).
 	toml := fmt.Sprintf("[defaults]\nprovider = \"stub\"\n\n[provider.stub]\ncommand = %q\nprompt_delivery = \"stdin\"\noutput = \"raw\"\nstrip_code_fence = true\n", bin)
-	writeConfigFile(t, repo, ".stagehand.toml", toml)
-	runGit(t, repo, "add", ".stagehand.toml")
+	writeConfigFile(t, repo, ".stagecoach.toml", toml)
+	runGit(t, repo, "add", ".stagecoach.toml")
 	runGit(t, repo, "commit", "-m", "init: config")
 
 	writeFile(t, repo, "new.txt", "hello")
@@ -1251,7 +1251,7 @@ func TestRunDefault_RepoLocalNoticeOnce_Issue5(t *testing.T) {
 		t.Fatalf("Execute err=%v, want nil", err)
 	}
 
-	const needle = "repo-local config (.stagehand.toml) sets provider to"
+	const needle = "repo-local config (.stagecoach.toml) sets provider to"
 	if got := strings.Count(notice.String(), needle); got != 1 {
 		t.Errorf("§19 notice count = %d, want 1\n--- captured notice ---\n%s", got, notice.String())
 	}

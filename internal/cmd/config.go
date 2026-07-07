@@ -76,8 +76,8 @@ var configPathCmd = &cobra.Command{
 	Long: `Print the config file path that ` + "`config init`" + `/` + "`config upgrade`" + ` operate on and that
 Stagehand reads as its global config layer.
 
-By default this is the DISCOVERED global location ($XDG_CONFIG_HOME/stagehand/config.toml, or
-~/.config/stagehand/config.toml). The --config flag and STAGECOACH_CONFIG env var ARE honored here: when
+By default this is the DISCOVERED global location ($XDG_CONFIG_HOME/stagecoach/config.toml, or
+~/.config/stagecoach/config.toml). The --config flag and STAGECOACH_CONFIG env var ARE honored here: when
 either is set, this prints that override path — the same file ` + "`config init`" + `/` + "`config upgrade`" + `
 then target — so you can confirm exactly which file a command will touch.`,
 	Args:          cobra.NoArgs,
@@ -502,9 +502,9 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 #
 # Resolution precedence (highest -> lowest), PRD §9.8 FR34 / §16.1:
 #   CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagecoach.*)  >
-#   repo-local .stagehand.toml  >  THIS global file  >  provider defaults  >  built-in defaults
+#   repo-local .stagecoach.toml  >  THIS global file  >  provider defaults  >  built-in defaults
 #
-# This is the GLOBAL file. A repo-local file (./.stagehand.toml) and repo git config (stagecoach.*)
+# This is the GLOBAL file. A repo-local file (./.stagecoach.toml) and repo git config (stagecoach.*)
 # both override it; CLI flags and env vars override those.
 #
 # Environment variables (PRD §9.8 FR35) — override this file, are overridden by CLI flags:

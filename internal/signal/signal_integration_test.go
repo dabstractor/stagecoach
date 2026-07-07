@@ -44,7 +44,7 @@ func TestSignalIntegration_SigintPostSnapshot(t *testing.T) {
 	beforeHEAD := runGit(t, repo, "rev-parse", "HEAD")
 
 	// Write a config that uses the stub agent with a 30s hang.
-	cfgPath := filepath.Join(repo, ".stagehand.toml")
+	cfgPath := filepath.Join(repo, ".stagecoach.toml")
 	configContent := "[defaults]\nprovider = \"stub\"\n[provider.stub]\ncommand = \"" + stubBin + "\"\nprompt_delivery = \"stdin\"\noutput = \"raw\"\n"
 	if err := os.WriteFile(cfgPath, []byte(configContent), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

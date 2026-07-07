@@ -106,7 +106,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		if err := bootstrapWriteConfig(globalPath); err != nil {
 			return nil, fmt.Errorf("bootstrap config: %w", err)
 		}
-		fmt.Fprintf(noticeOut, "stagehand: wrote bootstrap config to %s\n", globalPath)
+		fmt.Fprintf(noticeOut, "stagecoach: wrote bootstrap config to %s\n", globalPath)
 		if g, err := loadTOML(globalPath); err != nil {
 			return nil, fmt.Errorf("global config: %w", err)
 		} else if g != nil {
@@ -115,7 +115,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		}
 	}
 
-	// Layer 3: repo-local TOML (CWD .stagehand.toml; emits the §19 notice). nil => absent.
+	// Layer 3: repo-local TOML (CWD .stagecoach.toml; emits the §19 notice). nil => absent.
 	if r, err := loadRepoLocalConfig(); err != nil {
 		return nil, fmt.Errorf("repo config: %w", err)
 	} else if r != nil {
@@ -194,7 +194,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 
 	// Self-hosting guard (FR-SH1). "stub" (cmd/stubagent) is a TEST-ONLY provider double that echoes
 	// $STAGECOACH_STUB_OUT verbatim as the "generated" message. It is valid ONLY when selected
-	// intentionally — via the --provider flag or a config FILE (--config / repo-local .stagehand.toml
+	// intentionally — via the --provider flag or a config FILE (--config / repo-local .stagecoach.toml
 	// / global). Refuse AMBIENT selection via $STAGECOACH_PROVIDER or the stagecoach.provider repo
 	// git-config: those are the channels by which a leaked test environment (an exported
 	// STAGECOACH_PROVIDER=stub + STAGECOACH_STUB_OUT left sitting in a shell) silently hijacks a real

@@ -48,7 +48,7 @@ type LockContents struct {
 	Pid, Hostname, Repo, Timestamp, Snapshot string
 }
 
-// HeldError is returned by Acquire when another stagehand process holds the lock
+// HeldError is returned by Acquire when another stagecoach process holds the lock
 // (LOCK_NB failed). Contents is the holder's parsed lock file (for the
 // contention message); Path is the lock file path.
 type HeldError struct {
@@ -57,7 +57,7 @@ type HeldError struct {
 }
 
 func (e *HeldError) Error() string {
-	return fmt.Sprintf("stagehand run lock held by pid %s on %s", e.Contents.Pid, e.Contents.Hostname)
+	return fmt.Sprintf("stagecoach run lock held by pid %s on %s", e.Contents.Pid, e.Contents.Hostname)
 }
 
 // current is the process-global singleton (mirrors internal/signal.active). nil
@@ -216,19 +216,19 @@ func ReleaseCurrent() {
 
 // lockDir returns the directory for lock files (mirrors config/globalConfigPath
 // but with NO CWD fallback — a lock in the repo is the §18.5 anti-pattern).
-// Resolution: XDG_RUNTIME_DIR → XDG_CACHE_HOME → ~/.cache/stagehand/locks.
+// Resolution: XDG_RUNTIME_DIR → XDG_CACHE_HOME → ~/.cache/stagecoach/locks.
 func lockDir() (string, error) {
 	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" && filepath.IsAbs(xdg) {
-		return filepath.Join(xdg, "stagehand", "locks"), nil
+		return filepath.Join(xdg, "stagecoach", "locks"), nil
 	}
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" && filepath.IsAbs(xdg) {
-		return filepath.Join(xdg, "stagehand", "locks"), nil
+		return filepath.Join(xdg, "stagecoach", "locks"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err // NO CWD fallback — a lock in the repo is the §18.5 anti-pattern
 	}
-	return filepath.Join(home, ".cache", "stagehand", "locks"), nil
+	return filepath.Join(home, ".cache", "stagecoach", "locks"), nil
 }
 
 // writeContents writes the lock file contents (pid/hostname/repo/timestamp/snapshot)

@@ -80,7 +80,7 @@ var shaRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 
 // setupScriptedRepo initializes a temp git repo with a single commit whose subject is
 // headSubject, changes CWD into it, and registers the stub provider in SCRIPT (call-varying)
-// mode via a repo-local .stagehand.toml. The responses slice is the per-call stdout sequence;
+// mode via a repo-local .stagecoach.toml. The responses slice is the per-call stdout sequence;
 // blank entries are significant (empty output → parse failure → FR29 retry).
 // Sibling to setupTestRepo; mirrors its initRepo/commitRaw/chdir/cleanup pattern.
 func setupScriptedRepo(t *testing.T, headSubject string, responses []string) string {
@@ -103,8 +103,8 @@ func setupScriptedRepo(t *testing.T, headSubject string, responses []string) str
 	sb.WriteString("\n[provider.stub.env]\n")
 	sb.WriteString("STAGECOACH_STUB_SCRIPT = \"" + script + "\"\n")
 	sb.WriteString("STAGECOACH_STUB_COUNTER = \"" + counter + "\"\n")
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(sb.String()), 0o644); err != nil {
-		t.Fatalf("write .stagehand.toml: %v", err)
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(sb.String()), 0o644); err != nil {
+		t.Fatalf("write .stagecoach.toml: %v", err)
 	}
 
 	initRepo(t, repo)
@@ -122,14 +122,14 @@ func setupScriptedRepo(t *testing.T, headSubject string, responses []string) str
 }
 
 // setupTestRepo initializes a temp git repo with an initial commit, changes CWD into it,
-// and registers the stub provider via a repo-local .stagehand.toml.
+// and registers the stub provider via a repo-local .stagecoach.toml.
 func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 	t.Helper()
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
 
-	// Write repo-local .stagehand.toml to register the stub provider.
-	// config.Load Layer 3 reads CWD/.stagehand.toml; DecodeUserOverrides decodes [provider.stub].
+	// Write repo-local .stagecoach.toml to register the stub provider.
+	// config.Load Layer 3 reads CWD/.stagecoach.toml; DecodeUserOverrides decodes [provider.stub].
 	var sb strings.Builder
 	sb.WriteString("[provider.stub]\n")
 	sb.WriteString("command = \"" + bin + "\"\n")
@@ -147,8 +147,8 @@ func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 		}
 	}
 
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(sb.String()), 0o644); err != nil {
-		t.Fatalf("write .stagehand.toml: %v", err)
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(sb.String()), 0o644); err != nil {
+		t.Fatalf("write .stagecoach.toml: %v", err)
 	}
 
 	initRepo(t, repo)
@@ -537,7 +537,7 @@ func TestGenerateCommit_SystemExtra(t *testing.T) {
 // error is NOT a *RescueError, exitcode.For maps it to 1, the message names the missing command, and
 // NO new tree object is written. Before P1.M2.T1.S1 this surfaced as exit 3 (rescue) + a dangling tree.
 func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
-	// Fresh repo with a repo-local .stagehand.toml registering a provider whose command does not exist.
+	// Fresh repo with a repo-local .stagecoach.toml registering a provider whose command does not exist.
 	repo := t.TempDir()
 	initRepo(t, repo)
 	commitRaw(t, repo, "initial")
@@ -546,8 +546,8 @@ func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
 		"prompt_delivery = \"stdin\"\n" +
 		"output = \"raw\"\n" +
 		"strip_code_fence = true\n"
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
-		t.Fatalf("write .stagehand.toml: %v", err)
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
+		t.Fatalf("write .stagecoach.toml: %v", err)
 	}
 
 	// Chdir (GenerateCommit resolves the repo via os.Getwd()).
@@ -600,8 +600,8 @@ func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
 		repo := t.TempDir()
 		initRepo(t, repo)
 		commitRaw(t, repo, "initial")
-		if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
-			t.Fatalf("write .stagehand.toml: %v", err)
+		if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
+			t.Fatalf("write .stagecoach.toml: %v", err)
 		}
 		wd, err := os.Getwd()
 		if err != nil {
@@ -640,14 +640,14 @@ func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
 // TestResolveConfig_InjectedConfig proves that when opts.Config is non-nil, resolveConfig uses
 // the injected config directly and does NOT call config.Load. The proof: the injected config
 // carries a Providers map entry for a stub provider, and the test runs in a temp dir with NO
-// .stagehand.toml and NO STAGECOACH_CONFIG env — if Load ran, it would find no "stub" provider
+// .stagecoach.toml and NO STAGECOACH_CONFIG env — if Load ran, it would find no "stub" provider
 // (built-ins only) and the Providers map would be empty. The injected provider surviving proves
 // Load was skipped.
 func TestResolveConfig_InjectedConfig(t *testing.T) {
 	bin := stubtest.Build(t)
 
 	// Build a config.Config with the stub provider registered in the Providers map.
-	// This is the same shape that config.Load would produce from a .stagehand.toml [provider.stub] table.
+	// This is the same shape that config.Load would produce from a .stagecoach.toml [provider.stub] table.
 	injected := config.Config{
 		Provider: "stub",
 		Providers: map[string]map[string]any{
@@ -660,7 +660,7 @@ func TestResolveConfig_InjectedConfig(t *testing.T) {
 		},
 	}
 
-	// Create a temp git repo with NO .stagehand.toml (so config.Load would find no stub provider).
+	// Create a temp git repo with NO .stagecoach.toml (so config.Load would find no stub provider).
 	repo := t.TempDir()
 	initRepo(t, repo)
 	commitRaw(t, repo, "initial")
@@ -740,7 +740,7 @@ func TestGenerateCommit_GenerationConfigFile_OutputJSON_Issue4(t *testing.T) {
 		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n" +
 		"\n[generation]\n" +
 		"output = \"json\"\n" // the [generation] override
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
 
@@ -790,7 +790,7 @@ func TestGenerateCommit_GitConfig_OutputJSON_Issue4(t *testing.T) {
 		"strip_code_fence = true\n" +
 		"\n[provider.stub.env]\n" +
 		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n"
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
 
@@ -948,7 +948,7 @@ func TestGenerateCommit_ManifestOutputJSON_Honored_NoGeneration(t *testing.T) {
 		"strip_code_fence = true\n" +
 		"\n[provider.stub.env]\n" +
 		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n" // literal string preserves the JSON quotes
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
 
@@ -994,7 +994,7 @@ func TestGenerateCommit_ManifestStripCodeFenceFalse_Honored_NoGeneration(t *test
 		"strip_code_fence = false\n" + // manifest-level false — must be honored with no [generation]
 		"\n[provider.stub.env]\n" +
 		"STAGECOACH_STUB_OUT = \"```\\nfeat: keep the fence\\n```\"\n"
-	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
+	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
 
@@ -1022,7 +1022,7 @@ func TestGenerateCommit_ManifestStripCodeFenceFalse_Honored_NoGeneration(t *test
 
 // TestGenerateCommit_ManifestDefaultRaw_StillWorks is a regression guard (PRD bugfix-002 Issue 2 clause d):
 // with no [generation] block and the manifest default output="raw"/strip_code_fence=true (setupTestRepo's
-// .stagehand.toml), a plain raw message still round-trips unchanged. This must pass BOTH before and after
+// .stagecoach.toml), a plain raw message still round-trips unchanged. This must pass BOTH before and after
 // the S2 fix (raw/true is the unchanged default).
 func TestGenerateCommit_ManifestDefaultRaw_StillWorks(t *testing.T) {
 	setupTestRepo(t, stubtest.Options{Out: "feat: default raw ok"}) // output="raw", strip=true, no [generation]

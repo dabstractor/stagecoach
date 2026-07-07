@@ -87,7 +87,7 @@ func loadEnvSetup(t *testing.T) (home, repo, globalDir string) {
 	t.Setenv("XDG_CONFIG_HOME", home) // globalConfigPath will use XDG
 	repo = t.TempDir()
 	initRepo(t, repo) // initialize git repo for layer 4
-	globalDir = filepath.Join(home, "stagehand")
+	globalDir = filepath.Join(home, "stagecoach")
 	return home, repo, globalDir
 }
 
@@ -548,8 +548,8 @@ func TestLoad_RepoFileOverridesGlobal(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"pi\"\n")
-	// .stagehand.toml in repo dir (CWD)
-	writeConfigFile(t, repo, ".stagehand.toml", "[defaults]\nprovider = \"claude\"\n")
+	// .stagecoach.toml in repo dir (CWD)
+	writeConfigFile(t, repo, ".stagecoach.toml", "[defaults]\nprovider = \"claude\"\n")
 
 	// Redirect notice output so it doesn't pollute test output
 	origNoticeOut := noticeOut
@@ -569,7 +569,7 @@ func TestLoad_GitOverridesRepoFile(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"pi\"\n")
-	writeConfigFile(t, repo, ".stagehand.toml", "[defaults]\nprovider = \"claude\"\n")
+	writeConfigFile(t, repo, ".stagecoach.toml", "[defaults]\nprovider = \"claude\"\n")
 	setGitConfig(t, repo, "stagecoach.provider", "gemini")
 
 	// Redirect notice
@@ -775,7 +775,7 @@ func TestLoad_ExcludeUnion_GlobalAndRepo(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
 	writeConfigFile(t, globalDir, "config.toml", "[generation]\nexclude = [\"g1\"]\n")
-	writeConfigFile(t, repo, ".stagehand.toml", "[generation]\nexclude = [\"r1\"]\n")
+	writeConfigFile(t, repo, ".stagecoach.toml", "[generation]\nexclude = [\"r1\"]\n")
 
 	origNoticeOut := noticeOut
 	noticeOut = &strings.Builder{}
@@ -795,7 +795,7 @@ func TestLoad_ExcludeUnion_GlobalRepoAndFlags(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
 	writeConfigFile(t, globalDir, "config.toml", "[generation]\nexclude = [\"g1\"]\n")
-	writeConfigFile(t, repo, ".stagehand.toml", "[generation]\nexclude = [\"r1\"]\n")
+	writeConfigFile(t, repo, ".stagecoach.toml", "[generation]\nexclude = [\"r1\"]\n")
 
 	origNoticeOut := noticeOut
 	noticeOut = &strings.Builder{}
@@ -1038,8 +1038,8 @@ func TestLoad_ConfigPathOverride_MissingBeatsEnv(t *testing.T) {
 func TestLoad_BadRepoLocalFile(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	// Write invalid TOML to .stagehand.toml
-	if err := os.WriteFile(filepath.Join(repo, ".stagehand.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
+	// Write invalid TOML to .stagecoach.toml
+	if err := os.WriteFile(filepath.Join(repo, ".stagecoach.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1494,7 +1494,7 @@ func TestLoad_FullPrecedenceMatrix(t *testing.T) {
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"pi\"\ntimeout = \"60s\"\n")
 
 	// Layer 3: repo file overrides provider
-	writeConfigFile(t, repo, ".stagehand.toml", "[defaults]\nprovider = \"claude\"\n")
+	writeConfigFile(t, repo, ".stagecoach.toml", "[defaults]\nprovider = \"claude\"\n")
 
 	// Redirect notice
 	origNoticeOut := noticeOut

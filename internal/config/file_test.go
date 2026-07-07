@@ -33,7 +33,7 @@ func TestLoadRepoLocalConfig_BadTOML(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
-	if err := os.WriteFile(filepath.Join(dir, ".stagehand.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".stagecoach.toml"), []byte("this is [not valid {toml"), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	_, err = loadRepoLocalConfig()
@@ -154,19 +154,19 @@ func TestGlobalConfigPath(t *testing.T) {
 	absTmp := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", absTmp)
 	got := globalConfigPath()
-	want := filepath.Join(absTmp, "stagehand", "config.toml")
+	want := filepath.Join(absTmp, "stagecoach", "config.toml")
 	if got != want {
 		t.Errorf("XDG set: globalConfigPath() = %q, want %q", got, want)
 	}
 
-	// Case 2: XDG empty → falls back to home/.config/stagehand/config.toml
+	// Case 2: XDG empty → falls back to home/.config/stagecoach/config.toml
 	os.Setenv("XDG_CONFIG_HOME", "")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("os.UserHomeDir: %v", err)
 	}
 	got = globalConfigPath()
-	want = filepath.Join(home, ".config", "stagehand", "config.toml")
+	want = filepath.Join(home, ".config", "stagecoach", "config.toml")
 	if got != want {
 		t.Errorf("XDG unset: globalConfigPath() = %q, want %q", got, want)
 	}
@@ -233,9 +233,9 @@ func TestRepoProviderNotice(t *testing.T) {
 			} else if !strings.Contains(got, tc.want) {
 				t.Errorf("repoProviderNotice() = %q, want substring %q", got, tc.want)
 			}
-			// All non-empty notices must contain .stagehand.toml
-			if got != "" && !strings.Contains(got, ".stagehand.toml") {
-				t.Errorf("notice missing .stagehand.toml: %q", got)
+			// All non-empty notices must contain .stagecoach.toml
+			if got != "" && !strings.Contains(got, ".stagecoach.toml") {
+				t.Errorf("notice missing .stagecoach.toml: %q", got)
 			}
 		})
 	}
@@ -244,7 +244,7 @@ func TestRepoProviderNotice(t *testing.T) {
 // --- Test G: TestLoadRepoLocalConfig ---
 
 func TestLoadRepoLocalConfig(t *testing.T) {
-	// Use a temp dir as CWD to isolate the .stagehand.toml lookup
+	// Use a temp dir as CWD to isolate the .stagecoach.toml lookup
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -256,7 +256,7 @@ func TestLoadRepoLocalConfig(t *testing.T) {
 	origNoticeOut := noticeOut
 	defer func() { noticeOut = origNoticeOut }()
 
-	// Case 1: no .stagehand.toml → nil, nil
+	// Case 1: no .stagecoach.toml → nil, nil
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -273,11 +273,11 @@ func TestLoadRepoLocalConfig(t *testing.T) {
 		t.Errorf("no file: notice=%q, want empty", buf.String())
 	}
 
-	// Case 2: .stagehand.toml with provider set → notice emitted
+	// Case 2: .stagecoach.toml with provider set → notice emitted
 	tomlBody := `[defaults]
 provider = "pi"
 `
-	if err := os.WriteFile(filepath.Join(dir, ".stagehand.toml"), []byte(tomlBody), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".stagecoach.toml"), []byte(tomlBody), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	buf.Reset()
@@ -295,11 +295,11 @@ provider = "pi"
 		t.Errorf("notice=%q, want to contain 'sets provider to \"pi\"'", buf.String())
 	}
 
-	// Case 3: .stagehand.toml without provider → no notice
+	// Case 3: .stagecoach.toml without provider → no notice
 	tomlBody = `[defaults]
 timeout = "60s"
 `
-	if err := os.WriteFile(filepath.Join(dir, ".stagehand.toml"), []byte(tomlBody), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".stagecoach.toml"), []byte(tomlBody), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	buf.Reset()
@@ -328,7 +328,7 @@ func TestGlobalConfigPath_Wrapper(t *testing.T) {
 	absTmp := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", absTmp)
 	got := GlobalConfigPath()
-	want := filepath.Join(absTmp, "stagehand", "config.toml")
+	want := filepath.Join(absTmp, "stagecoach", "config.toml")
 	if got != want {
 		t.Errorf("GlobalConfigPath() = %q, want %q", got, want)
 	}
@@ -378,7 +378,7 @@ func TestResolveConfigPath(t *testing.T) {
 			if tc.setupXDG {
 				xdg := t.TempDir()
 				t.Setenv("XDG_CONFIG_HOME", xdg)
-				want = filepath.Join(xdg, "stagehand", "config.toml")
+				want = filepath.Join(xdg, "stagecoach", "config.toml")
 			} else {
 				want = tc.wantPath
 			}

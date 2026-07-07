@@ -67,7 +67,7 @@ func TestProvidersList_DetectedGlyphs(t *testing.T) {
 	repo := setupRepo(t)
 	// Write config with a provider whose command IS on PATH ("go" is guaranteed in go test)
 	// and one whose command is NOT on PATH.
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.realbin]
 command = "go"
 
@@ -161,7 +161,7 @@ func TestProvidersList_OverrideAppears(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	repo := setupRepo(t)
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.myagent]
 command = "/opt/agent"
 `)
@@ -221,7 +221,7 @@ func TestProvidersShow_OverrideMerged(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	repo := setupRepo(t)
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.pi]
 default_model = "glm-5.2"
 `)
@@ -252,7 +252,7 @@ func TestProvidersShow_NewProviderTOML(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	repo := setupRepo(t)
-	writeConfigFile(t, repo, ".stagehand.toml", `
+	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.myagent]
 command = "/opt/agent"
 prompt_delivery = "stdin"

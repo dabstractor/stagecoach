@@ -241,9 +241,9 @@ const bootstrapHeader = `# Stagehand configuration file (populated bootstrap).
 #
 # Resolution precedence (highest -> lowest), PRD §9.8 FR34 / §16.1:
 #   CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagecoach.*)  >
-#   repo-local .stagehand.toml  >  THIS global file  >  provider defaults  >  built-in defaults
+#   repo-local .stagecoach.toml  >  THIS global file  >  provider defaults  >  built-in defaults
 #
-# This is the GLOBAL file. A repo-local file (./.stagehand.toml) and repo git config (stagecoach.*)
+# This is the GLOBAL file. A repo-local file (./.stagecoach.toml) and repo git config (stagecoach.*)
 # both override it; CLI flags and env vars override those.
 #
 # Environment variables (PRD §9.8 FR35) — override this file, are overridden by CLI flags:

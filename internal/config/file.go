@@ -89,23 +89,23 @@ func NoticeOut() io.Writer { return noticeOut }
 // ---------------------------------------------------------------------------
 
 // globalConfigPath returns the GLOBAL config path (PRD §16.1 layer 2):
-// $XDG_CONFIG_HOME/stagehand/config.toml when XDG_CONFIG_HOME is set AND absolute
+// $XDG_CONFIG_HOME/stagecoach/config.toml when XDG_CONFIG_HOME is set AND absolute
 // (XDG Base Dir Spec: a relative/empty value is ignored); otherwise
-// ~/.config/stagehand/config.toml via os.UserHomeDir().
-// GlobalConfigPath returns the resolved GLOBAL Stagehand config path (PRD §16.1 layer 2):
+// ~/.config/stagecoach/config.toml via os.UserHomeDir().
+// GlobalConfigPath returns the resolved GLOBAL Stagecoach config path (PRD §16.1 layer 2):
 // the file `config init` writes and `config path` prints. It delegates to the unexported
 // globalConfigPath() so there is a SINGLE source of truth for the global config location.
 func GlobalConfigPath() string { return globalConfigPath() }
 
 func globalConfigPath() string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" && filepath.IsAbs(xdg) {
-		return filepath.Join(xdg, "stagehand", "config.toml")
+		return filepath.Join(xdg, "stagecoach", "config.toml")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "config.toml" // last-resort fallback (CWD); matches arch §2.8
 	}
-	return filepath.Join(home, ".config", "stagehand", "config.toml")
+	return filepath.Join(home, ".config", "stagecoach", "config.toml")
 }
 
 // ResolveConfigPath returns the config file path, honoring overrides in the SAME precedence as
@@ -122,9 +122,9 @@ func ResolveConfigPath(flagConfig string) string {
 }
 
 // repoLocalConfigPath returns the REPO-LOCAL config path (PRD §16.1 layer 3):
-// the file ./.stagehand.toml.
-// (Contract + PRD §16.1; NOT arch §2.8's .stagehand/config.toml directory.)
-func repoLocalConfigPath() string { return ".stagehand.toml" }
+// the file ./.stagecoach.toml.
+// (Contract + PRD §16.1; NOT arch §2.8's .stagecoach/config.toml directory.)
+func repoLocalConfigPath() string { return ".stagecoach.toml" }
 
 // ---------------------------------------------------------------------------
 // Defense-in-depth agent→provider textual remap (PRD §9.17 FR-B7 "first")
@@ -467,7 +467,7 @@ func overlay(dst, src *Config) {
 // loadRepoLocalConfig — repo-local file loader with §19 provider notice
 // ---------------------------------------------------------------------------
 
-// loadRepoLocalConfig loads the repo-local ./.stagehand.toml. If it sets the default provider, a
+// loadRepoLocalConfig loads the repo-local ./.stagecoach.toml. If it sets the default provider, a
 // one-line notice is written to noticeOut (default os.Stderr) per PRD §19 (a repo file redirecting
 // the provider is surfaced to the user). Returns (nil, nil) if the file is absent.
 func loadRepoLocalConfig() (*Config, error) {
@@ -488,5 +488,5 @@ func repoProviderNotice(cfg *Config) string {
 	if cfg == nil || cfg.Provider == "" {
 		return ""
 	}
-	return fmt.Sprintf("stagehand: repo-local config (.stagehand.toml) sets provider to %q\n", cfg.Provider)
+	return fmt.Sprintf("stagecoach: repo-local config (.stagecoach.toml) sets provider to %q\n", cfg.Provider)
 }
