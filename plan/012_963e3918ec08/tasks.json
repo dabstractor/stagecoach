@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Project Rename: stagehand → stagecoach",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Rename the entire project from 'stagehand' to 'stagecoach' across all tracked files. The codebase is a fully-implemented Go CLI tool (63K lines, ~200 files) that generates git commit messages via AI agent CLIs. Every reference to 'stagehand' (module path, imports, directories, files, packages, env vars, git config keys, config paths, CLI name, docs, build system) must be replaced with 'stagecoach'. The git remote is already renamed to dabstractor/stagecoach on GitHub. No backward compatibility is needed (no public releases exist).",
       "milestones": [
         {
@@ -433,7 +433,7 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Verification, Historical Artifacts, and Changeset-Level Documentation Sync",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Rename historical plan/ directory artifacts (tracked but non-functional planning documents), perform a comprehensive grep audit to ensure zero 'stagehand' references remain in any tracked file, run the full test suite, and verify documentation consistency.",
           "tasks": [
             {
@@ -503,14 +503,14 @@
               "type": "Task",
               "id": "P1.M5.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Final cross-cutting documentation sweep: verify README/docs internal consistency, badge URLs, GitHub links, and that the entire project presents a unified 'stagecoach' identity. This is the Mode B final task per the SOW — it depends on every implementing subtask and ensures no stale references survive.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T3.S1",
                   "title": "Verify documentation internal consistency and unified identity",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M5.T2.S1",
@@ -528,7 +528,7 @@
                   "type": "Subtask",
                   "id": "P1.M5.T3.S2",
                   "title": "Verify badge URLs, GitHub links, and distribution paths are correct",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M5.T3.S1"
