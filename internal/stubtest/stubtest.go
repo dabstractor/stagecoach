@@ -18,17 +18,17 @@ import (
 	"github.com/dustin/stagecoach/internal/provider"
 )
 
-// Options configures a stub invocation; Manifest/Env translate it to STAGEHAND_STUB_* env vars.
+// Options configures a stub invocation; Manifest/Env translate it to STAGECOACH_STUB_* env vars.
 type Options struct {
-	Out            string // STAGEHAND_STUB_OUT (single-response; used when Script=="")
-	Exit           int    // STAGEHAND_STUB_EXIT (default 0; non-zero ⇒ failed-agent simulation)
-	SleepMS        int    // STAGEHAND_STUB_SLEEP_MS (default 0; >0 ⇒ slow/timing-out agent)
-	Stderr         string // STAGEHAND_STUB_STDERR (default "")
-	Script         string // STAGEHAND_STUB_SCRIPT path (call-varying mode; "" disables)
-	Counter        string // STAGEHAND_STUB_COUNTER path (used with Script)
+	Out            string // STAGECOACH_STUB_OUT (single-response; used when Script=="")
+	Exit           int    // STAGECOACH_STUB_EXIT (default 0; non-zero ⇒ failed-agent simulation)
+	SleepMS        int    // STAGECOACH_STUB_SLEEP_MS (default 0; >0 ⇒ slow/timing-out agent)
+	Stderr         string // STAGECOACH_STUB_STDERR (default "")
+	Script         string // STAGECOACH_STUB_SCRIPT path (call-varying mode; "" disables)
+	Counter        string // STAGECOACH_STUB_COUNTER path (used with Script)
 	Output         string // manifest Output; "" → "raw"
 	StripCodeFence *bool  // manifest StripCodeFence; nil → true
-	ArgsFile       string // STAGEHAND_STUB_ARGSFILE (writes the stub's os.Args to this path — observe rendered argv)
+	ArgsFile       string // STAGECOACH_STUB_ARGSFILE (writes the stub's os.Args to this path — observe rendered argv)
 }
 
 var (
@@ -64,32 +64,32 @@ func Build(t testing.TB) string {
 	return stubPath
 }
 
-// optsEnvMap is the single source of truth for the STAGEHAND_STUB_* knobs (Env and Manifest both use it).
+// optsEnvMap is the single source of truth for the STAGECOACH_STUB_* knobs (Env and Manifest both use it).
 func optsEnvMap(o Options) map[string]string {
 	m := map[string]string{
-		"STAGEHAND_STUB_EXIT": strconv.Itoa(o.Exit),
+		"STAGECOACH_STUB_EXIT": strconv.Itoa(o.Exit),
 	}
 	if o.SleepMS > 0 {
-		m["STAGEHAND_STUB_SLEEP_MS"] = strconv.Itoa(o.SleepMS)
+		m["STAGECOACH_STUB_SLEEP_MS"] = strconv.Itoa(o.SleepMS)
 	}
 	if o.Stderr != "" {
-		m["STAGEHAND_STUB_STDERR"] = o.Stderr
+		m["STAGECOACH_STUB_STDERR"] = o.Stderr
 	}
 	if o.ArgsFile != "" {
-		m["STAGEHAND_STUB_ARGSFILE"] = o.ArgsFile
+		m["STAGECOACH_STUB_ARGSFILE"] = o.ArgsFile
 	}
 	if o.Script != "" {
-		m["STAGEHAND_STUB_SCRIPT"] = o.Script
+		m["STAGECOACH_STUB_SCRIPT"] = o.Script
 		if o.Counter != "" {
-			m["STAGEHAND_STUB_COUNTER"] = o.Counter
+			m["STAGECOACH_STUB_COUNTER"] = o.Counter
 		}
 	} else {
-		m["STAGEHAND_STUB_OUT"] = o.Out // single-response mode
+		m["STAGECOACH_STUB_OUT"] = o.Out // single-response mode
 	}
 	return m
 }
 
-// Env returns the "K=V" env slice for o (os.Environ() + STAGEHAND_STUB_*). Use to build a raw CmdSpec.
+// Env returns the "K=V" env slice for o (os.Environ() + STAGECOACH_STUB_*). Use to build a raw CmdSpec.
 func Env(o Options) []string {
 	env := os.Environ()
 	for k, v := range optsEnvMap(o) {

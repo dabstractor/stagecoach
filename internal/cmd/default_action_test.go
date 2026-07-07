@@ -74,11 +74,11 @@ var shaRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 
 // ---------------------------------------------------------------------------
 // Test seam helper: sets up a temp git repo with a stub provider in .stagehand.toml
-// and the STAGEHAND_STUB_OUT env var.
+// and the STAGECOACH_STUB_OUT env var.
 // ---------------------------------------------------------------------------
 
 // setupStubRepo creates a temp git repo, writes a .stagehand.toml with the stub
-// provider pointing at the compiled stubagent binary, sets STAGEHAND_STUB_OUT so
+// provider pointing at the compiled stubagent binary, sets STAGECOACH_STUB_OUT so
 // the stub returns the given response, and commits the .stagehand.toml so it's
 // tracked (not untracked). Returns the repo dir (caller must chdir — already done).
 func setupStubRepo(t *testing.T, stubOut string) string {
@@ -103,7 +103,7 @@ strip_code_fence = true
 	runGit(t, repo, "add", ".stagehand.toml")
 	runGit(t, repo, "commit", "-m", "init: add stagehand config")
 
-	t.Setenv("STAGEHAND_STUB_OUT", stubOut)
+	t.Setenv("STAGECOACH_STUB_OUT", stubOut)
 	return repo
 }
 
@@ -133,8 +133,8 @@ timeout = "%s"
 	runGit(t, repo, "add", ".stagehand.toml")
 	runGit(t, repo, "commit", "-m", "init: add stagehand config")
 
-	t.Setenv("STAGEHAND_STUB_OUT", stubOut)
-	t.Setenv("STAGEHAND_STUB_SLEEP_MS", fmt.Sprintf("%d", sleepMs))
+	t.Setenv("STAGECOACH_STUB_OUT", stubOut)
+	t.Setenv("STAGECOACH_STUB_SLEEP_MS", fmt.Sprintf("%d", sleepMs))
 	return repo
 }
 
@@ -244,7 +244,7 @@ output = "raw"
 strip_code_fence = true
 `, bin)
 	writeConfigFile(t, repo, ".stagehand.toml", toml)
-	t.Setenv("STAGEHAND_STUB_OUT", "chore: initial")
+	t.Setenv("STAGECOACH_STUB_OUT", "chore: initial")
 
 	writeFile(t, repo, "first.txt", "content")
 	stageFile(t, repo, "first.txt")
@@ -532,7 +532,7 @@ strip_code_fence = true
 max_duplicate_retries = 0
 `, bin))
 
-	t.Setenv("STAGEHAND_STUB_OUT", "")
+	t.Setenv("STAGECOACH_STUB_OUT", "")
 
 	// Commit the config first, then add test file
 	runGit(t, repo, "add", ".stagehand.toml")
@@ -679,7 +679,7 @@ strip_code_fence = true
 max_duplicate_retries = 0
 `, bin))
 
-	t.Setenv("STAGEHAND_STUB_OUT", "")
+	t.Setenv("STAGECOACH_STUB_OUT", "")
 
 	// Commit the config first, then add test file
 	runGit(t, repo, "add", ".stagehand.toml")
@@ -753,10 +753,10 @@ strip_code_fence = true
 	// proving that generation has started (the orchestrator has taken the snapshot
 	// and dispatched to the agent). The test polls for the marker, then moves HEAD.
 	marker := filepath.Join(t.TempDir(), "generation-started")
-	t.Setenv("STAGEHAND_STUB_OUT", "feat: x")
-	t.Setenv("STAGEHAND_STUB_MARKER", marker)
+	t.Setenv("STAGECOACH_STUB_OUT", "feat: x")
+	t.Setenv("STAGECOACH_STUB_MARKER", marker)
 	// The stub must sleep long enough that the test can move HEAD before it exits.
-	t.Setenv("STAGEHAND_STUB_SLEEP_MS", "5000")
+	t.Setenv("STAGECOACH_STUB_SLEEP_MS", "5000")
 
 	done := make(chan error, 1)
 	go func() {
@@ -887,7 +887,7 @@ func TestRunDefault_VerboseFlag(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRunDefault_VerboseEnv — STAGEHAND_VERBOSE=1 produces DEBUG output
+// TestRunDefault_VerboseEnv — STAGECOACH_VERBOSE=1 produces DEBUG output
 // ---------------------------------------------------------------------------
 
 func TestRunDefault_VerboseEnv(t *testing.T) {
@@ -898,7 +898,7 @@ func TestRunDefault_VerboseEnv(t *testing.T) {
 	writeFile(t, repo, "ve.txt", "content")
 	stageFile(t, repo, "ve.txt")
 
-	t.Setenv("STAGEHAND_VERBOSE", "1")
+	t.Setenv("STAGECOACH_VERBOSE", "1")
 
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -912,7 +912,7 @@ func TestRunDefault_VerboseEnv(t *testing.T) {
 
 	stderr := errBuf.String()
 	if !strings.Contains(stderr, "DEBUG:") {
-		t.Errorf("stderr = %q, want to contain 'DEBUG:' (STAGEHAND_VERBOSE=1)", stderr)
+		t.Errorf("stderr = %q, want to contain 'DEBUG:' (STAGECOACH_VERBOSE=1)", stderr)
 	}
 }
 
@@ -960,7 +960,7 @@ func TestRunDefault_ConfigFlagHonored_Issue1(t *testing.T) {
 
 	writeFile(t, repo, "new.txt", "hello")
 	stageFile(t, repo, "new.txt")
-	t.Setenv("STAGEHAND_STUB_OUT", "feat: config honored")
+	t.Setenv("STAGECOACH_STUB_OUT", "feat: config honored")
 
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -1238,7 +1238,7 @@ func TestRunDefault_RepoLocalNoticeOnce_Issue5(t *testing.T) {
 
 	writeFile(t, repo, "new.txt", "hello")
 	stageFile(t, repo, "new.txt")
-	t.Setenv("STAGEHAND_STUB_OUT", "feat: add file")
+	t.Setenv("STAGECOACH_STUB_OUT", "feat: add file")
 
 	var outBuf, errBuf, notice bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -1313,8 +1313,8 @@ tooled_flags = ["--yes"]
 		t.Setenv("HOME", home)
 		t.Setenv("XDG_CONFIG_HOME", home)
 		cfgPath := writePiStubConfig(t)
-		t.Setenv("STAGEHAND_CONFIG", cfgPath)
-		t.Setenv("STAGEHAND_PROVIDER", "pi")
+		t.Setenv("STAGECOACH_CONFIG", cfgPath)
+		t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 		repo := t.TempDir()
 		initRepo(t, repo)
@@ -1324,7 +1324,7 @@ tooled_flags = ["--yes"]
 		stageFile(t, repo, "new.txt")
 
 		const singleStubOut = "feat: single path provider render"
-		t.Setenv("STAGEHAND_STUB_OUT", singleStubOut)
+		t.Setenv("STAGECOACH_STUB_OUT", singleStubOut)
 
 		var outBuf, errBuf bytes.Buffer
 		rootCmd.SetOut(&outBuf)
@@ -1362,8 +1362,8 @@ tooled_flags = ["--yes"]
 		t.Setenv("HOME", home)
 		t.Setenv("XDG_CONFIG_HOME", home)
 		cfgPath := writePiStubConfig(t)
-		t.Setenv("STAGEHAND_CONFIG", cfgPath)
-		t.Setenv("STAGEHAND_PROVIDER", "pi")
+		t.Setenv("STAGECOACH_CONFIG", cfgPath)
+		t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 		repo := t.TempDir()
 		initRepo(t, repo)
@@ -1374,7 +1374,7 @@ tooled_flags = ["--yes"]
 		writeFile(t, repo, "dirty2.txt", "content2") // 2nd file: prevents FR-M2b one-file short-circuit
 
 		const decomposeStubOut = `{"count":1,"single":true,"commits":[{"title":"add dirty","description":"dirty.txt"}],"message":"feat: decompose path provider render"}`
-		t.Setenv("STAGEHAND_STUB_OUT", decomposeStubOut)
+		t.Setenv("STAGECOACH_STUB_OUT", decomposeStubOut)
 
 		var outBuf, errBuf bytes.Buffer
 		rootCmd.SetOut(&outBuf)
@@ -1439,7 +1439,7 @@ tooled_flags = ["--yes"]
 	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
 		t.Fatalf("write cfg: %v", err)
 	}
-	t.Setenv("STAGEHAND_CONFIG", cfgPath)
+	t.Setenv("STAGECOACH_CONFIG", cfgPath)
 
 	repo := t.TempDir()
 	initRepo(t, repo)

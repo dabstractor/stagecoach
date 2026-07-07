@@ -101,8 +101,8 @@ func setupScriptedRepo(t *testing.T, headSubject string, responses []string) str
 	sb.WriteString("output = \"raw\"\n")
 	sb.WriteString("strip_code_fence = true\n")
 	sb.WriteString("\n[provider.stub.env]\n")
-	sb.WriteString("STAGEHAND_STUB_SCRIPT = \"" + script + "\"\n")
-	sb.WriteString("STAGEHAND_STUB_COUNTER = \"" + counter + "\"\n")
+	sb.WriteString("STAGECOACH_STUB_SCRIPT = \"" + script + "\"\n")
+	sb.WriteString("STAGECOACH_STUB_COUNTER = \"" + counter + "\"\n")
 	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(sb.String()), 0o644); err != nil {
 		t.Fatalf("write .stagehand.toml: %v", err)
 	}
@@ -140,10 +140,10 @@ func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 	if stubOpts.Out != "" || stubOpts.SleepMS > 0 {
 		sb.WriteString("\n[provider.stub.env]\n")
 		if stubOpts.Out != "" {
-			sb.WriteString("STAGEHAND_STUB_OUT = \"" + stubOpts.Out + "\"\n")
+			sb.WriteString("STAGECOACH_STUB_OUT = \"" + stubOpts.Out + "\"\n")
 		}
 		if stubOpts.SleepMS > 0 {
-			sb.WriteString("STAGEHAND_STUB_SLEEP_MS = \"" + strconv.Itoa(stubOpts.SleepMS) + "\"\n")
+			sb.WriteString("STAGECOACH_STUB_SLEEP_MS = \"" + strconv.Itoa(stubOpts.SleepMS) + "\"\n")
 		}
 	}
 
@@ -284,7 +284,7 @@ func TestGenerateCommit_TemplateApplied(t *testing.T) {
 				"prompt_delivery":  "stdin",
 				"output":           "raw",
 				"strip_code_fence": true,
-				"env":              map[string]any{"STAGEHAND_STUB_OUT": "feat: add x"},
+				"env":              map[string]any{"STAGECOACH_STUB_OUT": "feat: add x"},
 			},
 		},
 	}
@@ -640,7 +640,7 @@ func TestGenerateCommit_MissingProviderCommand_Issue3(t *testing.T) {
 // TestResolveConfig_InjectedConfig proves that when opts.Config is non-nil, resolveConfig uses
 // the injected config directly and does NOT call config.Load. The proof: the injected config
 // carries a Providers map entry for a stub provider, and the test runs in a temp dir with NO
-// .stagehand.toml and NO STAGEHAND_CONFIG env — if Load ran, it would find no "stub" provider
+// .stagehand.toml and NO STAGECOACH_CONFIG env — if Load ran, it would find no "stub" provider
 // (built-ins only) and the Providers map would be empty. The injected provider surviving proves
 // Load was skipped.
 func TestResolveConfig_InjectedConfig(t *testing.T) {
@@ -729,7 +729,7 @@ func TestGenerateCommit_GenerationConfigFile_OutputJSON_Issue4(t *testing.T) {
 	repo := t.TempDir()
 	jsonOut := `{"subject":"feat: from json config"}`
 
-	// TOML uses a literal string ('...') for STAGEHAND_STUB_OUT so the JSON quotes survive parsing.
+	// TOML uses a literal string ('...') for STAGECOACH_STUB_OUT so the JSON quotes survive parsing.
 	toml := "[provider.stub]\n" +
 		"command = \"" + bin + "\"\n" +
 		"prompt_delivery = \"stdin\"\n" +
@@ -737,7 +737,7 @@ func TestGenerateCommit_GenerationConfigFile_OutputJSON_Issue4(t *testing.T) {
 		"json_field = \"subject\"\n" + // REQUIRED: parseJSON extracts obj["subject"]
 		"strip_code_fence = true\n" +
 		"\n[provider.stub.env]\n" +
-		"STAGEHAND_STUB_OUT = '" + jsonOut + "'\n" +
+		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n" +
 		"\n[generation]\n" +
 		"output = \"json\"\n" // the [generation] override
 	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
@@ -789,7 +789,7 @@ func TestGenerateCommit_GitConfig_OutputJSON_Issue4(t *testing.T) {
 		"json_field = \"subject\"\n" +
 		"strip_code_fence = true\n" +
 		"\n[provider.stub.env]\n" +
-		"STAGEHAND_STUB_OUT = '" + jsonOut + "'\n"
+		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n"
 	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
@@ -844,7 +844,7 @@ func TestGenerateCommit_InjectedConfig_StripCodeFenceFalse_Issue4(t *testing.T) 
 			"output":           "raw",
 			"strip_code_fence": true, // manifest says strip ON — cfg=false must override it
 			"env": map[string]any{
-				"STAGEHAND_STUB_OUT": stubOut,
+				"STAGECOACH_STUB_OUT": stubOut,
 			},
 		},
 	}
@@ -898,7 +898,7 @@ func TestGenerateCommit_ManifestOutputWins_WhenCfgOutputNil_Issue4(t *testing.T)
 			"json_field":       "subject",
 			"strip_code_fence": true,
 			"env": map[string]any{
-				"STAGEHAND_STUB_OUT": `{"subject":"feat: manifest wins when cfg nil"}`,
+				"STAGECOACH_STUB_OUT": `{"subject":"feat: manifest wins when cfg nil"}`,
 			},
 		},
 	}
@@ -947,7 +947,7 @@ func TestGenerateCommit_ManifestOutputJSON_Honored_NoGeneration(t *testing.T) {
 		"json_field = \"subject\"\n" + // REQUIRED: parseJSON extracts obj["subject"]
 		"strip_code_fence = true\n" +
 		"\n[provider.stub.env]\n" +
-		"STAGEHAND_STUB_OUT = '" + jsonOut + "'\n" // literal string preserves the JSON quotes
+		"STAGECOACH_STUB_OUT = '" + jsonOut + "'\n" // literal string preserves the JSON quotes
 	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
@@ -984,7 +984,7 @@ func TestGenerateCommit_ManifestOutputJSON_Honored_NoGeneration(t *testing.T) {
 func TestGenerateCommit_ManifestStripCodeFenceFalse_Honored_NoGeneration(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
-	// Use a TOML double-quoted string for STAGEHAND_STUB_OUT with \\n escapes so the stub emits
+	// Use a TOML double-quoted string for STAGECOACH_STUB_OUT with \\n escapes so the stub emits
 	// a fenced block. In Go, \\n produces the two-char TOML escape \n; backticks are not special
 	// in TOML double-quoted strings.
 	toml := "[provider.stub]\n" +
@@ -993,7 +993,7 @@ func TestGenerateCommit_ManifestStripCodeFenceFalse_Honored_NoGeneration(t *test
 		"output = \"raw\"\n" +
 		"strip_code_fence = false\n" + // manifest-level false — must be honored with no [generation]
 		"\n[provider.stub.env]\n" +
-		"STAGEHAND_STUB_OUT = \"```\\nfeat: keep the fence\\n```\"\n"
+		"STAGECOACH_STUB_OUT = \"```\\nfeat: keep the fence\\n```\"\n"
 	if err := os.WriteFile(repo+"/.stagehand.toml", []byte(toml), 0o644); err != nil {
 		t.Fatalf("write toml: %v", err)
 	}
@@ -1209,7 +1209,7 @@ func TestGenerateCommit_MessageRoleOverride_DryRun(t *testing.T) {
 			"output":           "raw",
 			"strip_code_fence": true,
 			"env": map[string]any{
-				"STAGEHAND_STUB_OUT": "feat: with override",
+				"STAGECOACH_STUB_OUT": "feat: with override",
 			},
 		},
 	}
@@ -1252,7 +1252,7 @@ func TestGenerateCommit_NoMessageOverride_Regression(t *testing.T) {
 			"output":           "raw",
 			"strip_code_fence": true,
 			"env": map[string]any{
-				"STAGEHAND_STUB_OUT": "feat: no override",
+				"STAGECOACH_STUB_OUT": "feat: no override",
 			},
 		},
 	}
@@ -1334,8 +1334,8 @@ func appendMultiTurnConfig(t *testing.T, bin, script, counter string, sessionMod
 		"output":           "raw",
 		"strip_code_fence": true,
 		"env": map[string]any{
-			"STAGEHAND_STUB_SCRIPT":  script,
-			"STAGEHAND_STUB_COUNTER": counter,
+			"STAGECOACH_STUB_SCRIPT":  script,
+			"STAGECOACH_STUB_COUNTER": counter,
 		},
 	}
 	if sessionMode != "" {
@@ -1481,7 +1481,7 @@ func TestGenerateCommit_DryRun_MultiTurnSmallPayloadSkip(t *testing.T) {
 }
 
 // TestGenerateCommit_DryRun_MultiTurnMidTurnFailure proves FR-T7: any multi-turn turn failure → rescue.
-// Mechanism (mirrors generate_multiturn_failure_test.go): global STAGEHAND_STUB_EXIT=1 ⇒ the one-shot
+// Mechanism (mirrors generate_multiturn_failure_test.go): global STAGECOACH_STUB_EXIT=1 ⇒ the one-shot
 // exits 1 but its stdout is "" (script[0]) ⇒ parse-fail ⇒ exhaust ⇒ gate fires ⇒ Run's turn 1 exits 1
 // ⇒ Run aborts ⇒ byte-identical rescue.
 func TestGenerateCommit_DryRun_MultiTurnMidTurnFailure(t *testing.T) {
@@ -1493,9 +1493,9 @@ func TestGenerateCommit_DryRun_MultiTurnMidTurnFailure(t *testing.T) {
 	// branch falls through to ParseOutput("") ⇒ ok=false ⇒ exhaust); Run's turn-1 exit-1 ⇒ Run aborts
 	// (FR-T7) ⇒ rescue.
 	cfg.Providers["stub"]["env"] = map[string]any{
-		"STAGEHAND_STUB_SCRIPT":  script,
-		"STAGEHAND_STUB_COUNTER": counter,
-		"STAGEHAND_STUB_EXIT":    "1",
+		"STAGECOACH_STUB_SCRIPT":  script,
+		"STAGECOACH_STUB_COUNTER": counter,
+		"STAGECOACH_STUB_EXIT":    "1",
 	}
 
 	ctx := context.Background()

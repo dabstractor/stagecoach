@@ -70,7 +70,7 @@ type Config struct {
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
 
 	// CLI / UI only — NOT in the §16.2 config file (toml:"-"). Set by flags/env at runtime, never by a file.
-	NoColor bool `toml:"-"` // --no-color / STAGEHAND_NO_COLOR / NO_COLOR; TTY-aware at runtime (UI layer)
+	NoColor bool `toml:"-"` // --no-color / STAGECOACH_NO_COLOR / NO_COLOR; TTY-aware at runtime (UI layer)
 	// V2 decompose mode flags (PRD §9.14 FR-M2) — set by --commits/--single (P1.M3.T2/P4.M1.T1), not files.
 	Commits int  `toml:"-"` // --commits N (N≥2 forces exactly N commits); 0 = auto-decompose (planner decides); --commits 1 ⇒ Single
 	Single  bool `toml:"-"` // --single/--no-decompose: bypass the planner entirely (v1 single-commit path)
@@ -119,7 +119,7 @@ type Config struct {
 	Edit bool `toml:"-"`
 
 	// Push is the §9.22 FR-P1 --push workflow convenience (full 5-layer precedence: --push /
-	// STAGEHAND_PUSH / stagehand.push / [generation].push, default false). When true, a plain `git push`
+	// STAGECOACH_PUSH / stagehand.push / [generation].push, default false). When true, a plain `git push`
 	// (no args, streaming) runs AFTER a fully-clean run. Push failure does NOT roll back commits (FR-P2):
 	// git's stderr is streamed verbatim, "commits created; push failed" prints, exit 1. Skipped on
 	// --dry-run, the exit-2 path, and any rescue/CAS abort (FR-P3). See cmd.runPush + git.Git.Push.
@@ -127,7 +127,7 @@ type Config struct {
 
 	// NoVerify is the §9.25 FR-V5 --no-verify hook bypass (mirrors `git commit --no-verify`).
 	// When true, skips pre-commit and commit-msg hooks (prepare-commit-msg and post-commit still run).
-	// Full 5-layer precedence: --no-verify / STAGEHAND_NO_VERIFY / stagehand.noVerify / [generation].no_verify,
+	// Full 5-layer precedence: --no-verify / STAGECOACH_NO_VERIFY / stagehand.noVerify / [generation].no_verify,
 	// default false — hooks run by default; --no-verify is the deliberate exception. FILE LAYER LIMITATION
 	// (same as Push): only-true-propagates — a file setting `no_verify = false` is a no-op; the flag/env
 	// layers can set it false. See cmd root.go + hooks.RunCommitHooks (M3).

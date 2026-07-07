@@ -5,7 +5,7 @@
 // lock.Acquire + handleLockContention) against REAL stagehand subprocesses on REAL temp git repos —
 // the layer unit tests cannot reach (real flock across real processes). Reuses the harness primitives
 // (buildStagecoach/newRepo/runStagecoach/waitForMarker/writeStubConfig/stubEnv) and the stub agent's
-// STAGEHAND_STUB_MARKER + STAGEHAND_STUB_SLEEP_MS blocking pattern (NO new binary). Test-only.
+// STAGECOACH_STUB_MARKER + STAGECOACH_STUB_SLEEP_MS blocking pattern (NO new binary). Test-only.
 package e2e
 
 import (
@@ -28,9 +28,9 @@ func TestE2ELockContention(t *testing.T) {
 
 		readiness := t.TempDir() + "/ready.marker"
 		holderEnv := stubEnv(map[string]string{
-			"STAGEHAND_STUB_OUT":      "feat: a",
-			"STAGEHAND_STUB_MARKER":   readiness,
-			"STAGEHAND_STUB_SLEEP_MS": "3000", // #1 holds the lock during generation
+			"STAGECOACH_STUB_OUT":      "feat: a",
+			"STAGECOACH_STUB_MARKER":   readiness,
+			"STAGECOACH_STUB_SLEEP_MS": "3000", // #1 holds the lock during generation
 		})
 
 		resCh := make(chan e2eResult, 1)
@@ -41,7 +41,7 @@ func TestE2ELockContention(t *testing.T) {
 		writeFile(t, repo, "b.txt", "b\n")
 		stageFile(t, repo, "b.txt")
 
-		contenderEnv := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: b"})
+		contenderEnv := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: b"})
 		res2 := runStagecoach(t, bin, repo, cfg, contenderEnv, "--provider", "stub")
 		if res2.ExitCode != 5 {
 			t.Fatalf("contender exit = %d, want 5 (Busy); stderr:\n%s", res2.ExitCode, res2.Stderr)
@@ -73,9 +73,9 @@ func TestE2ELockContention(t *testing.T) {
 
 		readiness := t.TempDir() + "/ready.marker"
 		holderEnv := stubEnv(map[string]string{
-			"STAGEHAND_STUB_OUT":      "feat: a",
-			"STAGEHAND_STUB_MARKER":   readiness,
-			"STAGEHAND_STUB_SLEEP_MS": "3000",
+			"STAGECOACH_STUB_OUT":      "feat: a",
+			"STAGECOACH_STUB_MARKER":   readiness,
+			"STAGECOACH_STUB_SLEEP_MS": "3000",
 		})
 
 		resCh := make(chan e2eResult, 1)
@@ -83,7 +83,7 @@ func TestE2ELockContention(t *testing.T) {
 		waitForMarker(t, readiness, 10*time.Second) // #1 snapshot = tree(a.txt)
 
 		// #2 stages NOTHING NEW → its write-tree (tree(a.txt)) == #1's snapshot → no-op fast path → exit 0.
-		contenderEnv := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: a"})
+		contenderEnv := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: a"})
 		res2 := runStagecoach(t, bin, repo, cfg, contenderEnv, "--provider", "stub")
 		if res2.ExitCode != 0 {
 			t.Fatalf("contender exit = %d, want 0 (no-op fast path); stderr:\n%s", res2.ExitCode, res2.Stderr)
@@ -107,7 +107,7 @@ func TestE2ELockContention(t *testing.T) {
 		writeFile(t, repo, "a.txt", "a\n")
 		stageFile(t, repo, "a.txt")
 
-		env := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: a"})
+		env := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: a"})
 
 		// #1 runs to completion and its process exits → flock auto-released (no stale lock).
 		res1 := runStagecoach(t, bin, repo, cfg, env, "--provider", "stub")
@@ -120,7 +120,7 @@ func TestE2ELockContention(t *testing.T) {
 		// — the property under test is "no stale lock", which requires #2 to actually run to exit 0.
 		writeFile(t, repo, "b.txt", "b\n")
 		stageFile(t, repo, "b.txt")
-		env2 := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: b"})
+		env2 := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: b"})
 		res2 := runStagecoach(t, bin, repo, cfg, env2, "--provider", "stub")
 		if res2.ExitCode == 5 {
 			t.Fatalf("#2 exited Busy (5) — stale lock! flock must auto-release on #1's exit; stderr:\n%s", res2.Stderr)
@@ -141,9 +141,9 @@ func TestE2ELockContention(t *testing.T) {
 
 		readiness := t.TempDir() + "/ready.marker"
 		holderEnv := stubEnv(map[string]string{
-			"STAGEHAND_STUB_OUT":      "feat: a",
-			"STAGEHAND_STUB_MARKER":   readiness,
-			"STAGEHAND_STUB_SLEEP_MS": "5000", // hold the lock while we poke the read-only commands
+			"STAGECOACH_STUB_OUT":      "feat: a",
+			"STAGECOACH_STUB_MARKER":   readiness,
+			"STAGECOACH_STUB_SLEEP_MS": "5000", // hold the lock while we poke the read-only commands
 		})
 
 		resCh := make(chan e2eResult, 1)
@@ -178,9 +178,9 @@ func TestE2ELockContention(t *testing.T) {
 
 		readiness := t.TempDir() + "/ready.marker"
 		holderEnv := stubEnv(map[string]string{
-			"STAGEHAND_STUB_OUT":      "feat: a",
-			"STAGEHAND_STUB_MARKER":   readiness,
-			"STAGEHAND_STUB_SLEEP_MS": "3000",
+			"STAGECOACH_STUB_OUT":      "feat: a",
+			"STAGECOACH_STUB_MARKER":   readiness,
+			"STAGECOACH_STUB_SLEEP_MS": "3000",
 		})
 
 		resCh := make(chan e2eResult, 1)
@@ -191,7 +191,7 @@ func TestE2ELockContention(t *testing.T) {
 		// and acquires the lock; if it bypassed, it would print "no commit created" and exit 0).
 		writeFile(t, repo, "b.txt", "b\n")
 		stageFile(t, repo, "b.txt")
-		contenderEnv := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: b"})
+		contenderEnv := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: b"})
 		res2 := runStagecoach(t, bin, repo, cfg, contenderEnv, "--dry-run", "--provider", "stub")
 		if res2.ExitCode != 5 {
 			t.Fatalf("dry-run contender exit = %d, want 5 (Busy — dry-run acquires the lock); stderr:\n%s", res2.ExitCode, res2.Stderr)
@@ -215,9 +215,9 @@ func TestE2ELockContention(t *testing.T) {
 
 		readiness := t.TempDir() + "/ready.marker"
 		holderEnv := stubEnv(map[string]string{
-			"STAGEHAND_STUB_OUT":      "feat: add feature",
-			"STAGEHAND_STUB_MARKER":   readiness,
-			"STAGEHAND_STUB_SLEEP_MS": "4000",
+			"STAGECOACH_STUB_OUT":      "feat: add feature",
+			"STAGECOACH_STUB_MARKER":   readiness,
+			"STAGECOACH_STUB_SLEEP_MS": "4000",
 		})
 
 		resCh := make(chan e2eResult, 1)
@@ -226,7 +226,7 @@ func TestE2ELockContention(t *testing.T) {
 
 		// Contender: same dirty tree, still nothing staged → handleLockContention:
 		//   WriteTree() = baseTree ≠ snap(T_start) → Busy(5). "nothing to do" must NOT appear.
-		contenderEnv := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: add feature"})
+		contenderEnv := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: add feature"})
 		res2 := runStagecoach(t, bin, repo, cfg, contenderEnv, "--provider", "stub")
 		if res2.ExitCode != 5 {
 			t.Fatalf("contender exit = %d, want 5 (Busy) — decompose no-op fast path is structurally impossible; stderr:\n%s", res2.ExitCode, res2.Stderr)

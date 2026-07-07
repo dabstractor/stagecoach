@@ -40,7 +40,7 @@ const verboseCommandPrefix = "DEBUG: command: "
 // pi's isolation flags so the render deltas are OBSERVABLE: one-shot Render includes --no-session
 // (and --system, since Render has no turn gate); multi-turn RenderMultiTurn drops --no-session, adds
 // --session-id, and emits --system on turn 1 only. The final turn's byte-exact argv is cross-checked
-// via the stub's STAGEHAND_STUB_ARGSFILE (which overwrites each call ⇒ holds only turn N+1).
+// via the stub's STAGECOACH_STUB_ARGSFILE (which overwrites each call ⇒ holds only turn N+1).
 //
 // COUNTING NOTE: a system-prompt VALUE with internal newlines makes a single command span multiple
 // physical lines, so the buffer is split into per-command BLOCKS on verboseCommandPrefix (NOT on
@@ -75,7 +75,7 @@ func TestCommitStaged_MultiTurnRenderContract(t *testing.T) {
 
 	// Byte-exact argv for the FINAL turn (turn N+1) — the stub's ArgsFile overwrites each call.
 	argsFile := filepath.Join(t.TempDir(), "args")
-	m.Env["STAGEHAND_STUB_ARGSFILE"] = argsFile // m.Env is a mutable map (optsEnvMap)
+	m.Env["STAGECOACH_STUB_ARGSFILE"] = argsFile // m.Env is a mutable map (optsEnvMap)
 
 	cfg := config.Defaults()
 	cfg.MaxDuplicateRetries = 0   // ⇒ exactly 1 one-shot call ⇒ counter math = N+2 total
@@ -135,7 +135,7 @@ func TestCommitStaged_MultiTurnRenderContract(t *testing.T) {
 	}
 	N := multiTurnCalls - 1 // N chunks; multiTurnCalls == N+1
 	// Counter cross-check: 1 one-shot + (N+1) multi-turn == N+2 total stub invocations.
-	if cf := m.Env["STAGEHAND_STUB_COUNTER"]; cf != "" {
+	if cf := m.Env["STAGECOACH_STUB_COUNTER"]; cf != "" {
 		if raw, rerr := os.ReadFile(cf); rerr == nil {
 			got := strings.TrimSpace(string(raw))
 			if got != fmt.Sprintf("%d", N+2) {

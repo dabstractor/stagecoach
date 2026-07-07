@@ -194,8 +194,8 @@ func TestGenerateBootstrapConfig_NamedProvider(t *testing.T) {
 func TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars(t *testing.T) {
 	content := buildBootstrapConfig("pi", nil, nil)
 	assertContains(t, content,
-		"STAGEHAND_REASONING",
-		"STAGEHAND_<ROLE>_REASONING",
+		"STAGECOACH_REASONING",
+		"STAGECOACH_<ROLE>_REASONING",
 	)
 }
 

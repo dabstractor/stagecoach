@@ -13,7 +13,7 @@ import (
 
 // TestE2EScenarios exercises the PRD §20.5 must-cover regression set via t.Run subtests.
 // Stub-reachable scenarios (S2/S3/S4/S6-single/S7) run by default.
-// Stager-dependent scenarios (S1/S5/loop-S6) skip unless STAGEHAND_RUN_REAL=1.
+// Stager-dependent scenarios (S1/S5/loop-S6) skip unless STAGECOACH_RUN_REAL=1.
 func TestE2EScenarios(t *testing.T) {
 	bin := buildStagecoach(t)
 	stub := buildStub(t)
@@ -94,8 +94,8 @@ provider = "canary"
 			writeFile(t, repo, "solo.txt", "solo\n")
 
 			env := stubEnv(map[string]string{
-				"STAGEHAND_STUB_OUT":    "feat: solo file",
-				"STAGEHAND_STUB_MARKER": msgMarker,
+				"STAGECOACH_STUB_OUT":    "feat: solo file",
+				"STAGECOACH_STUB_MARKER": msgMarker,
 			})
 			res := runStagecoach(t, bin, repo, cfg, env, "--provider", "stub")
 			if res.ExitCode != 0 {
@@ -144,9 +144,9 @@ provider = "canary"
 			writeFile(t, repo, "kept.txt", "kept\n")
 
 			env := stubEnv(map[string]string{
-				"STAGEHAND_STUB_OUT":      "feat: keep",
-				"STAGEHAND_STUB_MARKER":   msgMarker,
-				"STAGEHAND_STUB_SLEEP_MS": "800",
+				"STAGECOACH_STUB_OUT":      "feat: keep",
+				"STAGECOACH_STUB_MARKER":   msgMarker,
+				"STAGECOACH_STUB_SLEEP_MS": "800",
 			})
 
 			sentinel := filepath.Join(repo, "intruder.txt")
@@ -227,7 +227,7 @@ default_model = "x"
 			writeFile(t, repo, "change.txt", "change\n")
 
 			env := stubEnv(map[string]string{
-				"STAGEHAND_STUB_OUT": "feat: x",
+				"STAGECOACH_STUB_OUT": "feat: x",
 			})
 			res := runStagecoach(t, bin, repo, cfg, env,
 				"--provider", "testmulti", "--model", "bare")
@@ -282,7 +282,7 @@ default_model = "x"
 	})
 
 	t.Run("S6_Rescue", func(t *testing.T) {
-		// Empty STAGEHAND_STUB_OUT → unparseable → rescue (exit 3).
+		// Empty STAGECOACH_STUB_OUT → unparseable → rescue (exit 3).
 		msgMarker := t.TempDir() + "/msg.marker"
 
 		t.Run("single_rescue", func(t *testing.T) {
@@ -292,8 +292,8 @@ default_model = "x"
 			writeFile(t, repo, "solo.txt", "solo\n")
 
 			env := stubEnv(map[string]string{
-				"STAGEHAND_STUB_OUT":    "",
-				"STAGEHAND_STUB_MARKER": msgMarker,
+				"STAGECOACH_STUB_OUT":    "",
+				"STAGECOACH_STUB_MARKER": msgMarker,
 			})
 			res := runStagecoach(t, bin, repo, cfg, env, "--provider", "stub")
 			if res.ExitCode != 3 {
@@ -322,9 +322,9 @@ default_model = "x"
 			stageFile(t, repo, "solo.txt")
 
 			env := stubEnv(map[string]string{
-				"STAGEHAND_STUB_OUT":      "feat: x",
-				"STAGEHAND_STUB_MARKER":   msgMarker,
-				"STAGEHAND_STUB_SLEEP_MS": "1500",
+				"STAGECOACH_STUB_OUT":      "feat: x",
+				"STAGECOACH_STUB_MARKER":   msgMarker,
+				"STAGECOACH_STUB_SLEEP_MS": "1500",
 			})
 
 			resCh := make(chan e2eResult, 1)
@@ -389,7 +389,7 @@ default_model = "x"
 [generation]
 exclude = ["excluded.txt"]
 `)
-		baseEnv := stubEnv(map[string]string{"STAGEHAND_STUB_OUT": "feat: add feature"})
+		baseEnv := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: add feature"})
 		res := runStagecoach(t, bin, repo, cfg, baseEnv, "--provider", "stub")
 		if res.ExitCode != 0 {
 			t.Fatalf("exit code = %d, want 0; stderr:\n%s", res.ExitCode, res.Stderr)

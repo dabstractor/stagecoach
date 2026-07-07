@@ -1,14 +1,14 @@
 //go:build integration_real
 
 // Package generate test: the PRD §20.1 layer-4 "Integration — real agents (opt-in, not in CI)" suite.
-// Built ONLY under -tags integration_real; runs ONLY when STAGEHAND_RUN_REAL=1. NOT in CI
+// Built ONLY under -tags integration_real; runs ONLY when STAGECOACH_RUN_REAL=1. NOT in CI
 // (make test / make coverage pass no -tags). Drives generate.CommitStaged against each of the 6 real
 // builtin provider manifests (pi/claude/gemini/opencode/codex/cursor). Resolves the two
 // `// TO CONFIRM (integration)` notes in internal/provider/builtin.go (codex exec→stdout; cursor --mode ask).
 //
 // Manual run command:
 //
-//	STAGEHAND_RUN_REAL=1 go test -tags integration_real ./internal/generate/ -run TestRealAgents -v -timeout 30m
+//	STAGECOACH_RUN_REAL=1 go test -tags integration_real ./internal/generate/ -run TestRealAgents -v -timeout 30m
 package generate
 
 import (
@@ -35,7 +35,7 @@ type realDefault struct {
 
 // realDefaults — best-effort per-AGENT model + inference provider (env-overridable). "" ⇒ fall back
 // to the manifest DefaultModel / emit no flag. Sourced from architecture/external_deps.md.
-// Override per-run via STAGEHAND_REAL_MODEL_<NAME> / STAGEHAND_REAL_INFERENCE_<NAME>.
+// Override per-run via STAGECOACH_REAL_MODEL_<NAME> / STAGECOACH_REAL_INFERENCE_<NAME>.
 var realDefaults = map[string]realDefault{
 	"pi":       {"glm-5-turbo", "zai"},            // explicit personal override (commit-pi); manifest default empty (FR-D2)
 	"claude":   {"", ""},                          // sonnet from manifest default
@@ -65,7 +65,7 @@ func realConfig(name string) config.Config {
 	cfg := config.Defaults()
 	d := realDefaults[name]
 	cfg.Provider = name // the AGENT — NOT the inference provider (prior code conflated the two)
-	cfg.Model = envOr("STAGEHAND_REAL_MODEL_"+strings.ToUpper(name), d.model)
+	cfg.Model = envOr("STAGECOACH_REAL_MODEL_"+strings.ToUpper(name), d.model)
 	return cfg
 }
 
@@ -88,10 +88,10 @@ func logResolvedCommand(t *testing.T, name string, m provider.Manifest, cfg conf
 }
 
 // TestRealAgents drives each real builtin provider manifest through CommitStaged end-to-end. Opt-in:
-// build tag (integration_real) + STAGEHAND_RUN_REAL=1 + binary on $PATH. NOT in CI.
+// build tag (integration_real) + STAGECOACH_RUN_REAL=1 + binary on $PATH. NOT in CI.
 func TestRealAgents(t *testing.T) {
-	if os.Getenv("STAGEHAND_RUN_REAL") != "1" {
-		t.Skip("skipping real-agent suite; set STAGEHAND_RUN_REAL=1 and build with -tags integration_real")
+	if os.Getenv("STAGECOACH_RUN_REAL") != "1" {
+		t.Skip("skipping real-agent suite; set STAGECOACH_RUN_REAL=1 and build with -tags integration_real")
 	}
 
 	reg := provider.NewRegistry(nil) // pure built-ins — no user-config noise
@@ -122,7 +122,7 @@ func TestRealAgents(t *testing.T) {
 			// default_provider. This is the ONLY source Render consults for the --provider flag; stuffing
 			// it into cfg.Provider (as prior code did) is the agent/model-provider conflation FR-R5b now
 			// rejects at Render. DefaultProvider is nil on the pure built-in; set it only when non-empty.
-			if inf := envOr("STAGEHAND_REAL_INFERENCE_"+strings.ToUpper(name), realDefaults[name].inference); inf != "" {
+			if inf := envOr("STAGECOACH_REAL_INFERENCE_"+strings.ToUpper(name), realDefaults[name].inference); inf != "" {
 				// v3 FR-R5b: fold the inference provider into the model slash-prefix.
 				// cfg.Model may already contain a prefix from env override; only prepend if absent.
 				if cfg.Model == "" {

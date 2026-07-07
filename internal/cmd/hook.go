@@ -89,7 +89,7 @@ func hooksDir(ctx context.Context) (string, error) {
 func runHookInstall(cmd *cobra.Command, _ []string) error {
 	// Bake an explicit --config into the installed script so `hook exec` at commit time resolves the
 	// SAME config the user selected at install time (report Finding 4). When --config is unset (""), no
-	// STAGEHAND_CONFIG line is emitted and `hook exec` falls back to env/discovery as before.
+	// STAGECOACH_CONFIG line is emitted and `hook exec` falls back to env/discovery as before.
 	configPath := ""
 	if cmd.Flags().Changed("config") {
 		configPath = flagConfig

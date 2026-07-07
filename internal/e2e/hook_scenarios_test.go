@@ -38,7 +38,7 @@ func runGitCommit(t *testing.T, repo string, env []string, args ...string) (stri
 }
 
 // runGitCommitHook installs the stagehand hook in repo, then runs git commit with the given env.
-// The env must include PATH (with stagehand binary dir), STAGEHAND_CONFIG, and stub knobs.
+// The env must include PATH (with stagehand binary dir), STAGECOACH_CONFIG, and stub knobs.
 func runGitCommitHook(t *testing.T, bin, repo, cfg string, env []string, gitArgs ...string) (string, string, int) {
 	t.Helper()
 	// Install the hook.
@@ -90,9 +90,9 @@ provider = "stub"
 		stageFile(t, repo, "feature.txt")
 
 		env := stubEnv(map[string]string{
-			"STAGEHAND_CONFIG":   cfg,
-			"STAGEHAND_STUB_OUT": "feat: generated message\n",
-			"GIT_EDITOR":         "true",
+			"STAGECOACH_CONFIG":   cfg,
+			"STAGECOACH_STUB_OUT": "feat: generated message\n",
+			"GIT_EDITOR":          "true",
 		})
 		env = prependPath(env, binDir)
 
@@ -128,9 +128,9 @@ provider = "stub"
 		}
 
 		env := stubEnv(map[string]string{
-			"STAGEHAND_CONFIG":    cfg,
-			"STAGEHAND_STUB_EXIT": "1",
-			"GIT_EDITOR":          editorScript,
+			"STAGECOACH_CONFIG":    cfg,
+			"STAGECOACH_STUB_EXIT": "1",
+			"GIT_EDITOR":           editorScript,
 		})
 		env = prependPath(env, binDir)
 
@@ -153,9 +153,9 @@ provider = "stub"
 		stageFile(t, repo, "change.txt")
 
 		env := stubEnv(map[string]string{
-			"STAGEHAND_CONFIG":   cfg,
-			"STAGEHAND_STUB_OUT": "SHOULD NOT APPEAR",
-			"GIT_EDITOR":         "true",
+			"STAGECOACH_CONFIG":   cfg,
+			"STAGECOACH_STUB_OUT": "SHOULD NOT APPEAR",
+			"GIT_EDITOR":          "true",
 		})
 		env = prependPath(env, binDir)
 

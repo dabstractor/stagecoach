@@ -77,7 +77,7 @@ var configPathCmd = &cobra.Command{
 Stagehand reads as its global config layer.
 
 By default this is the DISCOVERED global location ($XDG_CONFIG_HOME/stagehand/config.toml, or
-~/.config/stagehand/config.toml). The --config flag and STAGEHAND_CONFIG env var ARE honored here: when
+~/.config/stagehand/config.toml). The --config flag and STAGECOACH_CONFIG env var ARE honored here: when
 either is set, this prints that override path — the same file ` + "`config init`" + `/` + "`config upgrade`" + `
 then target — so you can confirm exactly which file a command will touch.`,
 	Args:          cobra.NoArgs,
@@ -109,7 +109,7 @@ immediately — ` + "`config upgrade`" + ` persists that migration to the file s
 Running it twice is safe: a file already at the current version is left unchanged ("already up to date").
 
 This targets the file reported by ` + "`stagehand config path`" + ` — by default the GLOBAL config, but the
---config flag and STAGEHAND_CONFIG env var ARE honored. If no config file exists, run
+--config flag and STAGECOACH_CONFIG env var ARE honored. If no config file exists, run
 ` + "`stagehand config init`" + ` first. If the file is not valid TOML, it is left untouched and an error is
 printed.`,
 	Args:          cobra.NoArgs,
@@ -491,7 +491,7 @@ func writeBootstrapFile(cmd *cobra.Command, path, content string, force bool) er
 // exampleConfigTemplate is the commented example config written by `config init --template` (PRD §16.2 / FR38).
 // EVERY option line is commented out (#), so the file is INERT until the user uncomments it. This
 // template IS the Mode-A user-facing config documentation: the header explains the §9.8 precedence
-// order, STAGEHAND_* env vars, and `stagehand.*` git-config keys; the [defaults]/[generation]/
+// order, STAGECOACH_* env vars, and `stagehand.*` git-config keys; the [defaults]/[generation]/
 // [provider.X] sections mirror §16.2 with documented default values and (for providers) field names
 // that match internal/provider/manifest.go toml tags.
 const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
@@ -501,24 +501,24 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # copy its line to a new (uncommented) line and adjust the value.
 #
 # Resolution precedence (highest -> lowest), PRD §9.8 FR34 / §16.1:
-#   CLI flags  >  STAGEHAND_* env vars  >  repo git config (stagehand.*)  >
+#   CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagehand.*)  >
 #   repo-local .stagehand.toml  >  THIS global file  >  provider defaults  >  built-in defaults
 #
 # This is the GLOBAL file. A repo-local file (./.stagehand.toml) and repo git config (stagehand.*)
 # both override it; CLI flags and env vars override those.
 #
 # Environment variables (PRD §9.8 FR35) — override this file, are overridden by CLI flags:
-#   STAGEHAND_PROVIDER   default provider/agent (e.g. "pi", "claude", "gemini")
-#   STAGEHAND_MODEL      model override ("" -> provider manifest default_model)
-#   STAGEHAND_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
-#   STAGEHAND_CONFIG     path to a config file, overrides discovery
-#   STAGEHAND_VERBOSE    "true"/"false" — print resolved command, raw output, retries
-#   STAGEHAND_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
-#   STAGEHAND_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
-#   STAGEHAND_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
-#   STAGEHAND_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
-#   STAGEHAND_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
-#   STAGEHAND_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
+#   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "gemini")
+#   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
+#   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
+#   STAGECOACH_CONFIG     path to a config file, overrides discovery
+#   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
+#   STAGECOACH_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
+#   STAGECOACH_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
+#   STAGECOACH_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
+#   STAGECOACH_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
+#   STAGECOACH_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
+#   STAGECOACH_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
 #
 # ---------------------------------------------------------------------------
 # config_version — schema version (PRD §9.17 FR-B4). Top-level metadata, NOT a [defaults] key and
@@ -607,7 +607,7 @@ const exampleConfigTemplate = `# Stagehand configuration file (PRD §16.2).
 # The four agent roles — planner, stager, message, arbiter — each resolve their provider/model
 # independently. A single [defaults] (above) covers ALL roles; a [role.*] table overrides it for the
 # roles you care about. Both fields "" -> inherit [defaults]. Precedence (highest wins):
-#   flag > STAGEHAND_<ROLE>_* env > [role.*] config > [defaults] > provider manifest default.
+#   flag > STAGECOACH_<ROLE>_* env > [role.*] config > [defaults] > provider manifest default.
 #
 # [role.planner]
 # provider = "agy"

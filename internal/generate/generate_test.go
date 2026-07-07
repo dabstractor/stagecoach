@@ -537,7 +537,7 @@ func sliceContains(args []string, s string) bool {
 
 // TestCommitStaged_MessageRoleOverride verifies that per-role [role.message] overrides
 // (Model + Reasoning) reach Render end-to-end AND Result.Model reports the resolved model.
-// Uses the STAGEHAND_STUB_ARGSFILE knob to observe the exact rendered argv from the stub.
+// Uses the STAGECOACH_STUB_ARGSFILE knob to observe the exact rendered argv from the stub.
 func TestCommitStaged_MessageRoleOverride(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
@@ -673,7 +673,7 @@ func TestCommitStaged_ExcludedPayloadCapture(t *testing.T) {
 	stageFile(t, repo, "secret.conf")
 
 	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
-	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	t.Setenv("STAGECOACH_STUB_STDINFILE", stdinFile)
 	stub := stubtest.Build(t)
 	m := stubtest.Manifest(stub, stubtest.Options{Out: "feat: add feature"})
 
@@ -733,7 +733,7 @@ func TestCommitStaged_FormatGitmojiLocale_ReachesRenderedPrompt(t *testing.T) {
 	stageFile(t, repo, "auth.go")
 
 	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
-	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	t.Setenv("STAGECOACH_STUB_STDINFILE", stdinFile)
 	bin := stubtest.Build(t)
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "🎨 refactor auth flow"})
 

@@ -240,26 +240,26 @@ const bootstrapHeader = `# Stagehand configuration file (populated bootstrap).
 # Edit freely; uncomment any commented section to activate it.
 #
 # Resolution precedence (highest -> lowest), PRD §9.8 FR34 / §16.1:
-#   CLI flags  >  STAGEHAND_* env vars  >  repo git config (stagehand.*)  >
+#   CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagehand.*)  >
 #   repo-local .stagehand.toml  >  THIS global file  >  provider defaults  >  built-in defaults
 #
 # This is the GLOBAL file. A repo-local file (./.stagehand.toml) and repo git config (stagehand.*)
 # both override it; CLI flags and env vars override those.
 #
 # Environment variables (PRD §9.8 FR35) — override this file, are overridden by CLI flags:
-#   STAGEHAND_PROVIDER   default provider/agent (e.g. "pi", "claude", "gemini")
-#   STAGEHAND_MODEL      model override ("" -> provider manifest default_model)
-#   STAGEHAND_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
-#   STAGEHAND_CONFIG     path to a config file, overrides discovery
-#   STAGEHAND_VERBOSE    "true"/"false" — print resolved command, raw output, retries
-#   STAGEHAND_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
-#   STAGEHAND_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
-#   STAGEHAND_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
-#   STAGEHAND_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
-#   STAGEHAND_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
-#   STAGEHAND_REASONING                  global reasoning effort: off|low|medium|high (PRD §9.8 FR35, §16.2)
-#   STAGEHAND_<ROLE>_REASONING           per-role reasoning override (role = planner|stager|message|arbiter)
-#   STAGEHAND_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
+#   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "gemini")
+#   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
+#   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
+#   STAGECOACH_CONFIG     path to a config file, overrides discovery
+#   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
+#   STAGECOACH_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
+#   STAGECOACH_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
+#   STAGECOACH_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
+#   STAGECOACH_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
+#   STAGECOACH_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
+#   STAGECOACH_REASONING                  global reasoning effort: off|low|medium|high (PRD §9.8 FR35, §16.2)
+#   STAGECOACH_<ROLE>_REASONING           per-role reasoning override (role = planner|stager|message|arbiter)
+#   STAGECOACH_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
 #
 # Git config keys (PRD §9.8 FR36 / §16.3) — alternative to this file, scoped to one repo:
 #   git config stagehand.provider pi

@@ -150,12 +150,12 @@ var rootCmd = &cobra.Command{
 func init() {
 	pf := rootCmd.PersistentFlags()
 	// §15.2 config-backed flags (zero defaults; config.Load owns Layer-7 precedence via fs.Changed).
-	pf.StringVar(&flagProvider, "provider", "", "Provider/agent to use (env STAGEHAND_PROVIDER, git stagehand.provider; default auto-detected)")
-	pf.StringVar(&flagModel, "model", "", "Model override (env STAGEHAND_MODEL, git stagehand.model; default per-manifest default_model)")
-	pf.StringVar(&flagConfig, "config", "", "Path to a config file, overrides discovery (env STAGEHAND_CONFIG)")
-	pf.StringVar(&flagTimeout, "timeout", "", "Generation timeout, e.g. \"120s\" or 120 (env STAGEHAND_TIMEOUT, git stagehand.timeout; default 120s)")
-	pf.BoolVarP(&flagVerbose, "verbose", "v", false, "Print resolved command, raw output, retries (env STAGEHAND_VERBOSE)")
-	pf.BoolVar(&flagNoColor, "no-color", false, "Disable color (env STAGEHAND_NO_COLOR, NO_COLOR; default TTY-aware)")
+	pf.StringVar(&flagProvider, "provider", "", "Provider/agent to use (env STAGECOACH_PROVIDER, git stagehand.provider; default auto-detected)")
+	pf.StringVar(&flagModel, "model", "", "Model override (env STAGECOACH_MODEL, git stagehand.model; default per-manifest default_model)")
+	pf.StringVar(&flagConfig, "config", "", "Path to a config file, overrides discovery (env STAGECOACH_CONFIG)")
+	pf.StringVar(&flagTimeout, "timeout", "", "Generation timeout, e.g. \"120s\" or 120 (env STAGECOACH_TIMEOUT, git stagehand.timeout; default 120s)")
+	pf.BoolVarP(&flagVerbose, "verbose", "v", false, "Print resolved command, raw output, retries (env STAGECOACH_VERBOSE)")
+	pf.BoolVar(&flagNoColor, "no-color", false, "Disable color (env STAGECOACH_NO_COLOR, NO_COLOR; default TTY-aware)")
 	// §15.2 behavioral flags (read by S2/S4 RunE; not Config fields).
 	pf.BoolVarP(&flagAll, "all", "a", false, "Run git add -A before snapshotting, even if something is staged")
 	pf.BoolVar(&flagNoAutoStage, "no-auto-stage", false, "If nothing is staged, exit instead of auto-staging")
@@ -173,29 +173,29 @@ func init() {
 	pf.IntVar(&flagMaxCommits, "max-commits", 12,
 		"Safety cap on auto-decompose commit count (env/git stagehand.max_commits)")
 	pf.StringVar(&flagPlannerProvider, "planner-provider", "",
-		"Per-role provider override for the decomposition planner (env STAGEHAND_PLANNER_PROVIDER; git stagehand.role.planner)")
+		"Per-role provider override for the decomposition planner (env STAGECOACH_PLANNER_PROVIDER; git stagehand.role.planner)")
 	pf.StringVar(&flagPlannerModel, "planner-model", "",
-		"Per-role model override for the decomposition planner (env STAGEHAND_PLANNER_MODEL; git stagehand.role.planner)")
+		"Per-role model override for the decomposition planner (env STAGECOACH_PLANNER_MODEL; git stagehand.role.planner)")
 	pf.StringVar(&flagStagerProvider, "stager-provider", "",
-		"Per-role provider override for the (tooled) staging agent (env STAGEHAND_STAGER_PROVIDER; git stagehand.role.stager)")
+		"Per-role provider override for the (tooled) staging agent (env STAGECOACH_STAGER_PROVIDER; git stagehand.role.stager)")
 	pf.StringVar(&flagStagerModel, "stager-model", "",
-		"Per-role model override for the (tooled) staging agent (env STAGEHAND_STAGER_MODEL; git stagehand.role.stager)")
+		"Per-role model override for the (tooled) staging agent (env STAGECOACH_STAGER_MODEL; git stagehand.role.stager)")
 	pf.StringVar(&flagArbiterProvider, "arbiter-provider", "",
-		"Per-role provider override for the leftover arbiter (env STAGEHAND_ARBITER_PROVIDER; git stagehand.role.arbiter)")
+		"Per-role provider override for the leftover arbiter (env STAGECOACH_ARBITER_PROVIDER; git stagehand.role.arbiter)")
 	pf.StringVar(&flagArbiterModel, "arbiter-model", "",
-		"Per-role model override for the leftover arbiter (env STAGEHAND_ARBITER_MODEL; git stagehand.role.arbiter)")
+		"Per-role model override for the leftover arbiter (env STAGECOACH_ARBITER_MODEL; git stagehand.role.arbiter)")
 	// §9.19 FR-F1/FR-F6 — message format + locale flags (zero default; loadFlags reads via fs.Changed).
 	pf.StringVar(&flagFormat, "format", "",
-		"Message format: auto|conventional|gitmoji|plain (env STAGEHAND_FORMAT; git stagehand.format; "+
+		"Message format: auto|conventional|gitmoji|plain (env STAGECOACH_FORMAT; git stagehand.format; "+
 			"[generation].format; default auto). Unknown mode is a hard error.")
 	pf.StringVar(&flagLocale, "locale", "",
-		"Write the message in this language (free-form name or BCP-47 tag; env STAGEHAND_LOCALE; "+
+		"Write the message in this language (free-form name or BCP-47 tag; env STAGECOACH_LOCALE; "+
 			"git stagehand.locale; [generation].locale; default empty)")
 	// §9.19 FR-F8 — message template (distinct from the LOCAL `config init --template` bool: pflag's
 	// AddFlagSet skips this inherited persistent flag on `config init` since a local name already exists).
 	pf.StringVar(&flagTemplate, "template", "",
 		"Wrap every commit message: the literal $msg is replaced with the generated message, e.g. "+
-			"\"$msg (#205)\" (env STAGEHAND_TEMPLATE; git stagehand.template; [generation].template; "+
+			"\"$msg (#205)\" (env STAGECOACH_TEMPLATE; git stagehand.template; [generation].template; "+
 			"default empty). Must contain $msg. (Distinct from 'config init --template'.)")
 	pf.StringVar(&flagContext, "context", "",
 		"Extra context appended to the message+planner payload, e.g. \"hotfix for #812\" "+
@@ -211,27 +211,27 @@ func init() {
 			"run. Never prompts; never auto-sets upstream. On push failure the commits stand — "+
 			"git's stderr is shown verbatim (including the no-upstream hint), \"commits created; "+
 			"push failed\" prints, and stagehand exits 1. Skipped on --dry-run, the nothing-to-commit "+
-			"exit, and any rescue/CAS abort. (env STAGEHAND_PUSH, git stagehand.push, config "+
+			"exit, and any rescue/CAS abort. (env STAGECOACH_PUSH, git stagehand.push, config "+
 			"[generation].push; default false.) (§9.22 FR-P1)")
 	pf.BoolVar(&flagNoVerify, "no-verify", false,
 		"Bypass pre-commit and commit-msg hooks for this commit (mirrors git commit --no-verify; "+
-			"prepare-commit-msg and post-commit still run). (env STAGEHAND_NO_VERIFY, git "+
+			"prepare-commit-msg and post-commit still run). (env STAGECOACH_NO_VERIFY, git "+
 			"stagehand.noVerify; default false.) (§9.25 FR-V5)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
-		"Global reasoning effort: off|low|medium|high (env STAGEHAND_REASONING; git stagehand.reasoning; default off for every role)")
+		"Global reasoning effort: off|low|medium|high (env STAGECOACH_REASONING; git stagehand.reasoning; default off for every role)")
 	pf.StringVar(&flagPlannerReasoning, "planner-reasoning", "",
-		"Per-role reasoning override for the decomposition planner (env STAGEHAND_PLANNER_REASONING; git stagehand.role.planner)")
+		"Per-role reasoning override for the decomposition planner (env STAGECOACH_PLANNER_REASONING; git stagehand.role.planner)")
 	pf.StringVar(&flagStagerReasoning, "stager-reasoning", "",
-		"Per-role reasoning override for the (tooled) staging agent (env STAGEHAND_STAGER_REASONING; git stagehand.role.stager)")
+		"Per-role reasoning override for the (tooled) staging agent (env STAGECOACH_STAGER_REASONING; git stagehand.role.stager)")
 	pf.StringVar(&flagMessageProvider, "message-provider", "",
-		"Per-role provider override for the message composer (env STAGEHAND_MESSAGE_PROVIDER; git stagehand.role.message)")
+		"Per-role provider override for the message composer (env STAGECOACH_MESSAGE_PROVIDER; git stagehand.role.message)")
 	pf.StringVar(&flagMessageModel, "message-model", "",
-		"Per-role model override for the message composer (env STAGEHAND_MESSAGE_MODEL; git stagehand.role.message)")
+		"Per-role model override for the message composer (env STAGECOACH_MESSAGE_MODEL; git stagehand.role.message)")
 	pf.StringVar(&flagMessageReasoning, "message-reasoning", "",
-		"Per-role reasoning override for the message composer (env STAGEHAND_MESSAGE_REASONING; git stagehand.role.message)")
+		"Per-role reasoning override for the message composer (env STAGECOACH_MESSAGE_REASONING; git stagehand.role.message)")
 	pf.StringVar(&flagArbiterReasoning, "arbiter-reasoning", "",
-		"Per-role reasoning override for the leftover arbiter (env STAGEHAND_ARBITER_REASONING; git stagehand.role.arbiter)")
+		"Per-role reasoning override for the leftover arbiter (env STAGECOACH_ARBITER_REASONING; git stagehand.role.arbiter)")
 	// --version is auto-added by cobra (Version field above); --help/-h is cobra's built-in.
 
 	// Wrap flag-usage text to the live terminal width. Cobra's default usage template calls

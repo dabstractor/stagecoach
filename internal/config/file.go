@@ -109,13 +109,13 @@ func globalConfigPath() string {
 }
 
 // ResolveConfigPath returns the config file path, honoring overrides in the SAME precedence as
-// config.Load: flagConfig (--config) > STAGEHAND_CONFIG env > GlobalConfigPath() discovery. It is the
+// config.Load: flagConfig (--config) > STAGECOACH_CONFIG env > GlobalConfigPath() discovery. It is the
 // shared resolver for config.Load and the config init/upgrade/path subcommands (bugfix-001 Issue 4).
 func ResolveConfigPath(flagConfig string) string {
 	if flagConfig != "" {
 		return flagConfig
 	}
-	if env := os.Getenv("STAGEHAND_CONFIG"); env != "" {
+	if env := os.Getenv("STAGECOACH_CONFIG"); env != "" {
 		return env
 	}
 	return GlobalConfigPath()

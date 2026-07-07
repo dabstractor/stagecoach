@@ -64,7 +64,7 @@ func Detect(hooksDir string) (Status, error) {
 // For StatusForeign it returns ErrForeignHook WITHOUT touching the file.
 // It returns the previous status so the caller can print "Installed" vs "Updated".
 //
-// configPath, when non-empty, is baked into the installed script as STAGEHAND_CONFIG so `hook exec` at
+// configPath, when non-empty, is baked into the installed script as STAGECOACH_CONFIG so `hook exec` at
 // commit time resolves the same config the user explicitly selected at install time (report Finding 4).
 func Install(hooksDir string, strict bool, configPath string) (Status, error) {
 	prev, err := Detect(hooksDir)
@@ -107,13 +107,13 @@ func Uninstall(hooksDir string) (Status, error) {
 
 // Script returns the hook script content for the given strict mode and optional config path.
 // Exported so the cmd layer's `install --print` can access the unexported hookScript.
-// configPath == "" yields the no-op (no STAGEHAND_CONFIG export) form.
+// configPath == "" yields the no-op (no STAGECOACH_CONFIG export) form.
 func Script(strict bool, configPath string) string { return hookScript(strict, configPath) }
 
 // InvocationLine returns the exec line baked into the hook script.
 // Kept consistent with hookScript via drift-guard tests.
 //
-// NOTE: when a configPath is baked into a hook script, the script EXPORTS STAGEHAND_CONFIG before this
+// NOTE: when a configPath is baked into a hook script, the script EXPORTS STAGECOACH_CONFIG before this
 // exec line (the export lives on its own line, NOT in InvocationLine) — see hookScript.
 func InvocationLine(strict bool) string {
 	if strict {

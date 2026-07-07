@@ -43,7 +43,7 @@ func TerminalWidth(f *os.File) int {
 }
 
 // noColorEnvSet reports whether the NO_COLOR convention (https://no-color.org) disables color: the var
-// is present AND not an empty string. Byte-identical idiom to config/load.go's STAGEHAND_NO_COLOR
+// is present AND not an empty string. Byte-identical idiom to config/load.go's STAGECOACH_NO_COLOR
 // handling (line 112) — kept consistent so a user's mental model transfers between the two vars.
 func noColorEnvSet() bool {
 	v, ok := os.LookupEnv("NO_COLOR")
@@ -51,7 +51,7 @@ func noColorEnvSet() bool {
 }
 
 // ResolveColor decides whether ANSI color should be emitted (PRD §9.13 FR51, §15.2). Color is ON iff:
-// cfg.NoColor is false (--no-color / STAGEHAND_NO_COLOR, already resolved by config.Load) AND the bare
+// cfg.NoColor is false (--no-color / STAGECOACH_NO_COLOR, already resolved by config.Load) AND the bare
 // NO_COLOR env var is unset/empty (https://no-color.org) AND stdout is a terminal. The TTY check is
 // PASSED IN (isTTY) so the untestable IO is decoupled from the testable flag/env logic (work item:
 // "can't easily test TTY in unit tests; test the flag/env logic"). Callers pass isTTY = IsTerminal(os.Stdout).

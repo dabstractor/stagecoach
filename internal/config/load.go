@@ -20,7 +20,7 @@ var roleNames = []string{"planner", "stager", "message", "arbiter"}
 // P1.M4.T1.S1): ConfigPathOverride from the --config flag ("" if not passed); RepoDir = resolved repo
 // root (for git config); Flags = cmd.Flags() (nil for programmatic callers -> no flag overlay).
 type LoadOpts struct {
-	ConfigPathOverride string         // from --config (CLI); "" => fall back to STAGEHAND_CONFIG, then discovery
+	ConfigPathOverride string         // from --config (CLI); "" => fall back to STAGECOACH_CONFIG, then discovery
 	RepoDir            string         // repo root for git config (passed to loadGitConfig); "" is valid for tests
 	Flags              *pflag.FlagSet // cobra/pflag set; nil => skip the CLI-flag layer
 	DisableBootstrap   bool           // TEST-ONLY seam (FR-B3): true => skip the first-run auto-write. Production never sets it.
@@ -65,11 +65,11 @@ func (c *Config) setRoleReasoning(role, reasoning string) {
 
 // Load resolves the full Stagehand configuration by applying PRD §16.1 layers in precedence order
 // (lowest → highest): (1) built-in Defaults(); (2) global TOML; (3) repo-local TOML; (4) repo git
-// config; (5) STAGEHAND_* env vars; (7) CLI flags (only explicitly-set ones). Higher wins. Returns one
+// config; (5) STAGECOACH_* env vars; (7) CLI flags (only explicitly-set ones). Higher wins. Returns one
 // fully-resolved *Config (never nil on success). Any layer's hard error (unreadable file, bad parse,
 // git failure) is wrapped with its layer context and returned, failing load.
 //
-// The global-file PATH itself is resolved FIRST: opts.ConfigPathOverride (--config) > STAGEHAND_CONFIG
+// The global-file PATH itself is resolved FIRST: opts.ConfigPathOverride (--config) > STAGECOACH_CONFIG
 // (env) > globalConfigPath() discovery (FINDING 4). loadEnv/loadFlags set bool fields DIRECTLY (not via
 // overlay) so a boolean can be forced false — the documented escape hatch the non-zero overlay layers
 // cannot provide (FINDING 3). loadGitConfig(opts.RepoDir) is layer 4; loadRepoLocalConfig() reads CWD.
@@ -81,14 +81,14 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 
 	cfg := Defaults() // Layer 1 (by value)
 
-	// Resolve the global-file path: --config > STAGEHAND_CONFIG > discovery (via ResolveConfigPath).
-	// `explicit` records whether the path came from the user (--config / STAGEHAND_CONFIG) vs the
+	// Resolve the global-file path: --config > STAGECOACH_CONFIG > discovery (via ResolveConfigPath).
+	// `explicit` records whether the path came from the user (--config / STAGECOACH_CONFIG) vs the
 	// discovery default — a missing EXPLICIT path is a hard error (PRD §15.2 "overrides discovery");
 	// a missing discovery file is the normal "layer absent" sentinel (tolerated below).
 	globalPath := ResolveConfigPath(opts.ConfigPathOverride)
-	explicit := opts.ConfigPathOverride != "" || os.Getenv("STAGEHAND_CONFIG") != ""
+	explicit := opts.ConfigPathOverride != "" || os.Getenv("STAGECOACH_CONFIG") != ""
 
-	// Layer 2: global TOML (or --config/STAGEHAND_CONFIG override). A present file is overlaid; a
+	// Layer 2: global TOML (or --config/STAGECOACH_CONFIG override). A present file is overlaid; a
 	// read/parse error is wrapped. A MISSING file is "layer absent" (no error) for discovery, but a
 	// HARD ERROR when the path was explicit (a typo'd --config must not silently fall back to
 	// auto-detection and invoke an unintended agent). loadTOML's (nil,nil) contract is preserved.
@@ -124,7 +124,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	}
 
 	// fileProvider = cfg.Provider as set by the CONFIG-FILE layers (Defaults + global + repo-local),
-	// captured BEFORE the ambient layers (gitconfig / STAGEHAND_* env / --provider flag) overlay it.
+	// captured BEFORE the ambient layers (gitconfig / STAGECOACH_* env / --provider flag) overlay it.
 	// Used by the self-hosting stub guard below to tell an intentional file-selected provider from
 	// one smuggled in by a leaked environment. MUST stay positioned before Layer 4 (gitconfig).
 	fileProvider := cfg.Provider
@@ -138,7 +138,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		overlay(&cfg, gc)
 	}
 
-	// Layer 5: STAGEHAND_* env vars (DIRECT set — booleans can be false).
+	// Layer 5: STAGECOACH_* env vars (DIRECT set — booleans can be false).
 	if err := loadEnv(&cfg); err != nil {
 		return nil, fmt.Errorf("env config: %w", err)
 	}
@@ -185,7 +185,7 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	if err := validateDiffContext(cfg.DiffContext); err != nil {
 		return nil, fmt.Errorf("diff_context: %w", err)
 	}
-	// Finding 5: --commits / STAGEHAND_COMMITS / stagehand.commits must be >= 0. A negative value is
+	// Finding 5: --commits / STAGECOACH_COMMITS / stagehand.commits must be >= 0. A negative value is
 	// meaningless (0 = auto-decompose, 1 = --single, N>=2 = force N). Surface it as a usage error at
 	// load time rather than letting it fall through to downstream behavior.
 	if err := validateCommits(cfg.Commits); err != nil {
@@ -193,11 +193,11 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	}
 
 	// Self-hosting guard (FR-SH1). "stub" (cmd/stubagent) is a TEST-ONLY provider double that echoes
-	// $STAGEHAND_STUB_OUT verbatim as the "generated" message. It is valid ONLY when selected
+	// $STAGECOACH_STUB_OUT verbatim as the "generated" message. It is valid ONLY when selected
 	// intentionally — via the --provider flag or a config FILE (--config / repo-local .stagehand.toml
-	// / global). Refuse AMBIENT selection via $STAGEHAND_PROVIDER or the stagehand.provider repo
+	// / global). Refuse AMBIENT selection via $STAGECOACH_PROVIDER or the stagehand.provider repo
 	// git-config: those are the channels by which a leaked test environment (an exported
-	// STAGEHAND_PROVIDER=stub + STAGEHAND_STUB_OUT left sitting in a shell) silently hijacks a real
+	// STAGECOACH_PROVIDER=stub + STAGECOACH_STUB_OUT left sitting in a shell) silently hijacks a real
 	// `git commit-pi` / bare `stagehand` and mints nonsense commits ("feat: add a", "x", …). Tests
 	// select stub via --provider stub or a config file, so they are unaffected; fileProvider (captured
 	// above, after the file layers and before the ambient layers) distinguishes a genuine file pick.
@@ -206,8 +206,8 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		if !viaFlag && fileProvider != "stub" {
 			src := "an ambient source"
 			switch {
-			case os.Getenv("STAGEHAND_PROVIDER") == "stub":
-				src = "$STAGEHAND_PROVIDER"
+			case os.Getenv("STAGECOACH_PROVIDER") == "stub":
+				src = "$STAGECOACH_PROVIDER"
 			case gc != nil && gc.Provider == "stub":
 				src = "git config stagehand.provider"
 			}
@@ -221,46 +221,46 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	return &cfg, nil
 }
 
-// loadEnv overlays STAGEHAND_* environment variables (PRD §15.2/FR35, §16.1 layer 5). Presence-semantic:
+// loadEnv overlays STAGECOACH_* environment variables (PRD §15.2/FR35, §16.1 layer 5). Presence-semantic:
 // a PRESENT, non-empty value overrides; an unset/empty var is a no-op. Booleans are set DIRECTLY (not
-// via overlay) so STAGEHAND_VERBOSE=false / STAGEHAND_NO_COLOR=true work — the escape hatch the non-zero
-// overlay layers cannot provide (FINDING 3). STAGEHAND_CONFIG is NOT handled here (it selects the file
+// via overlay) so STAGECOACH_VERBOSE=false / STAGECOACH_NO_COLOR=true work — the escape hatch the non-zero
+// overlay layers cannot provide (FINDING 3). STAGECOACH_CONFIG is NOT handled here (it selects the file
 // path, resolved in Load). A present-but-unparseable bool/timeout is a wrapped error (fail at load).
 func loadEnv(cfg *Config) error {
-	if v, ok := os.LookupEnv("STAGEHAND_PROVIDER"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_PROVIDER"); ok && v != "" {
 		cfg.Provider = v
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_MODEL"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_MODEL"); ok && v != "" {
 		cfg.Model = v
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_REASONING"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_REASONING"); ok && v != "" {
 		cfg.Reasoning = v
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_TIMEOUT"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_TIMEOUT"); ok && v != "" {
 		d, err := parseTimeout(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_TIMEOUT: %w", err)
+			return fmt.Errorf("STAGECOACH_TIMEOUT: %w", err)
 		}
 		cfg.Timeout = d
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_VERBOSE"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_VERBOSE"); ok && v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_VERBOSE: %w", err)
+			return fmt.Errorf("STAGECOACH_VERBOSE: %w", err)
 		}
 		cfg.Verbose = b // DIRECT set — can be false (escape hatch)
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_NO_COLOR"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_NO_COLOR"); ok && v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_NO_COLOR: %w", err)
+			return fmt.Errorf("STAGECOACH_NO_COLOR: %w", err)
 		}
 		cfg.NoColor = b // DIRECT set — NoColor (toml:"-") becomes resolvable here for the first time
 	}
 
 	// Per-role provider/model overrides (PRD §9.15 FR-R3, §16.4, §9.8 FR35).
 	for _, role := range roleNames {
-		prefix := "STAGEHAND_" + strings.ToUpper(role)
+		prefix := "STAGECOACH_" + strings.ToUpper(role)
 		if v, ok := os.LookupEnv(prefix + "_PROVIDER"); ok && v != "" {
 			cfg.setRoleProvider(role, v)
 		}
@@ -272,47 +272,47 @@ func loadEnv(cfg *Config) error {
 		}
 	}
 
-	// STAGEHAND_COMMITS — forced commit count (PRD §9.14 FR-M2). Errors on non-integer
-	// (consistent with STAGEHAND_TIMEOUT/VERBOSE/NO_COLOR error discipline).
-	if v, ok := os.LookupEnv("STAGEHAND_COMMITS"); ok && v != "" {
+	// STAGECOACH_COMMITS — forced commit count (PRD §9.14 FR-M2). Errors on non-integer
+	// (consistent with STAGECOACH_TIMEOUT/VERBOSE/NO_COLOR error discipline).
+	if v, ok := os.LookupEnv("STAGECOACH_COMMITS"); ok && v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_COMMITS: %w", err)
+			return fmt.Errorf("STAGECOACH_COMMITS: %w", err)
 		}
 		cfg.Commits = n
 	}
 
-	// No STAGEHAND_EXCLUDE: deliberately omitted (§9.18 FR-X1) — a colon/comma-joined env list is a
+	// No STAGECOACH_EXCLUDE: deliberately omitted (§9.18 FR-X1) — a colon/comma-joined env list is a
 	// documented quoting trap for glob patterns. Do NOT "helpfully" add one; [generation].exclude and
 	// --exclude/-x already cover the persistent and ad-hoc cases.
 
-	// §9.19 FR-F1/FR-F6 — format/locale via env (presence-semantic, mirrors STAGEHAND_PROVIDER).
-	if v, ok := os.LookupEnv("STAGEHAND_FORMAT"); ok && v != "" {
+	// §9.19 FR-F1/FR-F6 — format/locale via env (presence-semantic, mirrors STAGECOACH_PROVIDER).
+	if v, ok := os.LookupEnv("STAGECOACH_FORMAT"); ok && v != "" {
 		cfg.Format = v
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_LOCALE"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_LOCALE"); ok && v != "" {
 		cfg.Locale = v
 	}
-	if v, ok := os.LookupEnv("STAGEHAND_TEMPLATE"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_TEMPLATE"); ok && v != "" {
 		cfg.Template = v
 	}
 
-	// §9.22 FR-P1 — push via env (presence-semantic, mirrors STAGEHAND_VERBOSE).
-	if v, ok := os.LookupEnv("STAGEHAND_PUSH"); ok && v != "" {
+	// §9.22 FR-P1 — push via env (presence-semantic, mirrors STAGECOACH_VERBOSE).
+	if v, ok := os.LookupEnv("STAGECOACH_PUSH"); ok && v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_PUSH: %w", err)
+			return fmt.Errorf("STAGECOACH_PUSH: %w", err)
 		}
 		cfg.Push = b // DIRECT set — can be false (escape hatch)
 	}
 
 	// §9.25 FR-V5 — no_verify via env (presence-semantic, DIRECT set — can be false, the escape hatch).
-	if v, ok := os.LookupEnv("STAGEHAND_NO_VERIFY"); ok && v != "" {
+	if v, ok := os.LookupEnv("STAGECOACH_NO_VERIFY"); ok && v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return fmt.Errorf("STAGEHAND_NO_VERIFY: %w", err)
+			return fmt.Errorf("STAGECOACH_NO_VERIFY: %w", err)
 		}
-		cfg.NoVerify = b // DIRECT set — can be false (escape hatch, mirrors STAGEHAND_PUSH)
+		cfg.NoVerify = b // DIRECT set — can be false (escape hatch, mirrors STAGECOACH_PUSH)
 	}
 
 	return nil
@@ -419,7 +419,7 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	}
 
 	// §9.19 FR-F7 — context via CLI flag ONLY (no env/git/file source; per-invocation). Mirrors --exclude's
-	// flag-only discipline (there is no STAGEHAND_CONTEXT / stagehand.context / [generation].context).
+	// flag-only discipline (there is no STAGECOACH_CONTEXT / stagehand.context / [generation].context).
 	if fs.Changed("context") {
 		if v, err := fs.GetString("context"); err == nil {
 			cfg.Context = v
@@ -427,7 +427,7 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	}
 
 	// §9.22 FR-E1 — --edit flag (flag-only; no env/git/file source; per-invocation). Mirrors --context's
-	// flag-only discipline (there is no STAGEHAND_EDIT / stagehand.edit / [generation].edit).
+	// flag-only discipline (there is no STAGECOACH_EDIT / stagehand.edit / [generation].edit).
 	if fs.Changed("edit") {
 		if v, err := fs.GetBool("edit"); err == nil {
 			cfg.Edit = v
@@ -529,7 +529,7 @@ func configVersionNotice(fileLoaded bool, version int) string {
 }
 
 // parseTimeout parses a duration that may be EITHER a Go duration string ("120s", "2m") OR a bare
-// integer (seconds: "120"). Used by both STAGEHAND_TIMEOUT (env) and --timeout (CLI). Returns a wrapped
+// integer (seconds: "120"). Used by both STAGECOACH_TIMEOUT (env) and --timeout (CLI). Returns a wrapped
 // error if neither form parses.
 func parseTimeout(s string) (time.Duration, error) {
 	if d, err := time.ParseDuration(s); err == nil {

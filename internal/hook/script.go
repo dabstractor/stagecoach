@@ -20,12 +20,12 @@ const ScriptMode os.FileMode = 0o755
 // It is strict POSIX sh (no bashisms) so it runs under git-for-windows' sh (Appendix E #15). When strict is
 // true the runtime call gets `--strict` (PRD §9.20 FR-H5: failures then abort the commit).
 //
-// When configPath is non-empty, an `export STAGEHAND_CONFIG=<path>` line is baked in BEFORE the exec
+// When configPath is non-empty, an `export STAGECOACH_CONFIG=<path>` line is baked in BEFORE the exec
 // line so that `hook exec` at commit time resolves the SAME config the user explicitly selected at
 // `hook install --config <path>` time (report Finding 4). Without this, `--config` passed to
 // `hook install` was silently ignored — the installed script invoked `stagehand hook exec` with no
 // config hint, so config.Load fell back to env/discovery and could resolve a DIFFERENT config (or a
-// different provider) than the one active at install time. config.Load honors STAGEHAND_CONFIG as the
+// different provider) than the one active at install time. config.Load honors STAGECOACH_CONFIG as the
 // layer between --config and discovery (internal/config/file.go ResolveConfigPath), so the env export
 // is the faithful bridge. The trailing newline keeps the file POSIX-clean.
 //
@@ -38,7 +38,7 @@ func hookScript(strict bool, configPath string) string {
 	}
 	var export string
 	if configPath != "" {
-		export = "export STAGEHAND_CONFIG=" + shellSingleQuote(configPath) + "\n"
+		export = "export STAGECOACH_CONFIG=" + shellSingleQuote(configPath) + "\n"
 	}
 	return "#!/bin/sh\n" + Marker + "\n" + export + run + "\n"
 }

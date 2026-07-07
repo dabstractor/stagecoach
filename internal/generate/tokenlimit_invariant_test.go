@@ -49,7 +49,7 @@ func TestCommitStaged_TokenLimitInvariant_AssembledPromptFits(t *testing.T) {
 	// Capture the stub's received stdin (the assembled prompt). Mirrors
 	// TestCommitStaged_ExcludedPayloadCapture (generate_test.go:660).
 	stdinFile := filepath.Join(t.TempDir(), "stdin.txt")
-	t.Setenv("STAGEHAND_STUB_STDINFILE", stdinFile)
+	t.Setenv("STAGECOACH_STUB_STDINFILE", stdinFile)
 	stub := stubtest.Build(t)
 	m := stubtest.Manifest(stub, stubtest.Options{Out: "feat: add big feature"})
 
@@ -68,7 +68,7 @@ func TestCommitStaged_TokenLimitInvariant_AssembledPromptFits(t *testing.T) {
 	// Read the captured assembled prompt (sysPrompt + "\n\n" + payload wrapping the gated diff).
 	data, err := os.ReadFile(stdinFile)
 	if err != nil {
-		t.Fatalf("read captured stdin: %v (did the stub run? STAGEHAND_STUB_STDINFILE=%s)", err, stdinFile)
+		t.Fatalf("read captured stdin: %v (did the stub run? STAGECOACH_STUB_STDINFILE=%s)", err, stdinFile)
 	}
 	captured := string(data)
 

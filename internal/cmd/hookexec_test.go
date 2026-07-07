@@ -160,7 +160,7 @@ func TestHookExec_StrictFailureNonZero(t *testing.T) {
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
 
-	t.Setenv("STAGEHAND_STUB_EXIT", "1")
+	t.Setenv("STAGECOACH_STUB_EXIT", "1")
 
 	err := rootCmd.ExecuteContext(context.TODO())
 	if err == nil {
@@ -210,7 +210,7 @@ func TestHookExec_NonStrictFailureExit0(t *testing.T) {
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
 
-	t.Setenv("STAGEHAND_STUB_EXIT", "1")
+	t.Setenv("STAGECOACH_STUB_EXIT", "1")
 
 	err := rootCmd.ExecuteContext(context.TODO())
 	if err != nil {
@@ -250,7 +250,7 @@ func TestHookExec_StrictFail_HasStderrLine(t *testing.T) {
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
 
-	t.Setenv("STAGEHAND_STUB_EXIT", "1")
+	t.Setenv("STAGECOACH_STUB_EXIT", "1")
 
 	_ = rootCmd.ExecuteContext(context.TODO())
 

@@ -200,7 +200,7 @@ func TestStub_MalformedEnvNoPanic(t *testing.T) {
 	spec := provider.CmdSpec{
 		Command: bin,
 		Stdin:   "payload",
-		Env:     append(os.Environ(), "STAGEHAND_STUB_EXIT=not-a-number", "STAGEHAND_STUB_OUT=x"),
+		Env:     append(os.Environ(), "STAGECOACH_STUB_EXIT=not-a-number", "STAGECOACH_STUB_OUT=x"),
 	}
 	out, _, err := provider.Execute(context.Background(), spec, 5*time.Second, nil)
 	if err != nil {

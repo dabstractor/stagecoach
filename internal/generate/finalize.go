@@ -56,7 +56,7 @@ type EditContext struct {
 
 // EditMessage is the §9.22 FR-E1 editor gate — a POST-dedupe, PRE-publish stage. cfg.Edit==false ⇒
 // identity (the default; byte-identical to the pre-feature path). When true: write msg + a commented
-// summary to <gitDir>/STAGEHAND_EDITMSG, open the resolved editor (`git var GIT_EDITOR` via sh -c), strip
+// summary to <gitDir>/STAGECOACH_EDITMSG, open the resolved editor (`git var GIT_EDITOR` via sh -c), strip
 // comment lines + trailing whitespace on close, return the edited message.
 //
 // An empty result (after strip) ⇒ ErrEmptyMessage (caller aborts: exit 1, NOT a rescue). A non-zero editor
@@ -75,7 +75,7 @@ func EditMessage(ctx context.Context, msg string, cfg config.Config, editCtx Edi
 	if err != nil {
 		return "", fmt.Errorf("--edit: resolve git dir: %w", err)
 	}
-	editMsgPath := filepath.Join(gitDir, "STAGEHAND_EDITMSG")
+	editMsgPath := filepath.Join(gitDir, "STAGECOACH_EDITMSG")
 
 	// 2. Build the EDITMSG content: message + commented summary.
 	var buf strings.Builder

@@ -103,7 +103,7 @@ func TestConfigPath_WorksOutsideGitRepo(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// config path — Issue-4 override tests (--config / STAGEHAND_CONFIG honored)
+// config path — Issue-4 override tests (--config / STAGECOACH_CONFIG honored)
 // ---------------------------------------------------------------------------
 
 func TestConfigPath_ConfigFlag_PrintsOverride(t *testing.T) {
@@ -111,7 +111,7 @@ func TestConfigPath_ConfigFlag_PrintsOverride(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupNoRepo(t)
-	t.Setenv("STAGEHAND_CONFIG", "")                   // isolate: this test exercises the FLAG, not the env
+	t.Setenv("STAGECOACH_CONFIG", "")                  // isolate: this test exercises the FLAG, not the env
 	override := filepath.Join(t.TempDir(), "foo.toml") // parent (TempDir) exists
 
 	var out bytes.Buffer
@@ -133,7 +133,7 @@ func TestConfigPath_StagecoachConfigEnv_PrintsOverride(t *testing.T) {
 
 	setupNoRepo(t)
 	override := filepath.Join(t.TempDir(), "foo.toml")
-	t.Setenv("STAGEHAND_CONFIG", override)
+	t.Setenv("STAGECOACH_CONFIG", override)
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
@@ -144,7 +144,7 @@ func TestConfigPath_StagecoachConfigEnv_PrintsOverride(t *testing.T) {
 		t.Fatalf("Execute err=%v, want nil", err)
 	}
 	if got := strings.TrimSpace(out.String()); got != override {
-		t.Errorf("config path = %q, want override %q (STAGEHAND_CONFIG must be honored)", got, override)
+		t.Errorf("config path = %q, want override %q (STAGECOACH_CONFIG must be honored)", got, override)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestConfigUpgrade_ConfigFlag_UpgradesOverride_NotGlobal(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	home, _, _ := setupNoRepo(t)
-	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG
+	t.Setenv("STAGECOACH_CONFIG", "") // isolate: this test exercises the FLAG
 	override := filepath.Join(t.TempDir(), "foo.toml")
 	if err := os.WriteFile(override, []byte("config_version = 1\n[defaults]\nprovider = \"pi\"\n"), 0o644); err != nil {
 		t.Fatalf("write override config: %v", err)
@@ -200,7 +200,7 @@ func TestConfigInit_ConfigFlag_WritesOverride(t *testing.T) {
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	setupNoRepo(t)
-	t.Setenv("STAGEHAND_CONFIG", "") // isolate: this test exercises the FLAG
+	t.Setenv("STAGECOACH_CONFIG", "") // isolate: this test exercises the FLAG
 	override := filepath.Join(t.TempDir(), "foo.toml")
 
 	var out bytes.Buffer
@@ -234,7 +234,7 @@ func TestConfigPath_NoOverride_BackCompatGlobal(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupNoRepo(t)
-	t.Setenv("STAGEHAND_CONFIG", "") // isolate: no override
+	t.Setenv("STAGECOACH_CONFIG", "") // isolate: no override
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
@@ -483,8 +483,8 @@ func TestConfigInit_TemplateIsInert(t *testing.T) {
 	}
 
 	// Env-var and git-key docs must be present
-	if !strings.Contains(content, "STAGEHAND_PROVIDER") {
-		t.Error("template missing STAGEHAND_PROVIDER env-var doc")
+	if !strings.Contains(content, "STAGECOACH_PROVIDER") {
+		t.Error("template missing STAGECOACH_PROVIDER env-var doc")
 	}
 	if !strings.Contains(content, "stagehand.provider") {
 		t.Error("template missing stagehand.provider git-key doc")

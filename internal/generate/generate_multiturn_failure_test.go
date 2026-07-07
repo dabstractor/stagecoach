@@ -8,7 +8,7 @@
 // proof that Run was/wasn't entered.
 //
 // Mechanism for a mid-turn failure WITHOUT modifying the stub (forbidden by T4.S1 + "existing harness"):
-// the stub has ONE exit knob — STAGEHAND_STUB_EXIT, applied to EVERY call. Setting it GLOBALLY ("1")
+// the stub has ONE exit knob — STAGECOACH_STUB_EXIT, applied to EVERY call. Setting it GLOBALLY ("1")
 // makes the one-shot exit 1 BUT its stdout is still "" (script[0]) ⇒ CommitStaged's non-zero-exit
 // branch falls through to ParseOutput("") ⇒ ok=false ⇒ exhausts (MaxDuplicateRetries=0) ⇒ the FR-T1
 // gate fires (all 4 conds hold) ⇒ Run's turn 1 exits 1 ⇒ provider.Execute returns a wrapped
@@ -17,7 +17,7 @@
 // equivalent FR-T7 coverage to a later turn).
 //
 // The counter is the discriminator between "gate fired + Run aborted" and "gate skipped": the stub
-// increments STAGEHAND_STUB_COUNTER once per process. counter=="1" ⇒ ONLY the one-shot ran (gate
+// increments STAGECOACH_STUB_COUNTER once per process. counter=="1" ⇒ ONLY the one-shot ran (gate
 // SKIPPED Run — conds b/d false); counter=="2" ⇒ one-shot + exactly 1 multi-turn turn (gate FIRED,
 // Run aborted at turn 1). This is the assertion T3.S3's Kind-only skip tests LACK.
 package generate
@@ -82,9 +82,9 @@ func assertMultiTurnRescue(t *testing.T, repo string, m provider.Manifest, cfg c
 	if got := gitOut(t, repo, "diff", "--cached"); got != beforeIndexFull {
 		t.Errorf("staged index content changed (idempotent-index §20.2 full diff)")
 	}
-	cf := m.Env["STAGEHAND_STUB_COUNTER"]
+	cf := m.Env["STAGECOACH_STUB_COUNTER"]
 	if cf == "" {
-		t.Fatalf("manifest Env lacks STAGEHAND_STUB_COUNTER (use stubtest.NewScript/appendScriptManifest)")
+		t.Fatalf("manifest Env lacks STAGECOACH_STUB_COUNTER (use stubtest.NewScript/appendScriptManifest)")
 	}
 	raw, rerr := os.ReadFile(cf)
 	if rerr != nil {
@@ -96,7 +96,7 @@ func assertMultiTurnRescue(t *testing.T, repo string, m provider.Manifest, cfg c
 	return re
 }
 
-// (a) MID-TURN FAILURE → RESCUE (FR-T7). Global STAGEHAND_STUB_EXIT=1 ⇒ the one-shot exits 1 but its
+// (a) MID-TURN FAILURE → RESCUE (FR-T7). Global STAGECOACH_STUB_EXIT=1 ⇒ the one-shot exits 1 but its
 // stdout is "" (script[0]) ⇒ parse-fail ⇒ exhaust ⇒ gate fires (conds a/b/c/d all hold) ⇒ Run's turn 1
 // exits 1 ⇒ Execute returns a wrapped *exec.ExitError ⇒ Run aborts ⇒ rescue. Counter == 2.
 func TestCommitStaged_MultiTurnMidTurnFailureRescue(t *testing.T) {
@@ -112,7 +112,7 @@ func TestCommitStaged_MultiTurnMidTurnFailureRescue(t *testing.T) {
 	// ok=false); Run's turn-1 exit-1 ⇒ Run aborts (FR-T7) ⇒ rescue. (No per-call exit knob without a
 	// stub change; turn-1 failure == later-turn failure coverage — Run aborts at the first error.)
 	m := appendScriptManifest(t, bin, []string{"", "ok", "ok", "feat: unreachable"})
-	m.Env["STAGEHAND_STUB_EXIT"] = "1" // mutable Env map (optsEnvMap); applies to every stub call
+	m.Env["STAGECOACH_STUB_EXIT"] = "1" // mutable Env map (optsEnvMap); applies to every stub call
 
 	cfg := config.Defaults()
 	cfg.MaxDuplicateRetries = 0  // exactly 1 one-shot call ⇒ counter math clean

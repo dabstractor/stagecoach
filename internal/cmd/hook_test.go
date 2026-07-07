@@ -368,7 +368,7 @@ func TestHookInstall_StrictBaked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// hook install --config <path> bakes STAGEHAND_CONFIG into the script (report Finding 4)
+// hook install --config <path> bakes STAGECOACH_CONFIG into the script (report Finding 4)
 // ---------------------------------------------------------------------------
 
 func TestHookInstall_ConfigBaked(t *testing.T) {
@@ -394,9 +394,9 @@ func TestHookInstall_ConfigBaked(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := string(data)
-	// The explicit --config path is baked in as a STAGEHAND_CONFIG export so `hook exec` at commit time
+	// The explicit --config path is baked in as a STAGECOACH_CONFIG export so `hook exec` at commit time
 	// resolves the SAME config the user selected at install time (report Finding 4).
-	if !strings.Contains(script, "export STAGEHAND_CONFIG='/special/config.toml'") {
+	if !strings.Contains(script, "export STAGECOACH_CONFIG='/special/config.toml'") {
 		t.Errorf("config path NOT baked into hook script:\n%s", script)
 	}
 	// The exec line is still present.
@@ -406,7 +406,7 @@ func TestHookInstall_ConfigBaked(t *testing.T) {
 }
 
 // TestHookInstall_NoConfig_NotBaked verifies the default (no --config) install does NOT emit a
-// STAGEHAND_CONFIG line — `hook exec` falls back to env/discovery as before (no behavior change for
+// STAGECOACH_CONFIG line — `hook exec` falls back to env/discovery as before (no behavior change for
 // the common case).
 func TestHookInstall_NoConfig_NotBaked(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
@@ -430,8 +430,8 @@ func TestHookInstall_NoConfig_NotBaked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "STAGEHAND_CONFIG") {
-		t.Errorf("no --config install must NOT bake STAGEHAND_CONFIG:\n%s", string(data))
+	if strings.Contains(string(data), "STAGECOACH_CONFIG") {
+		t.Errorf("no --config install must NOT bake STAGECOACH_CONFIG:\n%s", string(data))
 	}
 }
 

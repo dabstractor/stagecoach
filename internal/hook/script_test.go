@@ -86,22 +86,22 @@ func TestScriptMode(t *testing.T) {
 }
 
 // TestHookScript_ConfigPathBaked is the regression test for report Finding 4: when a configPath is
-// passed, the installed hook script EXPORTS STAGEHAND_CONFIG=<configPath> before the exec line so that
+// passed, the installed hook script EXPORTS STAGECOACH_CONFIG=<configPath> before the exec line so that
 // `hook exec` at commit time resolves the SAME config the user explicitly selected at
 // `hook install --config <path>` time. Without this, `--config` passed to `hook install` was silently
 // ignored — `hook exec` fell back to env/discovery and could resolve a DIFFERENT config.
 func TestHookScript_ConfigPathBaked(t *testing.T) {
 	// Non-empty configPath ⇒ the export line is present and well-formed.
 	got := hookScript(false, "/special/path.toml")
-	if !strings.Contains(got, "export STAGEHAND_CONFIG='/special/path.toml'\n") {
-		t.Errorf("configPath not baked into script as a STAGEHAND_CONFIG export:\n%s", got)
+	if !strings.Contains(got, "export STAGECOACH_CONFIG='/special/path.toml'\n") {
+		t.Errorf("configPath not baked into script as a STAGECOACH_CONFIG export:\n%s", got)
 	}
 	// The exec line must STILL be present after the export.
 	if !strings.Contains(got, `exec stagehand hook exec "$@"`) {
 		t.Errorf("exec line missing after config bake:\n%s", got)
 	}
 	// The export must come BEFORE the exec line (so the env is set when stagehand runs).
-	exportIdx := strings.Index(got, "export STAGEHAND_CONFIG=")
+	exportIdx := strings.Index(got, "export STAGECOACH_CONFIG=")
 	execIdx := strings.Index(got, "exec stagehand")
 	if exportIdx < 0 || execIdx < 0 || exportIdx > execIdx {
 		t.Errorf("export must precede exec; exportIdx=%d execIdx=%d\n%s", exportIdx, execIdx, got)
@@ -109,13 +109,13 @@ func TestHookScript_ConfigPathBaked(t *testing.T) {
 
 	// configPath="" ⇒ NO export line (the default no-op case is byte-identical to the old behavior).
 	noCfg := hookScript(false, "")
-	if strings.Contains(noCfg, "STAGEHAND_CONFIG") {
-		t.Errorf("empty configPath must NOT emit a STAGEHAND_CONFIG line:\n%s", noCfg)
+	if strings.Contains(noCfg, "STAGECOACH_CONFIG") {
+		t.Errorf("empty configPath must NOT emit a STAGECOACH_CONFIG line:\n%s", noCfg)
 	}
 
 	// Paths with single quotes are escaped safely (POSIX single-quote-escape idiom).
 	quoted := hookScript(false, "/path/with/'quote.toml")
-	if !strings.Contains(quoted, `export STAGEHAND_CONFIG='/path/with/'\''quote.toml'`+"\n") {
+	if !strings.Contains(quoted, `export STAGECOACH_CONFIG='/path/with/'\''quote.toml'`+"\n") {
 		t.Errorf("single-quote path not safely escaped:\n%s", quoted)
 	}
 }

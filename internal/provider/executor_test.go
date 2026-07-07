@@ -97,8 +97,8 @@ func TestExecute_StderrCaptureAndNonZeroExit(t *testing.T) {
 // 6. Env propagation: a manifest/env var reaches the child (`printenv VAR` prints its value).
 func TestExecute_EnvPropagation(t *testing.T) {
 	mustBin(t, "printenv")
-	env := append(os.Environ(), "STAGEHAND_TEST_VAR=s3cr3t")
-	spec := CmdSpec{Command: "printenv", Args: []string{"STAGEHAND_TEST_VAR"}, Env: env}
+	env := append(os.Environ(), "STAGECOACH_TEST_VAR=s3cr3t")
+	spec := CmdSpec{Command: "printenv", Args: []string{"STAGECOACH_TEST_VAR"}, Env: env}
 	out, _, err := Execute(context.Background(), spec, 5*time.Second, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)

@@ -54,7 +54,7 @@ func TestSignalIntegration_SigintPostSnapshot(t *testing.T) {
 	cmd := exec.Command(stagecoachBin, "--config", cfgPath)
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(),
-		"STAGEHAND_STUB_SLEEP_MS=30000", // stub hangs 30s (plenty of time)
+		"STAGECOACH_STUB_SLEEP_MS=30000", // stub hangs 30s (plenty of time)
 		"GIT_CONFIG_NOSYSTEM=1",
 	)
 	var stderr bytes.Buffer

@@ -262,7 +262,7 @@ func TestRoot_FlagOverridesEnvOverridesGit(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
 	setGitConfig(t, repo, "stagehand.provider", "git-p")
-	t.Setenv("STAGEHAND_PROVIDER", "env-p")
+	t.Setenv("STAGECOACH_PROVIDER", "env-p")
 
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)

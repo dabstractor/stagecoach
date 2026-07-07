@@ -340,7 +340,7 @@ func TestResolveConfigPath(t *testing.T) {
 	tests := []struct {
 		name     string
 		flag     string
-		envVal   string // value for STAGEHAND_CONFIG (set via t.Setenv)
+		envVal   string // value for STAGECOACH_CONFIG (set via t.Setenv)
 		setupXDG bool   // if true, set XDG_CONFIG_HOME to a temp dir before calling
 		wantPath string // expected result; empty means "use GlobalConfigPath() with XDG temp dir"
 	}{
@@ -371,8 +371,8 @@ func TestResolveConfigPath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Always clear STAGEHAND_CONFIG to prevent ambient env leaking
-			t.Setenv("STAGEHAND_CONFIG", tc.envVal)
+			// Always clear STAGECOACH_CONFIG to prevent ambient env leaking
+			t.Setenv("STAGECOACH_CONFIG", tc.envVal)
 
 			var want string
 			if tc.setupXDG {

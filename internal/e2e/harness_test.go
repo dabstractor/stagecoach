@@ -2,14 +2,14 @@
 
 // Package e2e implements the PRD §20.5 throwaway-repo regression harness: per scenario,
 // git init a temp repo, seed it, run the compiled stagehand binary as a subprocess (real agent
-// when STAGEHAND_RUN_REAL=1, else a stub provider wired via --config + cmd/stubagent), and assert
+// when STAGECOACH_RUN_REAL=1, else a stub provider wired via --config + cmd/stubagent), and assert
 // the resulting history / exit code. This subprocess angle catches CLI-routing + config-load + real-repo
 // bugs that the in-process library tests (§20.1 layer 3, decompose_test.go) cannot reach.
 //
 // Dual-mode contract:
-//   - STAGEHAND_RUN_REAL unset or !=1: stub-reachable scenarios run (S2/S3/S4/S6-single/S7);
+//   - STAGECOACH_RUN_REAL unset or !=1: stub-reachable scenarios run (S2/S3/S4/S6-single/S7);
 //     stager-dependent scenarios (S1/S5/loop-S6) skip with a clear message.
-//   - STAGEHAND_RUN_REAL=1: all 7 scenarios run against a real configured agent.
+//   - STAGECOACH_RUN_REAL=1: all 7 scenarios run against a real configured agent.
 package e2e
 
 import (
@@ -178,7 +178,7 @@ tooled_flags = ["--tooled"]
 }
 
 // stubEnv builds the stagehand process env for one scenario: os.Environ() + the given
-// STAGEHAND_STUB_* knobs. Per executor.go: Render = os.Environ()+manifest.Env, so these inherit
+// STAGECOACH_STUB_* knobs. Per executor.go: Render = os.Environ()+manifest.Env, so these inherit
 // to the stub subprocess.
 func stubEnv(knobs map[string]string) []string {
 	env := os.Environ()
@@ -228,23 +228,23 @@ func waitForMarker(t *testing.T, path string, timeout time.Duration) {
 	t.Fatalf("waitForMarker: %s not seen after %v (stub never reached generation)", path, timeout)
 }
 
-// skipIfNotReal skips the test if STAGEHAND_RUN_REAL != "1", with a message pointing to both
+// skipIfNotReal skips the test if STAGECOACH_RUN_REAL != "1", with a message pointing to both
 // the real-run mechanism and the in-process stub suite.
 func skipIfNotReal(t *testing.T, why string) {
 	t.Helper()
-	if os.Getenv("STAGEHAND_RUN_REAL") != "1" {
-		t.Skipf("%s (set STAGEHAND_RUN_REAL=1 + STAGEHAND_E2E_PROVIDER for a real run; "+
+	if os.Getenv("STAGECOACH_RUN_REAL") != "1" {
+		t.Skipf("%s (set STAGECOACH_RUN_REAL=1 + STAGECOACH_E2E_PROVIDER for a real run; "+
 			"see internal/decompose/decompose_test.go for the in-process stub coverage)", why)
 	}
 }
 
-// realAgent returns the (provider, model) for a real-agent scenario. Skips if STAGEHAND_RUN_REAL != "1".
+// realAgent returns the (provider, model) for a real-agent scenario. Skips if STAGECOACH_RUN_REAL != "1".
 // Mirrors realagent_test.go's envOr convention.
 func realAgent(t *testing.T) (string, string) {
 	t.Helper()
 	skipIfNotReal(t, "real agent required")
-	provider := envOr("STAGEHAND_E2E_PROVIDER", "pi")
-	model := envOr("STAGEHAND_E2E_MODEL", "")
+	provider := envOr("STAGECOACH_E2E_PROVIDER", "pi")
+	model := envOr("STAGECOACH_E2E_MODEL", "")
 	return provider, model
 }
 

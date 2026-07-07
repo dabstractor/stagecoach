@@ -70,14 +70,14 @@ func TestResolveColor_NoColorEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("NO_COLOR independent of STAGEHAND_NO_COLOR", func(t *testing.T) {
-		// NO_COLOR is handled by ui; STAGEHAND_NO_COLOR is handled by config and folded into noColor.
-		// Setting STAGEHAND_NO_COLOR should NOT affect ResolveColor (it doesn't read it).
+	t.Run("NO_COLOR independent of STAGECOACH_NO_COLOR", func(t *testing.T) {
+		// NO_COLOR is handled by ui; STAGECOACH_NO_COLOR is handled by config and folded into noColor.
+		// Setting STAGECOACH_NO_COLOR should NOT affect ResolveColor (it doesn't read it).
 		t.Setenv("NO_COLOR", "")
 		os.Unsetenv("NO_COLOR")
-		t.Setenv("STAGEHAND_NO_COLOR", "1")
+		t.Setenv("STAGECOACH_NO_COLOR", "1")
 		if !ResolveColor(false, true) {
-			t.Error("ResolveColor(false, true) = false, want true (STAGEHAND_NO_COLOR not read by ui)")
+			t.Error("ResolveColor(false, true) = false, want true (STAGECOACH_NO_COLOR not read by ui)")
 		}
 	})
 

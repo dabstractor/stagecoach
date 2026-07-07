@@ -600,7 +600,7 @@ func TestDecompose_Overlap(t *testing.T) {
 	// Message stub with a small sleep — allows the overlap to be observable via timing.
 	messageM := stubtest.NewScript(t, bin, []string{"feat: add a", "feat: add b"})
 	// Inject sleep into the message stub via Env.
-	messageM.Env["STAGEHAND_STUB_SLEEP_MS"] = "200"
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "200"
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
@@ -1528,7 +1528,7 @@ func TestDecompose_CASAbortPartial(t *testing.T) {
 	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
-	messageM.Env["STAGEHAND_STUB_SLEEP_MS"] = "1000" // create timing window for external HEAD move
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "1000" // create timing window for external HEAD move
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 
@@ -2569,9 +2569,9 @@ const assembledPromptSeparatorTokens = 1
 // TestDecompose_TokenLimitInvariant_PlannerPromptFits (PRD §9.1 FR3j / §20.5) is the SECOND consumer
 // path of the closed-loop invariant: the decompose PLANNER's assembled prompt (TreeDiff-gated) fits
 // token_limit. A decompose run invokes the stub multiple times (planner -> stager -> message ->
-// arbiter), and STAGEHAND_STUB_STDINFILE captures only the LAST invocation's stdin, so the planner's
+// arbiter), and STAGECOACH_STUB_STDINFILE captures only the LAST invocation's stdin, so the planner's
 // stdin is isolated via role-specific Env: ONLY the planner manifest's Env map carries
-// STAGEHAND_STUB_STDINFILE (the stager/message/arbiter manifests do not, so their stub invocations
+// STAGECOACH_STUB_STDINFILE (the stager/message/arbiter manifests do not, so their stub invocations
 // drain to io.Discard and never touch the planner's file). The closed loop is forced to run by making
 // the untruncated assembled prompt (~884 tokens: ~497 planner sysPrompt + ~388 payload) exceed
 // tokenLimit (700), while keeping tokenLimit above the sysPrompt floor (~510) so the loop can
@@ -2593,11 +2593,11 @@ func TestDecompose_TokenLimitInvariant_PlannerPromptFits(t *testing.T) {
 	plannerJSON := `{"count":1,"single":true,"commits":[{"title":"add big","description":"big.go"}],"message":"feat: add big"}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	// Isolate the planner's stdin via role-specific Env (D2/G4): ONLY the planner manifest carries
-	// STAGEHAND_STUB_STDINFILE. The stager/message/arbiter manifests do not, so their stubs see
+	// STAGECOACH_STUB_STDINFILE. The stager/message/arbiter manifests do not, so their stubs see
 	// os.Getenv("") => drain to io.Discard and never overwrite the planner's file. (Render builds
 	// spec.Env = os.Environ() + manifest.Env at render.go:175-180; the per-role Env is the seam.)
 	plannerStdin := filepath.Join(t.TempDir(), "planner-stdin.txt")
-	plannerM.Env["STAGEHAND_STUB_STDINFILE"] = plannerStdin
+	plannerM.Env["STAGECOACH_STUB_STDINFILE"] = plannerStdin
 
 	// Stager stub: auto-stage the concept's files so runSingleShortcut can commit. The concept title
 	// "add big" maps to file "big.go"; also stage a.go so the tree is clean post-run.

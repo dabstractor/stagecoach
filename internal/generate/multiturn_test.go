@@ -664,7 +664,7 @@ func TestMultiTurnGate_TokenLimitTruncated_Recaptures(t *testing.T) {
 // the bug). TokenLimit=0 + parseFail is the ONLY configuration that reaches the buggy line.
 //
 // Observation (G5): mtPayload is a local in CommitStaged — not directly inspectable. The stub's
-// STAGEHAND_STUB_STDINFILE captures only the LAST invocation's stdin (the finalInstruction turn, which
+// STAGECOACH_STUB_STDINFILE captures only the LAST invocation's stdin (the finalInstruction turn, which
 // is independent of mtPayload). To observe the chunk bodies' content across ALL multi-turn turns, this
 // test wraps the stub in a /bin/sh tee-wrapper (precedent: generate_test.go:788, models_test.go) that
 // appends each invocation's stdin to a single capture file, then execs the real stub unchanged. The
@@ -687,8 +687,8 @@ func TestMultiTurnGate_TokenLimitZero_ParseFail_NoRetryInstr(t *testing.T) {
 		"stub=\"$1\"; shift\n" +
 		"tmp=$(mktemp)\n" +
 		"cat > \"$tmp\"\n" +
-		"cat \"$tmp\" >> \"$STAGEHAND_TEST_CAPTURE\"\n" +
-		"printf '\\n---CAPTURE-BOUNDARY---\\n' >> \"$STAGEHAND_TEST_CAPTURE\"\n" +
+		"cat \"$tmp\" >> \"$STAGECOACH_TEST_CAPTURE\"\n" +
+		"printf '\\n---CAPTURE-BOUNDARY---\\n' >> \"$STAGECOACH_TEST_CAPTURE\"\n" +
 		"cat \"$tmp\" | \"$stub\" \"$@\"\n" +
 		"rc=$?\n" +
 		"rm -f \"$tmp\"\n" +
@@ -699,11 +699,11 @@ func TestMultiTurnGate_TokenLimitZero_ParseFail_NoRetryInstr(t *testing.T) {
 
 	// Build the stub manifest as usual (call-varying script), then RETARGET Command at the wrapper and
 	// pass the real stub path as Subcommand[0] (rendered as the wrapper's $1). Add the capture path to
-	// the Env map so the wrapper knows where to tee; the STAGEHAND_STUB_SCRIPT/COUNTER knobs survive.
+	// the Env map so the wrapper knows where to tee; the STAGECOACH_STUB_SCRIPT/COUNTER knobs survive.
 	m := stubAppendManifest(t, bin, []string{"", "", "ok", "feat: mt win"}, false) // SessionMode="append"
 	m.Command = strPtr(wrapper)
 	m.Subcommand = []string{bin}
-	m.Env["STAGEHAND_TEST_CAPTURE"] = captureFile
+	m.Env["STAGECOACH_TEST_CAPTURE"] = captureFile
 
 	cfg := config.Defaults()
 	cfg.MaxDuplicateRetries = 1 // TWO one-shot attempts: attempt 0 parses-fail (parseFail:=true),

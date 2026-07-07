@@ -101,7 +101,7 @@ func TestProvidersList_DefaultMarker_Explicit(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupRepo(t)
-	t.Setenv("STAGEHAND_PROVIDER", "pi")
+	t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
@@ -137,7 +137,7 @@ func TestProvidersList_DefaultMarker_Auto(t *testing.T) {
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupRepo(t)
-	// STAGEHAND_PROVIDER is NOT set; default is auto-detected.
+	// STAGECOACH_PROVIDER is NOT set; default is auto-detected.
 	// Assert: at most ONE "(default)" marker (could be 0 if no built-in is on PATH).
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)

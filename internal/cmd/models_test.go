@@ -232,7 +232,7 @@ func TestModels_Timeout_Fallback(t *testing.T) {
 	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	// Set a very short timeout
-	t.Setenv("STAGEHAND_TIMEOUT", "1s")
+	t.Setenv("STAGECOACH_TIMEOUT", "1s")
 
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -534,7 +534,7 @@ func TestModels_DefaultResolved_ExplicitProvider(t *testing.T) {
 		t.Skipf("cannot create stub binary: %v", err)
 	}
 	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("STAGEHAND_PROVIDER", "claude")
+	t.Setenv("STAGECOACH_PROVIDER", "claude")
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)

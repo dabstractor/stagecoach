@@ -143,12 +143,12 @@ func TestParseTimeout_Invalid(t *testing.T) {
 
 func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_PROVIDER", "pi")
-	t.Setenv("STAGEHAND_MODEL", "glm-5.2")
-	t.Setenv("STAGEHAND_TIMEOUT", "60s")
-	t.Setenv("STAGEHAND_VERBOSE", "true")
-	t.Setenv("STAGEHAND_NO_COLOR", "true")
-	t.Setenv("STAGEHAND_NO_VERIFY", "true")
+	t.Setenv("STAGECOACH_PROVIDER", "pi")
+	t.Setenv("STAGECOACH_MODEL", "glm-5.2")
+	t.Setenv("STAGECOACH_TIMEOUT", "60s")
+	t.Setenv("STAGECOACH_VERBOSE", "true")
+	t.Setenv("STAGECOACH_NO_COLOR", "true")
+	t.Setenv("STAGECOACH_NO_VERIFY", "true")
 
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
@@ -169,15 +169,15 @@ func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 		t.Errorf("NoColor=false want true")
 	}
 	if !cfg.NoVerify {
-		t.Errorf("NoVerify=false want true (STAGEHAND_NO_VERIFY=true)")
+		t.Errorf("NoVerify=false want true (STAGECOACH_NO_VERIFY=true)")
 	}
 }
 
 func TestLoadEnv_BoolFalseEscape(t *testing.T) {
 	cfg := Config{Verbose: true, NoColor: true, NoVerify: true} // start with true
-	t.Setenv("STAGEHAND_VERBOSE", "false")
-	t.Setenv("STAGEHAND_NO_COLOR", "false")
-	t.Setenv("STAGEHAND_NO_VERIFY", "false")
+	t.Setenv("STAGECOACH_VERBOSE", "false")
+	t.Setenv("STAGECOACH_NO_COLOR", "false")
+	t.Setenv("STAGECOACH_NO_VERIFY", "false")
 
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
@@ -204,46 +204,46 @@ func TestLoadEnv_NoColorResolvable(t *testing.T) {
 	}
 
 	// NoColor present → set
-	t.Setenv("STAGEHAND_NO_COLOR", "true")
+	t.Setenv("STAGECOACH_NO_COLOR", "true")
 	cfg2 := Defaults()
 	if err := loadEnv(&cfg2); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
 	if !cfg2.NoColor {
-		t.Errorf("NoColor=false want true (STAGEHAND_NO_COLOR=true)")
+		t.Errorf("NoColor=false want true (STAGECOACH_NO_COLOR=true)")
 	}
 }
 
 func TestLoadEnv_BadBoolErrors(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_VERBOSE", "notabool")
+	t.Setenv("STAGECOACH_VERBOSE", "notabool")
 
 	err := loadEnv(&cfg)
 	if err == nil {
 		t.Fatal("loadEnv err=nil, want error for bad bool")
 	}
-	if !strings.Contains(err.Error(), "STAGEHAND_VERBOSE") {
-		t.Errorf("err=%v, want it to contain 'STAGEHAND_VERBOSE'", err)
+	if !strings.Contains(err.Error(), "STAGECOACH_VERBOSE") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_VERBOSE'", err)
 	}
 }
 
 func TestLoadEnv_BadTimeoutErrors(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_TIMEOUT", "abc")
+	t.Setenv("STAGECOACH_TIMEOUT", "abc")
 
 	err := loadEnv(&cfg)
 	if err == nil {
 		t.Fatal("loadEnv err=nil, want error for bad timeout")
 	}
-	if !strings.Contains(err.Error(), "STAGEHAND_TIMEOUT") {
-		t.Errorf("err=%v, want it to contain 'STAGEHAND_TIMEOUT'", err)
+	if !strings.Contains(err.Error(), "STAGECOACH_TIMEOUT") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_TIMEOUT'", err)
 	}
 }
 
 func TestLoadEnv_EmptyStringsSkipped(t *testing.T) {
 	cfg := Config{Provider: "original", Model: "original"}
-	t.Setenv("STAGEHAND_PROVIDER", "")
-	t.Setenv("STAGEHAND_MODEL", "")
+	t.Setenv("STAGECOACH_PROVIDER", "")
+	t.Setenv("STAGECOACH_MODEL", "")
 
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
@@ -279,9 +279,9 @@ func TestSetRole_LazyAllocAndFieldMerge(t *testing.T) {
 
 func TestLoadEnv_PerRole(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_PLANNER_PROVIDER", "agy")
-	t.Setenv("STAGEHAND_PLANNER_MODEL", "gemini-2.5-pro")
-	t.Setenv("STAGEHAND_STAGER_MODEL", "gemini-2.5-flash")
+	t.Setenv("STAGECOACH_PLANNER_PROVIDER", "agy")
+	t.Setenv("STAGECOACH_PLANNER_MODEL", "gemini-2.5-pro")
+	t.Setenv("STAGECOACH_STAGER_MODEL", "gemini-2.5-flash")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
@@ -295,7 +295,7 @@ func TestLoadEnv_PerRole(t *testing.T) {
 
 func TestLoadEnv_PerRolePartial(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_PLANNER_MODEL", "gemini-2.5-pro")
+	t.Setenv("STAGECOACH_PLANNER_MODEL", "gemini-2.5-pro")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
@@ -307,7 +307,7 @@ func TestLoadEnv_PerRolePartial(t *testing.T) {
 
 func TestLoadEnv_Commits(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_COMMITS", "3")
+	t.Setenv("STAGECOACH_COMMITS", "3")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
@@ -318,13 +318,13 @@ func TestLoadEnv_Commits(t *testing.T) {
 
 func TestLoadEnv_CommitsBadIntErrors(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_COMMITS", "abc")
+	t.Setenv("STAGECOACH_COMMITS", "abc")
 	err := loadEnv(&cfg)
 	if err == nil {
-		t.Fatal("loadEnv err=nil, want error for bad STAGEHAND_COMMITS")
+		t.Fatal("loadEnv err=nil, want error for bad STAGECOACH_COMMITS")
 	}
-	if !strings.Contains(err.Error(), "STAGEHAND_COMMITS") {
-		t.Errorf("err=%v, want it to contain 'STAGEHAND_COMMITS'", err)
+	if !strings.Contains(err.Error(), "STAGECOACH_COMMITS") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_COMMITS'", err)
 	}
 }
 
@@ -590,7 +590,7 @@ func TestLoad_EnvOverridesGit(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
 	setGitConfig(t, repo, "stagehand.provider", "gemini")
-	t.Setenv("STAGEHAND_PROVIDER", "pi")
+	t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
@@ -604,7 +604,7 @@ func TestLoad_EnvOverridesGit(t *testing.T) {
 func TestLoad_CLIOverridesEnv(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_PROVIDER", "gemini")
+	t.Setenv("STAGECOACH_PROVIDER", "gemini")
 	fs := newFlagSet(t)
 	if err := fs.Set("provider", "claude"); err != nil {
 		t.Fatal(err)
@@ -624,21 +624,21 @@ func TestLoad_CLIOverridesEnv(t *testing.T) {
 }
 
 // TestLoad_RefusesStubViaEnvProvider (FR-SH1) proves the self-hosting guard fires when the test-only
-// "stub" provider is selected AMBIANTLY via $STAGEHAND_PROVIDER — the self-hosting footgun: an
-// exported STAGEHAND_PROVIDER=stub + STAGEHAND_STUB_OUT left in a shell silently hijacking a real
+// "stub" provider is selected AMBIANTLY via $STAGECOACH_PROVIDER — the self-hosting footgun: an
+// exported STAGECOACH_PROVIDER=stub + STAGECOACH_STUB_OUT left in a shell silently hijacking a real
 // `git commit-pi` and minting a nonsense commit like "feat: add a".
 func TestLoad_RefusesStubViaEnvProvider(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_PROVIDER", "stub")
-	t.Setenv("STAGEHAND_STUB_OUT", "feat: add a") // the very leak that minted the bad commits
+	t.Setenv("STAGECOACH_PROVIDER", "stub")
+	t.Setenv("STAGECOACH_STUB_OUT", "feat: add a") // the very leak that minted the bad commits
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
 	if err == nil {
 		t.Fatalf("Load err=nil, want refusal for ambient stub (provider=%q)", cfg.Provider)
 	}
-	if !strings.Contains(err.Error(), "stub") || !strings.Contains(err.Error(), "STAGEHAND_PROVIDER") {
-		t.Errorf("err=%q, want it to name the stub provider and the $STAGEHAND_PROVIDER source", err.Error())
+	if !strings.Contains(err.Error(), "stub") || !strings.Contains(err.Error(), "STAGECOACH_PROVIDER") {
+		t.Errorf("err=%q, want it to name the stub provider and the $STAGECOACH_PROVIDER source", err.Error())
 	}
 }
 
@@ -689,7 +689,7 @@ func TestLoad_AllowsStubViaFlagAndFile(t *testing.T) {
 func TestLoad_UnsetCLIFlagDoesNotOverride(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_PROVIDER", "pi")
+	t.Setenv("STAGECOACH_PROVIDER", "pi")
 	fs := newFlagSet(t) // provider NOT Set — Changed("provider")==false
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
@@ -706,7 +706,7 @@ func TestLoad_EnvBoolFalseEscape(t *testing.T) {
 	chdir(t, repo)
 	// Global file sets verbose=true (overlay can set true — non-zero)
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nverbose = true\n")
-	t.Setenv("STAGEHAND_VERBOSE", "false") // env DIRECT set -> Verbose=false
+	t.Setenv("STAGECOACH_VERBOSE", "false") // env DIRECT set -> Verbose=false
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
@@ -827,15 +827,15 @@ func TestLoad_ExcludeUnion_GlobalRepoAndFlags(t *testing.T) {
 func TestLoad_ExcludeNoEnvVar(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	// FR-X1: no STAGEHAND_EXCLUDE env var exists — it must be silently ignored, not consumed.
-	t.Setenv("STAGEHAND_EXCLUDE", "*.snap")
+	// FR-X1: no STAGECOACH_EXCLUDE env var exists — it must be silently ignored, not consumed.
+	t.Setenv("STAGECOACH_EXCLUDE", "*.snap")
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
 	if len(cfg.Exclude) != 0 {
-		t.Errorf("Exclude=%v want empty (no STAGEHAND_EXCLUDE support per FR-X1)", cfg.Exclude)
+		t.Errorf("Exclude=%v want empty (no STAGECOACH_EXCLUDE support per FR-X1)", cfg.Exclude)
 	}
 }
 
@@ -860,8 +860,8 @@ func TestLoad_CommitsOneNormalizesSingle(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
 
-	// env path: STAGEHAND_COMMITS=1 → Single=true
-	t.Setenv("STAGEHAND_COMMITS", "1")
+	// env path: STAGECOACH_COMMITS=1 → Single=true
+	t.Setenv("STAGECOACH_COMMITS", "1")
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
@@ -870,11 +870,11 @@ func TestLoad_CommitsOneNormalizesSingle(t *testing.T) {
 		t.Errorf("Commits=%d want 1", cfg.Commits)
 	}
 	if !cfg.Single {
-		t.Errorf("Single=false want true (STAGEHAND_COMMITS=1 must normalize to Single)")
+		t.Errorf("Single=false want true (STAGECOACH_COMMITS=1 must normalize to Single)")
 	}
 
 	// flag path: --commits 1 → Single=true
-	os.Unsetenv("STAGEHAND_COMMITS")
+	os.Unsetenv("STAGECOACH_COMMITS")
 	fs := newFlagSet(t)
 	if err := fs.Set("commits", "1"); err != nil {
 		t.Fatal(err)
@@ -891,7 +891,7 @@ func TestLoad_CommitsOneNormalizesSingle(t *testing.T) {
 func TestLoad_PerRoleFlagBeatsEnv(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_PLANNER_MODEL", "env-model")
+	t.Setenv("STAGECOACH_PLANNER_MODEL", "env-model")
 	fs := newFlagSet(t)
 	if err := fs.Set("planner-model", "flag-model"); err != nil {
 		t.Fatal(err)
@@ -925,33 +925,33 @@ func TestLoad_ConfigPathOverride(t *testing.T) {
 	}
 }
 
-func TestLoad_STAGEHAND_CONFIG_EnvPath(t *testing.T) {
+func TestLoad_STAGECOACH_CONFIG_EnvPath(t *testing.T) {
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
 
 	// Global discovery: provider=A
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"discovery\"\n")
 
-	// STAGEHAND_CONFIG points to a different file: provider=B
+	// STAGECOACH_CONFIG points to a different file: provider=B
 	envConfig := writeConfigFile(t, t.TempDir(), "env-config.toml", "[defaults]\nprovider = \"envpath\"\n")
-	t.Setenv("STAGEHAND_CONFIG", envConfig)
+	t.Setenv("STAGECOACH_CONFIG", envConfig)
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
 	if cfg.Provider != "envpath" {
-		t.Errorf("Provider=%q want envpath (STAGEHAND_CONFIG beats discovery)", cfg.Provider)
+		t.Errorf("Provider=%q want envpath (STAGECOACH_CONFIG beats discovery)", cfg.Provider)
 	}
 
-	// ConfigPathOverride beats STAGEHAND_CONFIG
+	// ConfigPathOverride beats STAGECOACH_CONFIG
 	cliConfig := writeConfigFile(t, t.TempDir(), "cli-config.toml", "[defaults]\nprovider = \"clipath\"\n")
 	cfg2, err := Load(context.Background(), LoadOpts{ConfigPathOverride: cliConfig, RepoDir: repo})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
 	if cfg2.Provider != "clipath" {
-		t.Errorf("Provider=%q want clipath (ConfigPathOverride beats STAGEHAND_CONFIG)", cfg2.Provider)
+		t.Errorf("Provider=%q want clipath (ConfigPathOverride beats STAGECOACH_CONFIG)", cfg2.Provider)
 	}
 }
 
@@ -976,15 +976,15 @@ func TestLoad_ConfigPathOverride_MissingFileFails(t *testing.T) {
 	}
 }
 
-func TestLoad_STAGEHAND_CONFIG_EnvPath_MissingFileFails(t *testing.T) {
+func TestLoad_STAGECOACH_CONFIG_EnvPath_MissingFileFails(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
 
 	missing := filepath.Join(t.TempDir(), "nope.toml")
-	t.Setenv("STAGEHAND_CONFIG", missing)
+	t.Setenv("STAGECOACH_CONFIG", missing)
 	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err == nil {
-		t.Fatal("Load err=nil, want error for missing STAGEHAND_CONFIG file")
+		t.Fatal("Load err=nil, want error for missing STAGECOACH_CONFIG file")
 	}
 	if !strings.Contains(err.Error(), "config file not found") {
 		t.Errorf("err=%v, want it to contain 'config file not found'", err)
@@ -997,9 +997,9 @@ func TestLoad_STAGEHAND_CONFIG_EnvPath_MissingFileFails(t *testing.T) {
 func TestLoad_DiscoveryMissingFileOK(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	// No --config, no STAGEHAND_CONFIG, no global file written to globalDir.
+	// No --config, no STAGECOACH_CONFIG, no global file written to globalDir.
 	// Discovery should tolerate absence (contract preserved).
-	os.Unsetenv("STAGEHAND_CONFIG")
+	os.Unsetenv("STAGECOACH_CONFIG")
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
 	if err != nil {
@@ -1014,10 +1014,10 @@ func TestLoad_ConfigPathOverride_MissingBeatsEnv(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
 
-	// Both ConfigPathOverride (missing) and STAGEHAND_CONFIG (set but irrelevant).
+	// Both ConfigPathOverride (missing) and STAGECOACH_CONFIG (set but irrelevant).
 	// ConfigPathOverride wins precedence; the resolved path is the missing override → error.
 	missing := filepath.Join(t.TempDir(), "override-missing.toml")
-	t.Setenv("STAGEHAND_CONFIG", filepath.Join(t.TempDir(), "env-set.toml"))
+	t.Setenv("STAGECOACH_CONFIG", filepath.Join(t.TempDir(), "env-set.toml"))
 
 	_, err := Load(context.Background(), LoadOpts{ConfigPathOverride: missing, RepoDir: repo})
 	if err == nil {
@@ -1070,7 +1070,7 @@ func TestLoad_BadGlobalFileErrors(t *testing.T) {
 func TestLoad_BadEnvBoolErrors(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_VERBOSE", "notabool")
+	t.Setenv("STAGECOACH_VERBOSE", "notabool")
 
 	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err == nil {
@@ -1079,8 +1079,8 @@ func TestLoad_BadEnvBoolErrors(t *testing.T) {
 	if !strings.Contains(err.Error(), "env config") {
 		t.Errorf("err=%v, want it to contain 'env config'", err)
 	}
-	if !strings.Contains(err.Error(), "STAGEHAND_VERBOSE") {
-		t.Errorf("err=%v, want it to contain 'STAGEHAND_VERBOSE'", err)
+	if !strings.Contains(err.Error(), "STAGECOACH_VERBOSE") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_VERBOSE'", err)
 	}
 }
 
@@ -1102,7 +1102,7 @@ func TestLoad_GitConfigErrorPropagates(t *testing.T) {
 func TestLoad_NilFlagsSkipped(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_PROVIDER", "pi")
+	t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: nil})
 	if err != nil {
@@ -1183,7 +1183,7 @@ func TestValidateDiffContext(t *testing.T) {
 	}
 }
 
-// validateCommits tests (Finding 5: --commits / STAGEHAND_COMMITS / stagehand.commits must be >= 0).
+// validateCommits tests (Finding 5: --commits / STAGECOACH_COMMITS / stagehand.commits must be >= 0).
 // Pure (no I/O); mirrors the validateDiffContext table style.
 func TestValidateCommits(t *testing.T) {
 	cases := []struct {
@@ -1273,7 +1273,7 @@ func TestLoad_TemplatePrecedence(t *testing.T) {
 	}
 
 	// Layer 5: env overrides
-	t.Setenv("STAGEHAND_TEMPLATE", "$msg (env)")
+	t.Setenv("STAGECOACH_TEMPLATE", "$msg (env)")
 	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
@@ -1299,7 +1299,7 @@ func TestLoad_TemplatePrecedence(t *testing.T) {
 func TestLoad_TemplateNoMsg_HardError(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_TEMPLATE", "(#205)")
+	t.Setenv("STAGECOACH_TEMPLATE", "(#205)")
 
 	_, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err == nil {
@@ -1319,22 +1319,22 @@ func TestLoad_TemplateNoMsg_HardError(t *testing.T) {
 
 func TestLoadEnv_Push(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGEHAND_PUSH", "true")
+	t.Setenv("STAGECOACH_PUSH", "true")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
 	if !cfg.Push {
-		t.Errorf("Push=false want true (STAGEHAND_PUSH=true)")
+		t.Errorf("Push=false want true (STAGECOACH_PUSH=true)")
 	}
 
-	// DIRECT-set escape hatch: STAGEHAND_PUSH=false
+	// DIRECT-set escape hatch: STAGECOACH_PUSH=false
 	cfg2 := Config{Push: true}
-	t.Setenv("STAGEHAND_PUSH", "false")
+	t.Setenv("STAGECOACH_PUSH", "false")
 	if err := loadEnv(&cfg2); err != nil {
 		t.Fatalf("loadEnv escape err=%v", err)
 	}
 	if cfg2.Push {
-		t.Errorf("Push=true want false (STAGEHAND_PUSH=false DIRECT set escape)")
+		t.Errorf("Push=true want false (STAGECOACH_PUSH=false DIRECT set escape)")
 	}
 }
 
@@ -1412,7 +1412,7 @@ func TestLoad_PushPrecedence(t *testing.T) {
 	}
 
 	// Layer 5: env overrides
-	t.Setenv("STAGEHAND_PUSH", "true")
+	t.Setenv("STAGECOACH_PUSH", "true")
 	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
@@ -1455,13 +1455,13 @@ func TestLoad_NoVerifyPrecedence(t *testing.T) {
 
 	// Layer 5: env overrides (DIRECT set — the escape hatch that CAN set false,
 	// unlike the file/git only-true-propagates layers).
-	t.Setenv("STAGEHAND_NO_VERIFY", "false")
+	t.Setenv("STAGECOACH_NO_VERIFY", "false")
 	cfg, err = Load(context.Background(), LoadOpts{RepoDir: repo, DisableBootstrap: true})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
 	if cfg.NoVerify {
-		t.Errorf("NoVerify=true want false (STAGEHAND_NO_VERIFY=false > stagehand.noVerify=true)")
+		t.Errorf("NoVerify=true want false (STAGECOACH_NO_VERIFY=false > stagehand.noVerify=true)")
 	}
 }
 
@@ -1506,8 +1506,8 @@ func TestLoad_FullPrecedenceMatrix(t *testing.T) {
 	setGitConfig(t, repo, "stagehand.model", "git-model")
 
 	// Layer 5: env overrides provider + model
-	t.Setenv("STAGEHAND_PROVIDER", "env-pi")
-	t.Setenv("STAGEHAND_MODEL", "env-model")
+	t.Setenv("STAGECOACH_PROVIDER", "env-pi")
+	t.Setenv("STAGECOACH_MODEL", "env-model")
 
 	// Layer 7: CLI overrides provider
 	fs := newFlagSet(t)
@@ -1542,14 +1542,14 @@ func TestLoad_FullPrecedenceMatrix(t *testing.T) {
 func TestLoad_TimeoutViaEnvInteger(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGEHAND_TIMEOUT", "45") // bare integer
+	t.Setenv("STAGECOACH_TIMEOUT", "45") // bare integer
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
 	if cfg.Timeout != 45*time.Second {
-		t.Errorf("Timeout=%v want 45s (from STAGEHAND_TIMEOUT=45)", cfg.Timeout)
+		t.Errorf("Timeout=%v want 45s (from STAGECOACH_TIMEOUT=45)", cfg.Timeout)
 	}
 }
 
@@ -1825,19 +1825,19 @@ func TestLoad_Bootstrap_SkippedWhenExplicit(t *testing.T) {
 		t.Error("explicit missing should NOT trigger bootstrap")
 	}
 
-	// STAGEHAND_CONFIG pointing to missing file — should error, NOT bootstrap
+	// STAGECOACH_CONFIG pointing to missing file — should error, NOT bootstrap
 	buf.Reset()
 	missing2 := filepath.Join(t.TempDir(), "missing2.toml")
-	t.Setenv("STAGEHAND_CONFIG", missing2)
+	t.Setenv("STAGECOACH_CONFIG", missing2)
 	_, err = Load(context.Background(), LoadOpts{RepoDir: repo})
 	if err == nil {
-		t.Fatal("expected error for STAGEHAND_CONFIG missing path")
+		t.Fatal("expected error for STAGECOACH_CONFIG missing path")
 	}
 	if !strings.Contains(err.Error(), "config file not found") {
 		t.Errorf("err=%v, want 'config file not found'", err)
 	}
 	if strings.Contains(buf.String(), "wrote bootstrap config") {
-		t.Error("STAGEHAND_CONFIG missing should NOT trigger bootstrap")
+		t.Error("STAGECOACH_CONFIG missing should NOT trigger bootstrap")
 	}
 }
 
