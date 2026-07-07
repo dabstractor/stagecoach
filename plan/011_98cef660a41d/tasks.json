@@ -152,14 +152,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Stale lock-file reaping mechanism",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Add processAlive (cross-platform pid-liveness check) and reapStaleLocks (glob+parse+remove dead-pid files), then wire reaping into Acquire after the flock succeeds. Fix the over-claiming doc comments and docs/how-it-works.md.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "processAlive cross-platform helper (lock_unix.go, lock_windows.go)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/011_98cef660a41d/architecture/lock_reaping.md. The existing lock package has a build-tag split: lock_unix.go (flock via syscall.Flock, isWouldBlock) and lock_windows.go (no-op flock, isWouldBlock). The processAlive helper follows the same split. On Unix, syscall.Kill(pid, 0) returns ESRCH for a dead pid, nil for a live one, EPERM for alive-but-not-ours. On Windows, flock is a no-op stub so there is no inode-bound-flock hazard; the §13.5 CAS is the guarantee.\n2. INPUT: The existing lock_unix.go and lock_windows.go files (both are small: ~22 and ~15 lines respectively).\n3. LOGIC: Add processAlive(pid int, hostname string) bool to each build-tag file. Unix (lock_unix.go): if hostname == \"\" or hostname != os.Hostname() return true (foreign host — don't reap, conservative). err := syscall.Kill(pid, 0). If err == nil return true (alive). If errors.Is(err, syscall.EPERM) return true (alive, different user). Return false (ESRCH — dead). Windows (lock_windows.go): return true always (conservative: reap nothing — there is no flock hazard and the invariant 'never reap a live pid' is trivially satisfied). Add necessary imports (errors, os, syscall).\n4. OUTPUT: The processAlive function is used by reapStaleLocks in S2. It is unexported (internal to the lock package).\n5. DOCS: [Mode A] Add a doc comment to processAlive explaining the cross-platform semantics and the 'never reap a live pid' invariant. No user-facing docs change.",
@@ -172,7 +172,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "reapStaleLocks function + wire into Acquire + fix over-claims",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -197,7 +197,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "ReleaseCurrent + OnRescueExit signal seam in handle()",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/011_98cef660a41d/architecture/lock_reaping.md. The signal package (internal/signal/signal.go) is deliberately stdlib-only — it cannot import internal/lock. Existing injectable seams in signal.Options: Kill, Exit, RescueFormat, Out — all defaulted in Install() and injectable for tests. The handle() function (signal.go:113-141) has two exit branches: h.opts.Exit(3) (post-snapshot rescue) and h.opts.Exit(exitCodeForSignal(sig)) (pre-snapshot 130/143). The lock is acquired at default_action.go:59 BEFORE the snapshot is armed, so BOTH branches can orphan the lock file. The lock package has a current atomic.Pointer[Locker] singleton (lock.go:60) with a nil-safe SetSnapshot wrapper (lock.go:163) that ReleaseCurrent mirrors.\n2. INPUT: The signal.Options struct (signal.go:31-47). The handle() function (signal.go:113-141). The lock.current singleton and Locker.Release() method (lock.go:123-135).\n3. LOGIC: (a) Add func ReleaseCurrent() to internal/lock/lock.go — mirror SetSnapshot: if l := current.Load(); l != nil { l.Release() }. Idempotent (Release's l.file==nil guard) and nil-safe (current==nil → no-op). (b) Add OnRescueExit func() field to signal.Options (signal.go:31). Default to func(){} in Install() (after line 85, mirroring the other defaults). (c) In handle() (signal.go:137 and 140), call h.opts.OnRescueExit() immediately BEFORE both h.opts.Exit(3) and h.opts.Exit(exitCodeForSignal(sig)). This ensures the lock file is removed before os.Exit skips the defer chain. Do NOT add OnRescueExit to RestoreDefault (that runs before update-ref on the success path; the defer Release handles cleanup there).\n4. OUTPUT: ReleaseCurrent in lock package. OnRescueExit seam in signal package. handle() releases the lock file before exiting on both signal paths.\n5. DOCS: [Mode A] Add a doc comment to OnRescueExit explaining it is the exit-path lock-release seam (called before os.Exit to prevent lock-file orphaning; stdlib-only signal package cannot import lock directly). Add a doc comment to ReleaseCurrent mirroring SetSnapshot's.",
