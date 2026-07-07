@@ -1657,3 +1657,54 @@ func TestGenerateCommit_SystemExtra_PreCommitAbort_Rescue(t *testing.T) {
 		t.Errorf("HEAD moved %q→%q on pre-commit abort (FR-V7 idempotent)", beforeSHA, after)
 	}
 }
+
+// TestGenerateCommit_DryRun_HookEmptiesMessage_AbortsExit1 — Issue 4 (P1.M3.T1.S2) dry-run guard: a
+// commit-msg hook that empties the message file (exit 0 ⇒ not a hook failure, no RescueError) must NOT
+// produce an empty dry-run preview (exit 0). git aborts "Aborting commit due to empty commit message.";
+// stagehand returns the BARE generate.ErrEmptyMessage (exit 1, NOT the FR-V8a warn-and-print —
+// ErrEmptyMessage is not a *RescueError, and this guard sits AFTER the hooks block). The stub Out is
+// NON-empty so generation succeeds and the HOOK empties the message (not the generator). FAILS before
+// the guard (err==nil, exit 0); PASSES after (errors.Is(err, generate.ErrEmptyMessage)).
+func TestGenerateCommit_DryRun_HookEmptiesMessage_AbortsExit1(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: non-empty generated message"}) // non-empty ⇒ generation succeeds
+	repoDir, _ := os.Getwd()
+	writeFile(t, repoDir, "new.txt", "hello")
+	stageFile(t, repoDir, "new.txt")
+
+	// commit-msg hook that empties the message file (exit 0 ⇒ not a hook failure; the guard catches the EMPTY result).
+	installHook(t, repoDir, "commit-msg", "#!/bin/sh\n> \"$1\"\nexit 0\n")
+
+	_, err := GenerateCommit(context.Background(), Options{Provider: "stub", DryRun: true})
+	if err == nil {
+		t.Fatal("expected generate.ErrEmptyMessage, got nil (a dry-run with an empty message was produced — the Issue-4 bug)")
+	}
+	if !errors.Is(err, generate.ErrEmptyMessage) {
+		t.Errorf("expected generate.ErrEmptyMessage (bare, exit 1 — NOT the dryRun warn-and-print), got %T: %v", err, err)
+	}
+}
+
+// TestGenerateCommit_HookEmptiesMessage_NoCommit — Issue 4 (P1.M3.T1.S2) commit-path guard: the same
+// emptying hook on runPipeline's commit tail (forced via SystemExtra, since !DryRun && SystemExtra==""
+// delegates to CommitStaged, S1's path) → generate.ErrEmptyMessage + NO commit created (HEAD unchanged —
+// the abort returned before CommitTree). Bare error → exit 1, NOT a rescue.
+func TestGenerateCommit_HookEmptiesMessage_NoCommit(t *testing.T) {
+	setupTestRepo(t, stubtest.Options{Out: "feat: non-empty generated message"})
+	repoDir, _ := os.Getwd()
+	writeFile(t, repoDir, "new.txt", "hello")
+	stageFile(t, repoDir, "new.txt")
+
+	installHook(t, repoDir, "commit-msg", "#!/bin/sh\n> \"$1\"\nexit 0\n")
+
+	beforeSHA := headSHA(t, repoDir)
+	_, err := GenerateCommit(context.Background(), Options{Provider: "stub", SystemExtra: "extra context"}) // SystemExtra ⇒ runPipeline !dryRun
+	if err == nil {
+		t.Fatal("expected generate.ErrEmptyMessage, got nil (a commit with an empty message was created — the Issue-4 bug)")
+	}
+	if !errors.Is(err, generate.ErrEmptyMessage) {
+		t.Errorf("expected generate.ErrEmptyMessage (bare, exit 1), got %T: %v", err, err)
+	}
+	// NO commit created (HEAD unchanged — the abort returned before CommitTree).
+	if afterSHA := headSHA(t, repoDir); afterSHA != beforeSHA {
+		t.Errorf("HEAD moved on empty-message abort: %s → %s (a commit was created)", beforeSHA, afterSHA)
+	}
+}

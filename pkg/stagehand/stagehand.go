@@ -674,6 +674,16 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		}
 	}
 
+	// §9.25 git parity (Issue 4): a prepare-commit-msg / commit-msg hook may have emptied the message file
+	// (a rejection / force-re-edit pattern). git aborts "Aborting commit due to empty commit message.";
+	// mirror it — return the BARE generate.ErrEmptyMessage (exit 1, NOT a rescue), same as the --edit path
+	// and S1's CommitStaged guard. This is NOT the dryRun warn-and-print path (ErrEmptyMessage is not a
+	// *RescueError, and this guard sits AFTER the hooks block) — an empty message aborts even under --dry-run.
+	// HEAD + live index are untouched (the abort returns before CommitTree → no update-ref ran).
+	if strings.TrimSpace(msg) == "" {
+		return Result{}, generate.ErrEmptyMessage
+	}
+
 	// ---- Dry-run success: skip commit-tree/update-ref. ----
 	if dryRun {
 		signal.ClearSnapshot() // disarm — no rescue on dry-run success

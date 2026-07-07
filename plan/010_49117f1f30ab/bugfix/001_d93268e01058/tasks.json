@@ -104,14 +104,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Post-Hook Empty-Message Guard (Issue 4)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "If prepare-commit-msg or commit-msg empties the message file, git aborts with 'Aborting commit due to empty commit message.' (exit 1, no commit). Stagehand has NO empty-message check after RunCommitHooks returns in any of the 3 commit paths (CommitStaged, runPipeline, publishCommit). An emptied message flows straight to CommitTree and creates an invalid commit. Fix: add a post-hook empty-message guard in all 3 callers, returning the existing ErrEmptyMessage sentinel (non-rescue, exit 1).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Add empty-message guard after RunCommitHooks in all 3 commit paths",
-              "status": "Planned",
+              "status": "Researching",
               "description": "After RunCommitHooks returns successfully in each of the 3 commit paths, check whether the hook-adjusted message is empty (after trimming). If empty, return generate.ErrEmptyMessage (the existing sentinel from finalize.go:45, used by EditMessage) — non-rescue, exit 1, mirroring git's 'Aborting commit due to empty commit message.' HEAD and the index are untouched (no update-ref ran).",
               "subtasks": [
                 {
@@ -134,7 +134,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Add empty-message guard in pkg/stagehand.runPipeline after RunCommitHooks",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/010_49117f1f30ab/bugfix/001_d93268e01058/architecture/hooks_runner_and_callers.md §4 caller (b). runPipeline at pkg/stagehand/stagehand.go:652-694 calls deps.Hooks.RunCommitHooks and handles dryRun specially: under dryRun a *RescueError from a hook is warn-and-print (exit 0). The empty-message guard must be placed AFTER the hooks block, where `msg` has been reassigned to `fm` (line ~672: treeSHA, msg = ft, fm). ErrEmptyMessage is NOT a *RescueError, so it does NOT enter the dryRun warn-and-print branch — it propagates as a hard error (exit 1) under both dryRun and commit paths, which is correct: an empty message means the commit would be aborted even under --dry-run.\n2. INPUT: runPipeline function in pkg/stagehand/stagehand.go. The hooks block at lines 652-672: `if deps.Hooks != nil { ft, fm, herr := deps.Hooks.RunCommitHooks(..., dryRun, ...); if herr != nil { ...dryRun warn-and-print or rescue... } else { treeSHA, msg = ft, fm } }`. After this block (under the `else` branch where herr==nil), `msg` is the hook-adjusted message. Under dryRun, the function returns early at line ~678 with Result{Message: msg}. Under !dryRun, CommitTree is at line ~694.\n3. LOGIC: (a) Write a FAILING test first: in pkg/stagehand/stagehand_test.go, install a commit-msg hook that empties the file, call GenerateCommit with DryRun:true, assert the error is generate.ErrEmptyMessage (errors.Is) and exit would be 1 (NOT 0). Also test the !dryRun path. (b) After the hooks block closes (after the `if deps.Hooks != nil { ... }` block), BEFORE the `if dryRun` early return, add: `if strings.TrimSpace(msg) == \"\" { return Result{}, generate.ErrEmptyMessage }`. This fires under both dryRun and commit paths. Use generate.ErrEmptyMessage (pkg/stagehand already imports generate). HEAD and index are untouched.\n4. OUTPUT: runPipeline returns Result{}, generate.ErrEmptyMessage when a hook empties the message, under both dry-run and commit paths. No commit is created. The dry-run preview correctly shows the abort instead of carrying an empty message.\n5. DOCS: [Mode A] none — the abort matches git's existing behavior and the existing --edit ErrEmptyMessage path.",
@@ -150,7 +150,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S3",
                   "title": "Add empty-message guard in decompose.publishCommit after RunCommitHooks",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/010_49117f1f30ab/bugfix/001_d93268e01058/architecture/hooks_runner_and_callers.md §4 caller (c). publishCommit at internal/decompose/message.go:230-235 calls hooks.RunCommitHooks DIRECTLY (not via the CommitHookRunner interface — decompose imports hooks directly). After RunCommitHooks returns, finalTree and finalMsg are assigned, then CommitTree is called at line 235 with NO empty check. publishCommit calls generate.ErrEmptyMessage — decompose already imports generate (for RescueError, CASError).\n2. INPUT: publishCommit function in internal/decompose/message.go. The hooks block at lines 230-234: `finalTree, finalMsg, herr := hooks.RunCommitHooks(ctx, deps.Git, deps.Config, tree, parentSHA, msg, hooks.HookOpts{DryRun: false, Verbose: deps.Verbose}); if herr != nil { return \"\", herr }`. After this, finalMsg is the hook-adjusted message (possibly empty). CommitTree is at line 235: `deps.Git.CommitTree(ctx, finalTree, parents, finalMsg)`.\n3. LOGIC: (a) Write a FAILING test first: in internal/decompose/message_test.go, install a commit-msg hook that empties the file (`> \"$1\"`), call publishCommit, assert the error is generate.ErrEmptyMessage (errors.Is) and NO commit was created (git log shows no new commit). Use the existing msgInstallHook helper (message_test.go:407). (b) After the `if herr != nil` block at line 233, add: `if strings.TrimSpace(finalMsg) == \"\" { return \"\", generate.ErrEmptyMessage }`. This is a bare non-rescue error — propagates to runLoop's FR-M12 handling. The strings package is already imported in message.go. HEAD and index are untouched.\n4. OUTPUT: publishCommit returns \"\", generate.ErrEmptyMessage when a hook empties the message. No commit is created. The error propagates to the decompose orchestrator's error handling.\n5. DOCS: [Mode A] none — the abort matches git's behavior and the existing ErrEmptyMessage pattern.",
