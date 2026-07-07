@@ -1,4 +1,4 @@
-// Command stubagent is a tiny fake-agent binary for Stagehand's integration/property tests
+// Command stubagent is a tiny fake-agent binary for Stagecoach's integration/property tests
 // (PRD §20.1 layer 3). It reads the prompt from stdin and writes a canned commit message to
 // stdout, with behavior (output, exit code, simulated timeout, stderr, and per-call output
 // variation for the dedupe loop) controlled entirely by STAGEHAND_STUB_* environment variables —
