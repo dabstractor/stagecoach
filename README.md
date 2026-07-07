@@ -1,13 +1,13 @@
-# Stagehand
+# Stagecoach
 
-> **Stagehand writes your commit messages using the AI agent you already pay for.**
+> **Stagecoach writes your commit messages using the AI agent you already pay for.**
 > No API key. No per-token billing. It shells out to Claude Code, Codex, Gemini CLI, pi, opencode, agy, qwen-code, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
 A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery — see [Features](#features) below.
 
 <!-- TODO: add LICENSE file and badge -->
 
-![CI](https://github.com/dustin/stagehand/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/dustin/stagecoach/actions/workflows/ci.yml/badge.svg)
 
 ## 30-second demo
 
@@ -18,11 +18,11 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.
 
 ## Why not opencommit/aicommits?
 
-The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones gate their quota to the official harness (Anthropic, Google Antigravity, Cursor, gemini-cli), and Z.ai even subsidizes harness use with free tokens. The quota lives behind your agent's CLI either way, which is exactly why stagehand shells out to that CLI instead of opening its own connection.
+The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones gate their quota to the official harness (Anthropic, Google Antigravity, Cursor, gemini-cli), and Z.ai even subsidizes harness use with free tokens. The quota lives behind your agent's CLI either way, which is exactly why stagecoach shells out to that CLI instead of opening its own connection.
 
-Stagehand inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse — the agent brings its own auth and billing. That trade-off — give up control of the model call in exchange for access to the user's existing quota — is the entire product.
+Stagecoach inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse — the agent brings its own auth and billing. That trade-off — give up control of the model call in exchange for access to the user's existing quota — is the entire product.
 
-| | **opencommit / aicommits** | **Stagehand** |
+| | **opencommit / aicommits** | **Stagecoach** |
 |---|---|---|
 | Auth | API key required | None — uses your agent's existing auth |
 | Architecture | Owns the HTTP call | Shells out to your CLI agent |
@@ -35,7 +35,7 @@ Stagehand inverts the architecture: it shells out to your installed CLI agent, t
 <summary><em>Which coding plans actually gate their quota?</em></summary>
 
 How strictly a coding plan's quota is tied to its official harness varies by provider. A few are
-permissive; the popular ones are not — and that distinction is the whole reason stagehand shells
+permissive; the popular ones are not — and that distinction is the whole reason stagecoach shells
 out to your agent rather than calling an API.
 
 - **Anthropic (Claude Code)** — strict. Plan quota is gated to the Claude Code harness and isn't
@@ -58,22 +58,22 @@ Antigravity, Cursor, gemini-cli) or by incentive (Z.ai). Opencode is the outlier
 
 ## Features
 
-Stagehand does one thing — commit messages — and a few things around them.
+Stagecoach does one thing — commit messages — and a few things around them.
 
 | Capability | Description |
 |---|---|
 | Multi-commit decomposition | Auto-decompose a dirty, un-staged tree into N logical commits (planner → stager → message → arbiter). A start-of-run freeze means a concurrent edit during the run can never enter a commit — including across the leftover-reconciliation arbiter; the planner partitions per file and leans toward a soft count target ([how it works](docs/how-it-works.md#multi-commit-decomposition) · [flags](docs/cli.md)). |
-| Payload exclusions | `.stagehandignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
+| Payload exclusions | `.stagecoachignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
 | Payload optimization | The diff sent to your agent is trimmed and budgeted — rename-aware (`-M`), reduced-context (`-U1`), led by a compact file skeleton, and optionally capped to your model's context window via `token_limit` — a closed-loop guarantee that the assembled prompt never exceeds the limit ([how it works](docs/how-it-works.md#diff-capture-pipeline) · [knobs](docs/configuration.md#built-in-defaults)). |
-| Multi-turn fallback | Lossless multi-turn fallback: when a one-shot generation of a large diff fails, stagehand re-delivers the full diff across session turns so the message still lands — no truncation, no extra commits ([how it works](docs/how-it-works.md#multi-turn-generation-fallback) · [knobs](docs/configuration.md#built-in-defaults)). |
+| Multi-turn fallback | Lossless multi-turn fallback: when a one-shot generation of a large diff fails, stagecoach re-delivers the full diff across session turns so the message still lands — no truncation, no extra commits ([how it works](docs/how-it-works.md#multi-turn-generation-fallback) · [knobs](docs/configuration.md#built-in-defaults)). |
 | Message shaping | `--format` (auto, conventional, gitmoji, plain), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
-| Git hook mode | `stagehand hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
-| Commit hooks on every `stagehand` commit | As of v2.4, your repo's `pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit` hooks run around every `stagehand` commit, scoped to the frozen snapshot (atomic + stage-while-generating preserved); `--no-verify` mirrors git ([how it works](docs/how-it-works.md#commit-hooks-on-the-plumbing-path)). |
-| Tool integrations | `stagehand integrate install git-alias lazygit` wires `git stagehand` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
+| Git hook mode | `stagecoach hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
+| Commit hooks on every `stagecoach` commit | As of v2.4, your repo's `pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit` hooks run around every `stagecoach` commit, scoped to the frozen snapshot (atomic + stage-while-generating preserved); `--no-verify` mirrors git ([how it works](docs/how-it-works.md#commit-hooks-on-the-plumbing-path)). |
+| Tool integrations | `stagecoach integrate install git-alias lazygit` wires `git stagecoach` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
 | `--edit` / `--push` | Review in `$EDITOR` before the atomic commit; push after a clean run ([docs](docs/cli.md)). |
-| Discovery | `stagehand models` and `config init --interactive` for guided setup ([docs](docs/cli.md#models-provider)). |
+| Discovery | `stagecoach models` and `config init --interactive` for guided setup ([docs](docs/cli.md#models-provider)). |
 
-<!-- Multi-turn fallback (Features row above): intentionally generic — "stagehand" re-delivers, NOT
+<!-- Multi-turn fallback (Features row above): intentionally generic — "stagecoach" re-delivers, NOT
      "the commit path". Multi-turn runs on EVERY generation path (snapshot commit, `--dry-run`, hook
      mode); the per-path detail lives in docs/how-it-works.md#multi-turn-generation-fallback (linked
      from the row), so this high-level row deliberately does NOT enumerate paths. "no extra commits"
@@ -85,35 +85,35 @@ Stagehand does one thing — commit messages — and a few things around them.
 **Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, Gemini CLI, opencode, Codex, Cursor, agy, or qwen-code).
 
 > [!NOTE]
-> Stagehand is pre-release and still being tested locally — **build from source** is the only working install method today. The package-managed channels below are coming with the first public release.
+> Stagecoach is pre-release and still being tested locally — **build from source** is the only working install method today. The package-managed channels below are coming with the first public release.
 
 ### Build from source (works today)
 
 Requires [Go](https://go.dev) 1.22+:
 
 ```bash
-git clone https://github.com/dustin/stagehand.git
-cd stagehand
+git clone https://github.com/dustin/stagecoach.git
+cd stagecoach
 make install          # installs the binary to $GOPATH/bin
 ```
 
 Ensure `$GOPATH/bin` (usually `~/go/bin`) is on your `$PATH`, then verify:
 
 ```bash
-stagehand --version   # stagehand version dev
+stagecoach --version   # stagecoach version dev
 ```
 
 > [!TIP]
-> If you keep your user binaries elsewhere (e.g. `~/.local/bin`), symlink it instead of editing `$PATH`: `ln -s "$(go env GOPATH)/bin/stagehand" ~/.local/bin/stagehand`. `make install` overwrites the target in place, so the link stays valid across rebuilds.
+> If you keep your user binaries elsewhere (e.g. `~/.local/bin`), symlink it instead of editing `$PATH`: `ln -s "$(go env GOPATH)/bin/stagecoach" ~/.local/bin/stagecoach`. `make install` overwrites the target in place, so the link stays valid across rebuilds.
 
 ### Coming soon
 
 These will land with the first release, once the tap/bucket repos are published:
 
-- **Homebrew** (macOS / Linuxbrew) — `brew install dustin/tap/stagehand`
-- **Scoop** (Windows) — `scoop install dustin/stagehand`
-- **`go install`** — `go install github.com/dustin/stagehand/cmd/stagehand@latest`
-- **Direct binary** (curl​|​sh one-liner) — `curl -fsSL https://github.com/dustin/stagehand/raw/main/install.sh | bash`
+- **Homebrew** (macOS / Linuxbrew) — `brew install dustin/tap/stagecoach`
+- **Scoop** (Windows) — `scoop install dustin/stagecoach`
+- **`go install`** — `go install github.com/dustin/stagecoach/cmd/stagecoach@latest`
+- **Direct binary** (curl​|​sh one-liner) — `curl -fsSL https://github.com/dustin/stagecoach/raw/main/install.sh | bash`
 
 ## Quick start
 
@@ -121,16 +121,16 @@ These will land with the first release, once the tap/bucket repos are published:
 # 1. Stage your changes
 git add feature/login.js
 
-# 2. Run stagehand — it snapshots, generates, and commits atomically
-stagehand
+# 2. Run stagecoach — it snapshots, generates, and commits atomically
+stagecoach
 # [abc1234] feat: add login flow
 # M  src/login.js
 
 # 3. Stage everything and commit in one step
-stagehand -a
+stagecoach -a
 
 # 4. Preview the real message (full pipeline: snapshot→generate→parse→dedupe→retry), no commit
-stagehand --dry-run
+stagecoach --dry-run
 ```
 
 > [!NOTE]
@@ -139,33 +139,33 @@ stagehand --dry-run
 ### More options
 
 ```bash
-stagehand --push                 # commit + push after a clean run
-stagehand --edit                 # review in $EDITOR before the atomic commit
-stagehand --format conventional  # force conventional-commit style
-stagehand --exclude '*.snap'     # hide snapshot diffs from the model (still committed)
+stagecoach --push                 # commit + push after a clean run
+stagecoach --edit                 # review in $EDITOR before the atomic commit
+stagecoach --format conventional  # force conventional-commit style
+stagecoach --exclude '*.snap'     # hide snapshot diffs from the model (still committed)
 ```
 
 See [Features](#features) above and the [CLI reference](docs/cli.md) for the rest.
 
 ### Multi-commit decomposition
 
-With a dirty working tree and nothing staged, `stagehand` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagehand owns every commit via git plumbing.
+With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
 
 ```bash
 # Auto-decompose — planner decides the count and grouping
-stagehand
+stagecoach
 # Decomposes into N commits automatically
 
 # Use reasoning for deeper analysis on the planner
-stagehand --reasoning high
+stagecoach --reasoning high
 
 # Force exactly 3 commits
-stagehand --commits 3
+stagecoach --commits 3
 
 # Keep the v1 single-commit behavior
-stagehand --single
+stagecoach --single
 
-# Route planning to a bigger model (per-repo .stagehand.toml):
+# Route planning to a bigger model (per-repo .stagecoach.toml):
 # [role.planner]
 # provider = "claude"
 # model = "opus"
@@ -176,42 +176,42 @@ stagehand --single
 > **claude** (`--effort`). Other providers treat it as a graceful no-op (no error) per FR-R6. It
 > applies to any role via `--<role>-reasoning` or `[role.*] reasoning`.
 
-See [How Stagehand works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
+See [How Stagecoach works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
 
 ### lazygit & git alias
 
 ```bash
-stagehand integrate install lazygit      # default key <c-a>; --key '<c-s>' to customize
-stagehand integrate install git-alias     # enables `git stagehand` everywhere
-stagehand integrate list                  # see what's installed / detected
+stagecoach integrate install lazygit      # default key <c-a>; --key '<c-s>' to customize
+stagecoach integrate install git-alias     # enables `git stagecoach` everywhere
+stagecoach integrate list                  # see what's installed / detected
 ```
 
 > [!NOTE]
 > gitui isn't supported — see [FUTURE_SPEC.md](FUTURE_SPEC.md) §1.2.
 
 <details>
-<summary><em>Manual install (no <code>stagehand integrate</code>)</em></summary>
+<summary><em>Manual install (no <code>stagecoach integrate</code>)</em></summary>
 
 If you prefer to paste the YAML yourself, add this to your lazygit `config.yml` (see [docs/cli.md#lazygit-target](docs/cli.md#lazygit-target) for the canonical block):
 
 ```yaml
 customCommands:
-  - key: '<c-a>'                       # stagehand-integration
+  - key: '<c-a>'                       # stagecoach-integration
     context: 'files'
-    command: 'stagehand'
+    command: 'stagecoach'
     loadingText: 'Generating commit message…'
     output: 'none'
-    description: 'stagehand: AI commit'
+    description: 'stagecoach: AI commit'
 ```
 
 </details>
 
 ## Configure your agent
 
-Stagehand auto-detects which agents are installed and uses the first one it finds (in preference order: pi, opencode, cursor, agy, gemini, qwen-code, codex, claude). To see what's detected:
+Stagecoach auto-detects which agents are installed and uses the first one it finds (in preference order: pi, opencode, cursor, agy, gemini, qwen-code, codex, claude). To see what's detected:
 
 ```bash
-$ stagehand providers list
+$ stagecoach providers list
 NAME       DETECTED  DEFAULT
 agy        ✓
 claude     ✓
@@ -229,57 +229,57 @@ qwen-code  ✗
 Set a per-repo default with git config:
 
 ```bash
-git config stagehand.provider claude
+git config stagecoach.provider claude
 # Optionally pin a model (single-backend providers use a bare model):
-git config stagehand.model sonnet
+git config stagecoach.model sonnet
 
 # For pi (multi-backend), prefix the model with the inference backend:
-git config stagehand.provider pi
-git config stagehand.model zai/glm-5.2
+git config stagecoach.provider pi
+git config stagecoach.model zai/glm-5.2
 ```
 
 > [!NOTE]
 > `pi` is a multi-backend provider: the inference backend is a slash-prefix on the model
 > (`zai/glm-5.2`). A bare model (no `/`) on pi is a config error (FR-R5b). Set
-> `git config stagehand.model zai/glm-5.2` (or `[defaults] model = "zai/glm-5.2"` in your config).
+> `git config stagecoach.model zai/glm-5.2` (or `[defaults] model = "zai/glm-5.2"` in your config).
 > See [Provider manifests](docs/providers.md) for the full schema.
 
 Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are left empty so you can supply your own inference-backend/model prefix; set `model = "zai/glm-5.2"` to pin a specific backend):
 
 ```bash
-stagehand config init
-# Wrote config to ~/.config/stagehand/config.toml
+stagecoach config init
+# Wrote config to ~/.config/stagecoach/config.toml
 
 # See where that lives:
-stagehand config path
-# ~/.config/stagehand/config.toml
+stagecoach config path
+# ~/.config/stagecoach/config.toml
 
 # Upgrade a v1 config to the current schema:
-stagehand config upgrade
+stagecoach config upgrade
 ```
 
 > [!NOTE]
-> The template also documents a `[generation]` section: `output` ("raw"|"json") and `strip_code_fence` are an **opt-in override** for how Stagehand parses agent output. When unset, the per-provider `[provider.<name>]` value is used (defaulting to `raw` / `true`); set them under `[generation]` only to force the value across ALL providers.
+> The template also documents a `[generation]` section: `output` ("raw"|"json") and `strip_code_fence` are an **opt-in override** for how Stagecoach parses agent output. When unset, the per-provider `[provider.<name>]` value is used (defaulting to `raw` / `true`); set them under `[generation]` only to force the value across ALL providers.
 
-Point discovery at a specific file with `stagehand --config path/to/config.toml`. It is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagehand --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` there is usable with `--provider <name>` directly. The path must exist: an explicit `--config` (or `STAGEHAND_CONFIG`) pointing at a missing file fails fast with exit 1 rather than silently falling back to auto-detection.
+Point discovery at a specific file with `stagecoach --config path/to/config.toml`. It is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` there is usable with `--provider <name>` directly. The path must exist: an explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file fails fast with exit 1 rather than silently falling back to auto-detection.
 
-**Config precedence** (highest → lowest): CLI flags > `STAGEHAND_*` env vars > repo `git config` (`stagehand.*`) > repo `.stagehand.toml` > global config file > provider defaults > built-in defaults.
+**Config precedence** (highest → lowest): CLI flags > `STAGECOACH_*` env vars > repo `git config` (`stagecoach.*`) > repo `.stagecoach.toml` > global config file > provider defaults > built-in defaults.
 
 ## The snapshot workflow
 
-Stagehand creates commits against a frozen snapshot of your index — not the live state. This means you can keep staging more files while the message generates, and they will **never** be included in the current in-flight commit.
+Stagecoach creates commits against a frozen snapshot of your index — not the live state. This means you can keep staging more files while the message generates, and they will **never** be included in the current in-flight commit.
 
 ```text
 Pane A (lazygit / shell)        Pane B (shell)
 ─────────────────────────       ───────────────────────
 git add feature/login.js
-stagehand                     ┐
+stagecoach                     ┐
   ↳ snapshotting…             │  (user is free to work here)
   ↳ generating with pi…       │  git add docs/login.md
   ↳ (10s pass)                │  git add tests/login.test.js
   ↳ created abc1234           │  (these stay staged — NOT in abc1234)
                               ┘
-                                stagehand        # next run commits these
+                                stagecoach        # next run commits these
 ```
 
 Generation time is no longer dead time. The in-flight commit only ever contains what was staged when it started, so you can stage the next batch freely while the current message generates — and a failed generation leaves your repo byte-for-byte unchanged.
@@ -289,20 +289,20 @@ Generation time is no longer dead time. The in-flight commit only ever contains 
 The **authoritative, always-available** reference lives in the binary itself:
 
 ```bash
-stagehand --help          # every flag, subcommand, and option
-stagehand config init     # bootstraps a populated working config (auto-detects your agent)
-stagehand config upgrade  # upgrades an existing config to the current schema version
-stagehand config path     # shows where the global config lives
+stagecoach --help          # every flag, subcommand, and option
+stagecoach config init     # bootstraps a populated working config (auto-detects your agent)
+stagecoach config upgrade  # upgrades an existing config to the current schema version
+stagecoach config path     # shows where the global config lives
 ```
 
 See the [docs/](docs/) for the full reference (growing).
 
 ## Adding a new agent
 
-No recompilation needed — community agents land via a manifest in your config file. Drop a `[provider.<name>]` block into `~/.config/stagehand/config.toml` (or a repo-local `.stagehand.toml`):
+No recompilation needed — community agents land via a manifest in your config file. Drop a `[provider.<name>]` block into `~/.config/stagecoach/config.toml` (or a repo-local `.stagecoach.toml`):
 
 ```toml
-# ~/.config/stagehand/config.toml
+# ~/.config/stagecoach/config.toml
 [provider.myagent]
 command            = "/opt/myagent/bin/agent"
 prompt_delivery    = "stdin"          # stdin | positional | flag
@@ -317,36 +317,36 @@ output             = "raw"            # raw | json
 Verify it works with `providers show`:
 
 ```bash
-stagehand providers show myagent
+stagecoach providers show myagent
 ```
 
 Then use it:
 
 ```bash
-stagehand --provider myagent
+stagecoach --provider myagent
 ```
 
 For field reference, copy from the [shipped `providers/*.toml` files](providers/) in this repo — `providers/pi.toml` is the cleanest template.
 
 ## FAQ
 
-### Stagehand is not for you if…
+### Stagecoach is not for you if…
 
-…you don't have (and don't want) a coding-agent CLI installed. Stagehand has no model of its own — it is a thin wrapper around *your* agent. If you just want an API-key-based commit generator, [opencommit](https://github.com/dlintw/opencommit) is the right tool.
+…you don't have (and don't want) a coding-agent CLI installed. Stagecoach has no model of its own — it is a thin wrapper around *your* agent. If you just want an API-key-based commit generator, [opencommit](https://github.com/dlintw/opencommit) is the right tool.
 
 ### Will it corrupt my repo?
 
-No. Stagehand uses `git write-tree` + `git commit-tree` + `git update-ref` (atomic snapshot commits). A failed generation leaves the repo byte-for-byte unchanged — it never touches the live index during generation.
+No. Stagecoach uses `git write-tree` + `git commit-tree` + `git update-ref` (atomic snapshot commits). A failed generation leaves the repo byte-for-byte unchanged — it never touches the live index during generation.
 
 **Safe to run twice.** A per-repo run lock prevents two concurrent commit-producing runs from racing on HEAD. On the **single-commit path** (changes staged), an accidental double-invoke exits `0` if nothing new has been staged since the in-progress run began (*nothing to do — an in-progress run already covers your staged changes*), or exits `5` (Busy) if genuinely new work is staged (your changes stay staged to re-run). On the **decompose path** (nothing staged, dirty working tree), an accidental double-run exits `5` (Busy) rather than `0` — the in-progress run publishes a working-tree snapshot a contender can't reproduce without the lock, so it conservatively refuses and leaves your working tree untouched. (On a shared filesystem across hosts the lock can't help — the atomic `update-ref` CAS is the never-clobber-HEAD guarantee there.)
 
 ### Does it send my code anywhere new?
 
-No. It shells out to *your* agent under *your* existing auth and billing. Stagehand never opens an HTTP connection to any API — your agent does, exactly as it would if you ran it manually.
+No. It shells out to *your* agent under *your* existing auth and billing. Stagecoach never opens an HTTP connection to any API — your agent does, exactly as it would if you ran it manually.
 
 ### Can it write multiple commits?
 
-Yes. Run `stagehand` with a dirty working tree and nothing staged, and it automatically decomposes the changes into a sequence of logically-coherent commits. Force a count with `--commits 3`, or keep the one-commit behavior with `--single`. See [Multi-commit decomposition](#multi-commit-decomposition) and the [pipeline architecture](docs/how-it-works.md#multi-commit-decomposition).
+Yes. Run `stagecoach` with a dirty working tree and nothing staged, and it automatically decomposes the changes into a sequence of logically-coherent commits. Force a count with `--commits 3`, or keep the one-commit behavior with `--single`. See [Multi-commit decomposition](#multi-commit-decomposition) and the [pipeline architecture](docs/how-it-works.md#multi-commit-decomposition).
 
 ### How does it match my project's style?
 
@@ -359,27 +359,27 @@ Eight built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(e
 ### How do I see what command it runs?
 
 ```bash
-stagehand --verbose
+stagecoach --verbose
 ```
 
 This prints the resolved provider command, raw agent output, and retry attempts.
 
 ### Does it run my pre-commit hooks?
 
-Yes. As of v2.4, the default `stagehand` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot — so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagehand hook install`) remains for when you commit via plain `git commit` from an IDE — the two compose (§9.25 covers `stagehand`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
+Yes. As of v2.4, the default `stagecoach` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot — so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagecoach hook install`) remains for when you commit via plain `git commit` from an IDE — the two compose (§9.25 covers `stagecoach`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagehand writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, self-update, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md).
+Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, self-update, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md).
 
 ---
 
 ## Contributing
 
-Stagehand is built with Go. To build from source:
+Stagecoach is built with Go. To build from source:
 
 ```bash
-make build        # produces ./bin/stagehand
+make build        # produces ./bin/stagecoach
 make test         # run the test suite
 make help         # see all targets
 ```
