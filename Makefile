@@ -55,8 +55,11 @@ build: ## Compile the stagecoach binary to ./bin/stagecoach
 build-test: ## Compile a test binary as ./bin/stagecoach-test (side-by-side with the real one)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_TEST) $(MAIN_PKG)
 
-install: ## Install stagecoach into $GOPATH/bin
+install: ## Install stagecoach into $GOPATH/bin and symlink onto PATH (~/.local/bin/stagecoach)
 	go install -ldflags "$(LDFLAGS)" $(MAIN_PKG)
+	@mkdir -p "$(HOME)/.local/bin"
+	ln -sfn "$(GOBIN)/stagecoach" "$(HOME)/.local/bin/stagecoach"
+	@echo "installed → $(GOBIN)/stagecoach   (PATH: ~/.local/bin/stagecoach)"
 
 install-test: build-test ## Install stagecoach-test where the official binary lives (on PATH, like `stagecoach`)
 	@mkdir -p "$(GOBIN)" "$(HOME)/.local/bin"
