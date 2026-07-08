@@ -97,12 +97,16 @@ func runDefault(cmd *cobra.Command, args []string) error {
 			}
 			return runDecompose(ctx, stdout, stderr, u, cfg, g, repoDir) // planner gets the working-tree diff
 		}
+		// §9.26 FR-W8: work-description mode forces auto-stage-all when nothing is staged (mirrors the
+		// default action's empty-tree behavior), EVEN IF the user disabled auto_stage_all — the mode is
+		// opt-in and its premise (a description covering staged work) requires something staged to read.
+		forceAutoStage := cfg.WorkDescription != ""
 		switch {
-		case flagNoAutoStage:
+		case flagNoAutoStage && !forceAutoStage:
 			// FR19: --no-auto-stage + nothing staged → exit 2 "Nothing staged." (--no-auto-stage wins
 			// over cfg.AutoStageAll). main prints "stagecoach: Nothing staged." (non-nil err).
 			return exitcode.New(exitcode.NothingToCommit, errors.New("Nothing staged."))
-		case cfg.AutoStageAll:
+		case cfg.AutoStageAll || forceAutoStage:
 			// FR16/FR18: auto-stage all, print the transparent notice, re-check.
 			if err := g.AddAll(ctx); err != nil {
 				return exitcode.New(exitcode.Error, fmt.Errorf("git add -A: %w", err))

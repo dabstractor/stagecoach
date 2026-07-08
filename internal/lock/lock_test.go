@@ -101,10 +101,14 @@ func TestLockDir_NoCwdFallbackError(t *testing.T) {
 func TestHash_CanonicalSymlink(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpRepo := filepath.Join(tmpDir, "repo")
-	os.MkdirAll(tmpRepo, 0o755)
+	if err := os.MkdirAll(tmpRepo, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	tmpLink := filepath.Join(tmpDir, "link")
-	os.Symlink(tmpRepo, tmpLink)
+	if err := os.Symlink(tmpRepo, tmpLink); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
 
 	_, hash1 := lockHash(tmpRepo)
 	_, hash2 := lockHash(tmpLink)
@@ -146,9 +150,13 @@ func TestAcquire_PathMatchesLockPath(t *testing.T) {
 func TestLockPath_CanonicalSymlink(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpRepo := filepath.Join(tmpDir, "repo")
-	os.MkdirAll(tmpRepo, 0o755)
+	if err := os.MkdirAll(tmpRepo, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 	tmpLink := filepath.Join(tmpDir, "link")
-	os.Symlink(tmpRepo, tmpLink)
+	if err := os.Symlink(tmpRepo, tmpLink); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
 
 	p1, err := lockPath(tmpRepo)
 	if err != nil {

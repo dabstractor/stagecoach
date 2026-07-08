@@ -173,6 +173,18 @@ func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	}
 }
 
+// TestLoadEnv_WorkDescription (§9.26 FR-W1): STAGECOACH_WORK_DESCRIPTION activates work-description mode.
+func TestLoadEnv_WorkDescription(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGECOACH_WORK_DESCRIPTION", "add the login flow")
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	if cfg.WorkDescription != "add the login flow" {
+		t.Errorf("WorkDescription=%q want the env value", cfg.WorkDescription)
+	}
+}
+
 func TestLoadEnv_BoolFalseEscape(t *testing.T) {
 	cfg := Config{Verbose: true, NoColor: true, NoVerify: true} // start with true
 	t.Setenv("STAGECOACH_VERBOSE", "false")
@@ -1382,6 +1394,52 @@ func TestLoadFlags_NoVerify(t *testing.T) {
 	loadFlags(&cfg2, fs2)
 	if cfg2.NoVerify {
 		t.Errorf("NoVerify=true want false (--no-verify not changed)")
+	}
+}
+
+// TestLoadFlags_WorkDescription (§9.26 FR-W1): --work-description activates the mode; --work-description-file
+// wins when both are set (FR-W1: "file wins if both are set").
+func TestLoadFlags_WorkDescription(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	fs.String("work-description", "", "")
+	fs.String("work-description-file", "", "")
+	if err := fs.Set("work-description", "add login"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if cfg.WorkDescription != "add login" {
+		t.Errorf("WorkDescription=%q, want add login", cfg.WorkDescription)
+	}
+
+	// --work-description-file WINS over --work-description (FR-W1).
+	cfg2 := Defaults()
+	fs2 := newFlagSet(t)
+	fs2.String("work-description", "", "")
+	fs2.String("work-description-file", "", "")
+	if err := fs2.Set("work-description", "from-flag"); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "desc.txt")
+	if err := os.WriteFile(file, []byte("from-file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs2.Set("work-description-file", file); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg2, fs2)
+	if cfg2.WorkDescription != "from-file" {
+		t.Errorf("WorkDescription=%q, want from-file (file wins over flag, FR-W1)", cfg2.WorkDescription)
+	}
+
+	// Not changed → no-op (WorkDescription stays at default "").
+	cfg3 := Defaults()
+	fs3 := newFlagSet(t)
+	fs3.String("work-description", "", "")
+	fs3.String("work-description-file", "", "")
+	loadFlags(&cfg3, fs3)
+	if cfg3.WorkDescription != "" {
+		t.Errorf("WorkDescription=%q want empty (neither flag changed)", cfg3.WorkDescription)
 	}
 }
 

@@ -40,6 +40,12 @@ type Options struct {
 	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (120s)
 	Verbose     io.Writer     // optional; when set AND cfg.Verbose, diagnostics (resolved command, raw output, retries) are written here (the CLI passes stderr). nil ⇒ silent. Additive-only (PRD §14.1).
 	VerboseOn   bool          // when true, forces cfg.Verbose=true (highest precedence — CLI --verbose / library consumer override). Overrides config/env/git-config layers.
+	// WorkDescription activates work-description mode for the message role (PRD §9.26 FR-W1): a non-empty
+	// value leads the prompt with this description + the numstat skeleton and lets the model pull staged
+	// file diffs on demand via a `READ <path>` text protocol (description-first, read-on-demand). Empty ⇒
+	// the default diff-first path (§9.5) runs unchanged. Message role only; never the default. Library
+	// callers set this instead of --work-description/--work-description-file. Additive-only (PRD §14.1).
+	WorkDescription string
 	// Config optionally supplies an already-resolved configuration; when non-nil, config.Load is
 	// skipped entirely (the caller — typically the in-module CLI — has already loaded config once).
 	// Options overrides below still apply on top. nil ⇒ config.Load runs as before (standalone path).
@@ -244,6 +250,10 @@ func resolveConfig(ctx context.Context, opts Options) (config.Config, string, er
 	}
 	if opts.VerboseOn {
 		cfg.Verbose = true
+	}
+	// §9.26 FR-W1 — work-description mode (library caller override; mirrors the CLI flag).
+	if opts.WorkDescription != "" {
+		cfg.WorkDescription = opts.WorkDescription
 	}
 
 	return cfg, repoDir, nil
@@ -505,7 +515,47 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	var lastCause error
 	var payload string // hoisted: survives the loop for the FR-T1 multi-turn gate (mirrors CommitStaged)
 
-	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
+	// §9.26 FR-W1/FR-W8: work-description mode (dry-run path). When cfg.WorkDescription is non-empty,
+	// the message role uses the description-first read-on-demand loop instead of the diff-first loop.
+	// On success the message is deduped (FR-W7); duplicate/no-valid-message → rescue (byte-identical to
+	// the commit path). FR-W7: does NOT cascade into multi-turn fallback. When active, the DEFAULT loop
+	// below is SKIPPED entirely (FR-W1: either/or).
+	workDescActive := cfg.WorkDescription != ""
+	if workDescActive {
+		wdSysPrompt := prompt.BuildWorkDescSystemPrompt(sysPrompt, cfg.WorkDescReadRounds)
+		skeleton, serr := deps.Git.StagedNumstatSkeleton(ctx, git.StagedDiffOptions{
+			MaxDiffBytes:     cfg.MaxDiffBytes,
+			MaxMDLines:       cfg.MaxMdLines,
+			BinaryExtensions: cfg.BinaryExtensions,
+			Excludes:         deps.Excludes,
+			DiffContext:      cfg.DiffContextValue(),
+		})
+		if serr != nil {
+			return Result{}, fmt.Errorf("work-description skeleton: %w", serr)
+		}
+		wdPayload := prompt.BuildWorkDescPayload(cfg.WorkDescription, cfg.Context, skeleton)
+		wdMsg, wdOK, wdCause := generate.RunWorkDescription(ctx, deps, cfg, deps.Manifest,
+			wdSysPrompt, wdPayload, skeleton, msgModel, msgReasoning)
+		if wdCause != nil {
+			if errors.Is(wdCause, context.DeadlineExceeded) {
+				return Result{}, &generate.RescueError{Kind: generate.ErrTimeout, TreeSHA: treeSHA, ParentSHA: parentSHA, Candidate: wdMsg, Cause: wdCause}
+			}
+			lastCause = wdCause
+		} else if wdOK {
+			finalMsg := generate.FinalizeMessage(wdMsg, cfg)
+			signal.SetCandidate(finalMsg)
+			if !generate.IsDuplicate(generate.ExtractSubject(finalMsg), recent) {
+				msg = finalMsg
+				success = true
+			} else {
+				candidate = finalMsg
+			}
+		} else {
+			candidate = wdMsg
+		}
+	}
+
+	for attempt := 0; attempt <= cfg.MaxDuplicateRetries && !success && !workDescActive; attempt++ {
 		payload = prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
 			payload = retryInstr + "\n\n" + payload
@@ -570,7 +620,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		// delivery of a payload that exceeded what one request could carry. When token_limit is set
 		// (non-zero) it truncated the one-shot `diff`/`payload` above; for the multi-turn path we
 		// RE-CAPTURE the diff with TokenLimit=0 and rebuild the payload from the UNTRUNCATED diff.
-		if cfg.MultiTurnFallback &&
+		if cfg.MultiTurnFallback && !workDescActive &&
 			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
 			// FR-T2/Issue4: mtPayload is ALWAYS rebuilt from the untruncated `diff` via BuildUserPayload

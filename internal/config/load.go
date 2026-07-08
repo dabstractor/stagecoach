@@ -315,6 +315,12 @@ func loadEnv(cfg *Config) error {
 		cfg.NoVerify = b // DIRECT set — can be false (escape hatch, mirrors STAGECOACH_PUSH)
 	}
 
+	// §9.26 FR-W1 — work-description text via env (presence-semantic, mirrors STAGECOACH_PROVIDER).
+	// --work-description-file (when set) wins over this in loadFlags; env sets the base value here.
+	if v, ok := os.LookupEnv("STAGECOACH_WORK_DESCRIPTION"); ok && v != "" {
+		cfg.WorkDescription = v
+	}
+
 	return nil
 }
 
@@ -445,6 +451,22 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	if fs.Changed("no-verify") {
 		if v, err := fs.GetBool("no-verify"); err == nil {
 			cfg.NoVerify = v // DIRECT set
+		}
+	}
+
+	// §9.26 FR-W1 — work-description mode. --work-description sets the text; --work-description-file
+	// reads it from a file and WINS if both are set (FR-W1). ENV (STAGECOACH_WORK_DESCRIPTION) already
+	// set the base value above; the flag(s) override it here when changed.
+	if fs.Changed("work-description") {
+		if v, err := fs.GetString("work-description"); err == nil {
+			cfg.WorkDescription = v
+		}
+	}
+	if fs.Changed("work-description-file") {
+		if path, err := fs.GetString("work-description-file"); err == nil {
+			if b, rerr := os.ReadFile(path); rerr == nil {
+				cfg.WorkDescription = string(b) // file wins over --work-description AND env (FR-W1)
+			}
 		}
 	}
 }

@@ -156,4 +156,25 @@ multi_turn_fallback = false
 				"mirrors auto_stage_all). Pinned here as known/tested behavior.", dst.MultiTurnFallback)
 		}
 	})
+
+	// ---- §9.26 FR-W6: work_desc_read_rounds end-to-end (file → resolved value) ----
+	t.Run("loadTOML/work_desc_read_rounds_end_to_end", func(t *testing.T) {
+		body := `
+[generation]
+work_desc_read_rounds = 8
+`
+		path := writeTempTOML(t, body)
+		cfg, err := loadTOML(path)
+		if err != nil || cfg == nil {
+			t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+		}
+		if cfg.WorkDescReadRounds != 8 {
+			t.Errorf("loadTOML WorkDescReadRounds = %d, want 8 (materialized file value)", cfg.WorkDescReadRounds)
+		}
+		dst := Defaults() // 5
+		overlay(&dst, cfg)
+		if dst.WorkDescReadRounds != 8 {
+			t.Errorf("after overlay: WorkDescReadRounds = %d, want 8 (resolved)", dst.WorkDescReadRounds)
+		}
+	})
 }

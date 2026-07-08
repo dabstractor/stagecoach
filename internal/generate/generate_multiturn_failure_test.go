@@ -142,7 +142,7 @@ func TestCommitStaged_MultiTurnSmallPayloadSkip_RescueInvariant(t *testing.T) {
 	cfg := config.Defaults()                        // MultiTurnChunkTokens=32000 (default) ⇒ cond (b) false
 	cfg.MaxDuplicateRetries = 0
 
-	assertMultiTurnRescue(t, repo, m, cfg, 1) // one-shot ONLY; Run never entered
+	_ = assertMultiTurnRescue(t, repo, m, cfg, 1) // one-shot ONLY; Run never entered
 }
 
 // (c) NON-APPEND PROVIDER SKIP (FR-T1d negative). SessionMode UNSET (claude-shaped) + large payload ⇒
@@ -161,5 +161,5 @@ func TestCommitStaged_MultiTurnNonAppendSkip_RescueInvariant(t *testing.T) {
 	cfg.MaxDuplicateRetries = 0
 	cfg.MultiTurnChunkTokens = 4 // cond (b) true ⇒ ONLY cond (d) fails
 
-	assertMultiTurnRescue(t, repo, m, cfg, 1) // one-shot ONLY; Run never entered
+	_ = assertMultiTurnRescue(t, repo, m, cfg, 1) // one-shot ONLY; Run never entered
 }

@@ -54,6 +54,7 @@ type fileGeneration struct {
 	MaxDuplicateRetries  int      `toml:"max_duplicate_retries"`
 	MultiTurnFallback    bool     `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (default true); only-true-propagates (mirrors AutoStageAll)
 	MultiTurnChunkTokens int      `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size in tokens (default 32000); != 0 guard (mirrors TokenLimit)
+	WorkDescReadRounds   int      `toml:"work_desc_read_rounds"`    // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
 	SubjectTargetChars   int      `toml:"subject_target_chars"`
 	Output               string   `toml:"output"`
 	StripCodeFence       *bool    `toml:"strip_code_fence"`
@@ -252,6 +253,10 @@ func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
 	if g.MultiTurnChunkTokens != 0 {
 		c.MultiTurnChunkTokens = g.MultiTurnChunkTokens
 	}
+	// §9.26 FR-W6 — work_desc_read_rounds (int; != 0, mirrors MultiTurnChunkTokens).
+	if g.WorkDescReadRounds != 0 {
+		c.WorkDescReadRounds = g.WorkDescReadRounds
+	}
 	if g.SubjectTargetChars != 0 {
 		c.SubjectTargetChars = g.SubjectTargetChars
 	}
@@ -386,6 +391,10 @@ func overlay(dst, src *Config) {
 	// §9.24 FR-T3 — multi_turn_chunk_tokens (int; != 0, mirrors TokenLimit/MaxCommits).
 	if src.MultiTurnChunkTokens != 0 {
 		dst.MultiTurnChunkTokens = src.MultiTurnChunkTokens
+	}
+	// §9.26 FR-W6 — work_desc_read_rounds (int; != 0, mirrors MultiTurnChunkTokens).
+	if src.WorkDescReadRounds != 0 {
+		dst.WorkDescReadRounds = src.WorkDescReadRounds
 	}
 	if src.SubjectTargetChars != 0 {
 		dst.SubjectTargetChars = src.SubjectTargetChars

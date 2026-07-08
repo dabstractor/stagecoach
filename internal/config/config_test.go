@@ -52,6 +52,12 @@ func TestDefaults(t *testing.T) {
 	if c.MultiTurnChunkTokens != 32000 {
 		t.Errorf("MultiTurnChunkTokens = %d, want 32000 (§9.24 FR-T3)", c.MultiTurnChunkTokens)
 	}
+	if c.WorkDescReadRounds != 5 {
+		t.Errorf("WorkDescReadRounds = %d, want 5 (§9.26 FR-W6)", c.WorkDescReadRounds)
+	}
+	if c.WorkDescription != "" {
+		t.Errorf("WorkDescription = %q, want empty (§9.26 FR-W1: never the default)", c.WorkDescription)
+	}
 	if c.SubjectTargetChars != 50 {
 		t.Errorf("SubjectTargetChars = %d, want 50", c.SubjectTargetChars)
 	}

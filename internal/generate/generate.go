@@ -271,7 +271,52 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	var payload string   // hoisted: the last-built payload survives the loop for the FR-T1 gate (D1)
 	success := false
 
-	for attempt := 0; attempt <= cfg.MaxDuplicateRetries; attempt++ {
+	// §9.26 FR-W1/FR-W8: work-description mode. When cfg.WorkDescription is non-empty, the message role
+	// uses the description-first read-on-demand loop INSTEAD of the default diff-first one-shot/multi-turn
+	// paths. FR-W7: it does NOT cascade into multi-turn fallback (§9.24) — a user who wants that runs
+	// without --work-description. On a non-append provider, RunWorkDescription's turn-1 RenderMultiTurn
+	// yields a cause (its session_mode gate) → rescue (FR-W4: provider support is identical to §9.24).
+	// On success the message is deduped (FR-W7: the normal ParseOutput → FinalizeMessage → dedupe path);
+	// a duplicate or no-valid-message falls through to the existing rescue (§9.10). When the mode is
+	// active, the DEFAULT diff-first loop below is SKIPPED entirely (FR-W1: either/or, not both).
+	workDescActive := cfg.WorkDescription != ""
+	if workDescActive {
+		wdSysPrompt := prompt.BuildWorkDescSystemPrompt(sysPrompt, cfg.WorkDescReadRounds)
+		skeleton, serr := deps.Git.StagedNumstatSkeleton(ctx, git.StagedDiffOptions{
+			MaxDiffBytes:     cfg.MaxDiffBytes,
+			MaxMDLines:       cfg.MaxMdLines,
+			BinaryExtensions: cfg.BinaryExtensions,
+			Excludes:         deps.Excludes,
+			DiffContext:      cfg.DiffContextValue(),
+		})
+		if serr != nil {
+			return Result{}, fmt.Errorf("work-description skeleton: %w", serr)
+		}
+		wdPayload := prompt.BuildWorkDescPayload(cfg.WorkDescription, cfg.Context, skeleton)
+		wdMsg, wdOK, wdCause := RunWorkDescription(ctx, deps, cfg, deps.Manifest,
+			wdSysPrompt, wdPayload, skeleton, msgModel, msgReasoning)
+		if wdCause != nil {
+			// FR-T7 parity: a turn error/timeout/cancel/non-append-provider aborts → rescue.
+			lastCause = wdCause
+			if errors.Is(wdCause, context.DeadlineExceeded) {
+				return Result{}, &RescueError{Kind: ErrTimeout, TreeSHA: treeSHA, ParentSHA: parentSHA, Candidate: wdMsg, Cause: wdCause}
+			}
+		} else if wdOK {
+			// FR-W7: dedupe the result (FinalizeMessage BEFORE dedupe, one-shot parity — D3).
+			finalMsg := FinalizeMessage(wdMsg, cfg)
+			signal.SetCandidate(finalMsg)
+			if !IsDuplicate(ExtractSubject(finalMsg), recent) {
+				msg = finalMsg
+				success = true
+			} else {
+				candidate = finalMsg // duplicate → rescue with the finalized candidate
+			}
+		} else {
+			candidate = wdMsg // no valid message after the round cap → rescue (FR-W7)
+		}
+	}
+
+	for attempt := 0; attempt <= cfg.MaxDuplicateRetries && !success && !workDescActive; attempt++ {
 		// Build user payload each attempt (rejection list / retry_instruction change).
 		payload = prompt.BuildUserPayload(diff, cfg.Context, rejected)
 		if parseFail {
@@ -346,7 +391,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		// the feature delivers its headline benefit even when token_limit truncates the one-shot
 		// payload below the chunk threshold. When token_limit is unset (0) the re-capture is skipped
 		// (the captured payload is already untruncated), keeping the fast path fast.
-		if cfg.MultiTurnFallback &&
+		if cfg.MultiTurnFallback && !workDescActive &&
 			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
 			// FR-T2/FR-T12: mtPayload is ALWAYS rebuilt from the untruncated `diff` via BuildUserPayload

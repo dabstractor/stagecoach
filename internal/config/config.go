@@ -83,6 +83,7 @@ type Config struct {
 	MaxDuplicateRetries  int  `toml:"max_duplicate_retries"`   // re-gen attempts on duplicate subject
 	MultiTurnFallback    bool `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (lossless large-diff priming); default true; consumed by P1.M1.T3.S3 trigger gate
 	MultiTurnChunkTokens int  `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size (tokens est) for multi-turn; default 32000; consumed by P1.M1.T3.S2 protocol
+	WorkDescReadRounds   int  `toml:"work_desc_read_rounds"`    // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
 	SubjectTargetChars   int  `toml:"subject_target_chars"`    // target subject length for truncation
 	// Format selects the commit-message style (PRD §9.19 FR-F1): "auto" (style learning, default),
 	// "conventional", "gitmoji", or "plain". Resolved through the standard 5-layer precedence
@@ -117,6 +118,13 @@ type Config struct {
 	// Context). When true, an editor round-trip gates each commit message before publication (post-dedupe,
 	// pre-CommitTree). Default false (non-interactive). See generate.EditMessage.
 	Edit bool `toml:"-"`
+
+	// WorkDescription is the §9.26 FR-W1 work-description mode trigger text. FLAG/ENV-ONLY (no git key,
+	// no config-file key — mirrors Context's per-invocation nature): --work-description / --work-description-file
+	// / STAGECOACH_WORK_DESCRIPTION. Non-empty activates work-description mode for the message role
+	// (description-first payload + READ <path> read-on-demand loop); empty ⇒ the default diff-first path
+	// (§9.5) runs unchanged. Message role only; never the default. See generate.CommitStaged (FR-W8).
+	WorkDescription string `toml:"-"`
 
 	// Push is the §9.22 FR-P1 --push workflow convenience (full 5-layer precedence: --push /
 	// STAGECOACH_PUSH / stagecoach.push / [generation].push, default false). When true, a plain `git push`
@@ -190,6 +198,7 @@ func Defaults() Config {
 		MaxDuplicateRetries:  3,
 		MultiTurnFallback:    true,  // §9.24 FR-T1c default (multi-turn fallback enabled)
 		MultiTurnChunkTokens: 32000, // §9.24 FR-T3 default (per-request chunk size, tokens est)
+		WorkDescReadRounds:   5,     // §9.26 FR-W6 default (max read rounds in work-description mode)
 		SubjectTargetChars:   50,
 		Output:               nil,
 		StripCodeFence:       nil,

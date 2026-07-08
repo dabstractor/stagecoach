@@ -248,10 +248,10 @@ func lockDir() (string, error) {
 func (l *Locker) writeContents(snapshot string) {
 	content := fmt.Sprintf("pid=%s\nhostname=%s\nrepo=%s\ntimestamp=%s\nsnapshot=%s\n",
 		l.pid, l.hostname, l.repo, l.timestamp, snapshot)
-	l.file.Seek(0, 0)
-	l.file.Write([]byte(content))
-	l.file.Truncate(int64(len(content)))
-	l.file.Sync()
+	_, _ = l.file.Seek(0, 0)
+	_, _ = l.file.Write([]byte(content))
+	_ = l.file.Truncate(int64(len(content)))
+	_ = l.file.Sync()
 }
 
 // parseContents parses the key=value lock file contents from raw bytes.

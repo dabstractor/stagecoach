@@ -423,6 +423,23 @@ type Git interface {
 	// (timeout/signal cancel the push). Targets the repo via -C (the goroutine-safe convention). Push is
 	// the ONLY method on Git that runs a network-mutating command and the ONLY one taking io.Writer params.
 	Push(ctx context.Context, stdout, stderr io.Writer) error
+
+	// StagedNumstatSkeleton returns the compact per-file numstat skeleton for the staged change set
+	// (the same block StagedDiff prepends, PRD §9.1 FR3g), WITHOUT the diff bodies. It is the file menu
+	// for work-description mode (§9.26 FR-W2: the skeleton doubles as the menu of READ-requestable
+	// paths). opts.Excludes/BinaryExtensions/DiffContext are honored identically to StagedDiff so the
+	// menu mirrors exactly the change set the model can read. Returns "" when nothing is staged.
+	// Read-only w.r.t. refs and the index (PRD §18.1).
+	StagedNumstatSkeleton(ctx context.Context, opts StagedDiffOptions) (skeleton string, err error)
+
+	// StagedFileDiff returns the staged diff body for a SINGLE path (PRD §9.26 FR-W5: the response to a
+	// `READ <path>` request). It is the per-path slice of StagedDiff: same -M/-U<diff_context> flags, the
+	// same FR3h index-line stripping, and the same opts.Excludes/BinaryExtensions filtering — but scoped
+	// to one file and with NO skeleton header, NO byte/line cap, and NO token-limit gate (work-description
+	// mode does its own chunking via the read-round budget, §9.26 FR-W5/FR-W6). An empty result means the
+	// path has no staged changes (a non-staged READ target — the caller notes "not in the staged changes").
+	// Read-only w.r.t. refs and the index (PRD §18.1).
+	StagedFileDiff(ctx context.Context, path string, opts StagedDiffOptions) (diff string, err error)
 }
 
 // gitRunner is the production Git implementation. It wraps exec.CommandContext for the real git
@@ -2089,4 +2106,84 @@ func (g *gitRunner) Push(ctx context.Context, stdout, stderr io.Writer) error {
 		return fmt.Errorf("git push failed (exit %d)", exitErr.ExitCode())
 	}
 	return fmt.Errorf("git push: %w", runErr) // start / I/O failure
+}
+
+// StagedNumstatSkeleton returns the compact per-file numstat skeleton for the staged change set
+// (PRD §9.1 FR3g), WITHOUT the diff bodies. It is the file menu for work-description mode (PRD §9.26
+// FR-W2). It reuses numstatSkeleton (the same renderer StagedDiff uses) with the SAME exclude union
+// (default denylist + opts.Excludes) and -M so the menu mirrors exactly the change set the model can
+// READ. Returns "" when nothing is staged. Read-only w.r.t. refs and the index.
+func (g *gitRunner) StagedNumstatSkeleton(ctx context.Context, opts StagedDiffOptions) (string, error) {
+	excludes := make([]string, 0, len(defaultExcludes)+len(opts.Excludes))
+	excludes = append(excludes, defaultExcludes...) // FR3/FR-X1 source (a) — ALWAYS
+	excludes = append(excludes, opts.Excludes...)   // user union, FR-X1 sources (b)+(c)+(d)
+	args := make([]string, 0, 2+len(excludes)+1)
+	args = append(args, "--cached", "-M")
+	args = append(args, "--")
+	args = append(args, excludes...)
+	return g.numstatSkeleton(ctx, args...)
+}
+
+// StagedFileDiff returns the staged diff body for a SINGLE path (PRD §9.26 FR-W5: the response to a
+// `READ <path>` request). It is the per-path slice of StagedDiff: same -M/-U<diff_context> flags and
+// the same FR3h index-line stripping, but scoped to one file, with NO skeleton header, NO byte/line
+// cap, and NO token-limit gate (work-description mode does its own chunking, §9.26 FR-W5/FR-W6).
+// opts.Excludes/BinaryExtensions are honored (a path that the excludes match is treated as not-staged
+// → returns ""). An empty result means the path has no staged changes (a non-staged READ target).
+// Read-only w.r.t. refs and the index.
+func (g *gitRunner) StagedFileDiff(ctx context.Context, path string, opts StagedDiffOptions) (string, error) {
+	if path == "" {
+		return "", nil // a bare READ with no path is a non-staged target (caller notes it)
+	}
+	// FR3/FR-X1 exclude union — if the path matches a user/default exclude, treat it as not-readable
+	// (the model never sees excluded paths in the skeleton either, so this keeps READ consistent).
+	if isExcludedPath(path, opts.Excludes) {
+		return "", nil
+	}
+	// A binary file has no useful text diff — return "" so the caller notes it as not-readable
+	// (binary placeholders are a StagedDiff concern; work-description mode surfaces binary via the
+	// skeleton's `-	-	<path>` row, not a READ body).
+	if isBinaryByExtension(path, opts.BinaryExtensions) {
+		return "", nil
+	}
+	args := append(buildDiffArgs(opts, "--cached"), "--", path)
+	out, stderr, code, err := g.run(ctx, g.workDir, args...)
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("git diff --cached -- %s: failed (exit %d): %s", path, code, strings.TrimSpace(stderr))
+	}
+	return stripIndexLines(out), nil
+}
+
+// isExcludedPath reports whether path matches the default denylist OR one of the user exclude globs.
+// It mirrors the exclude logic StagedDiff applies to BOTH the skeleton and the diff bodies (FR3/FR-X1
+// union), so a READ request for an excluded path is consistent with what the model sees in the menu.
+// Default excludes are exact path/match tests (the built-in denylist); user excludes are gitignore-
+// style globs evaluated by git itself via a cheap `git check-ignore`-free pathspec match here (a path
+// outside the user's globs is READ-able). The skeleton already reflects excludes, so this is a
+// belt-and-suspenders guard against a model emitting a path it shouldn't read.
+func isExcludedPath(path string, userExcludes []string) bool {
+	for _, ex := range defaultExcludes {
+		if ex == path {
+			return true
+		}
+	}
+	for _, pattern := range userExcludes {
+		if matched, _ := filepath.Match(pattern, path); matched {
+			return true
+		}
+		// gitignore-style: a trailing-slash or directory pattern matches paths beneath it.
+		if strings.HasSuffix(pattern, "/") && strings.HasPrefix(path, pattern) {
+			return true
+		}
+		if !strings.ContainsAny(pattern, "*?[") {
+			// a literal prefix (e.g. "vendor/") matches paths beneath it
+			if strings.HasPrefix(path, pattern+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }

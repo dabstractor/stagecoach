@@ -113,6 +113,15 @@ var (
 // counterpart — read only via fs.Changed/fs.GetString in loadFlags (same discipline as flagExclude).
 var flagContext string
 
+// §9.26 FR-W1 — work-description flags (--work-description / --work-description-file). The text value is
+// resolved by config.Load via fs.Changed (file wins over --work-description when both are set, FR-W1);
+// read only via fs.Changed/fs.GetString in loadFlags (same discipline as flagContext). STAGECOACH_WORK_DESCRIPTION
+// is the env counterpart (per-invocation nature, but env IS allowed here — mirrors --provider).
+var (
+	flagWorkDescription     string
+	flagWorkDescriptionFile string
+)
+
 // loadedCfg holds the config resolved in PersistentPreRunE; nil until then. Read by Config().
 var loadedCfg *config.Config
 
@@ -217,6 +226,15 @@ func init() {
 		"Bypass pre-commit and commit-msg hooks for this commit (mirrors git commit --no-verify; "+
 			"prepare-commit-msg and post-commit still run). (env STAGECOACH_NO_VERIFY, git "+
 			"stagecoach.noVerify; default false.) (§9.25 FR-V5)")
+	// §9.26 FR-W1 — work-description mode (description-first, read-on-demand). Either flag activates it
+	// for the message role; --work-description-file wins if both are set.
+	pf.StringVar(&flagWorkDescription, "work-description", "",
+		"Activate work-description mode: lead the prompt with this description of the work and let the "+
+			"model read staged file diffs on demand (message role only; never the default). "+
+			"(env STAGECOACH_WORK_DESCRIPTION; flag/file only.) (§9.26 FR-W1)")
+	pf.StringVar(&flagWorkDescriptionFile, "work-description-file", "",
+		"Activate work-description mode with the description read from this file (wins over "+
+			"--work-description when both are set). (§9.26 FR-W1)")
 	// §15.2 reasoning flags (FR-R6) — global + per-role; zero default; loadFlags reads via fs.Changed.
 	pf.StringVar(&flagReasoning, "reasoning", "",
 		"Global reasoning effort: off|low|medium|high (env STAGECOACH_REASONING; git stagecoach.reasoning; default off for every role)")

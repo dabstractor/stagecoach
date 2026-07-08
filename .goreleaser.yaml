@@ -70,9 +70,11 @@ release:
   draft: false
   prerelease: auto                 # prerelease if the tag looks like a pre-release (e.g. -rc1).
 
-# Homebrew Casks (replaces deprecated brews/formulas in goreleaser v2.10+).
+# Homebrew formula (brews:). stagecoach is a CLI binary, so it ships as a Homebrew formula
+# (installed to $HOMEBREW_PREFIX/bin, on $PATH), NOT a cask (casks are for macOS GUI .app bundles
+# installed to /Applications). `brews:` is the current, non-deprecated field in goreleaser v2.
 # Users install with: brew install dustin/tap/stagecoach
-homebrew_casks:
+brews:
   - repository:
       owner: dustin
       name: homebrew-tap           # PRD §21.2: tap repo github.com/dustin/homebrew-tap
@@ -80,6 +82,8 @@ homebrew_casks:
     homepage: https://github.com/dustin/stagecoach
     description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
     license: MIT                   # ADJUST to the repo's actual license if different.
+    install: |
+      bin.install "stagecoach"
 
 scoops:
   - name: stagecoach

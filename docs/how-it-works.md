@@ -302,6 +302,32 @@ disabled and delivers the **untruncated** diff across the N+1 turns — the chun
 `token_limit`. (The re-capture is skipped when `token_limit` is unset, since the one-shot payload is
 already untruncated in that case.)
 
+## Work-description mode (description-first, read-on-demand)
+
+When you already have a description of the work (e.g. a task system that breaks work into named units and
+commits each one), the default diff-first path makes the model reverse-engineer intent you already wrote.
+**Work-description mode** inverts that: you supply the description, stagecoach leads the prompt with it
+plus the file-change skeleton (the list of changed files), and the model pulls specific file diffs on
+demand by writing `READ <path>` on its own line (PRD §9.26). It needs no tool-calling support and runs in
+bare mode on every provider, because the only action is reading a staged file's diff.
+
+Activate it with `--work-description "..."` (or `--work-description-file <path>`, which wins when both
+are set; env `STAGECOACH_WORK_DESCRIPTION`). Message role only; never the default. Directing guidance
+("phrase it this way") still uses `--context` — the two inputs are distinct: `--work-description` is the
+*what*, `--context` is the *how*.
+
+The read/answer exchange accumulates in one provider session via `session_mode = "append"` (the same
+machinery multi-turn uses, §9.24), so provider support is identical (pi ships `"append"`; others ship
+`""` until verified). The model has at most `work_desc_read_rounds` rounds (default 5) of READ requests;
+after that, stagecoach refuses further reads and demands the commit message (FR-W6 guarantees
+termination). A response with no `READ` line is the commit message, parsed through the normal
+parse + duplicate-rejection pipeline (so `--format`, `--locale`, `--template`, `--edit` all apply).
+
+If nothing is staged when `--work-description` is present, stagecoach auto-stages all (even with
+`auto_stage_all` disabled), mirroring the default action's empty-tree behavior. The mode composes with
+`--dry-run`, hooks, and the snapshot/CAS/rescue core. It does **not** cascade into multi-turn fallback —
+a user who wants that degradation runs without `--work-description`.
+
 ## Commit hooks on the plumbing path
 
 As of v2.4, the snapshot-based flow runs your repository's standard commit hooks itself — you no longer

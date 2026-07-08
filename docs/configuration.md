@@ -109,6 +109,7 @@ model = "sonnet"
 # diff_context          = 1       # 0 = changed-lines-only, 1 = one anchor (default), 3 = git default; FR3f; valid range 0–3 — out-of-range rejected at config load
 # multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion (§9.24 FR-T1c); CANNOT disable via file (see "Multi-turn fallback" below)
 # multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens (§9.24 FR-T3); does NOT interact with token_limit (FR-T12)
+# work_desc_read_rounds  = 5       # max READ rounds in work-description mode (§9.26 FR-W6); flag/env activate the mode, not this knob
 # exclude               = []   # UNIONS across layers — see "Exclusion globs" below
 # format                = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
 # locale                = ""       # free-form language name or BCP-47 tag; never validated
@@ -138,6 +139,7 @@ These are the values when no config file, env var, git-config key, or flag sets 
 | `max_duplicate_retries` | `3` | `config.Defaults()` |
 | `multi_turn_fallback` | `true` | `config.Defaults()` (§9.24 FR-T1c) |
 | `multi_turn_chunk_tokens` | `32000` | `config.Defaults()` (§9.24 FR-T3) |
+| `work_desc_read_rounds` | `5` | `config.Defaults()` (§9.26 FR-W6) |
 | `subject_target_chars` | `50` | `config.Defaults()` |
 | `output` | `"raw"` | provider manifest (§12.1) |
 | `strip_code_fence` | `true` | provider manifest (§12.1) |
