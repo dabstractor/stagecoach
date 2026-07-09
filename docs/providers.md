@@ -82,7 +82,7 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, q
 | `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | — no |
 | `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | — no |
 | `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | — no |
-| `agy` | stdin | `-p` | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--approval-mode default`) | — no |
+| `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | — no |
 | `qwen-code` | stdin | `-p` | `-m` | `qwen3-coder-plus` ⚠️ | (prepended) | Read-only constraint (`--approval-mode default`) | — no ⚠️ |
 
 Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending the remaining §12.5.1.1 checklist items (the non-TTY stdout drop, issue #76, no longer reproduces as of 2026-07-03) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).

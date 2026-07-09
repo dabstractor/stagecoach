@@ -118,14 +118,14 @@
               "type": "Task",
               "id": "P2.M3.T1",
               "title": "Fix residual docs/providers.md drift (agy table row, date, provider count)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Seven specific drift items in docs/providers.md: the agy quick-reference table row has two stale cells (print flag and tool-disable approach), the #76 verification date is stale, and the provider count '8' appears in four places where it should be '7'.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M3.T1.S1",
                   "title": "Correct the agy quick-reference table row (print flag + tool-disable cells)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P2.M2.T1.S1"
@@ -142,7 +142,7 @@
                   "type": "Subtask",
                   "id": "P2.M3.T1.S2",
                   "title": "Fix verification date and provider count in docs/providers.md",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 0.5,
                   "dependencies": [
                     "P2.M2.T1.S2"
