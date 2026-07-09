@@ -1,0 +1,14 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: auto_stage_all = false in a TOML config file is silently ignored
+  h3.1 Issue 2: Documented git-config key stagecoach.auto_stage_all is invalid; only the undocumented camelCase form works
+  h3.2 Issue 3: No environment-variable source for auto_stage_all
+ h2.3 Minor Issues (Nice to Fix)
+  h3.3 Issue 4: STAGECOACH_VERBOSE=2 is rejected (PRD §19 documents it for stdin-contents logging)
+  h3.4 Issue 5: --verbose payload-size line is missing for positional/flag-delivery providers
+  h3.5 Issue 6: --model (global) does not override a per-role [role.message] model — surprising UX (by-spec)
+ h2.4 Testing Summary
+---
+para:19 list:3
