@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Confirm gemini built-in removal from the built-in set and all references",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The gemini (Gemini CLI) provider is no longer shipped. Confirm its removal from the provider registry, role defaults, TOML files, and all PRD cross-references. The word 'gemini' legitimately persists as model names (e.g. gemini-3.5-pro, Gemini 3.5 Flash) because agy runs the Gemini model family; those are correct and must NOT be touched.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "Verify gemini is removed from the built-in provider set and all references",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Confirm the code already matches the spec: exactly seven built-ins with no gemini entry, preferredBuiltins has no gemini, providers/gemini.toml does not exist, and the PRD §12.5 carries the REMOVED stub with clean cross-references.",
               "subtasks": [
                 {
@@ -41,7 +41,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T1.S2",
                   "title": "Confirm PRD §12.5 carries the REMOVED stub and cross-references are clean",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -77,7 +77,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T1.S1",
                   "title": "Verify the agy manifest fields in code match §12.5.1",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 0.5,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (code_gemini_agy_audit.md Check 1) confirmed all eight agy manifest fields MATCH at builtin.go:199-217. This is a verification subtask.\n2. INPUT: `internal/provider/builtin.go` `builtinAgy()` (around line 199) and `providers/agy.toml`.\n3. LOGIC: Confirm the manifest matches PRD §12.5.1 exactly:\n   - `PrintFlag = strPtr(\"\")` (non-nil empty) — agy v1.1.0's -p is value-taking; bare -p fails.\n   - `ModelFlag = strPtr(\"--model\")` — NOT `-m` (rejected in v1.1.0).\n   - `PromptDelivery = \"stdin\"` — agy reads stdin when -p is absent.\n   - `DefaultModel = \"Gemini 3.5 Flash (Low)\"` — agy models display label VERBATIM (reasoning suffix included).\n   - `BareFlags = []string{\"--mode\", \"plan\"}`` — NOT `[\"--approval-mode\", \"default\"]` (removed in v1.1.0).\n   - `ListModelsCommand = []string{\"agy\", \"models\"}`.\n   - `Experimental = true`.\n   - `TooledFlags` nil (agy cannot serve as stager until §12.5.1.1 item 4 is resolved).\n   Also confirm `internal/config/role_defaults.go` agy defaults use display labels: planner=\"Gemini 3.5 Flash (High)\", message=\"Gemini 3.5 Flash (Low)\", arbiter=\"Gemini 3.5 Flash (Medium)\", stager=\"\" (nil TooledFlags).\n   The corrected render is: `agy --model \"<label>\" --mode plan < <sys+user payload via stdin>` (no -p).\n4. OUTPUT: A one-line confirmation per field. All should PASS.\n5. DOCS: The manifest comments in builtin.go/providers/agy.toml carry the 2026-07-08 verification record — confirm they are present and dated. This is the in-code documentation (Mode A).",
