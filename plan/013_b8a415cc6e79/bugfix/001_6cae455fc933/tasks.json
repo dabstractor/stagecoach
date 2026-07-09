@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Convert AutoStageAll & MultiTurnFallback to *bool precedence-aware overlay (Issue 1)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "The core fix: both default-true booleans use an 'only-true-propagates' overlay (if src.X { dst.X = true }) that silently drops an explicit false. Convert them to *bool end-to-end (nil = inherit lower layer; non-nil incl. *false = explicit override), following the 1:1 proven DiffContext *int precedent. This is a cross-cutting but mechanical type change (~12 code sites).",
               "subtasks": [
                 {
@@ -39,7 +39,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "End-to-end integration tests: TOML/git-config false disables auto-stage and multi-turn fallback",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
