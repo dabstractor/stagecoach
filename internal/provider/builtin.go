@@ -182,49 +182,67 @@ func builtinGemini() Manifest {
 }
 
 // builtinAgy returns the agy (Google Antigravity CLI) manifest per PRD §12.5.1 (the Gemini-CLI successor,
-// superseded gemini on 2026-06-18). Flag surface VERIFIED vs `agy --help` + live -p runs on 2026-07-03:
-// the model flag is `--model` ONLY (`-m` is rejected: "flags provided but not defined"; agy defines short
-// aliases only for -c/-i/-p). Still ships Experimental=true (§12.7.2) until the remaining §12.5.1.1 items
-// clear. agy has no first-class system-prompt flag → sys is PREPENDED to the payload (§12.2), like gemini.
-// `--approval-mode default` is a read-only, never-ask profile (§12.7.1 "read-only constraint").
+// superseded gemini on 2026-06-18). Flag surface RE-VERIFIED vs `agy --help` + live stdin runs on
+// 2026-07-08 against agy v1.1.0. The Antigravity CLI has DIVERGED from the gemini-cli lineage it forked
+// from: the bare-roles invocation the 2026-07-03 manifest assumed (`--approval-mode default -p` + stdin)
+// no longer works on v1.1.0. Two corrections:
 //
-// MODEL NAMES (verified 2026-07-03): agy's --model takes the DISPLAY LABEL from `agy models` VERBATIM,
-// reasoning level included — e.g. "Gemini 3.5 Flash (Low)" / "Gemini 3.1 Pro (High)". Reasoning is NOT a
+//   - PROMPT DELIVERY: `-p`/`--print`/`--prompt` is VALUE-TAKING (the prompt is its argument), NOT a
+//     boolean print-mode flag. A bare `-p` fails with "flag needs an argument: -p". Empirically, agy
+//     reads the prompt from STDIN when `-p` is ABSENT (or empty) and stdin is a pipe (non-TTY): a no-`-p`
+//     run with piped stdin prints the response and exits 0. So stagecoach uses prompt_delivery="stdin" with
+//     PrintFlag="" (NO bare -p). This also routes ~300 KB diffs over stdin — a bare `-p` would demand a
+//     value, and argv/positional delivery would hit Linux's 128 KB MAX_ARG_STRLEN ceiling.
+//   - READ-ONLY CONSTRAINT: agy v1.1.0 has NO `--approval-mode` flag (the gemini-cli lineage's flag was
+//     removed). The read-only, never-ask equivalent is `--mode plan` (choices: accept-edits | plan).
+//     Verified: `--mode plan` + stdin yields CLEAN commit-message output — no plan-mode formatting noise —
+//     so bare roles stay read-only without polluting the message.
+//
+// The model flag is `--model` ONLY (`-m` is rejected: "flags provided but not defined"; agy defines short
+// aliases only for -c/-i/-p). agy has no first-class system-prompt flag → sys is PREPENDED to the payload
+// (§12.2), like gemini.
+//
+// MODEL NAMES (verified 2026-07-08): agy's --model takes the DISPLAY LABEL from `agy models` VERBATIM,
+// reasoning level included — e.g. "Gemini 3.5 Flash (Low)" / "GPT-OSS 120B (Medium)". Reasoning is NOT a
 // separate flag (ReasoningLevels stays nil); it is baked into the label's parenthesized suffix. API-style
-// ids (gemini-3.5-flash) are NOT recognized and SILENTLY fall back to agy's own default (the backend logs
-// "Requested entity was not found" but the run succeeds on the fallback model) — so these labels, spaces
-// and all, are the only safe tokens.
+// ids are NOT recognized and SILENTLY fall back to agy's own default — so these labels, spaces and all,
+// are the only safe tokens. NOTE: GPT-OSS 120B is subject to transient backend 503 "No capacity available"
+// errors; retries succeed — that is an external capacity issue, not a stagecoach bug.
 //
-// §12.5.1.1 item 1 (issue #76, non-TTY stdout drop): NO LONGER REPRODUCES — 2026-07-03 live `agy -p` runs
-// from a non-TTY returned stdout correctly. Kept experimental until the full §12.5.1.1 checklist clears.
+// §12.5.1.1 status (2026-07-08, v1.1.0): item 1 (issue #76, non-TTY stdout drop) NO LONGER REPRODUCES —
+// live stdin runs from a non-TTY return stdout correctly (PONG, full commit messages). Items 2 (`--model`)
+// and 3 (no system-prompt flag) CLEARED. Item 4 (tooled/stager flags) remains OPEN, so agy still cannot
+// serve as a stager and stays Experimental=true until it clears.
 //
 // STAGER: TooledFlags is intentionally nil — agy CANNOT serve as a stager until §12.5.1.1 item 4 (the
 // scoped, non-interactive, git-scoped tool combo) is verified. RenderTooled errors on nil tooled_flags.
 //
-// NOTE: (1) PrintFlag="-p" (NON-NIL). (2) SystemPromptFlag/ProviderFlag are strPtr("") — §12.5.1 WRITES
-// them "" (NON-NIL empty): no sys flag (sys prepended, §12.2), no sub-provider. (3) default_model is
-// "Gemini 3.5 Flash (Low)" (label form; refreshed from gemini-3.1-pro per FR-D5, verified 2026-07-03).
-// (4) Experimental=boolPtr(true) (ships experimental).
-// (5) Subcommand/PromptFlag/JsonField/RetryInstruction/Env/TooledFlags/ReasoningLevels are nil (absent,
-// like gemini). agy is the Gemini-lineage twin of gemini, differing in default_model + Experimental.
+// NOTE: (1) PrintFlag="" (NON-NIL empty — agy reads stdin; a bare -p is value-taking and breaks delivery).
+// (2) SystemPromptFlag/ProviderFlag are strPtr("") — §12.5.1 WRITES them "" (NON-NIL empty): no sys flag
+// (sys prepended, §12.2), no sub-provider. (3) DefaultModel="Gemini 3.5 Flash (Low)" (label form; verified
+// 2026-07-08). (4) Experimental=boolPtr(true) (item 4 still open). (5) BareFlags=["--mode","plan"] (the
+// v1.1.0 read-only equivalent of the removed --approval-mode default). (6) Subcommand/PromptFlag/JsonField/
+// RetryInstruction/Env/TooledFlags/ReasoningLevels are nil (absent, like gemini). agy is the Gemini-lineage
+// twin of gemini, differing in model flag (--model vs -m), delivery (stdin w/o -p), bare flag (--mode plan
+// vs --approval-mode default), default_model + Experimental.
 func builtinAgy() Manifest {
 	return Manifest{
 		Name:              "agy",
 		Detect:            strPtr("agy"),
 		Command:           strPtr("agy"),
-		ListModelsCommand: []string{"agy", "models"}, // VERIFIED 2026-07-03 via `agy models` (exit 0); FR-L2/FR-D5.
+		ListModelsCommand: []string{"agy", "models"}, // VERIFIED 2026-07-08 via `agy models` (exit 0); FR-L2/FR-D5.
 		PromptDelivery:    strPtr("stdin"),
-		PrintFlag:         strPtr("-p"),
-		ModelFlag:         strPtr("--model"),                // `-m` is REJECTED by agy (verified 2026-07-03)
-		DefaultModel:      strPtr("Gemini 3.5 Flash (Low)"), // display LABEL, verbatim incl. reasoning suffix (verified 2026-07-03)
+		PrintFlag:         strPtr(""),                       // NON-NIL empty — agy reads stdin; a bare -p is value-taking and breaks delivery (verified 2026-07-08, agy v1.1.0)
+		ModelFlag:         strPtr("--model"),                // `-m` is REJECTED by agy (verified 2026-07-08)
+		DefaultModel:      strPtr("Gemini 3.5 Flash (Low)"), // display LABEL, verbatim incl. reasoning suffix (verified 2026-07-08)
 		SystemPromptFlag:  strPtr(""),                       // §12.5.1 NON-NIL empty — no sys flag; sys prepended to payload (§12.2)
 		ProviderFlag:      strPtr(""),                       // §12.5.1 NON-NIL empty — agy has no sub-provider
 		BareFlags: []string{
-			"--approval-mode", "default", // read-only, never-ask profile (don't auto-run tools)
+			"--mode", "plan", // read-only, never-ask profile. agy v1.1.0 has NO --approval-mode; plan = read-only (verified 2026-07-08).
 		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
-		Experimental:   boolPtr(true), // §12.5.1.1 ships experimental (non-TTY stdout drop, issue #76)
+		Experimental:   boolPtr(true), // §12.5.1.1 ships experimental (tooled/stager flags, item 4, still open)
 		// TooledFlags: nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
 		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent, like gemini).
 	}
@@ -234,9 +252,11 @@ func builtinAgy() Manifest {
 // (npm @qwen-code/qwen-code; GitHub QwenLM/qwen-code) is a FORK of Google's Gemini CLI tuned for the
 // Qwen3-Coder family, reached via Alibaba Cloud Model Studio / DashScope (DASHSCOPE_API_KEY, or
 // `qwen-code login` for the free coding-plan quota). It is SINGLE-BACKEND (Qwen/DashScope), so
-// provider_flag is empty and a bare model is used. Its flag surface mirrors gemini/agy (§12.5/§12.5.1)
-// EXACTLY: stdin delivery, -m model, --approval-mode default (read-only), no first-class system-prompt
-// flag → sys is PREPENDED to the payload (§12.2).
+// provider_flag is empty and a bare model is used. Its flag surface mirrors gemini (§12.5) — a Gemini-CLI
+// fork keeps the gemini-cli lineage's flags: stdin delivery, -m model, --approval-mode default (read-only),
+// no first-class system-prompt flag → sys is PREPENDED to the payload (§12.2). NOTE: agy (§12.5.1) DIVERGED
+// from this lineage in v1.1.0 (--model, --mode plan, value-taking -p) and no longer matches; do NOT treat
+// agy and qwen-code as identical.
 //
 // Flag surface assembled from qwen-code's docs (NOT yet `--help`-verified) → ships Experimental=true
 // (§12.7.2) until a real end-to-end run clears it. Marked `# TO CONFIRM` per FR-D5: the exact default

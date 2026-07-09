@@ -163,13 +163,13 @@ detect = "agy"
 command = "agy"
 list_models_command = ["agy", "models"]
 prompt_delivery = "stdin"
-print_flag = "-p"
+print_flag = ""
 model_flag = "--model"
 default_model = "Gemini 3.5 Flash (Low)"
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = [
-  "--approval-mode", "default",
+  "--mode", "plan",
 ]
 output = "raw"
 strip_code_fence = true
@@ -716,13 +716,13 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 	assertStr(t, "Detect", m.Detect, "agy")
 	assertStr(t, "Command", m.Command, "agy")
 	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
-	assertStr(t, "PrintFlag", m.PrintFlag, "-p")                           // NON-NIL (agy HAS a -p print flag per §12.5.1)
+	assertStr(t, "PrintFlag", m.PrintFlag, "")                             // NON-NIL empty — agy reads stdin; a bare -p is value-taking and breaks delivery (verified 2026-07-08, v1.1.0)
 	assertStr(t, "ModelFlag", m.ModelFlag, "--model")                      // `-m` is rejected by agy (verified 2026-07-03)
 	assertStr(t, "DefaultModel", m.DefaultModel, "Gemini 3.5 Flash (Low)") // display label, verbatim (verified 2026-07-03)
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "")               // NON-NIL explicit empty (prepend)
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "")                       // NON-NIL explicit empty
 	assertStr(t, "ProviderFlag", m.ProviderFlag, "")                       // NON-NIL explicit empty
-	wantBare := []string{"--approval-mode", "default"}
+	wantBare := []string{"--mode", "plan"}
 	if !reflect.DeepEqual(m.BareFlags, wantBare) {
 		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
 	}
@@ -759,8 +759,8 @@ func TestBuiltinManifests_RenderedCommand_Agy(t *testing.T) {
 	argv := renderArgs(builtinAgy(), "", "", "<sys>") // model="" → default "Gemini 3.5 Flash (Low)"
 	want := []string{
 		"agy", "--model", "Gemini 3.5 Flash (Low)", // label passed as ONE argv element — spaces are safe (no shell)
-		"--approval-mode", "default",
-		"-p", // print_flag LAST per §12.2 (agy has -p unlike gemini)
+		"--mode", "plan", // read-only (v1.1.0 has NO --approval-mode; plan = read-only). Verified 2026-07-08.
+		// NO print_flag: agy reads stdin; a bare -p is value-taking and breaks delivery (verified 2026-07-08).
 		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin (NOT in argv). No sys/provider flag.
 	}
 	if !reflect.DeepEqual(argv, want) {

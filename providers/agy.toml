@@ -5,8 +5,8 @@
 # WHAT THIS FILE IS
 #   Human-readable REFERENCE DOCUMENTATION for the `agy` provider. It mirrors the
 #   compiled-in manifest `builtinAgy()` in internal/provider/builtin.go BYTE-FOR-BYTE
-#   (modulo comments). It is NOT loaded at runtime — built-ins are compiled into
-#   the Go binary. (The config loader reads .stagecoach.toml, not this directory.)
+#   (modulo comments). It is NOT loaded at runtime — built-ins are compiled into the
+#   Go binary. (The config loader reads .stagecoach.toml, not this directory.)
 #
 # HOW TO USE IT AS A CONFIG OVERRIDE (PRD §12.8)
 #   To override the built-in agy (or define a variant), copy the FIELD lines below
@@ -15,47 +15,64 @@
 #   Change only the fields you want; fields you omit inherit the built-in's value.
 #       # ~/.config/stagecoach/config.toml  (or a repo-local .stagecoach.toml)
 #       [provider.agy]
-#       default_model = "Gemini 3.1 Pro (High)"  # e.g. override only the model (display label, verbatim)
+#       default_model = "GPT-OSS 120B (Medium)"  # e.g. override only the model (display label, verbatim)
 #
-# RENDERED COMMAND (PRD §12.5.1)
-#   agy --model "Gemini 3.5 Flash (Low)" --approval-mode default -p < "<sys>\n\n<user payload>"
-#   (stdin delivery; agy appends stdin to the prompt. The model label is ONE argv
-#   element — stagecoach execs directly, no shell, so the spaces are safe.)
+# RENDERED COMMAND (PRD §12.5.1, re-verified 2026-07-08 against agy v1.1.0)
+#   agy --model "Gemini 3.5 Flash (Low)" --mode plan < "<sys>\n\n<user payload>"
+#   (stdin delivery; NO -p flag. agy v1.1.0's -p/--print/--prompt is VALUE-TAKING — a
+#   bare -p fails with "flag needs an argument: -p". agy reads the prompt from STDIN
+#   when -p is absent and stdin is a pipe. The model label is ONE argv element —
+#   stagecoach execs directly, no shell, so the spaces are safe.)
 #
-# MODEL NAMES (verified 2026-07-03): agy's --model takes the DISPLAY LABEL from
-#   `agy models` VERBATIM — e.g. "Gemini 3.5 Flash (Low)" / "Gemini 3.1 Pro (High)".
+# MODEL NAMES (verified 2026-07-08): agy's --model takes the DISPLAY LABEL from
+#   `agy models` VERBATIM — e.g. "Gemini 3.5 Flash (Low)" / "GPT-OSS 120B (Medium)".
 #   Reasoning is NOT a separate flag; it is baked into the label's parenthesized
 #   suffix. API-style ids (gemini-3.5-flash) are NOT recognized and SILENTLY fall
-#   back to agy's own default model.
+#   back to agy's own default model. NOTE: GPT-OSS 120B is subject to transient
+#   backend 503 "No capacity available" errors; retries succeed (external, not a
+#   stagecoach bug).
+#
+# DIVERGENCE FROM GEMINI-CLI LINEAGE (2026-07-08, v1.1.0): the Antigravity CLI has
+#   DIVERGED from the gemini-cli fork it came from. The invocation this manifest
+#   assumed on 2026-07-03 (`--approval-mode default -p` + stdin) NO LONGER WORKS:
+#     * --approval-mode was REMOVED. The read-only equivalent is `--mode plan`.
+#     * -p/--print/--prompt is VALUE-TAKING, not a boolean print-mode flag. A bare
+#       -p breaks stdin delivery ("flag needs an argument: -p"). print_flag is now "".
+#   Both are corrected below and re-verified end-to-end.
 #
 # EXPERIMENTAL (§12.5.1.1): agy still ships experimental. The original blocker —
 #   issue #76, `agy -p` silently dropping stdout from a non-TTY — NO LONGER
-#   REPRODUCES (live non-TTY -p runs verified 2026-07-03), but the remaining
-#   §12.5.1.1 checklist items have not all cleared.
+#   REPRODUCES on v1.1.0 (2026-07-08: live stdin runs return stdout correctly), and
+#   items 2 (--model) + 3 (no system-prompt flag) are cleared. agy stays experimental
+#   only because §12.5.1.1 item 4 (the tooled/stager flag combo) is still open.
 #
 # STAGER: agy cannot serve as a stager — TooledFlags is intentionally nil.
 #   RenderTooled errors on nil tooled_flags. This won't change until §12.5.1.1
 #   item 4 (the scoped, non-interactive, git-scoped tool combo) is verified.
 #
 # TOOLS-DISABLE CATEGORY (§12.7.1): READ-ONLY CONSTRAINT — agy has NO global
-#   tool-disable switch; `--approval-mode default` constrains it to a read-only,
-#   never-ask profile (don't auto-run tools, never prompt).
+#   tool-disable switch; `--mode plan` constrains it to a read-only, never-ask
+#   profile (plan mode forbids edits; verified to produce clean commit-message
+#   output with no plan-mode formatting noise).
 # ============================================================================
 
 # --- identity / discovery ---
 name = "agy"                     # identity; the value you pass to --provider.
 detect = "agy"                   # command looked up on $PATH to decide "installed".
 command = "agy"                  # the executable to run (exec.LookPath; may be absolute).
-list_models_command = ["agy", "models"]      # VERIFIED 2026-07-03 via `agy models` (exit 0); FR-L2/FR-D5. Never an HTTP call (§6.2 N2).
+list_models_command = ["agy", "models"]      # VERIFIED 2026-07-08 via `agy models` (exit 0); FR-L2/FR-D5. Never an HTTP call (§6.2 N2).
 
 # --- prompt delivery ---
-prompt_delivery = "stdin"        # agy reads stdin; appended to the prompt.
+prompt_delivery = "stdin"        # agy reads stdin when -p is absent (verified 2026-07-08); the only way
+                                 # past the 128 KB MAX_ARG_STRLEN ceiling for ~300 KB diffs.
 
 # --- non-interactive mode ---
-print_flag = "-p"                 # non-interactive print mode flag.
+print_flag = ""                  # NON-NIL empty: agy's -p/--print/--prompt is VALUE-TAKING in v1.1.0 — a bare
+                                 # -p fails with "flag needs an argument: -p". agy reads stdin without it, so
+                                 # NO print flag is emitted (delivery is stdin).
 
 # --- model ---
-model_flag = "--model"                     # the model-selection flag. `-m` is REJECTED by agy (verified 2026-07-03).
+model_flag = "--model"                     # the model-selection flag. `-m` is REJECTED by agy (verified 2026-07-08).
 default_model = "Gemini 3.5 Flash (Low)"   # `agy models` display label VERBATIM (reasoning suffix included);
                                            # API-style ids silently fall back to agy's default.
 
@@ -69,7 +86,7 @@ provider_flag = ""               # NON-NIL empty: agy has no sub-provider concep
 
 # --- bare mode (§12.7.1: read-only constraint) ---
 bare_flags = [                   # appended VERBATIM to enforce a read-only, never-ask profile.
-  "--approval-mode", "default",  # don't auto-run tools, never ask (choices: default|auto_edit|yolo).
+  "--mode", "plan",              # agy v1.1.0 has NO --approval-mode; plan = read-only (verified 2026-07-08).
 ]
 
 # --- output ---
@@ -77,9 +94,9 @@ output = "raw"                   # cleaned stdout IS the commit message (DEFAULT
 strip_code_fence = true          # strip one layer of ``` / ~~~ if the agent wraps the output.
 
 # --- experimental ---
-experimental = true              # ships experimental (§12.5.1.1; issue #76 no longer reproduces as of 2026-07-03).
+experimental = true              # ships experimental (§12.5.1.1; only item 4 — tooled/stager flags — remains open).
 
 # --- absent fields (PRD §12.1) ---
-# tooled_flags, list_models_command, subcommand, prompt_flag, default_provider, json_field, retry_instruction,
+# tooled_flags, subcommand, prompt_flag, default_provider, json_field, retry_instruction,
 # and [env] are NOT set for agy and therefore omitted above. tooled_flags is intentionally
 # nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
