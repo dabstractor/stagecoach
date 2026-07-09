@@ -115,14 +115,14 @@
               "type": "Task",
               "id": "P1.M2.T4",
               "title": "Handle STAGECOACH_VERBOSE=2 gracefully (Issue 4)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "STAGECOACH_VERBOSE=2 (documented in PRD §19 for stdin-contents logging) fails with an opaque strconv.ParseBool error because Config.Verbose is a bool. The code comments acknowledge VERBOSE=2 as deferred. The minimal fix: gracefully reject '2' with a clear, actionable message instead of an opaque parse error. Full implementation (promoting Verbose to int) is out of scope for a bugfix.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T4.S1",
                   "title": "Gracefully reject STAGECOACH_VERBOSE=2 with a clear 'not yet supported' message",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Verified in research_provider_verbose.md Issue 4 section. Config.Verbose is bool (config.go:70). loadEnv parses STAGECOACH_VERBOSE with strconv.ParseBool at load.go:246-251, which rejects '2' with 'strconv.ParseBool: parsing \"2\": invalid syntax'. The verbose.go comments (lines 30-33, 62-64) acknowledge VERBOSE=2 as deferred/out-of-scope. PRD §19 documents stagecoach_VERBOSE=2 for stdin-contents logging.\n2. INPUT: loadEnv at load.go:246-251 is the parsing site. The current error path: ParseBool fails → wraps error → Load returns error → exit 1.\n3. LOGIC: In loadEnv's STAGECOACH_VERBOSE handler (load.go:246-251), BEFORE calling strconv.ParseBool, check if the value is exactly \"2\" (or any value > \"1\" that isn't a valid bool). If so, return a CLEAR error: `fmt.Errorf(\"STAGECOACH_VERBOSE=2 is not yet supported (stdin-contents logging is deferred); use 0/1/true/false\")`. This replaces the opaque parse error with an actionable message. Alternatively, if ParseBool fails and the raw value is \"2\", post-process the error to append the clear explanation. Keep Config.Verbose as bool (do NOT promote to int — that is a cross-cutting feature change, not a bugfix). Update the verbose.go comments (lines 30-33, 62-64) to reflect that VERBOSE=2 now produces a clear rejection rather than being 'un-parseable'.\n4. OUTPUT: STAGECOACH_VERBOSE=2 → clear error message mentioning 'not yet supported' and suggesting 0/1/true/false. STAGECOACH_VERBOSE=1/true/0/false still work unchanged. Unit test: env=2 → error contains 'not yet supported'; env=1 → true, no error; env=0 → false.\n5. DOCS: [Mode A] Update docs/configuration.md line 179 (the STAGECOACH_VERBOSE table row) to add a note: 'VERBOSE=2 (stdin-contents logging) is not yet implemented and produces a clear error if set.' Also update docs/cli.md if it mentions VERBOSE levels. These ride WITH the work.",

@@ -28,7 +28,7 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--verbose`, `-v` | bool | false | `STAGECOACH_VERBOSE` | — | Print resolved command, raw output, retries |
 | `--no-color` | bool | TTY-aware | `STAGECOACH_NO_COLOR` | — | Disable color (also honors `NO_COLOR`) |
 | `--all`, `-a` | bool | false | — | — | Run `git add -A` before snapshotting, even if something is staged |
-| `--no-auto-stage` | bool | false | — | — | If nothing is staged, exit instead of auto-staging |
+| `--no-auto-stage` | bool | false | `STAGECOACH_AUTO_STAGE_ALL` (inverse) | `stagecoach.autoStageAll` | If nothing is staged, exit instead of auto-staging (env/git-config use the POSITIVE sense: true=enable, false=disable) |
 | `--dry-run` | bool | false | — | — | Run the full snapshot→generate→parse→duplicate-check pipeline (same as a real commit, including the write-tree snapshot and retry) and print the message; do not commit. If generation fails (timeout or parse/duplicate-check exhaustion), exits **1** with a short stderr message instead of exit 3/124 + the full recovery recipe (since no commit was ever intended) |
 | `--commits <N>` | int | 0 (auto) | `STAGECOACH_COMMITS` | — | Force exactly N commits when nothing is staged (0 = auto-decompose; ≥2 = force N; 1 ≡ `--single`) |
 | `--single` | bool | false | — | — | Bypass decomposition; force the single-commit auto-stage-all behavior (alias: `--no-decompose`) |
@@ -60,7 +60,7 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--version` | — | — | — | — | Print the build version (`"dev"` for a local build; the release tag for a released binary) |
 | `--help`, `-h` | — | — | — | — | Print help |
 
-The `--config` flag is a path override for config-file discovery — it is not itself a `Config` field. An explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file errors with `config: config file not found: <path>` (exit 1) instead of silently falling back to provider auto-detection. Only the discovery default (no `--config` or `STAGECOACH_CONFIG`) tolerates a missing global file. The behavioral flags (`--all`, `--no-auto-stage`, `--dry-run`) have no env-var or git-config analogs. `--config` is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a user-defined provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` on `stagecoach` directly.
+The `--config` flag is a path override for config-file discovery — it is not itself a `Config` field. An explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file errors with `config: config file not found: <path>` (exit 1) instead of silently falling back to provider auto-detection. Only the discovery default (no `--config` or `STAGECOACH_CONFIG`) tolerates a missing global file. The behavioral flags `--all` and `--dry-run` have no env-var or git-config analogs. (`--no-auto-stage` does: it mirrors `STAGECOACH_AUTO_STAGE_ALL` and `stagecoach.autoStageAll` in the positive sense — true=enable, false=disable.) `--config` is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a user-defined provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` on `stagecoach` directly.
 
 ## Subcommands
 
@@ -393,7 +393,7 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--verbose` | `STAGECOACH_VERBOSE` | — |
 | `--no-color` | `STAGECOACH_NO_COLOR` (also honors `NO_COLOR`) | — |
 | `--all` | — | — |
-| `--no-auto-stage` | — | — |
+| `--no-auto-stage` | `STAGECOACH_AUTO_STAGE_ALL` (inverse) | `stagecoach.autoStageAll` |
 | `--dry-run` | — | — |
 | `--commits` | `STAGECOACH_COMMITS` | — |
 | `--single` | — | — |
