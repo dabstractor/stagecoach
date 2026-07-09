@@ -4,42 +4,56 @@
       "type": "Phase",
       "id": "P2",
       "title": "Provider lineup correction (remove EOL gemini; re-verify agy v1.1.0)",
-      "status": "Researching",
+      "status": "Planned",
       "description": "The built-in provider set reflects reality: gemini (Gemini CLI) is gone (superseded by agy on 2026-06-18); agy's manifest is corrected against its actual v1.1.0 flag surface (value-taking -p, no --approval-mode, --model replaces -m); every cross-reference (priority order, default-model table, package layout, assumptions, appendices, docs) agrees. The code-side work is already committed (2f77bd0, 010ecee, cdbccf5); this phase confirms the code matches the corrected spec and finishes the residual documentation drift.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Confirm gemini built-in removal from the built-in set and all references",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The gemini (Gemini CLI) provider is no longer shipped. Confirm its removal from the provider registry, role defaults, TOML files, and all PRD cross-references. The word 'gemini' legitimately persists as model names (e.g. gemini-3.5-pro, Gemini 3.5 Flash) because agy runs the Gemini model family; those are correct and must NOT be touched.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "Verify gemini is removed from the built-in provider set and all references",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Confirm the code already matches the spec: exactly seven built-ins with no gemini entry, preferredBuiltins has no gemini, providers/gemini.toml does not exist, and the PRD §12.5 carries the REMOVED stub with clean cross-references.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T1.S1",
                   "title": "Verify code-side removal of the gemini built-in",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [],
-                  "prd_selectors": ["h3.57", "h3.58", "h3.59", "h3.62", "h3.32"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (plan/013_b8a415cc6e79/architecture/code_gemini_agy_audit.md) confirmed all four code checks PASS. This is a verification subtask; no code change is expected.\n2. INPUT: The committed codebase at HEAD (cdbccf5).\n3. LOGIC: Confirm four items:\n   (a) `internal/provider/builtin.go` `BuiltinManifests()` returns exactly seven entries: pi, claude, agy, qwen-code, opencode, codex, cursor. No `builtinGemini` function exists. No `gemini` `Name:` entry.\n   (b) `internal/provider/registry.go:15` `preferredBuiltins` is `[\"pi\", \"opencode\", \"cursor\", \"agy\", \"qwen-code\", \"codex\", \"claude\"]` with no `gemini`.\n   (c) `providers/gemini.toml` does NOT exist; `providers/` contains exactly 7 TOML files.\n   (d) `internal/config/role_defaults.go` has no `gemini` key in the `roleDefaults` map.\n   NOTE: Test fixtures in `internal/config/*_test.go` and `internal/cmd/models_test.go` that use \"gemini\" as arbitrary string data are NOT drift — they test config-resolution mechanics with opaque strings. Leave them alone.\n4. OUTPUT: A one-line PASS/FAIL confirmation per item (a)–(d). If any item fails, restore the removed state per the spec (this would be unexpected — the audit confirmed all pass).\n5. DOCS: none — pure code verification, no user-facing/config/API surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (plan/013_b8a415cc6e79/architecture/code_gemini_agy_audit.md) confirmed all four code checks PASS. This is a verification subtask; no code change is expected.\n2. INPUT: The committed codebase at HEAD (cdbccf5).\n3. LOGIC: Confirm four items:\n   (a) `internal/provider/builtin.go` `BuiltinManifests()` returns exactly seven entries: pi, claude, agy, qwen-code, opencode, codex, cursor. No `builtinGemini` function exists. No `gemini` `Name:` entry.\n   (b) `internal/provider/registry.go:15` `preferredBuiltins` is `[\"pi\", \"opencode\", \"cursor\", \"agy\", \"qwen-code\", \"codex\", \"claude\"]` with no `gemini`.\n   (c) `providers/gemini.toml` does NOT exist; `providers/` contains exactly 7 TOML files.\n   (d) `internal/config/role_defaults.go` has no `gemini` key in the `roleDefaults` map.\n   NOTE: Test fixtures in `internal/config/*_test.go` and `internal/cmd/models_test.go` that use \"gemini\" as arbitrary string data are NOT drift — they test config-resolution mechanics with opaque strings. Leave them alone.\n4. OUTPUT: A one-line PASS/FAIL confirmation per item (a)–(d). If any item fails, restore the removed state per the spec (this would be unexpected — the audit confirmed all pass).\n5. DOCS: none — pure code verification, no user-facing/config/API surface change.",
+                  "prd_selectors": [
+                    "h3.57",
+                    "h3.58",
+                    "h3.59",
+                    "h3.62",
+                    "h3.32"
+                  ]
                 },
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T1.S2",
                   "title": "Confirm PRD §12.5 carries the REMOVED stub and cross-references are clean",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 0.5,
-                  "dependencies": ["P2.M1.T1.S1"],
-                  "prd_selectors": ["h3.57", "h2.6", "h3.10", "h3.13", "h3.32"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD.md was already updated in commit cdbccf5 ('Purge gemini-cli from PRD after built-in removal'). This subtask confirms that committed state.\n2. INPUT: `PRD.md` at HEAD.\n3. LOGIC: Confirm these PRD sections are consistent with gemini removal:\n   (a) §12.5 (h3.57) reads '~~Built-in provider: Gemini CLI~~ — REMOVED (superseded by agy, §12.5.1)'.\n   (b) §12 terminology list / fixed-backend examples: no `gemini`.\n   (c) §6.1 G2 (h3.10): lists `agy` (not `gemini`) as one of the four shipped agents.\n   (d) §9.16 FR-D1 (h3.32) cascading priority: `pi, opencode, cursor, agy, qwen-code, codex, claude` — no gemini.\n   (e) §9.16 FR-D4 default-model table: no gemini row.\n   (f) §14 package layout: no `providers/gemini.toml`.\n   (g) Appendix D quick reference: no gemini row.\n   (h) Appendix B.5 rescue example: uses agy, not gemini.\n   NOTE: The word 'gemini' legitimately appears as a MODEL NAME (gemini-3.5-pro, Gemini 3.5 Flash) because agy runs the Gemini model family. These are correct.\n4. OUTPUT: A one-line PASS/FAIL per item (a)–(h). This is already the committed state.\n5. DOCS: The PRD edits themselves ARE this subtask's documentation surface (Mode A) — confirming the spec-of-record for the removal is the task."
+                  "dependencies": [
+                    "P2.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD.md was already updated in commit cdbccf5 ('Purge gemini-cli from PRD after built-in removal'). This subtask confirms that committed state.\n2. INPUT: `PRD.md` at HEAD.\n3. LOGIC: Confirm these PRD sections are consistent with gemini removal:\n   (a) §12.5 (h3.57) reads '~~Built-in provider: Gemini CLI~~ — REMOVED (superseded by agy, §12.5.1)'.\n   (b) §12 terminology list / fixed-backend examples: no `gemini`.\n   (c) §6.1 G2 (h3.10): lists `agy` (not `gemini`) as one of the four shipped agents.\n   (d) §9.16 FR-D1 (h3.32) cascading priority: `pi, opencode, cursor, agy, qwen-code, codex, claude` — no gemini.\n   (e) §9.16 FR-D4 default-model table: no gemini row.\n   (f) §14 package layout: no `providers/gemini.toml`.\n   (g) Appendix D quick reference: no gemini row.\n   (h) Appendix B.5 rescue example: uses agy, not gemini.\n   NOTE: The word 'gemini' legitimately appears as a MODEL NAME (gemini-3.5-pro, Gemini 3.5 Flash) because agy runs the Gemini model family. These are correct.\n4. OUTPUT: A one-line PASS/FAIL per item (a)–(h). This is already the committed state.\n5. DOCS: The PRD edits themselves ARE this subtask's documentation surface (Mode A) — confirming the spec-of-record for the removal is the task.",
+                  "prd_selectors": [
+                    "h3.57",
+                    "h2.6",
+                    "h3.10",
+                    "h3.13",
+                    "h3.32"
+                  ]
                 }
               ]
             }
@@ -66,8 +80,12 @@
                   "status": "Planned",
                   "story_points": 0.5,
                   "dependencies": [],
-                  "prd_selectors": ["h3.58", "h4.0", "h3.32"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (code_gemini_agy_audit.md Check 1) confirmed all eight agy manifest fields MATCH at builtin.go:199-217. This is a verification subtask.\n2. INPUT: `internal/provider/builtin.go` `builtinAgy()` (around line 199) and `providers/agy.toml`.\n3. LOGIC: Confirm the manifest matches PRD §12.5.1 exactly:\n   - `PrintFlag = strPtr(\"\")` (non-nil empty) — agy v1.1.0's -p is value-taking; bare -p fails.\n   - `ModelFlag = strPtr(\"--model\")` — NOT `-m` (rejected in v1.1.0).\n   - `PromptDelivery = \"stdin\"` — agy reads stdin when -p is absent.\n   - `DefaultModel = \"Gemini 3.5 Flash (Low)\"` — agy models display label VERBATIM (reasoning suffix included).\n   - `BareFlags = []string{\"--mode\", \"plan\"}`` — NOT `[\"--approval-mode\", \"default\"]` (removed in v1.1.0).\n   - `ListModelsCommand = []string{\"agy\", \"models\"}`.\n   - `Experimental = true`.\n   - `TooledFlags` nil (agy cannot serve as stager until §12.5.1.1 item 4 is resolved).\n   Also confirm `internal/config/role_defaults.go` agy defaults use display labels: planner=\"Gemini 3.5 Flash (High)\", message=\"Gemini 3.5 Flash (Low)\", arbiter=\"Gemini 3.5 Flash (Medium)\", stager=\"\" (nil TooledFlags).\n   The corrected render is: `agy --model \"<label>\" --mode plan < <sys+user payload via stdin>` (no -p).\n4. OUTPUT: A one-line confirmation per field. All should PASS.\n5. DOCS: The manifest comments in builtin.go/providers/agy.toml carry the 2026-07-08 verification record — confirm they are present and dated. This is the in-code documentation (Mode A)."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (code_gemini_agy_audit.md Check 1) confirmed all eight agy manifest fields MATCH at builtin.go:199-217. This is a verification subtask.\n2. INPUT: `internal/provider/builtin.go` `builtinAgy()` (around line 199) and `providers/agy.toml`.\n3. LOGIC: Confirm the manifest matches PRD §12.5.1 exactly:\n   - `PrintFlag = strPtr(\"\")` (non-nil empty) — agy v1.1.0's -p is value-taking; bare -p fails.\n   - `ModelFlag = strPtr(\"--model\")` — NOT `-m` (rejected in v1.1.0).\n   - `PromptDelivery = \"stdin\"` — agy reads stdin when -p is absent.\n   - `DefaultModel = \"Gemini 3.5 Flash (Low)\"` — agy models display label VERBATIM (reasoning suffix included).\n   - `BareFlags = []string{\"--mode\", \"plan\"}`` — NOT `[\"--approval-mode\", \"default\"]` (removed in v1.1.0).\n   - `ListModelsCommand = []string{\"agy\", \"models\"}`.\n   - `Experimental = true`.\n   - `TooledFlags` nil (agy cannot serve as stager until §12.5.1.1 item 4 is resolved).\n   Also confirm `internal/config/role_defaults.go` agy defaults use display labels: planner=\"Gemini 3.5 Flash (High)\", message=\"Gemini 3.5 Flash (Low)\", arbiter=\"Gemini 3.5 Flash (Medium)\", stager=\"\" (nil TooledFlags).\n   The corrected render is: `agy --model \"<label>\" --mode plan < <sys+user payload via stdin>` (no -p).\n4. OUTPUT: A one-line confirmation per field. All should PASS.\n5. DOCS: The manifest comments in builtin.go/providers/agy.toml carry the 2026-07-08 verification record — confirm they are present and dated. This is the in-code documentation (Mode A).",
+                  "prd_selectors": [
+                    "h3.58",
+                    "h4.0",
+                    "h3.32"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -75,9 +93,15 @@
                   "title": "Confirm PRD §12.5.1/§12.5.1.1/§22.1 reflect the agy re-verification",
                   "status": "Planned",
                   "story_points": 0.5,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h3.58", "h4.0", "h3.103"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD.md was already updated in commit 2f77bd0 ('Re-verify and fix agy manifest against v1.1.0'). This confirms that committed state.\n2. INPUT: `PRD.md` at HEAD.\n3. LOGIC: Confirm:\n   (a) §12.5.1 (h3.58) shows the corrected agy manifest (PrintFlag=\"\", ModelFlag=\"--model\", BareFlags=[\"--mode\",\"plan\"], etc.).\n   (b) §12.5.1.1 (h4.0) marks items 1–3 as RESOLVED (2026-07-08, agy v1.1.0) and item 4 as OPEN (tooled/stager flags).\n   (c) §22.1 risk table (h3.103) marks the agy non-TTY stdout drop (issue #76) as RESOLVED 2026-07-08.\n   (d) §12.5.2 (qwen-code) notes that agy diverged from the gemini-cli lineage.\n4. OUTPUT: A one-line PASS/FAIL per item (a)–(d). This is already the committed PRD state.\n5. DOCS: The PRD sections themselves are this subtask's documentation surface (Mode A)."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: PRD.md was already updated in commit 2f77bd0 ('Re-verify and fix agy manifest against v1.1.0'). This confirms that committed state.\n2. INPUT: `PRD.md` at HEAD.\n3. LOGIC: Confirm:\n   (a) §12.5.1 (h3.58) shows the corrected agy manifest (PrintFlag=\"\", ModelFlag=\"--model\", BareFlags=[\"--mode\",\"plan\"], etc.).\n   (b) §12.5.1.1 (h4.0) marks items 1–3 as RESOLVED (2026-07-08, agy v1.1.0) and item 4 as OPEN (tooled/stager flags).\n   (c) §22.1 risk table (h3.103) marks the agy non-TTY stdout drop (issue #76) as RESOLVED 2026-07-08.\n   (d) §12.5.2 (qwen-code) notes that agy diverged from the gemini-cli lineage.\n4. OUTPUT: A one-line PASS/FAIL per item (a)–(d). This is already the committed PRD state.\n5. DOCS: The PRD sections themselves are this subtask's documentation surface (Mode A).",
+                  "prd_selectors": [
+                    "h3.58",
+                    "h4.0",
+                    "h3.103"
+                  ]
                 }
               ]
             }
@@ -103,9 +127,16 @@
                   "title": "Correct the agy quick-reference table row (print flag + tool-disable cells)",
                   "status": "Planned",
                   "story_points": 0.5,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h3.58", "h4.0", "h4.1", "h2.27"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D1, D2) identified the exact drift. The agy row at docs/providers.md line 85 currently documents an invocation that NO LONGER WORKS on agy v1.1.0.\n2. INPUT: `docs/providers.md` ~line 85 (the providers quick-reference table, agy row). Source of truth: `internal/provider/builtin.go:199-217` `builtinAgy()` and `providers/agy.toml`.\n3. LOGIC: Edit the agy row in the quick-reference table. Two cells need correction:\n   - **Print flag cell**: currently `` `-p` `` → change to ``(none)``. Rationale: agy v1.1.0's `-p`/`--print`/`--prompt` is value-taking (bare `-p` fails with 'flag needs an argument'); PrintFlag=\"\" — agy reads stdin with no flag. Compare the opencode/codex rows which correctly say '(none)'.\n   - **Tool-disable / bare essentials cell**: currently `` Read-only constraint (`--approval-mode default`) `` → change to `` Read-only constraint (`--mode plan`) ``. Rationale: `--approval-mode` was removed in agy v1.1.0; `BareFlags=[\"--mode\",\"plan\"]` is the read-only equivalent.\n   Delivery (stdin), model flag (--model), default model (Gemini 3.5 Flash (Low)), sys-prompt (prepended), and stager (— no) cells are already correct — do NOT touch them.\n4. OUTPUT: The agy row matches the corrected manifest exactly: `` | `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | — no | ``\n5. DOCS: This edit IS the documentation update (Mode A target file = docs/providers.md). The corrected table cell is the user-facing documentation of how agy is invoked."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D1, D2) identified the exact drift. The agy row at docs/providers.md line 85 currently documents an invocation that NO LONGER WORKS on agy v1.1.0.\n2. INPUT: `docs/providers.md` ~line 85 (the providers quick-reference table, agy row). Source of truth: `internal/provider/builtin.go:199-217` `builtinAgy()` and `providers/agy.toml`.\n3. LOGIC: Edit the agy row in the quick-reference table. Two cells need correction:\n   - **Print flag cell**: currently `` `-p` `` → change to ``(none)``. Rationale: agy v1.1.0's `-p`/`--print`/`--prompt` is value-taking (bare `-p` fails with 'flag needs an argument'); PrintFlag=\"\" — agy reads stdin with no flag. Compare the opencode/codex rows which correctly say '(none)'.\n   - **Tool-disable / bare essentials cell**: currently `` Read-only constraint (`--approval-mode default`) `` → change to `` Read-only constraint (`--mode plan`) ``. Rationale: `--approval-mode` was removed in agy v1.1.0; `BareFlags=[\"--mode\",\"plan\"]` is the read-only equivalent.\n   Delivery (stdin), model flag (--model), default model (Gemini 3.5 Flash (Low)), sys-prompt (prepended), and stager (— no) cells are already correct — do NOT touch them.\n4. OUTPUT: The agy row matches the corrected manifest exactly: `` | `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | — no | ``\n5. DOCS: This edit IS the documentation update (Mode A target file = docs/providers.md). The corrected table cell is the user-facing documentation of how agy is invoked.",
+                  "prd_selectors": [
+                    "h3.58",
+                    "h4.0",
+                    "h4.1",
+                    "h2.27"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -113,9 +144,15 @@
                   "title": "Fix verification date and provider count in docs/providers.md",
                   "status": "Planned",
                   "story_points": 0.5,
-                  "dependencies": ["P2.M2.T1.S2"],
-                  "prd_selectors": ["h3.58", "h4.0", "h2.27"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D3–D7) identified 5 drift items in docs/providers.md.\n2. INPUT: `docs/providers.md` at the following lines. Source of truth: PRD §12.5.1 (verified 2026-07-08) and `builtin.go` (7 built-ins).\n3. LOGIC: Five edits in `docs/providers.md`:\n   (a) ~line 88 (note paragraph): change 'as of **2026-07-03**' → 'as of **2026-07-08**'. The manifest was re-verified on 2026-07-08 against agy v1.1.0. Optionally reframe that agy stays experimental only pending §12.5.1.1 item 4 (stager flags).\n   (b) ~line 3: change 'the 8 built-in providers' → 'the 7 built-in providers'.\n   (c) ~line 7: change 'Eight providers are compiled in as built-ins' → 'Seven providers are compiled in as built-ins'.\n   (d) ~line 74: change heading '## The 8 built-in providers' → '## The 7 built-in providers'.\n   (e) ~line 92: change 'The eight built-in providers achieve tool-safety' → 'The seven built-in providers achieve tool-safety'.\n   The table at lines ~80-85 lists exactly 7 providers; these heading/prose '8's contradict the table itself.\n4. OUTPUT: All '8'/'eight' provider-count references in docs/providers.md are '7'/'seven'; the verification date is 2026-07-08.\n5. DOCS: These edits ARE the documentation updates (Mode A target file = docs/providers.md). Internal consistency between the table and its surrounding prose is the user-facing value."
+                  "dependencies": [
+                    "P2.M2.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D3–D7) identified 5 drift items in docs/providers.md.\n2. INPUT: `docs/providers.md` at the following lines. Source of truth: PRD §12.5.1 (verified 2026-07-08) and `builtin.go` (7 built-ins).\n3. LOGIC: Five edits in `docs/providers.md`:\n   (a) ~line 88 (note paragraph): change 'as of **2026-07-03**' → 'as of **2026-07-08**'. The manifest was re-verified on 2026-07-08 against agy v1.1.0. Optionally reframe that agy stays experimental only pending §12.5.1.1 item 4 (stager flags).\n   (b) ~line 3: change 'the 8 built-in providers' → 'the 7 built-in providers'.\n   (c) ~line 7: change 'Eight providers are compiled in as built-ins' → 'Seven providers are compiled in as built-ins'.\n   (d) ~line 74: change heading '## The 8 built-in providers' → '## The 7 built-in providers'.\n   (e) ~line 92: change 'The eight built-in providers achieve tool-safety' → 'The seven built-in providers achieve tool-safety'.\n   The table at lines ~80-85 lists exactly 7 providers; these heading/prose '8's contradict the table itself.\n4. OUTPUT: All '8'/'eight' provider-count references in docs/providers.md are '7'/'seven'; the verification date is 2026-07-08.\n5. DOCS: These edits ARE the documentation updates (Mode A target file = docs/providers.md). Internal consistency between the table and its surrounding prose is the user-facing value.",
+                  "prd_selectors": [
+                    "h3.58",
+                    "h4.0",
+                    "h2.27"
+                  ]
                 }
               ]
             },
@@ -132,9 +169,14 @@
                   "title": "Correct provider count and field count in docs/README.md",
                   "status": "Planned",
                   "story_points": 0.5,
-                  "dependencies": ["P2.M1.T1.S1"],
-                  "prd_selectors": ["h3.53", "h2.27"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D8, D9) found this adjacent drift on the same line being edited. The field-count drift (21 → 22) is not strictly the 'provider lineup' correction but lives on the same line and is trivially fixable.\n2. INPUT: `docs/README.md` ~line 35 (the 'Provider manifests' index row). Source of truth: `internal/provider/manifest.go` (22 toml tags) and `builtin.go` (7 built-ins).\n3. LOGIC: Edit one line (~line 35) in `docs/README.md`:\n   - Change 'the 8 built-in providers' → 'the 7 built-in providers'.\n   - Change '21-field manifest schema' → '22-field manifest schema'. (manifest.go has 22 toml: tags; providers.md itself says '22-field schema'. docs/README.md is the lone outlier at 21.)\n   Current line: `| [Provider manifests](providers.md) | 21-field manifest schema, command rendering, the 8 built-in providers (incl. agy and qwen-code), and adding a new agent. |`\n   Corrected line: `| [Provider manifests](providers.md) | 22-field manifest schema, command rendering, the 7 built-in providers (incl. agy and qwen-code), and adding a new agent. |`\n4. OUTPUT: The docs/README.md index row matches reality (7 providers, 22 fields).\n5. DOCS: This edit IS the documentation update (Mode A target file = docs/README.md)."
+                  "dependencies": [
+                    "P2.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md items D8, D9) found this adjacent drift on the same line being edited. The field-count drift (21 → 22) is not strictly the 'provider lineup' correction but lives on the same line and is trivially fixable.\n2. INPUT: `docs/README.md` ~line 35 (the 'Provider manifests' index row). Source of truth: `internal/provider/manifest.go` (22 toml tags) and `builtin.go` (7 built-ins).\n3. LOGIC: Edit one line (~line 35) in `docs/README.md`:\n   - Change 'the 8 built-in providers' → 'the 7 built-in providers'.\n   - Change '21-field manifest schema' → '22-field manifest schema'. (manifest.go has 22 toml: tags; providers.md itself says '22-field schema'. docs/README.md is the lone outlier at 21.)\n   Current line: `| [Provider manifests](providers.md) | 21-field manifest schema, command rendering, the 8 built-in providers (incl. agy and qwen-code), and adding a new agent. |`\n   Corrected line: `| [Provider manifests](providers.md) | 22-field manifest schema, command rendering, the 7 built-in providers (incl. agy and qwen-code), and adding a new agent. |`\n4. OUTPUT: The docs/README.md index row matches reality (7 providers, 22 fields).\n5. DOCS: This edit IS the documentation update (Mode A target file = docs/README.md).",
+                  "prd_selectors": [
+                    "h3.53",
+                    "h2.27"
+                  ]
                 }
               ]
             },
@@ -151,9 +193,19 @@
                   "title": "Comprehensive grep audit + build/test verification",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M3.T1.S1", "P2.M3.T1.S2", "P2.M3.T2.S1"],
-                  "prd_selectors": ["h3.58", "h3.57", "h3.32", "h2.27", "h3.71"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md §Summary) confirmed docs/cli.md, docs/configuration.md, docs/how-it-works.md, and README.md are CLEAN. This subtask verifies that remains true and that the P2.M3.T1/T2 edits introduced no regressions.\n2. INPUT: The full repo (excluding `plan/` which contains immutable planning snapshots).\n3. LOGIC: Three verification passes:\n   (a) Grep: `git grep -in 'gemini' -- docs/ README.md providers/ internal/ pkg/` — every remaining hit must be either a MODEL NAME (e.g. gemini-3.5-pro, Gemini 3.5 Flash) or a LINEAGE/HISTORY comment (EOL, superseded, fork). Fix any that imply `gemini` is a shipped built-in provider.\n   (b) Count check: confirm `docs/cli.md`, `docs/configuration.md`, `docs/how-it-works.md`, `docs/README.md`, `docs/providers.md`, and `README.md` do not list `gemini` as a built-in and do not say 'eight'/'8' providers.\n   (c) Smoke test: `make build && ./bin/stagecoach providers list` — must list exactly seven built-ins with no `gemini`; `./bin/stagecoach providers show agy` — must print `print = \"\"` (or equivalent empty), `model_flag = \"--model\"`, and `--mode plan` in bare essentials. Then `go test ./internal/provider/... ./internal/config/... ./internal/cmd/...` must pass.\n4. OUTPUT: Grep is clean of stale gemini-as-built-in framing; providers list/show agy match the spec; all targeted test suites pass.\n5. DOCS: Mode B final verification — confirms the whole delta is coherent across PRD, code, manifests, and docs. This is the catch-all that prevents a coherent delta from shipping with stale references."
+                  "dependencies": [
+                    "P2.M3.T1.S1",
+                    "P2.M3.T1.S2",
+                    "P2.M3.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Architecture audit (docs_drift_audit.md §Summary) confirmed docs/cli.md, docs/configuration.md, docs/how-it-works.md, and README.md are CLEAN. This subtask verifies that remains true and that the P2.M3.T1/T2 edits introduced no regressions.\n2. INPUT: The full repo (excluding `plan/` which contains immutable planning snapshots).\n3. LOGIC: Three verification passes:\n   (a) Grep: `git grep -in 'gemini' -- docs/ README.md providers/ internal/ pkg/` — every remaining hit must be either a MODEL NAME (e.g. gemini-3.5-pro, Gemini 3.5 Flash) or a LINEAGE/HISTORY comment (EOL, superseded, fork). Fix any that imply `gemini` is a shipped built-in provider.\n   (b) Count check: confirm `docs/cli.md`, `docs/configuration.md`, `docs/how-it-works.md`, `docs/README.md`, `docs/providers.md`, and `README.md` do not list `gemini` as a built-in and do not say 'eight'/'8' providers.\n   (c) Smoke test: `make build && ./bin/stagecoach providers list` — must list exactly seven built-ins with no `gemini`; `./bin/stagecoach providers show agy` — must print `print = \"\"` (or equivalent empty), `model_flag = \"--model\"`, and `--mode plan` in bare essentials. Then `go test ./internal/provider/... ./internal/config/... ./internal/cmd/...` must pass.\n4. OUTPUT: Grep is clean of stale gemini-as-built-in framing; providers list/show agy match the spec; all targeted test suites pass.\n5. DOCS: Mode B final verification — confirms the whole delta is coherent across PRD, code, manifests, and docs. This is the catch-all that prevents a coherent delta from shipping with stale references.",
+                  "prd_selectors": [
+                    "h3.58",
+                    "h3.57",
+                    "h3.32",
+                    "h2.27",
+                    "h3.71"
+                  ]
                 }
               ]
             }
