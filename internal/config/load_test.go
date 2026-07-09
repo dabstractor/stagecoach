@@ -278,10 +278,10 @@ func TestSetRole_LazyAllocAndFieldMerge(t *testing.T) {
 	if cfg.Roles == nil || cfg.Roles["planner"].Provider != "agy" {
 		t.Fatalf("setRoleProvider did not lazily alloc + set: %+v", cfg.Roles)
 	}
-	cfg.setRoleModel("planner", "gemini-2.5-pro") // must NOT erase Provider
+	cfg.setRoleModel("planner", "codex-2.5-pro") // must NOT erase Provider
 	rc := cfg.Roles["planner"]
-	if rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
-		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro} (field-merge: Model must not erase Provider)", rc)
+	if rc.Provider != "agy" || rc.Model != "codex-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy codex-2.5-pro} (field-merge: Model must not erase Provider)", rc)
 	}
 }
 
@@ -292,28 +292,28 @@ func TestSetRole_LazyAllocAndFieldMerge(t *testing.T) {
 func TestLoadEnv_PerRole(t *testing.T) {
 	cfg := Defaults()
 	t.Setenv("STAGECOACH_PLANNER_PROVIDER", "agy")
-	t.Setenv("STAGECOACH_PLANNER_MODEL", "gemini-2.5-pro")
-	t.Setenv("STAGECOACH_STAGER_MODEL", "gemini-2.5-flash")
+	t.Setenv("STAGECOACH_PLANNER_MODEL", "codex-2.5-pro")
+	t.Setenv("STAGECOACH_STAGER_MODEL", "codex-2.5-flash")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
-	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
-		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "codex-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy codex-2.5-pro}", rc)
 	}
-	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "gemini-2.5-flash" {
-		t.Errorf("Roles[stager]=%+v want {\"\" gemini-2.5-flash} (partial — field-level)", rc)
+	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "codex-2.5-flash" {
+		t.Errorf("Roles[stager]=%+v want {\"\" codex-2.5-flash} (partial — field-level)", rc)
 	}
 }
 
 func TestLoadEnv_PerRolePartial(t *testing.T) {
 	cfg := Defaults()
-	t.Setenv("STAGECOACH_PLANNER_MODEL", "gemini-2.5-pro")
+	t.Setenv("STAGECOACH_PLANNER_MODEL", "codex-2.5-pro")
 	if err := loadEnv(&cfg); err != nil {
 		t.Fatalf("loadEnv err=%v", err)
 	}
 	rc := cfg.Roles["planner"]
-	if rc.Provider != "" || rc.Model != "gemini-2.5-pro" {
-		t.Errorf("Roles[planner]=%+v want {\"\" gemini-2.5-pro} (model-only — field-level)", rc)
+	if rc.Provider != "" || rc.Model != "codex-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {\"\" codex-2.5-pro} (model-only — field-level)", rc)
 	}
 }
 
@@ -347,14 +347,14 @@ func TestLoadEnv_CommitsBadIntErrors(t *testing.T) {
 func TestLoadFlags_ChangedOnly(t *testing.T) {
 	cfg := Defaults()
 	fs := newFlagSet(t)
-	if err := fs.Set("provider", "gemini"); err != nil {
+	if err := fs.Set("provider", "codex"); err != nil {
 		t.Fatal(err)
 	}
 
 	loadFlags(&cfg, fs)
 
-	if cfg.Provider != "gemini" {
-		t.Errorf("Provider=%q want gemini", cfg.Provider)
+	if cfg.Provider != "codex" {
+		t.Errorf("Provider=%q want codex", cfg.Provider)
 	}
 	// model was NOT Changed — must stay at default ("")
 	if cfg.Model != "" {
@@ -410,12 +410,12 @@ func TestLoadFlags_PerRole(t *testing.T) {
 	if err := fs.Set("planner-provider", "agy"); err != nil {
 		t.Fatal(err)
 	}
-	if err := fs.Set("planner-model", "gemini-2.5-pro"); err != nil {
+	if err := fs.Set("planner-model", "codex-2.5-pro"); err != nil {
 		t.Fatal(err)
 	}
 	loadFlags(&cfg, fs)
-	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
-		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "codex-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy codex-2.5-pro}", rc)
 	}
 }
 
@@ -582,7 +582,7 @@ func TestLoad_GitOverridesRepoFile(t *testing.T) {
 	chdir(t, repo)
 	writeConfigFile(t, globalDir, "config.toml", "[defaults]\nprovider = \"pi\"\n")
 	writeConfigFile(t, repo, ".stagecoach.toml", "[defaults]\nprovider = \"claude\"\n")
-	setGitConfig(t, repo, "stagecoach.provider", "gemini")
+	setGitConfig(t, repo, "stagecoach.provider", "codex")
 
 	// Redirect notice
 	origNoticeOut := noticeOut
@@ -593,15 +593,15 @@ func TestLoad_GitOverridesRepoFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load err=%v", err)
 	}
-	if cfg.Provider != "gemini" {
-		t.Errorf("Provider=%q want gemini (git > repo file)", cfg.Provider)
+	if cfg.Provider != "codex" {
+		t.Errorf("Provider=%q want codex (git > repo file)", cfg.Provider)
 	}
 }
 
 func TestLoad_EnvOverridesGit(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	setGitConfig(t, repo, "stagecoach.provider", "gemini")
+	setGitConfig(t, repo, "stagecoach.provider", "codex")
 	t.Setenv("STAGECOACH_PROVIDER", "pi")
 
 	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
@@ -616,7 +616,7 @@ func TestLoad_EnvOverridesGit(t *testing.T) {
 func TestLoad_CLIOverridesEnv(t *testing.T) {
 	_, repo, _ := loadEnvSetup(t)
 	chdir(t, repo)
-	t.Setenv("STAGECOACH_PROVIDER", "gemini")
+	t.Setenv("STAGECOACH_PROVIDER", "codex")
 	fs := newFlagSet(t)
 	if err := fs.Set("provider", "claude"); err != nil {
 		t.Fatal(err)
@@ -1560,7 +1560,7 @@ func TestLoad_FullPrecedenceMatrix(t *testing.T) {
 	defer func() { noticeOut = origNoticeOut }()
 
 	// Layer 4: git overrides provider
-	setGitConfig(t, repo, "stagecoach.provider", "gemini")
+	setGitConfig(t, repo, "stagecoach.provider", "codex")
 	setGitConfig(t, repo, "stagecoach.model", "git-model")
 
 	// Layer 5: env overrides provider + model

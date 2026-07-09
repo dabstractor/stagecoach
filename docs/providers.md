@@ -1,10 +1,10 @@
 # Provider manifests
 
-Full reference for Stagecoach's provider manifest system: the 22-field schema, command-rendering algorithm, the 8 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
+Full reference for Stagecoach's provider manifest system: the 22-field schema, command-rendering algorithm, the 7 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in `internal/provider/` and the shipped `providers/*.toml` files.
 
 ## What a manifest is
 
-A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Eight providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via `[provider.<name>]` sections in their config file.
+A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Seven providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via `[provider.<name>]` sections in their config file.
 
 See the [shipped `providers/*.toml` files](../providers/) for human-readable reference manifests — `providers/pi.toml` is the cleanest template.
 
@@ -71,7 +71,7 @@ In **tooled mode** (the stager role), `tooled_flags` replaces `bare_flags`; tool
 
 For a multi-backend provider (one whose manifest sets `provider_flag` — pi today), the model is `inference/model` (e.g. `zai/glm-5.2`): Render splits it on the first `/` and emits `--provider <prefix> --model <rest>` (FR-R5b). A model with no `/` on such a provider is a HARD configuration error, never a silent bare `--model`. Single-backend providers take the model verbatim. When a `reasoning` level resolves to a non-empty token list in `reasoning_levels`, those tokens are appended after the model flag (FR-R6); absent/empty ⇒ silent no-op.
 
-## The 8 built-in providers
+## The 7 built-in providers
 
 Auto-detection order (first installed = default): **pi, opencode, cursor, agy, qwen-code, codex, claude**. User-defined providers are never auto-selected.
 
@@ -85,11 +85,11 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, q
 | `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | — no |
 | `qwen-code` | stdin | `-p` | `-m` | `qwen3-coder-plus` ⚠️ | (prepended) | Read-only constraint (`--approval-mode default`) | — no ⚠️ |
 
-Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending the remaining §12.5.1.1 checklist items (the non-TTY stdout drop, issue #76, no longer reproduces as of 2026-07-03) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
+Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending the remaining §12.5.1.1 checklist items (the non-TTY stdout drop, issue #76, no longer reproduces as of **2026-07-08**) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
 
 ## Tools-disable asymmetry
 
-The eight built-in providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
+The seven built-in providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
 
 - **Explicit switch** (pi, claude): The manifest passes literal flags that **disable tools** (pi: `--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-session`; claude: `--tools "" --setting-sources "" --no-session-persistence`). This is the cleanest approach — the agent runs as a pure text-in/text-out process.
 

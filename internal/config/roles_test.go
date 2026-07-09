@@ -33,11 +33,11 @@ func TestResolveRoleModel_FullOverride(t *testing.T) {
 	cfg := Defaults()
 	cfg.Provider = "pi" // global
 	cfg.Roles = map[string]RoleConfig{
-		"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
+		"planner": {Provider: "agy", Model: "codex-2.5-pro"},
 	}
 	p, m, r := ResolveRoleModel("planner", cfg)
-	if p != "agy" || m != "gemini-2.5-pro" {
-		t.Errorf("ResolveRoleModel(planner) = (%q,%q), want (agy,gemini-2.5-pro) [full override]", p, m)
+	if p != "agy" || m != "codex-2.5-pro" {
+		t.Errorf("ResolveRoleModel(planner) = (%q,%q), want (agy,codex-2.5-pro) [full override]", p, m)
 	}
 	if r != "" {
 		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"\" (off — no shipped default)", r)
@@ -105,14 +105,14 @@ func TestResolveRoleModel_AllCanonicalRoles(t *testing.T) {
 	cfg.Model = "gpt-5.4"
 	// Override only planner + stager; leave message + arbiter on the global.
 	cfg.Roles = map[string]RoleConfig{
-		"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
-		"stager":  {Provider: "agy", Model: "gemini-2.5-flash"},
+		"planner": {Provider: "agy", Model: "codex-2.5-pro"},
+		"stager":  {Provider: "agy", Model: "codex-2.5-flash"},
 	}
 	want := map[string][3]string{
-		"planner": {"agy", "gemini-2.5-pro", ""},   // overridden provider/model; reasoning off (no shipped default)
-		"stager":  {"agy", "gemini-2.5-flash", ""}, // overridden provider/model; reasoning = shipped off
-		"message": {"pi", "gpt-5.4", ""},           // global; reasoning = shipped off
-		"arbiter": {"pi", "gpt-5.4", ""},           // global; reasoning = shipped off
+		"planner": {"agy", "codex-2.5-pro", ""},   // overridden provider/model; reasoning off (no shipped default)
+		"stager":  {"agy", "codex-2.5-flash", ""}, // overridden provider/model; reasoning = shipped off
+		"message": {"pi", "gpt-5.4", ""},          // global; reasoning = shipped off
+		"arbiter": {"pi", "gpt-5.4", ""},          // global; reasoning = shipped off
 	}
 	for _, role := range roleNames { // roleNames is load.go's package-level canonical list (same package)
 		p, m, r := ResolveRoleModel(role, cfg)

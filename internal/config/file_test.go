@@ -553,10 +553,10 @@ binary_extensions = ["foo", "bar"]
 
 [role.planner]
 provider = "agy"
-model = "gemini-2.5-pro"
+model = "codex-2.5-pro"
 
 [role.stager]
-model = "gemini-2.5-flash"
+model = "codex-2.5-flash"
 `
 	path := writeTempTOML(t, body)
 	cfg, err := loadTOML(path)
@@ -575,12 +575,12 @@ model = "gemini-2.5-flash"
 	if len(cfg.Roles) != 2 {
 		t.Fatalf("Roles len=%d want 2", len(cfg.Roles))
 	}
-	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "gemini-2.5-pro" {
-		t.Errorf("Roles[planner]=%+v want {agy gemini-2.5-pro}", rc)
+	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "codex-2.5-pro" {
+		t.Errorf("Roles[planner]=%+v want {agy codex-2.5-pro}", rc)
 	}
 	// Partial role: only model set → Provider decodes "" (field-level, not whole-block).
-	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "gemini-2.5-flash" {
-		t.Errorf("Roles[stager]=%+v want {\"\" gemini-2.5-flash}", rc)
+	if rc := cfg.Roles["stager"]; rc.Provider != "" || rc.Model != "codex-2.5-flash" {
+		t.Errorf("Roles[stager]=%+v want {\"\" codex-2.5-flash}", rc)
 	}
 }
 
@@ -593,13 +593,13 @@ model = "gemini-2.5-flash"
 func TestOverlayRolesFieldMerge(t *testing.T) {
 	dst := &Config{
 		Roles: map[string]RoleConfig{
-			"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
+			"planner": {Provider: "agy", Model: "codex-2.5-pro"},
 			"message": {Provider: "pi", Model: "gpt-5.4-nano"},
 		},
 	}
 	src := &Config{
 		Roles: map[string]RoleConfig{
-			"planner": {Model: "gemini-3.5-pro"},                        // higher layer sets MODEL only
+			"planner": {Model: "codex-3.5-pro"},                         // higher layer sets MODEL only
 			"arbiter": {Provider: "codex", Model: "gpt-5.1-codex-mini"}, // new role
 		},
 	}
@@ -610,8 +610,8 @@ func TestOverlayRolesFieldMerge(t *testing.T) {
 		t.Errorf("planner.provider=%q want agy (field-merge must preserve lower-layer provider)", rc.Provider)
 	}
 	// planner.model OVERRIDDEN by the higher layer:
-	if rc := dst.Roles["planner"]; rc.Model != "gemini-3.5-pro" {
-		t.Errorf("planner.model=%q want gemini-3.5-pro (higher layer wins)", rc.Model)
+	if rc := dst.Roles["planner"]; rc.Model != "codex-3.5-pro" {
+		t.Errorf("planner.model=%q want codex-3.5-pro (higher layer wins)", rc.Model)
 	}
 	// new role added:
 	if rc, ok := dst.Roles["arbiter"]; !ok {

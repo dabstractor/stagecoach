@@ -173,7 +173,7 @@ func TestConfig_V2TOMLTags(t *testing.T) {
 	leaky.Commits = 5
 	leaky.Single = true
 	leaky.Roles = map[string]RoleConfig{
-		"planner": {Provider: "agy", Model: "gemini-2.5-pro"},
+		"planner": {Provider: "agy", Model: "codex-2.5-pro"},
 	}
 	data2, err := toml.Marshal(leaky)
 	if err != nil {

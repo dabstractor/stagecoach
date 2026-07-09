@@ -118,7 +118,7 @@
               "type": "Task",
               "id": "P2.M3.T1",
               "title": "Fix residual docs/providers.md drift (agy table row, date, provider count)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Seven specific drift items in docs/providers.md: the agy quick-reference table row has two stale cells (print flag and tool-disable approach), the #76 verification date is stale, and the provider count '8' appears in four places where it should be '7'.",
               "subtasks": [
                 {
@@ -142,7 +142,7 @@
                   "type": "Subtask",
                   "id": "P2.M3.T1.S2",
                   "title": "Fix verification date and provider count in docs/providers.md",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P2.M2.T1.S2"
@@ -160,14 +160,14 @@
               "type": "Task",
               "id": "P2.M3.T2",
               "title": "Fix residual docs/README.md drift (provider count + field count)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The docs/README.md index entry for the providers page carries two stale values on the same line: provider count '8' (should be '7') and manifest schema field count '21' (should be '22').",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M3.T2.S1",
                   "title": "Correct provider count and field count in docs/README.md",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 0.5,
                   "dependencies": [
                     "P2.M1.T1.S1"
