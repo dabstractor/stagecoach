@@ -103,10 +103,11 @@ func parseInt(repo, key, value string, dst *int) error {
 // KEY NAMES ARE CAMELCASE (FINDING A): git config rejects underscores ("invalid key"). The multi-word
 // keys follow the PRD §16.3 example (autoStageAll, maxDiffBytes, …), NOT FR36's snake_case spelling.
 //
-// The returned *Config is designed for S2's NON-ZERO overlay(): unset fields are zero, so overlay
-// copies only the fields the user actually set. Do NOT pre-fill with Defaults() (that would make every
-// field "set" and clobber lower layers — see the GOTCHA). Because overlay is non-zero, a found-but-
-// false bool (autoStageAll=false) is a documented no-op (FINDING G); force false via env (S4)/CLI (S4).
+// The returned *Config is designed for S2's *bool/*int nil-overlay(): unset fields are nil/zero, so
+// overlay copies only the fields the user actually set. Do NOT pre-fill with Defaults() (that would
+// make every field "set" and clobber lower layers — see the GOTCHA). AutoStageAll is now *bool, so a
+// found-but-false bool (autoStageAll=false) propagates as *false and survives overlay (the *bool
+// conversion fixed this; force false via env (S4)/CLI (S4) remains available too).
 func loadGitConfig(repoDir string) (*Config, error) {
 	c := &Config{} // ALL fields zero; only found keys are set below.
 
@@ -158,7 +159,7 @@ func loadGitConfig(repoDir string) (*Config, error) {
 	if v, found, err := gitConfigBool(repoDir, "stagecoach.autoStageAll"); err != nil { // camelCase!
 		return nil, err
 	} else if found {
-		c.AutoStageAll = v
+		c.AutoStageAll = boolPtr(v) // *bool: wrap the plain bool v; omitted ⇒ stays nil (overlay inherits). An explicit "git config stagecoach.autoStageAll off" now propagates *false end-to-end (was a no-op under the old only-true-propagates bool — fixed by the *bool conversion). Mirrors the DiffContext intPtr(n) pattern below.
 	}
 	if v, found, err := gitConfigBool(repoDir, "stagecoach.verbose"); err != nil {
 		return nil, err

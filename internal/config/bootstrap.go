@@ -301,6 +301,6 @@ const generationCommented = `
 # strip_code_fence      = true    # strip ` + "`" + ` fences from agent output (all providers)
 # max_commits           = 12      # safety cap on auto-decompose (PRD §9.14 FR-M4); default 12
 # binary_extensions     = []      # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
-# multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion (§9.24 FR-T1c); CANNOT disable via file — set session_mode="" on the provider instead (see docs/configuration.md)
+# multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion (§9.24 FR-T1c); set false to DISABLE (now honored via file/git-config)
 # multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens for multi-turn (§9.24 FR-T3); does NOT interact with token_limit (FR-T12)
 `

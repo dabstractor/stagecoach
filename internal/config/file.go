@@ -41,8 +41,8 @@ type fileDefaults struct {
 	Provider     string `toml:"provider"`
 	Model        string `toml:"model"`
 	Reasoning    string `toml:"reasoning"`
-	Timeout      string `toml:"timeout"` // §16.2 duration string, e.g. "120s"; parsed in loadTOML
-	AutoStageAll bool   `toml:"auto_stage_all"`
+	Timeout      string `toml:"timeout"`        // §16.2 duration string, e.g. "120s"; parsed in loadTOML
+	AutoStageAll *bool  `toml:"auto_stage_all"` // *bool (nil ⇒ unset; non-nil incl. *false ⇒ explicit) — mirrors Config.AutoStageAll
 	Verbose      bool   `toml:"verbose"`
 }
 
@@ -52,7 +52,7 @@ type fileGeneration struct {
 	TokenLimit           int      `toml:"token_limit"`  // FR3d — plumbed in S2 (materialize/overlay)
 	DiffContext          *int     `toml:"diff_context"` // FR3f — *int (0-vs-unset); nil ⇒ user omitted (S2 contract correction)
 	MaxDuplicateRetries  int      `toml:"max_duplicate_retries"`
-	MultiTurnFallback    bool     `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (default true); only-true-propagates (mirrors AutoStageAll)
+	MultiTurnFallback    *bool    `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (*bool: nil ⇒ unset; non-nil incl. *false ⇒ explicit) — mirrors Config.MultiTurnFallback
 	MultiTurnChunkTokens int      `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size in tokens (default 32000); != 0 guard (mirrors TokenLimit)
 	WorkDescReadRounds   int      `toml:"work_desc_read_rounds"`   // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
 	SubjectTargetChars   int      `toml:"subject_target_chars"`
@@ -218,8 +218,11 @@ func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
 	if d.Reasoning != "" {
 		c.Reasoning = d.Reasoning
 	}
-	if d.AutoStageAll {
-		c.AutoStageAll = true // v1 limitation: cannot set false via file
+	// *bool: nil ⇒ this layer omits the key ⇒ inherit lower layer; non-nil (incl. *false) ⇒ explicit
+	// override. Mirrors the DiffContext *int materialize guard below. A deref guard (if *d.AutoStageAll)
+	// would re-introduce the only-true-propagates bug (false would fail to propagate), so copy the pointer.
+	if d.AutoStageAll != nil {
+		c.AutoStageAll = d.AutoStageAll
 	}
 	if d.Verbose {
 		c.Verbose = true
@@ -244,10 +247,10 @@ func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
 	if g.MaxDuplicateRetries != 0 {
 		c.MaxDuplicateRetries = g.MaxDuplicateRetries
 	}
-	// §9.24 FR-T1c — multi_turn_fallback (bool; only-true-propagates, mirrors AutoStageAll —
-	// cannot disable via file, same v1 limitation; S3 documents this in docs/configuration.md).
-	if g.MultiTurnFallback {
-		c.MultiTurnFallback = true
+	// §9.24 FR-T1c — multi_turn_fallback (*bool: nil ⇒ inherit; non-nil incl. *false ⇒ override). Mirrors
+	// the AutoStageAll *bool guard above and the DiffContext *int pattern. A file CAN now disable it.
+	if g.MultiTurnFallback != nil {
+		c.MultiTurnFallback = g.MultiTurnFallback
 	}
 	// §9.24 FR-T3 — multi_turn_chunk_tokens (int; != 0, mirrors TokenLimit/MaxDuplicateRetries).
 	if g.MultiTurnChunkTokens != 0 {
@@ -340,8 +343,11 @@ func overlay(dst, src *Config) {
 	if src.Timeout != 0 {
 		dst.Timeout = src.Timeout
 	}
-	if src.AutoStageAll {
-		dst.AutoStageAll = true
+	// *bool: nil ⇒ src omits the key ⇒ inherit lower layer; non-nil (incl. *false) ⇒ explicit override
+	// (pointer copy, NOT deref — a deref guard would re-introduce only-true-propagates). Mirrors the
+	// DiffContext *int overlay guard below.
+	if src.AutoStageAll != nil {
+		dst.AutoStageAll = src.AutoStageAll
 	}
 	if src.Verbose {
 		dst.Verbose = true
@@ -383,10 +389,10 @@ func overlay(dst, src *Config) {
 	if src.MaxDuplicateRetries != 0 {
 		dst.MaxDuplicateRetries = src.MaxDuplicateRetries
 	}
-	// §9.24 FR-T1c — multi_turn_fallback (bool; only-true-propagates, mirrors AutoStageAll/Push —
-	// cannot disable via file, same v1 limitation).
-	if src.MultiTurnFallback {
-		dst.MultiTurnFallback = true
+	// §9.24 FR-T1c — multi_turn_fallback (*bool: nil ⇒ inherit; non-nil incl. *false ⇒ override). Mirrors
+	// AutoStageAll above. Push/NoVerify stay plain bool (default-false, so only-true-propagates is harmless).
+	if src.MultiTurnFallback != nil {
+		dst.MultiTurnFallback = src.MultiTurnFallback
 	}
 	// §9.24 FR-T3 — multi_turn_chunk_tokens (int; != 0, mirrors TokenLimit/MaxCommits).
 	if src.MultiTurnChunkTokens != 0 {

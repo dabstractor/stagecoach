@@ -78,9 +78,9 @@ func TestCommitStaged_MultiTurnRenderContract(t *testing.T) {
 	m.Env["STAGECOACH_STUB_ARGSFILE"] = argsFile // m.Env is a mutable map (optsEnvMap)
 
 	cfg := config.Defaults()
-	cfg.MaxDuplicateRetries = 0   // ⇒ exactly 1 one-shot call ⇒ counter math = N+2 total
-	cfg.MultiTurnChunkTokens = 50 // tiny ⇒ N≥2 (payload ≫ 50 tokens)
-	cfg.MultiTurnFallback = true  // cond c (default true; explicit for clarity)
+	cfg.MaxDuplicateRetries = 0           // ⇒ exactly 1 one-shot call ⇒ counter math = N+2 total
+	cfg.MultiTurnChunkTokens = 50         // tiny ⇒ N≥2 (payload ≫ 50 tokens)
+	cfg.MultiTurnFallback = boolPtr(true) // cond c (default true; explicit for clarity)
 
 	// Verbose sink captures EVERY Execute command (one-shot + N+1 multi-turn).
 	var vbuf bytes.Buffer

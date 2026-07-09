@@ -20,7 +20,7 @@ func TestDefaults(t *testing.T) {
 	if c.Timeout != 120*time.Second {
 		t.Errorf("Timeout = %v, want 120s", c.Timeout)
 	}
-	if !c.AutoStageAll {
+	if !c.AutoStageAllValue() {
 		t.Errorf("AutoStageAll = false, want true")
 	}
 	if c.Verbose {
@@ -46,7 +46,7 @@ func TestDefaults(t *testing.T) {
 	if c.MaxDuplicateRetries != 3 {
 		t.Errorf("MaxDuplicateRetries = %d, want 3", c.MaxDuplicateRetries)
 	}
-	if !c.MultiTurnFallback {
+	if !c.MultiTurnFallbackValue() {
 		t.Errorf("MultiTurnFallback = false, want true (§9.24 FR-T1c)")
 	}
 	if c.MultiTurnChunkTokens != 32000 {
@@ -188,5 +188,48 @@ func TestConfig_V2TOMLTags(t *testing.T) {
 		if strings.Contains(s2, probe) || strings.HasPrefix(s2, key+" =") {
 			t.Errorf("toml:\"-\" field leaked into TOML as %q:\n%s", key, s2)
 		}
+	}
+}
+
+// TestAutoStageAll_MultiTurnFallback_Accessors proves the two *bool accessors mirror DiffContextValue:
+// nil ⇒ the default-true fallback; non-nil (incl. *false) ⇒ the pointed-to value verbatim.
+func TestAutoStageAll_MultiTurnFallback_Accessors(t *testing.T) {
+	// nil ⇒ default true (the fallback a consumer reads when every layer omits the key)
+	var nilCfg Config
+	if nilCfg.AutoStageAllValue() != true {
+		t.Errorf("nil AutoStageAll: AutoStageAllValue() = false, want true (default fallback)")
+	}
+	if nilCfg.MultiTurnFallbackValue() != true {
+		t.Errorf("nil MultiTurnFallback: MultiTurnFallbackValue() = false, want true (default fallback)")
+	}
+
+	// *true ⇒ true
+	trueCfg := Config{AutoStageAll: boolPtr(true), MultiTurnFallback: boolPtr(true)}
+	if trueCfg.AutoStageAllValue() != true {
+		t.Errorf("*true AutoStageAll: AutoStageAllValue() = false, want true")
+	}
+	if trueCfg.MultiTurnFallbackValue() != true {
+		t.Errorf("*true MultiTurnFallback: MultiTurnFallbackValue() = false, want true")
+	}
+
+	// *false ⇒ false (the fix: an explicit false survives end-to-end)
+	falseCfg := Config{AutoStageAll: boolPtr(false), MultiTurnFallback: boolPtr(false)}
+	if falseCfg.AutoStageAllValue() != false {
+		t.Errorf("*false AutoStageAll: AutoStageAllValue() = true, want false (explicit override honored)")
+	}
+	if falseCfg.MultiTurnFallbackValue() != false {
+		t.Errorf("*false MultiTurnFallback: MultiTurnFallbackValue() = true, want false (explicit override honored)")
+	}
+
+	// Defaults() seeds both non-nil *true (so a higher layer's *false is the final word after overlay)
+	d := Defaults()
+	if d.AutoStageAll == nil || *d.AutoStageAll != true {
+		t.Errorf("Defaults().AutoStageAll = %v, want non-nil *true", d.AutoStageAll)
+	}
+	if d.MultiTurnFallback == nil || *d.MultiTurnFallback != true {
+		t.Errorf("Defaults().MultiTurnFallback = %v, want non-nil *true", d.MultiTurnFallback)
+	}
+	if d.AutoStageAllValue() != true || d.MultiTurnFallbackValue() != true {
+		t.Errorf("Defaults() accessors: ASA=%v MTF=%v, want true/true", d.AutoStageAllValue(), d.MultiTurnFallbackValue())
 	}
 }

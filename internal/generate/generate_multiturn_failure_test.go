@@ -115,9 +115,9 @@ func TestCommitStaged_MultiTurnMidTurnFailureRescue(t *testing.T) {
 	m.Env["STAGECOACH_STUB_EXIT"] = "1" // mutable Env map (optsEnvMap); applies to every stub call
 
 	cfg := config.Defaults()
-	cfg.MaxDuplicateRetries = 0  // exactly 1 one-shot call ⇒ counter math clean
-	cfg.MultiTurnChunkTokens = 4 // tiny ⇒ cond (b) true; N≥2
-	cfg.MultiTurnFallback = true // cond (c) (default true; explicit)
+	cfg.MaxDuplicateRetries = 0           // exactly 1 one-shot call ⇒ counter math clean
+	cfg.MultiTurnChunkTokens = 4          // tiny ⇒ cond (b) true; N≥2
+	cfg.MultiTurnFallback = boolPtr(true) // cond (c) (default true; explicit)
 
 	re := assertMultiTurnRescue(t, repo, m, cfg, 2) // 1 one-shot + 1 multi-turn turn (aborted at turn 1)
 	// FR-T7: the multi-turn turn error supersedes one-shot's lastCause and propagates as RescueError.Cause.

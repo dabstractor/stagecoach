@@ -66,7 +66,7 @@ type Config struct {
 	Model        string        `toml:"model"`          // "" => provider manifest default_model
 	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default; config init writes "off")
 	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 120s
-	AutoStageAll bool          `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4)
+	AutoStageAll *bool         `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4); *bool — nil ⇒ inherit lower layer (Defaults seeds true); non-nil incl. *false ⇒ explicit override
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
 
 	// CLI / UI only — NOT in the §16.2 config file (toml:"-"). Set by flags/env at runtime, never by a file.
@@ -76,15 +76,15 @@ type Config struct {
 	Single  bool `toml:"-"` // --single/--no-decompose: bypass the planner entirely (v1 single-commit path)
 
 	// [generation] (PRD §16.2)
-	MaxDiffBytes         int  `toml:"max_diff_bytes"`          // byte cap on non-markdown diff section
-	MaxMdLines           int  `toml:"max_md_lines"`            // per-file line cap for markdown diffs
-	TokenLimit           int  `toml:"token_limit"`             // FR3d holistic token cap (0 = unset ⇒ legacy caps); consumed by S2/S4
-	DiffContext          *int `toml:"diff_context"`            // FR3f reduced context (0–3); *int — nil ⇒ unset (default 1/-U1); non-nil incl. *0 ⇒ explicit (0 = changed-lines-only). *int not plain int so overlay distinguishes unset from explicit 0; consumed by S2/S4
-	MaxDuplicateRetries  int  `toml:"max_duplicate_retries"`   // re-gen attempts on duplicate subject
-	MultiTurnFallback    bool `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (lossless large-diff priming); default true; consumed by P1.M1.T3.S3 trigger gate
-	MultiTurnChunkTokens int  `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size (tokens est) for multi-turn; default 32000; consumed by P1.M1.T3.S2 protocol
-	WorkDescReadRounds   int  `toml:"work_desc_read_rounds"`   // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
-	SubjectTargetChars   int  `toml:"subject_target_chars"`    // target subject length for truncation
+	MaxDiffBytes         int   `toml:"max_diff_bytes"`          // byte cap on non-markdown diff section
+	MaxMdLines           int   `toml:"max_md_lines"`            // per-file line cap for markdown diffs
+	TokenLimit           int   `toml:"token_limit"`             // FR3d holistic token cap (0 = unset ⇒ legacy caps); consumed by S2/S4
+	DiffContext          *int  `toml:"diff_context"`            // FR3f reduced context (0–3); *int — nil ⇒ unset (default 1/-U1); non-nil incl. *0 ⇒ explicit (0 = changed-lines-only). *int not plain int so overlay distinguishes unset from explicit 0; consumed by S2/S4
+	MaxDuplicateRetries  int   `toml:"max_duplicate_retries"`   // re-gen attempts on duplicate subject
+	MultiTurnFallback    *bool `toml:"multi_turn_fallback"`     // §9.24 FR-T1c multi-turn fallback (lossless large-diff priming); *bool — nil ⇒ inherit lower layer (Defaults seeds true); non-nil incl. *false ⇒ explicit override; consumed by P1.M1.T3.S3 trigger gate
+	MultiTurnChunkTokens int   `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size (tokens est) for multi-turn; default 32000; consumed by P1.M1.T3.S2 protocol
+	WorkDescReadRounds   int   `toml:"work_desc_read_rounds"`   // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
+	SubjectTargetChars   int   `toml:"subject_target_chars"`    // target subject length for truncation
 	// Format selects the commit-message style (PRD §9.19 FR-F1): "auto" (style learning, default),
 	// "conventional", "gitmoji", or "plain". Resolved through the standard 5-layer precedence
 	// (file → git → env → flag). Validated against validFormats at the tail of Load() — an unknown
@@ -186,7 +186,7 @@ func Defaults() Config {
 		Model:                "",
 		Reasoning:            "", // FR-R6: off for every role by default; config init writes reasoning = "off" into [defaults] (FR-B1)
 		Timeout:              120 * time.Second,
-		AutoStageAll:         true,
+		AutoStageAll:         boolPtr(true), // *bool (non-nil): lets a higher layer's explicit *false be the final word after overlay (mirrors DiffContext intPtr(1))
 		Verbose:              false,
 		NoColor:              false,
 		Commits:              0, // auto-decompose (PRD §9.14 FR-M2); set by --commits in P1.M3.T2/P4.M1.T1
@@ -196,9 +196,9 @@ func Defaults() Config {
 		TokenLimit:           0,         // FR3d: 0 = unset ⇒ legacy per-section caps (max_diff_bytes/max_md_lines) apply unchanged
 		DiffContext:          intPtr(1), // FR3f: -U1 default (non-nil: nil ⇒ user omitted the key; *0 ⇒ changed-lines-only)
 		MaxDuplicateRetries:  3,
-		MultiTurnFallback:    true,  // §9.24 FR-T1c default (multi-turn fallback enabled)
-		MultiTurnChunkTokens: 32000, // §9.24 FR-T3 default (per-request chunk size, tokens est)
-		WorkDescReadRounds:   5,     // §9.26 FR-W6 default (max read rounds in work-description mode)
+		MultiTurnFallback:    boolPtr(true), // §9.24 FR-T1c default (multi-turn fallback enabled); *bool non-nil seed mirrors AutoStageAll/DiffContext
+		MultiTurnChunkTokens: 32000,         // §9.24 FR-T3 default (per-request chunk size, tokens est)
+		WorkDescReadRounds:   5,             // §9.26 FR-W6 default (max read rounds in work-description mode)
 		SubjectTargetChars:   50,
 		Output:               nil,
 		StripCodeFence:       nil,
@@ -230,4 +230,29 @@ func (c Config) DiffContextValue() int {
 		return *c.DiffContext
 	}
 	return 1
+}
+
+// AutoStageAllValue resolves the *bool AutoStageAll to the plain bool consumers need (a raw *bool read
+// would force every caller to handle nil). Mirrors DiffContextValue exactly. Returns the default true
+// when the pointer is nil (a layer that omits the key inherits the default-true fallback); a non-nil
+// pointer is returned verbatim, so an explicit *false ("auto_stage_all = false" / "git config
+// stagecoach.autoStageAll false") is preserved end-to-end through the materialize→overlay chain.
+// Called by the default-action auto-stage gate and the decompose trigger check.
+func (c Config) AutoStageAllValue() bool {
+	if c.AutoStageAll != nil {
+		return *c.AutoStageAll
+	}
+	return true
+}
+
+// MultiTurnFallbackValue resolves the *bool MultiTurnFallback to the plain bool consumers need.
+// Mirrors AutoStageAllValue / DiffContextValue. Returns the default true when the pointer is nil
+// (a layer that omits the key inherits the default-true fallback); a non-nil pointer is returned
+// verbatim, so an explicit *false ("multi_turn_fallback = false") is preserved end-to-end through
+// the materialize→overlay chain. Called by the generate/hook/stagecoach multi-turn trigger gates.
+func (c Config) MultiTurnFallbackValue() bool {
+	if c.MultiTurnFallback != nil {
+		return *c.MultiTurnFallback
+	}
+	return true
 }

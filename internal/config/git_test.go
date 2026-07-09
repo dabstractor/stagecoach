@@ -105,7 +105,7 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	if cfg.Timeout != 90*time.Second {
 		t.Errorf("Timeout=%v want 90s", cfg.Timeout)
 	}
-	if !cfg.AutoStageAll {
+	if !cfg.AutoStageAllValue() {
 		t.Errorf("AutoStageAll=false want true (--bool 'on')")
 	}
 	if !cfg.Verbose {
@@ -161,7 +161,7 @@ func TestLoadGitConfig_MissingKeysIgnored(t *testing.T) {
 		cfg.MaxDuplicateRetries != 0 || cfg.SubjectTargetChars != 0 {
 		t.Errorf("numeric field non-zero: %+v", cfg)
 	}
-	if cfg.AutoStageAll || cfg.Verbose || (cfg.StripCodeFence != nil && *cfg.StripCodeFence) {
+	if cfg.AutoStageAll != nil || cfg.Verbose || (cfg.StripCodeFence != nil && *cfg.StripCodeFence) {
 		t.Errorf("bool field non-zero: %+v", cfg)
 	}
 }
@@ -181,7 +181,7 @@ func TestLoadGitConfig_BoolNormalization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadGitConfig err=%v, want nil", err)
 	}
-	if cfg.AutoStageAll {
+	if cfg.AutoStageAllValue() {
 		t.Errorf("AutoStageAll=true want false (--bool 'off')")
 	}
 	if cfg.StripCodeFence != nil && *cfg.StripCodeFence {
@@ -312,7 +312,7 @@ func TestLoadGitConfig_CamelCaseKeysOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadGitConfig err=%v, want nil", err)
 	}
-	if !cfg.AutoStageAll {
+	if !cfg.AutoStageAllValue() {
 		t.Error("AutoStageAll=false want true (camelCase key works)")
 	}
 
@@ -369,7 +369,7 @@ func TestLoadGitConfig_OverlaysWithDefaults(t *testing.T) {
 		t.Errorf("MaxMdLines=%d want 7", cfg.MaxMdLines)
 	}
 	// Unset git fields MUST keep Defaults() (proves partial overlay, not wholesale replace):
-	if !cfg.AutoStageAll {
+	if !cfg.AutoStageAllValue() {
 		t.Errorf("AutoStageAll=false want true (default preserved)")
 	}
 	if cfg.MaxDiffBytes != 300000 {

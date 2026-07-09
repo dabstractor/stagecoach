@@ -73,7 +73,7 @@ bare_flags = ["--no-mcp", "--ephemeral"]
 	if cfg.Timeout != 90*time.Second {
 		t.Errorf("Timeout=%v want 90s", cfg.Timeout)
 	}
-	if !cfg.AutoStageAll {
+	if !cfg.AutoStageAllValue() {
 		t.Errorf("AutoStageAll=false want true")
 	}
 	if cfg.MaxDiffBytes != 12345 {
@@ -120,7 +120,7 @@ func TestOverlayPartial(t *testing.T) {
 		t.Errorf("Output = %v, want strPtr(json)", dst.Output)
 	}
 	// Everything else MUST be untouched (NOT a wholesale replace):
-	if !dst.AutoStageAll {
+	if !dst.AutoStageAllValue() {
 		t.Errorf("AutoStageAll clobbered: false, want true (partial merge broken)")
 	}
 	if dst.MaxDiffBytes != 300000 {
@@ -787,7 +787,7 @@ func TestOverlayNilSrc(t *testing.T) {
 	if dst.Timeout != 120*time.Second {
 		t.Errorf("Timeout changed: %v", dst.Timeout)
 	}
-	if dst.AutoStageAll != true {
+	if !dst.AutoStageAllValue() {
 		t.Errorf("AutoStageAll changed")
 	}
 	if dst.MaxDiffBytes != 300000 {
@@ -944,6 +944,201 @@ max_diff_bytes = 1000
 		overlay(&dst, cfg)
 		if dst.DiffContext == nil || *dst.DiffContext != 1 {
 			t.Fatalf("after overlay: DiffContext = %v, want non-nil *1 (-U1 default inherited)", dst.DiffContext)
+		}
+	})
+}
+
+// --- TestMaterializeOverlay_AutoStageAll_MultiTurnFallback ---
+
+// TestMaterializeOverlay_AutoStageAll_MultiTurnFallback is the load-bearing proof of P1.M1.T1.S1:
+// AutoStageAll and MultiTurnFallback are *bool (nil = unset/inherit; non-nil incl. *false = explicit
+// override), mirroring the DiffContext *int pattern exactly. This test proves the *bool conversion
+// fixed Issue 1 ("auto_stage_all = false silently ignored"): an explicit false in a TOML file now
+// survives the full materialize→overlay chain and resolves to false, while an omitted key inherits
+// the default-true.
+//
+// Table coverage (mirrors TestMaterializeOverlay_DiffContext_TokenLimit's structure):
+//
+//	(a) materialize-only  (file → Config): omitted⇒nil, explicit true⇒*true, explicit false⇒*false
+//	(b) global-only       (Defaults → overlay global)
+//	(c) repo-only         (Defaults → overlay repo)
+//	(d) global+repo       (Defaults → overlay global → overlay repo)
+//	(e) end-to-end via loadTOML (real TOML decode → *bool → overlay)
+//
+// The explicit-false rows PASS under *bool + != nil and would FAIL under the old only-true-propagates
+// `if d.X { c.X = true }` guard (false would not propagate, silently reverting to the default true).
+func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
+	// bp returns a pointer to v (test-local alias of boolPtr for table brevity).
+	bp := func(v bool) *bool { return &v }
+
+	// ---- (a) materialize-only: file → Config ----
+	// A file that sets auto_stage_all / multi_turn_fallback decodes into a *bool (nil when omitted) and
+	// materialize copies the pointer through (nil ⇒ materialize leaves the field nil; non-nil ⇒ copies).
+	materializeCases := []struct {
+		name    string
+		fileASA *bool // nil = key omitted in [defaults]
+		fileMTF *bool // nil = key omitted in [generation]
+		wantASA *bool // nil ⇒ expect c.AutoStageAll == nil (materialize does NOT seed a default)
+		wantMTF *bool // nil ⇒ expect c.MultiTurnFallback == nil
+	}{
+		{"both_unset", nil, nil, nil, nil},
+		{"asa_true", bp(true), nil, bp(true), nil},
+		{"asa_false", bp(false), nil, bp(false), nil}, // THE key row: explicit false survives materialize
+		{"mtf_true", nil, bp(true), nil, bp(true)},
+		{"mtf_false", nil, bp(false), nil, bp(false)}, // explicit false survives materialize
+		{"asa_false_mtf_false", bp(false), bp(false), bp(false), bp(false)},
+	}
+	for _, tc := range materializeCases {
+		t.Run("materialize/"+tc.name, func(t *testing.T) {
+			fc := &fileConfig{
+				Defaults:   fileDefaults{AutoStageAll: tc.fileASA},
+				Generation: fileGeneration{MultiTurnFallback: tc.fileMTF},
+			}
+			c := materialize(fc, 0, 0)
+			// AutoStageAll
+			if tc.wantASA == nil {
+				if c.AutoStageAll != nil {
+					t.Errorf("AutoStageAll = %v, want nil (materialize must not seed a default)", c.AutoStageAll)
+				}
+			} else {
+				if c.AutoStageAll == nil {
+					t.Fatalf("AutoStageAll = nil, want non-nil *%v", *tc.wantASA)
+				}
+				if *c.AutoStageAll != *tc.wantASA {
+					t.Errorf("*AutoStageAll = %v, want *%v", *c.AutoStageAll, *tc.wantASA)
+				}
+			}
+			// MultiTurnFallback
+			if tc.wantMTF == nil {
+				if c.MultiTurnFallback != nil {
+					t.Errorf("MultiTurnFallback = %v, want nil (materialize must not seed a default)", c.MultiTurnFallback)
+				}
+			} else {
+				if c.MultiTurnFallback == nil {
+					t.Fatalf("MultiTurnFallback = nil, want non-nil *%v", *tc.wantMTF)
+				}
+				if *c.MultiTurnFallback != *tc.wantMTF {
+					t.Errorf("*MultiTurnFallback = %v, want *%v", *c.MultiTurnFallback, *tc.wantMTF)
+				}
+			}
+		})
+	}
+
+	// ---- (b)/(c)/(d) overlay chain: Defaults (boolPtr(true)) → overlay(global) → overlay(repo) ----
+	// This is the load.go step the old broken guard sat in. overlay MUST use != nil (pointer copy) so an
+	// explicit false propagates and an omitted key inherits the default-true. The accessor resolves the
+	// final bool: nil ⇒ true (default); non-nil ⇒ the pointed-to value (incl. false).
+	type fileSpec struct {
+		asa *bool
+		mtf *bool
+	}
+	overlayCases := []struct {
+		name    string
+		global  fileSpec // applied first (Defaults → overlay global)
+		repo    fileSpec // applied next (→ overlay repo); nil ⇒ repo omits the key
+		wantASA bool     // expected AutoStageAllValue() (Defaults guarantees non-nil after overlay)
+		wantMTF bool     // expected MultiTurnFallbackValue()
+	}{
+		// (b) global-only (repo omits both)
+		{"global_only/unset", fileSpec{nil, nil}, fileSpec{nil, nil}, true, true},
+		{"global_only/asa_false", fileSpec{bp(false), nil}, fileSpec{nil, nil}, false, true}, // global false ⇒ ASA false
+		{"global_only/mtf_false", fileSpec{nil, bp(false)}, fileSpec{nil, nil}, true, false}, // global false ⇒ MTF false
+		// (c) repo-only (global omits both)
+		{"repo_only/unset", fileSpec{nil, nil}, fileSpec{nil, nil}, true, true},
+		{"repo_only/asa_false", fileSpec{nil, nil}, fileSpec{bp(false), nil}, false, true}, // repo false ⇒ ASA false
+		{"repo_only/mtf_false", fileSpec{nil, nil}, fileSpec{nil, bp(false)}, true, false}, // repo false ⇒ MTF false
+		// (d) global+repo interactions
+		{"global_true_repo_false_repo_wins_false", fileSpec{bp(true), nil}, fileSpec{bp(false), nil}, false, true}, // repo explicit-false overrides global true
+		{"global_false_repo_unset_inherits_false", fileSpec{bp(false), nil}, fileSpec{nil, nil}, false, true},      // repo omits ⇒ inherits global false
+		{"global_false_repo_true_repo_wins_true", fileSpec{bp(false), nil}, fileSpec{bp(true), nil}, true, true},   // repo true overrides global false
+		{"mtf_global_false_repo_unset_inherits_false", fileSpec{nil, bp(false)}, fileSpec{nil, nil}, true, false},
+		{"omitted_everywhere_value_true", fileSpec{nil, nil}, fileSpec{nil, nil}, true, true}, // nil everywhere ⇒ accessor returns default true
+	}
+	for _, tc := range overlayCases {
+		t.Run("overlay/"+tc.name, func(t *testing.T) {
+			cfg := Defaults() // AutoStageAll=boolPtr(true); MultiTurnFallback=boolPtr(true)
+			g := materialize(&fileConfig{
+				Defaults:   fileDefaults{AutoStageAll: tc.global.asa},
+				Generation: fileGeneration{MultiTurnFallback: tc.global.mtf},
+			}, 0, 0)
+			overlay(&cfg, g)
+			r := materialize(&fileConfig{
+				Defaults:   fileDefaults{AutoStageAll: tc.repo.asa},
+				Generation: fileGeneration{MultiTurnFallback: tc.repo.mtf},
+			}, 0, 0)
+			overlay(&cfg, r)
+			if cfg.AutoStageAll == nil {
+				t.Fatalf("AutoStageAll = nil after overlay; Defaults() must seed boolPtr(true) so nil is impossible here")
+			}
+			if cfg.AutoStageAllValue() != tc.wantASA {
+				t.Errorf("AutoStageAllValue() = %v, want %v", cfg.AutoStageAllValue(), tc.wantASA)
+			}
+			if cfg.MultiTurnFallback == nil {
+				t.Fatalf("MultiTurnFallback = nil after overlay; Defaults() must seed boolPtr(true) so nil is impossible here")
+			}
+			if cfg.MultiTurnFallbackValue() != tc.wantMTF {
+				t.Errorf("MultiTurnFallbackValue() = %v, want %v", cfg.MultiTurnFallbackValue(), tc.wantMTF)
+			}
+		})
+	}
+
+	// ---- (e) End-to-end via loadTOML (proves the TOML decode → *bool path) ----
+	// A real TOML file with [defaults] auto_stage_all = false and [generation] multi_turn_fallback = false
+	// must yield accessor()==false after the full Defaults() → overlay(loadTOML) chain (Issue 1's fix).
+	t.Run("loadTOML/false_end_to_end", func(t *testing.T) {
+		body := `
+[defaults]
+auto_stage_all = false
+[generation]
+multi_turn_fallback = false
+`
+		path := writeTempTOML(t, body)
+		cfg, err := loadTOML(path)
+		if err != nil || cfg == nil {
+			t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+		}
+		// materialize: explicit false ⇒ non-nil *false (distinct from omitted=nil)
+		if cfg.AutoStageAll == nil || *cfg.AutoStageAll != false {
+			t.Fatalf("loadTOML AutoStageAll = %v, want non-nil *false", cfg.AutoStageAll)
+		}
+		if cfg.MultiTurnFallback == nil || *cfg.MultiTurnFallback != false {
+			t.Fatalf("loadTOML MultiTurnFallback = %v, want non-nil *false", cfg.MultiTurnFallback)
+		}
+		// Now run the load.go overlay step (Defaults → overlay) — the step the old guard broke.
+		dst := Defaults()
+		overlay(&dst, cfg)
+		if dst.AutoStageAllValue() != false {
+			t.Fatalf("after overlay: AutoStageAllValue() = %v, want false (explicit false must survive the overlay chain)", dst.AutoStageAllValue())
+		}
+		if dst.MultiTurnFallbackValue() != false {
+			t.Fatalf("after overlay: MultiTurnFallbackValue() = %v, want false (explicit false must survive the overlay chain)", dst.MultiTurnFallbackValue())
+		}
+	})
+
+	// ---- (e) End-to-end: omitted keys inherit the default-true (no regression on the default path) ----
+	t.Run("loadTOML/omitted_inherits_default", func(t *testing.T) {
+		body := `
+[generation]
+max_diff_bytes = 1000
+`
+		path := writeTempTOML(t, body)
+		cfg, err := loadTOML(path)
+		if err != nil || cfg == nil {
+			t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+		}
+		if cfg.AutoStageAll != nil {
+			t.Errorf("loadTOML AutoStageAll = %v, want nil (key omitted ⇒ materialize leaves it nil)", cfg.AutoStageAll)
+		}
+		if cfg.MultiTurnFallback != nil {
+			t.Errorf("loadTOML MultiTurnFallback = %v, want nil (key omitted ⇒ materialize leaves it nil)", cfg.MultiTurnFallback)
+		}
+		dst := Defaults()
+		overlay(&dst, cfg)
+		if dst.AutoStageAllValue() != true {
+			t.Fatalf("after overlay: AutoStageAllValue() = %v, want true (default inherited)", dst.AutoStageAllValue())
+		}
+		if dst.MultiTurnFallbackValue() != true {
+			t.Fatalf("after overlay: MultiTurnFallbackValue() = %v, want true (default inherited)", dst.MultiTurnFallbackValue())
 		}
 	})
 }

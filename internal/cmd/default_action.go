@@ -118,7 +118,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 			// FR19: --no-auto-stage + nothing staged → exit 2 "Nothing staged." (--no-auto-stage wins
 			// over cfg.AutoStageAll). main prints "stagecoach: Nothing staged." (non-nil err).
 			return exitcode.New(exitcode.NothingToCommit, errors.New("Nothing staged."))
-		case cfg.AutoStageAll || forceAutoStage:
+		case cfg.AutoStageAllValue() || forceAutoStage:
 			// FR16/FR18: auto-stage all, print the transparent notice, re-check.
 			if err := g.AddAll(ctx); err != nil {
 				return exitcode.New(exitcode.Error, fmt.Errorf("git add -A: %w", err))
@@ -379,7 +379,7 @@ func shouldDecompose(cfg *config.Config, dryRun, noAutoStage bool) bool {
 	if dryRun { // decompose commits; --dry-run → single preview
 		return false
 	}
-	return cfg.AutoStageAll && !noAutoStage // FR-M1 trigger context (auto-stage on)
+	return cfg.AutoStageAllValue() && !noAutoStage // FR-M1 trigger context (auto-stage on)
 }
 
 // runDecompose builds decompose.Deps (ResolveRoles for the four roles) and runs the pipeline.

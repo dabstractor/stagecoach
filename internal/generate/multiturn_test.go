@@ -546,7 +546,7 @@ func TestMultiTurnTriggerGate_TruthTable(t *testing.T) {
 			m := stubAppendManifest(t, bin, tc.script, !tc.append) // omitAppend = !tc.append
 			cfg := config.Defaults()
 			cfg.MaxDuplicateRetries = 0 // one-shot: exactly 1 attempt (the script's call 1)
-			cfg.MultiTurnFallback = tc.multiTurn
+			cfg.MultiTurnFallback = boolPtr(tc.multiTurn)
 			cfg.MultiTurnChunkTokens = tc.chunkTokens
 
 			var buf bytes.Buffer
@@ -757,6 +757,11 @@ func TestMultiTurnGate_TokenLimitZero_ParseFail_NoRetryInstr(t *testing.T) {
 // unexported; the stubtest package has its own copy we cannot reach from here).
 func strPtr(s string) *string { return &s }
 
+// boolPtr returns a pointer to b — a local helper for setting *bool Config fields (config.boolPtr is
+// unexported; this test package needs its own copy to assign cfg.MultiTurnFallback, now a *bool).
+// Mirrors pkg/stagecoach/stagecoach_test.go's boolPtr.
+func boolPtr(b bool) *bool { return &b }
+
 // tail returns the last n bytes of s (for readable failure messages on the verbose buffer).
 func tail(s string, n int) string {
 	if len(s) > n {
@@ -806,9 +811,9 @@ func TestCommitStaged_MultiTurnProgressLine_ChunkTokens(t *testing.T) {
 	// Script: call 1 = "" (one-shot parse-fail ⇒ exhaust ⇒ gate fires); "ok","ok" priming; final = message.
 	m := stubAppendManifest(t, bin, []string{"", "ok", "ok", "feat: mt win"}, false) // append (cond d)
 	cfg := config.Defaults()
-	cfg.MaxDuplicateRetries = 0  // exactly 1 one-shot attempt ⇒ exhaust ⇒ gate fires
-	cfg.MultiTurnFallback = true // cond c
-	cfg.MultiTurnChunkTokens = 4 // cond b (24 > 4); small ⇒ a distinctive, easy-to-assert substring
+	cfg.MaxDuplicateRetries = 0           // exactly 1 one-shot attempt ⇒ exhaust ⇒ gate fires
+	cfg.MultiTurnFallback = boolPtr(true) // cond c
+	cfg.MultiTurnChunkTokens = 4          // cond b (24 > 4); small ⇒ a distinctive, easy-to-assert substring
 
 	var vbuf bytes.Buffer
 	captured := captureStderr(t, func() {

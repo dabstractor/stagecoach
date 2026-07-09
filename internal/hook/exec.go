@@ -223,7 +223,7 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 	// Mirrors the canonical gate in internal/generate/generate.go (CommitStaged), with hook adaptations:
 	// generate.ChunkCount (exported), generate.Run (exported), nil-guarded Verbose, WriteMessageFile-on-
 	// success / fall-through-on-failure, NO signal/rescue.
-	if cfg.MultiTurnFallback &&
+	if cfg.MultiTurnFallbackValue() &&
 		resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
 		// FR-T2/FR-T12 (Issue 4): mtPayload is ALWAYS rebuilt from the untruncated `diff` (NOT reused from

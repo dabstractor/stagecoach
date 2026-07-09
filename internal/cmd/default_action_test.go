@@ -21,6 +21,10 @@ import (
 	"github.com/dustin/stagecoach/internal/stubtest"
 )
 
+// boolPtr returns a pointer to b — a local helper for setting *bool Config fields (config.boolPtr is
+// unexported; this test package needs its own copy to assign cfg.AutoStageAll, now a *bool).
+func boolPtr(b bool) *bool { return &b }
+
 // ---------------------------------------------------------------------------
 // Fixture helpers (COPIED from internal/generate/generate_test.go — package-private
 // there, unimportable by cmd). Bodies kept identical.
@@ -992,13 +996,13 @@ func TestShouldDecompose(t *testing.T) {
 		noAutoStage bool
 		want        bool
 	}{
-		{"default_auto_stage", &config.Config{AutoStageAll: true}, false, false, true},
-		{"single_opt_out", &config.Config{Single: true, AutoStageAll: true}, false, false, false},
-		{"commits_1", &config.Config{Commits: 1, AutoStageAll: true}, false, false, false},
-		{"commits_3", &config.Config{Commits: 3, AutoStageAll: true}, false, false, true},
-		{"dry_run", &config.Config{AutoStageAll: true}, true, false, false},
-		{"no_auto_stage_flag", &config.Config{AutoStageAll: true}, false, true, false},
-		{"auto_stage_off", &config.Config{AutoStageAll: false}, false, false, false},
+		{"default_auto_stage", &config.Config{AutoStageAll: boolPtr(true)}, false, false, true},
+		{"single_opt_out", &config.Config{Single: true, AutoStageAll: boolPtr(true)}, false, false, false},
+		{"commits_1", &config.Config{Commits: 1, AutoStageAll: boolPtr(true)}, false, false, false},
+		{"commits_3", &config.Config{Commits: 3, AutoStageAll: boolPtr(true)}, false, false, true},
+		{"dry_run", &config.Config{AutoStageAll: boolPtr(true)}, true, false, false},
+		{"no_auto_stage_flag", &config.Config{AutoStageAll: boolPtr(true)}, false, true, false},
+		{"auto_stage_off", &config.Config{AutoStageAll: boolPtr(false)}, false, false, false},
 		{"nil_cfg", nil, false, false, false},
 	}
 	for _, tt := range tests {

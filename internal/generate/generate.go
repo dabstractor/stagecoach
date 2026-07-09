@@ -391,7 +391,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		// the feature delivers its headline benefit even when token_limit truncates the one-shot
 		// payload below the chunk threshold. When token_limit is unset (0) the re-capture is skipped
 		// (the captured payload is already untruncated), keeping the fast path fast.
-		if cfg.MultiTurnFallback && !workDescActive &&
+		if cfg.MultiTurnFallbackValue() && !workDescActive &&
 			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
 			// FR-T2/FR-T12: mtPayload is ALWAYS rebuilt from the untruncated `diff` via BuildUserPayload

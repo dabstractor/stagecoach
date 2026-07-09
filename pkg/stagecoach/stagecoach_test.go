@@ -1324,7 +1324,7 @@ func appendMultiTurnConfig(t *testing.T, bin, script, counter string, sessionMod
 	cfg := config.Defaults()
 	cfg.Provider = "stub"
 	cfg.MaxDuplicateRetries = 0 // exactly 1 one-shot call ⇒ exhaust on "", then multi-turn fires
-	cfg.MultiTurnFallback = true
+	cfg.MultiTurnFallback = boolPtr(true)
 	if chunkTokens > 0 {
 		cfg.MultiTurnChunkTokens = chunkTokens // tiny ⇒ N≥2 (cond b true for a large diff)
 	}

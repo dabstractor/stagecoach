@@ -620,7 +620,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 		// delivery of a payload that exceeded what one request could carry. When token_limit is set
 		// (non-zero) it truncated the one-shot `diff`/`payload` above; for the multi-turn path we
 		// RE-CAPTURE the diff with TokenLimit=0 and rebuild the payload from the UNTRUNCATED diff.
-		if cfg.MultiTurnFallback && !workDescActive &&
+		if cfg.MultiTurnFallbackValue() && !workDescActive &&
 			resolved.SessionMode != nil && *resolved.SessionMode == "append" {
 
 			// FR-T2/Issue4: mtPayload is ALWAYS rebuilt from the untruncated `diff` via BuildUserPayload

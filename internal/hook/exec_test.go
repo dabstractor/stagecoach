@@ -17,6 +17,10 @@ import (
 	"github.com/dustin/stagecoach/internal/ui"
 )
 
+// boolPtr returns a pointer to b — a local helper for setting *bool Config fields (config.boolPtr is
+// unexported; this test package needs its own copy to assign cfg.MultiTurnFallback, now a *bool).
+func boolPtr(b bool) *bool { return &b }
+
 // runGit runs a git command in repo dir. Test helper.
 func runGit(t *testing.T, repo string, args ...string) {
 	t.Helper()
@@ -343,7 +347,7 @@ func TestRun_MultiTurnSuccess_WritesMessageFile(t *testing.T) {
 	cfg := config.Config{
 		Timeout:              10 * time.Second,
 		MaxDuplicateRetries:  0, // one-shot: 1 attempt (the "")
-		MultiTurnFallback:    true,
+		MultiTurnFallback:    boolPtr(true),
 		MultiTurnChunkTokens: 4, // low ⇒ the diff exceeds one chunk ⇒ condition (b) true
 		TokenLimit:           0,
 	}
@@ -377,7 +381,7 @@ func TestRun_MultiTurnFailure_NeverBlock(t *testing.T) {
 	cfg := config.Config{
 		Timeout:              10 * time.Second,
 		MaxDuplicateRetries:  0,
-		MultiTurnFallback:    true,
+		MultiTurnFallback:    boolPtr(true),
 		MultiTurnChunkTokens: 4,
 	}
 
@@ -411,7 +415,7 @@ func TestRun_MultiTurnSkipped_NonAppend(t *testing.T) {
 	cfg := config.Config{
 		Timeout:              10 * time.Second,
 		MaxDuplicateRetries:  0,
-		MultiTurnFallback:    true,
+		MultiTurnFallback:    boolPtr(true),
 		MultiTurnChunkTokens: 4,
 	}
 
@@ -436,7 +440,7 @@ func TestRun_MultiTurnSmallPayloadSkip(t *testing.T) {
 	cfg := config.Config{
 		Timeout:              10 * time.Second,
 		MaxDuplicateRetries:  0,
-		MultiTurnFallback:    true,
+		MultiTurnFallback:    boolPtr(true),
 		MultiTurnChunkTokens: 100000, // huge ⇒ EstimateTokens(payload) ≤ chunkTokens ⇒ cond (b) false
 	}
 
