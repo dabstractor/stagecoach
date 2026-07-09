@@ -341,8 +341,6 @@ command = "/nonexistent/opencode"
 command = "/nonexistent/codex"
 [provider.cursor]
 command = "/nonexistent/cursor"
-[provider.gemini]
-command = "/nonexistent/gemini"
 [provider.agy]
 command = "/nonexistent/agy"
 [provider.qwen-code]
@@ -435,8 +433,6 @@ command = "/nonexistent/opencode"
 command = "/nonexistent/codex"
 [provider.cursor]
 command = "/nonexistent/cursor"
-[provider.gemini]
-command = "/nonexistent/gemini"
 [provider.agy]
 command = "/nonexistent/agy"
 [provider.qwen-code]
