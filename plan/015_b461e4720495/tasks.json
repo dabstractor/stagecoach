@@ -119,21 +119,21 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Resolution & Defaults — ResolveRoleTimeout + planner 480s built-in default + global 120s",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Add the ResolveRoleTimeout function (mirroring ResolveRoleModel), the planner 480s built-in default, and change the global default from 480s to 120s (fixing all pinning tests).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "ResolveRoleTimeout function + planner 480s built-in default",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The per-role timeout resolver that consumers call at each Execute call site, plus the planner-specific built-in default of 480s.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Add ResolveRoleTimeout + defaultRoleTimeouts map (planner=480s)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -152,14 +152,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Change global default 480s→120s + fix pinning tests",
-              "status": "Planned",
+              "status": "Ready",
               "description": "The global timeout default changes from 480s to 120s (FR-R7). The planner retains 480s via its built-in default. All tests and help text that pin the old 480s default must be updated.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Change global default 480s→120s and fix all pinning tests",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestResolveRoleModel_GlobalFallbackRolesNil(t *testing.T) {
 	cfg := Defaults() // Roles == nil, Provider/Model/Reasoning == ""
@@ -186,5 +189,66 @@ func TestResolveRoleModel_ReasoningOffIsNonZero(t *testing.T) {
 	_, _, rp := ResolveRoleModel("planner", cfg)
 	if rp != "off" {
 		t.Errorf("ResolveRoleModel(planner) reasoning = %q, want \"off\" [per-role off beats global high]", rp)
+	}
+}
+
+// --- ResolveRoleTimeout tests (FR-R7 per-role generation timeout) ---
+
+func TestResolveRoleTimeout_PerRoleOverride(t *testing.T) {
+	cfg := Defaults()
+	cfg.Timeout = 120 * time.Second // distinct from the 480s built-in so the assertion is unambiguous
+	cfg.Roles = map[string]RoleConfig{"planner": {Timeout: 600 * time.Second}}
+	got := ResolveRoleTimeout("planner", cfg)
+	if got != 600*time.Second {
+		t.Errorf("ResolveRoleTimeout(planner) = %v, want 600s [per-role beats built-in 480s AND global 120s]", got)
+	}
+}
+
+func TestResolveRoleTimeout_PlannerBuiltinBeatsGlobal(t *testing.T) {
+	cfg := Defaults()
+	cfg.Timeout = 120 * time.Second // DISTINCT from the 480s built-in — makes the assertion unambiguous
+	// Roles nil ⇒ no per-role override; planner must take its 480s BUILT-IN, NOT the 120s global.
+	got := ResolveRoleTimeout("planner", cfg)
+	if got != 480*time.Second {
+		t.Errorf("ResolveRoleTimeout(planner) = %v, want 480s (built-in beats 120s global)", got)
+	}
+}
+
+func TestResolveRoleTimeout_NonPlannerGlobalFallback(t *testing.T) {
+	cfg := Defaults()
+	cfg.Timeout = 120 * time.Second // distinct from the 480s planner built-in
+	for _, role := range []string{"stager", "message", "arbiter"} {
+		got := ResolveRoleTimeout(role, cfg)
+		if got != 120*time.Second {
+			t.Errorf("ResolveRoleTimeout(%s) = %v, want 120s [no built-in ⇒ global]", role, got)
+		}
+	}
+}
+
+func TestResolveRoleTimeout_FieldMergeTimeoutOnly(t *testing.T) {
+	cfg := Defaults()
+	cfg.Timeout = 120 * time.Second
+	cfg.Roles = map[string]RoleConfig{"message": {Provider: "pi", Timeout: 0}} // Timeout 0 ⇒ inherit global
+	got := ResolveRoleTimeout("message", cfg)
+	if got != 120*time.Second {
+		t.Errorf("ResolveRoleTimeout(message) = %v, want 120s [Timeout 0 inherits global; Provider is irrelevant to timeout]", got)
+	}
+}
+
+func TestResolveRoleTimeout_UnknownRoleGlobalFallback(t *testing.T) {
+	cfg := Defaults()
+	cfg.Timeout = 120 * time.Second
+	got := ResolveRoleTimeout("palnner", cfg) // typo / non-canonical name
+	if got != 120*time.Second {
+		t.Errorf("ResolveRoleTimeout(palnner) = %v, want 120s [unknown role ⇒ global, no built-in]", got)
+	}
+}
+
+func TestResolveRoleTimeout_RolesNilGlobalFallback(t *testing.T) {
+	cfg := Defaults() // Roles is nil from Defaults()
+	cfg.Timeout = 120 * time.Second
+	got := ResolveRoleTimeout("message", cfg)
+	if got != 120*time.Second {
+		t.Errorf("ResolveRoleTimeout(message) = %v, want 120s [Roles nil ⇒ global fallback]", got)
 	}
 }
