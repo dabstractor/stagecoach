@@ -52,6 +52,8 @@ v2.0's headline feature: run `stagecoach` with a dirty working tree and nothing 
 
 Decompose activates when **nothing is staged**, **auto-stage-all is on** (the default), and the user has **not opted out** (`--single`, `--no-decompose`, or `--commits 1`). If something is already staged, the single-commit path runs unchanged. `--dry-run` also forces the single-commit preview (decompose commits, so dry-run honors the single preview).
 
+**Defense-in-depth (FR-M1e).** Decompose re-asserts the empty-index precondition at its entry: if a stale or buggy trigger ever routes to it with a non-empty index, it fails loudly — naming the offending staged paths and pointing to `git reset` (unstage, then re-run) or `stagecoach --single` (commit the hand-staged index as one) — instead of silently sweeping them into the start-of-run freeze. The single-commit escape hatch (`--single`, `--commits 1`) is checked first and is unaffected, since it handles a hand-staged index normally.
+
 ### The four roles
 
 | Role | Mode | Job | Output |

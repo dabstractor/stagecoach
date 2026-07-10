@@ -119,8 +119,11 @@ type msgOut struct {
 // composing the four-role pipeline (planner → stager → message → arbiter).
 //
 // PRECONDITION (FR-M1, owned by the CLI router — P4.M1.T1.S1): the caller routed here because NOTHING is
-// staged (HasStagedChanges false) AND the working tree has changes. Decompose does NOT re-check this; it
-// assumes correct routing.
+// staged (HasStagedChanges false) AND the working tree has changes. FR-M1e (defense-in-depth):
+// Decompose re-asserts the empty-index precondition at entry — AFTER the single/`--commits 1`
+// escape-hatch (which handles a hand-staged index normally) and BEFORE FreezeWorkingTree. A stale or
+// buggy trigger that routes here with a non-empty index fails loudly, naming the staged paths, instead
+// of silently folding them into T_start.
 //
 // MODE ROUTING (FR-M2): Config.Single==true || Config.Commits==1 → single ESCAPE-HATCH (planner bypassed
 // → AddAll → generate.CommitStaged, v1 behavior). Else → callPlanner(forcedCount=Config.Commits). If the
@@ -142,6 +145,26 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 	// (1) Mode routing: single ESCAPE-HATCH (planner bypassed) → v1 path.
 	if deps.Config.Single || deps.Config.Commits == 1 {
 		return runSingleEscape(ctx, deps)
+	}
+
+	// (1b) FR-M1e defense-in-depth: re-assert the empty-index precondition the trigger (FR-M1) owns.
+	//      A stale/buggy trigger that routes here with a non-empty index would otherwise have its
+	//      staged content silently folded into T_start by FreezeWorkingTree's internal AddAll (step 3).
+	//      Placed AFTER the escape-hatch (single/--commits 1 still uses the single primitive, which
+	//      handles a hand-staged index normally) and BEFORE FreezeWorkingTree. Fail loudly, naming the
+	//      offending paths.
+	hasStaged, err := deps.Git.HasStagedChanges(ctx)
+	if err != nil {
+		return DecomposeResult{}, fmt.Errorf("%w: check staged changes: %w", ErrDecomposeFailed, err)
+	}
+	if hasStaged {
+		names, _ := deps.Git.StagedNames(ctx) // best-effort: HasStagedChanges already proved something is staged
+		return DecomposeResult{}, fmt.Errorf(
+			"decompose requires an empty index, but %d file(s) are staged: %s. "+
+				"This is a defense-in-depth check (FR-M1e) — the trigger should have routed to the "+
+				"single-commit path. Run `git reset` to unstage, or `stagecoach --single` for the "+
+				"one-commit behavior",
+			len(names), strings.Join(names, ", "))
 	}
 
 	// (2) Derive isUnborn + preRunHEAD + baseTree ONCE (callPlanner + the loop both need them).

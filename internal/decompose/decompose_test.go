@@ -1977,8 +1977,13 @@ func TestDecompose_OneFileShortcut_Deletion(t *testing.T) {
 	dcmStageFile(t, repo, "gone.txt")
 	dcmRunGit(t, repo, "commit", "-m", "initial")
 
-	// Delete the tracked file.
-	dcmRunGit(t, repo, "rm", "gone.txt")
+	// Delete the tracked file WITHOUT staging (plain filesystem delete) — mirrors the real FR-M1
+	// precondition the CLI enforces (empty index + working-tree change). `git rm` would stage the
+	// deletion, which FR-M1e's empty-index re-check now rejects; a bare `rm` leaves the index clean
+	// and FreezeWorkingTree's AddAll captures the deletion into T_start all the same.
+	if err := os.Remove(filepath.Join(repo, "gone.txt")); err != nil {
+		t.Fatalf("rm gone.txt: %v", err)
+	}
 
 	// Planner counter-manifest: must NOT be called.
 	counterDir := t.TempDir()
@@ -2653,4 +2658,121 @@ func truncForLogD(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
+}
+
+// TestDecompose_StagedIndex_FRM1e (FR-M1e): with files staged in auto mode (Commits=0, Single=false),
+// Decompose fails loudly naming the staged paths + remedies, creates ZERO commits, and leaves the
+// index byte-for-byte untouched (the check runs before any git mutation). The staged-content error
+// is NOT sentinel-wrapped (the design choice — a distinct user-facing actionable category).
+func TestDecompose_StagedIndex_FRM1e(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// Write + STAGE 2 files (a non-empty index — exactly what the FR-M1e check guards against).
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.go", "bbb\n")
+	dcmStageFile(t, repo, "a.txt")
+	dcmStageFile(t, repo, "b.go")
+
+	msgM := dcmMessageManifest(t, bin, "feat: should never run")
+	roles := RoleManifests{Message: msgM}
+	cfg := config.Defaults() // Commits=0 (auto), Single=false
+
+	deps := dcmDepsWithConfig(t, repo, roles, cfg)
+
+	result, err := Decompose(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected FR-M1e error for staged index, got nil")
+	}
+
+	// The message names each staged path + the FR-M1e phrase + both remedies.
+	msg := err.Error()
+	for _, want := range []string{"a.txt", "b.go", "2 file(s) are staged", "defense-in-depth check (FR-M1e)", "git reset", "stagecoach --single"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q missing %q", msg, want)
+		}
+	}
+
+	// The staged-content error is NOT sentinel-wrapped (design choice — distinct actionable category).
+	if errors.Is(err, ErrDecomposeFailed) {
+		t.Errorf("staged-content error must NOT wrap ErrDecomposeFailed; got %v", err)
+	}
+
+	// ZERO commits created.
+	if len(result.Commits) != 0 {
+		t.Errorf("Commits len = %d, want 0 (the check runs before any publish)", len(result.Commits))
+	}
+	if dcmLogCount(t, repo) != 0 {
+		t.Fatalf("commit count = %d, want 0 (index check must precede every git mutation)", dcmLogCount(t, repo))
+	}
+
+	// Index byte-for-byte untouched: both files STILL staged (the check runs before any git mutation).
+	status := dcmStatusPorcelain(t, repo)
+	if !strings.Contains(status, "a.txt") || !strings.Contains(status, "b.go") {
+		t.Fatalf("index mutated; status = %q (want both files still staged)", status)
+	}
+}
+
+// TestDecompose_StagedIndex_SingleBypasses (FR-M1e regression): with files staged AND Single=true,
+// Decompose STILL commits normally — proves the check is placed AFTER the escape-hatch
+// (runSingleEscape → CommitStaged handles a hand-staged index normally).
+func TestDecompose_StagedIndex_SingleBypasses(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.go", "bbb\n")
+	dcmStageFile(t, repo, "a.txt")
+	dcmStageFile(t, repo, "b.go")
+
+	msgM := dcmMessageManifest(t, bin, "feat: all staged")
+	roles := RoleManifests{Message: msgM}
+	cfg := config.Defaults()
+	cfg.Single = true // the escape-hatch
+
+	deps := dcmDepsWithConfig(t, repo, roles, cfg)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(Single=true, staged): expected escape-hatch success, got %v", err)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1 (escape-hatch bypasses the FR-M1e check)", len(result.Commits))
+	}
+	if dcmLogCount(t, repo) != 1 {
+		t.Fatalf("commit count = %d, want 1", dcmLogCount(t, repo))
+	}
+}
+
+// TestDecompose_StagedIndex_Commits1Bypasses (FR-M1e regression): with files staged AND Commits==1,
+// Decompose STILL commits normally — proves `--commits 1` also bypasses the check (same escape-hatch).
+func TestDecompose_StagedIndex_Commits1Bypasses(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.go", "bbb\n")
+	dcmStageFile(t, repo, "a.txt")
+	dcmStageFile(t, repo, "b.go")
+
+	msgM := dcmMessageManifest(t, bin, "feat: all staged")
+	roles := RoleManifests{Message: msgM}
+	cfg := config.Defaults()
+	cfg.Commits = 1 // the escape-hatch
+
+	deps := dcmDepsWithConfig(t, repo, roles, cfg)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(Commits=1, staged): expected escape-hatch success, got %v", err)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1 (escape-hatch bypasses the FR-M1e check)", len(result.Commits))
+	}
+	if dcmLogCount(t, repo) != 1 {
+		t.Fatalf("commit count = %d, want 1", dcmLogCount(t, repo))
+	}
 }
