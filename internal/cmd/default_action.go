@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/dustin/stagecoach/internal/lock"
 	"github.com/dustin/stagecoach/internal/provider"
 	"github.com/dustin/stagecoach/internal/ui"
+	"github.com/dustin/stagecoach/internal/watchdog"
 	"github.com/dustin/stagecoach/pkg/stagecoach"
 )
 
@@ -34,7 +36,7 @@ import (
 // CAS message). To avoid main double-printing a detailed message, the rescue/CAS paths return a SILENT
 // exitcode.New(code, nil) (ExitError.Error()=="" → main's `err.Error() != ""` guard skips printing).
 func runDefault(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context() // S1's Execute set this; P1.M4.T2 swaps it for a signal-aware ctx later.
+	ctx := cmd.Context() // the signal-aware ctx (main.go's signal.Install → cmd.Execute → rootCmd.SetContext).
 	stdout := cmd.OutOrStdout()
 	stderr := cmd.ErrOrStderr()
 
@@ -77,6 +79,19 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		return exitcode.New(exitcode.Error, fmt.Errorf("acquire run lock: %w", lockErr))
 	}
 	defer locker.Release()
+
+	// §9.27 FR-K1/K6 — parent-death watchdog. Now that THIS process owns the run lock, arm the watchdog so that
+	// when the launcher dies without sending a signal (closing the lazygit TUI, quitting an IDE, a detaching
+	// terminal — §18.5's "closed without killing it" case), it reclaims the lock instead of orphaning it. Gated
+	// by the FR-K6 opt-out (NoParentWatchdog) for intentional detach (nohup/setsid/systemd-run). The watchdog
+	// shares this ctx (cmd.Context → main.go's signal.Install ctx), so its poll goroutine dies with the process;
+	// on a parent-pid change it calls signal.Trigger(SIGTERM), reusing the SAME rescue + OnRescueExit
+	// (=lock.ReleaseCurrent) exit path a terminal SIGTERM takes — no separate teardown, no internal/lock import.
+	// One arming covers BOTH the single-commit path and runDecompose (runDecompose runs under this same lock),
+	// so do NOT re-arm inside runDecompose. Windows is a no-op inside the watchdog (FR-K7); 1s cadence is FR-K2.
+	if !cfg.NoParentWatchdog {
+		watchdog.Arm(ctx, 1*time.Second)
+	}
 
 	// ---- §9.4 auto-stage-all state machine (FR16–FR20) ----
 	// §9.22 FR-E4: --dry-run + --edit → warn + skip the editor (nothing to commit).
