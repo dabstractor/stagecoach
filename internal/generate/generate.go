@@ -262,6 +262,11 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	// No message override ⇒ (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.
 	// Provider is discarded (manifest is deps.Manifest, selected upstream by buildDeps; P1.M2.T2.S1).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
+	// FR-R7/FR25: resolve the message role's timeout so [role.message].timeout / --message-timeout
+	// bound the message agent's one-shot generation (and the multi-turn total budget, FR-T5) instead
+	// of the flat cfg.Timeout. With no per-role override ResolveRoleTimeout returns cfg.Timeout
+	// (the message role has no built-in) — behavior-preserving by default.
+	msgTimeout := config.ResolveRoleTimeout("message", cfg)
 
 	var rejected []string
 	var candidate string // last generated message (for RescueError.Candidate)
@@ -332,7 +337,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout, deps.Verbose)
+		out, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.
@@ -423,7 +428,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 				// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
 				// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
 				turns := len(chunkPayload(mtPayload, cfg.MultiTurnChunkTokens)) + 1 // N chunks + 1 final turn
-				totalMin := int((cfg.Timeout * time.Duration(turns)).Minutes())
+				totalMin := int((msgTimeout * time.Duration(turns)).Minutes())
 				if totalMin < 1 {
 					totalMin = 1
 				}

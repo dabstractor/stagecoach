@@ -485,6 +485,53 @@ func TestCommitStaged_Timeout(t *testing.T) {
 	}
 }
 
+// TestCommitStaged_MessageRoleTimeout verifies FR-R7/FR25 on the single-commit path:
+// the message role's resolved timeout (ResolveRoleTimeout("message", cfg)) — NOT the flat
+// cfg.Timeout — bounds the one-shot Execute. Sets the GLOBAL large (30s, which would NOT time
+// out against a 2000ms stub sleep) and the MESSAGE-ROLE small (150ms → times out). Asserting
+// ErrTimeout here proves msgTimeout (150ms), not cfg.Timeout (30s), reached Execute.
+// This is the positive proof of the P1.M3.T1.S1 wiring; TestCommitStaged_Timeout is the
+// behavior-preserving-by-default regression canary (there msgTimeout == cfg.Timeout == 150ms).
+func TestCommitStaged_MessageRoleTimeout(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "z.txt", "data")
+	stageFile(t, repo, "z.txt")
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: slow", SleepMS: 2000})
+	cfg := config.Defaults()
+	cfg.Timeout = 30 * time.Second                                                         // LARGE global (would NOT time out)
+	cfg.Roles = map[string]config.RoleConfig{"message": {Timeout: 150 * time.Millisecond}} // SMALL message-role (times out)
+
+	beforeHEAD := headSHA(t, repo)
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err == nil {
+		t.Fatal("expected error on message-role timeout, got nil")
+	}
+
+	var re *RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("error type = %T, want *RescueError", err)
+	}
+	if !errors.Is(err, ErrTimeout) {
+		t.Errorf("errors.Is(err, ErrTimeout) = false, want true (message-role 150ms should bound Execute, not the 30s global)")
+	}
+	if errors.Is(err, ErrRescue) {
+		t.Error("errors.Is(err, ErrRescue) = true, want false (should be ErrTimeout)")
+	}
+	if re.TreeSHA == "" {
+		t.Error("RescueError.TreeSHA is empty, want non-empty (snapshot was taken)")
+	}
+
+	// HEAD unchanged.
+	if got := headSHA(t, repo); got != beforeHEAD {
+		t.Errorf("HEAD changed from %q to %q on timeout, want unchanged", beforeHEAD, got)
+	}
+}
+
 // TestCommitStaged_IdempotentIndexOnFailure verifies the §20.2 invariant: after a
 // rescue path, the index is byte-for-byte unchanged (CommitStaged never calls
 // git add). Checks both HEAD and staged files.
