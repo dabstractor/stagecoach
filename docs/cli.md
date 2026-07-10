@@ -450,10 +450,10 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--message-model` | `STAGECOACH_MESSAGE_MODEL` | — |
 | `--message-reasoning` | `STAGECOACH_MESSAGE_REASONING` | — |
 | `--arbiter-reasoning` | `STAGECOACH_ARBITER_REASONING` | — |
-| `--planner-timeout` | `STAGECOACH_PLANNER_TIMEOUT` | — |
-| `--stager-timeout` | `STAGECOACH_STAGER_TIMEOUT` | — |
-| `--message-timeout` | `STAGECOACH_MESSAGE_TIMEOUT` | — |
-| `--arbiter-timeout` | `STAGECOACH_ARBITER_TIMEOUT` | — |
+| `--planner-timeout` | `STAGECOACH_PLANNER_TIMEOUT` | `stagecoach.role.planner.timeout` |
+| `--stager-timeout` | `STAGECOACH_STAGER_TIMEOUT` | `stagecoach.role.stager.timeout` |
+| `--message-timeout` | `STAGECOACH_MESSAGE_TIMEOUT` | `stagecoach.role.message.timeout` |
+| `--arbiter-timeout` | `STAGECOACH_ARBITER_TIMEOUT` | `stagecoach.role.arbiter.timeout` |
 | — (no flag) | `STAGECOACH_NO_PARENT_WATCHDOG` | `stagecoach.noParentWatchdog` (also `[generation].no_parent_watchdog` in config) |
 
 ## Examples

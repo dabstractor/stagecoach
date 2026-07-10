@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Per-Role Generation Timeouts (FR-R7, §9.15)",
-      "status": "Researching",
+      "status": "Ready",
       "description": "Each role (planner, stager, message, arbiter) resolves its OWN timeout independently. The global --timeout default changes 480s→120s (the fallback any role inherits); the planner role gets a built-in default of 480s (the heavy role — reasoning over the entire frozen T_start diff routinely exceeds the lighter roles' budget). Stager/message/arbiter inherit 120s, each independently tunable via --<role>-timeout / STAGECOACH_<ROLE>_TIMEOUT / [role.<role>].timeout / stagecoach.role.<role>.timeout. Mirrors the existing per-role provider/model/reasoning resolution pattern exactly (FR-R3). Motivated by a real 'decompose: planner failed: context deadline exceeded' with thinking-high planner over a large diff.",
       "milestones": [
         {
@@ -256,7 +256,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Tests & Documentation for per-role timeouts",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Comprehensive tests for per-role timeout resolution across all precedence layers, plus changeset-level documentation sync.",
           "tasks": [
             {
@@ -291,14 +291,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Sync changeset-level documentation for per-role timeouts",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Mode B changeset-level docs: update README.md, docs/how-it-works.md, and docs/configuration.md to document per-role timeouts as a coherent feature. Per-role flag/env/git-config docs already landed as Mode A in P1.M1.T2 subtasks.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Update README + docs/how-it-works + docs/configuration overview for per-role timeouts",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -336,14 +336,14 @@
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "Add StagedNames() git primitive for listing staged paths",
-              "status": "Planned",
+              "status": "Researching",
               "description": "No git method returns staged paths as []string today. StagedFileCount runs `git diff --cached --name-only` but discards the paths. FR-M1e needs to name the offending staged paths in its error message.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T1.S1",
                   "title": "Add StagedNames() to Git interface + gitRunner implementation",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The Git interface (git.go ~L131-163) has `HasStagedChanges(ctx) (bool, error)` and `StagedFileCount(ctx) (int, error)`. StagedFileCount (git.go:1331) runs `git diff --cached --name-only` but only counts lines, discarding the paths. The implementation pattern for gitRunner methods uses `g.run(ctx, g.workDir, ...)` which returns `(stdout, stderr, code, err)`.\n2. INPUT: The existing gitRunner pattern and Git interface.\n3. LOGIC: (a) Add `StagedNames(ctx context.Context) ([]string, error)` to the `Git` interface in `internal/git/git.go` (near StagedFileCount at ~L163). Doc comment: 'StagedNames returns the paths of files currently staged (git diff --cached --name-only). Returns nil/empty if nothing is staged. Used by FR-M1e to name offending staged paths in the decompose re-check error.' (b) Implement on `*gitRunner` following the StagedFileCount pattern: run `git diff --cached --name-only`, split on newlines, filter empty strings, return []string. (c) Update ALL test fakes/mocks that implement the Git interface to add a StagedNames method. Search for `type.*Git.*interface` or struct mocks in test files.\n4. OUTPUT: `deps.Git.StagedNames(ctx)` returns `[]string` of staged file paths for use in the FR-M1e error message.\n5. DOCS: none — internal git primitive, no user-facing surface.",

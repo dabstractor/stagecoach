@@ -83,7 +83,7 @@ config_version = 3
 provider = "claude"
 reasoning = "off"   # off|low|medium|high; off by default for every role (FR-R6)
 # model          = ""
-# timeout        = "120s"
+# timeout        = "120s"   # global fallback for every role (FR-R7); the planner role defaults to 480s
 # auto_stage_all = true
 # verbose        = false
 
@@ -91,6 +91,7 @@ reasoning = "off"   # off|low|medium|high; off by default for every role (FR-R6)
 
 [role.planner]
 model = "opus"
+# timeout = "600s"   # per-role generation timeout (FR-R7); overrides the planner's 480s built-in
 
 [role.stager]
 model = "sonnet"
@@ -181,7 +182,7 @@ All `STAGECOACH_*` variables override the config file and are overridden by CLI 
 |----------|-------------|-------------|---------|
 | `STAGECOACH_PROVIDER` | `--provider` | Default provider/agent | `STAGECOACH_PROVIDER=claude stagecoach` |
 | `STAGECOACH_MODEL` | `--model` | Model override | `STAGECOACH_MODEL=sonnet stagecoach` |
-| `STAGECOACH_TIMEOUT` | `--timeout` | Generation timeout | `STAGECOACH_TIMEOUT=60s stagecoach` |
+| `STAGECOACH_TIMEOUT` | `--timeout` | Global generation timeout — the fallback for every role (FR-R7); the planner role defaults to 480s and is NOT changed by this | `STAGECOACH_TIMEOUT=60s stagecoach` |
 | `STAGECOACH_CONFIG` | `--config` | Config file path | `STAGECOACH_CONFIG=./alt.toml stagecoach` |
 | `STAGECOACH_VERBOSE` | `--verbose` | Print resolved command and output. Accepts `true`/`false`/`1`/`0`. (`2` is documented as a future payload-contents level but **not yet implemented** — it is rejected with a clear message.) | `STAGECOACH_VERBOSE=true stagecoach` |
 | `STAGECOACH_NO_COLOR` | `--no-color` | Disable color | `STAGECOACH_NO_COLOR=true stagecoach` |
@@ -200,6 +201,10 @@ All `STAGECOACH_*` variables override the config file and are overridden by CLI 
 | `STAGECOACH_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGECOACH_STAGER_REASONING=low stagecoach` |
 | `STAGECOACH_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGECOACH_MESSAGE_REASONING=low stagecoach` |
 | `STAGECOACH_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGECOACH_ARBITER_REASONING=low stagecoach` |
+| `STAGECOACH_PLANNER_TIMEOUT` | `--planner-timeout` | Per-role: planner generation timeout (FR-R7; planner built-in 480s) | `STAGECOACH_PLANNER_TIMEOUT=600s stagecoach` |
+| `STAGECOACH_STAGER_TIMEOUT` | `--stager-timeout` | Per-role: stager generation timeout (FR-R7; inherits 120s) | `STAGECOACH_STAGER_TIMEOUT=300s stagecoach` |
+| `STAGECOACH_MESSAGE_TIMEOUT` | `--message-timeout` | Per-role: message generation timeout (FR-R7; the single-commit path's only role; inherits 120s) | `STAGECOACH_MESSAGE_TIMEOUT=120s stagecoach` |
+| `STAGECOACH_ARBITER_TIMEOUT` | `--arbiter-timeout` | Per-role: arbiter generation timeout (FR-R7; inherits 120s) | `STAGECOACH_ARBITER_TIMEOUT=120s stagecoach` |
 | `STAGECOACH_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGECOACH_FORMAT=conventional stagecoach` |
 | `STAGECOACH_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGECOACH_LOCALE=ja stagecoach` |
 | `STAGECOACH_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGECOACH_TEMPLATE='$msg (#205)' stagecoach` |
@@ -248,7 +253,7 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | Single-commit | `--single` / `--no-decompose` | — | — | `false` | Bypass decompose → v1 single-commit |
 | Max commits | `--max-commits <N>` | — | `[generation].max_commits` | `12` | Safety cap on auto-decompose count |
 
-Per-role provider/model overrides (flag > env > `[role.<role>]` config > `[defaults]` > built-in): see [providers.md](providers.md#per-role-default-models-fr-d4) for the compiled-in defaults per provider. Every role (including message) exposes `--<role>-provider`/`--<role>-model`/`--<role>-reasoning` (FR-R3).
+Per-role provider/model overrides (flag > env > `[role.<role>]` config > `[defaults]` > built-in): see [providers.md](providers.md#per-role-default-models-fr-d4) for the compiled-in defaults per provider. Every role (including message) exposes `--<role>-provider`/`--<role>-model`/`--<role>-reasoning`/`--<role>-timeout` (FR-R3/FR-R7). Each role also resolves its **own generation timeout** (FR-R7): the **planner defaults to 480s** (the heavy role that reasons over the full frozen diff), while **stager/message/arbiter inherit the global `120s`**. Override a role with `--<role>-timeout` / `STAGECOACH_<ROLE>_TIMEOUT` / `[role.<role>].timeout` / `stagecoach.role.<role>.timeout` (precedence: flag > env > `[role.<role>]` > built-in > `[defaults]`). Note the global `--timeout` does **not** change the planner — it has a 480s built-in that wins; set `--planner-timeout` to override it.
 
 > [!IMPORTANT]
 > **Precedence gotcha:** because per-role config beats the global `[defaults]`, a `[role.<role>]` entry silently shadows an explicit `--model`/`--provider` (which set the GLOBAL default only) for that role. This is correct per FR-R3 but an easy footgun — e.g. a `[role.message] model = "…"` config means `stagecoach --model X` uses the config's model for the commit. Use `--message-model` (or `--message-provider`) to override the message role specifically, or run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint when shadowing is active. See [cli.md](cli.md#global-flags) for the full precedence note.

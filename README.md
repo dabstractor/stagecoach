@@ -168,6 +168,7 @@ stagecoach --single
 # [role.planner]
 # provider = "claude"
 # model = "opus"
+# timeout = "600s"   # per-role generation timeout (FR-R7); the planner defaults to 480s
 ```
 
 > [!NOTE]

@@ -129,7 +129,7 @@ The same snapshot-based safety invariants from the single-commit path apply to e
 - **No index resets** — the index accumulates across concepts. After the final commit, HEAD.tree == tree[N-1] == full accumulated index, so the index is clean relative to HEAD.
 - **Start-of-run freeze** — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. The stager is verified as a content-subset of T_start after each staging step (FR-M1c), and the arbiter — the third freeze surface — derives its gate, its diff, and every tree it commits strictly from T_start and tipTree, never a live re-read (FR-M1d).
 
-See [configuration.md](configuration.md) for per-role model configuration and [cli.md](cli.md) for the decompose and per-role flags.
+See [configuration.md](configuration.md) for per-role provider/model/reasoning/**timeout** configuration and [cli.md](cli.md) for the decompose and per-role flags. Each role resolves its own generation timeout (FR-R7): the **planner defaults to 480s** (the heavy role), while stager/message/arbiter inherit the global `120s`; override with `--<role>-timeout`.
 
 ### Diff capture pipeline
 
@@ -300,7 +300,7 @@ the entire diff in its session history — then writes one message at the end:
 - **Turn N+1:** "Now write the commit message for the diff above." This turn's output runs through the
   normal parse + duplicate-rejection pipeline, then commits like any other message.
 
-Each turn is a separate provider invocation with its own timeout; total wall-clock ≈ `timeout × (N+1)`,
+Each turn is a separate provider invocation bounded by the **message role's** resolved timeout (FR-R7/FR-T5); total wall-clock ≈ `message-timeout × (N+1)`,
 surfaced on the progress line at fallback time. That progress line also reports the per-chunk token budget each chunk targets; with `--verbose`, each turn additionally prints its payload size and raw agent output (FR-T11).
 
 **Failure handling.** If any turn errors, times out, or the final output fails to parse/dedupe, the
