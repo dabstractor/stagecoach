@@ -28,8 +28,17 @@ func KillProcessGroup(pid int, sig os.Signal) error {
 	return nil
 }
 
+// caughtSignals returns the signals this platform's handler intercepts (FR-K7). Windows has no
+// SIGHUP concept (no controlling-terminal-hangup analog, no init-reparenting); the parent-death
+// watchdog is Unix-only, so only SIGINT/SIGTERM are caught here. The Unix twin adds SIGHUP.
+func caughtSignals() []os.Signal {
+	return []os.Signal{os.Interrupt, syscall.SIGTERM}
+}
+
 // exitCodeForSignal (Windows). SIGINT via Ctrl-C → 130. SIGTERM is not deliverable on Windows but
 // is defined as a const; map it to 143 for consistency with Unix (the branch won't fire in practice).
+// NOTE: SIGHUP has no case here — syscall.SIGHUP does not exist on Windows and the branch is
+// unreachable anyway (caughtSignals() above never returns it).
 func exitCodeForSignal(sig os.Signal) int {
 	switch sig {
 	case os.Interrupt, syscall.SIGINT:

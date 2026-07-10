@@ -1,9 +1,17 @@
-// Package signal implements Stagecoach's SIGINT/SIGTERM safety net (PRD §18.4 / §9.10 FR45,
-// FINDING 8). It intercepts Ctrl-C / SIGTERM, forwards the signal to the running child agent's
-// whole process group (so no orphaned grandchildren survive), runs the §18.3 rescue protocol if
-// the snapshot was taken (print TREE_SHA + manual recovery command, exit 3), or exits cleanly
-// (130/143) pre-snapshot, and restores the default signal disposition immediately before the
-// final atomic update-ref so a last-instant Ctrl-C isn't misreported as a failure.
+// Package signal implements Stagecoach's SIGINT/SIGTERM/(Unix)SIGHUP safety net (PRD §18.4 / §9.10
+// FR45, FINDING 8; §9.27 FR-K3). It intercepts Ctrl-C / SIGTERM / (Unix) SIGHUP, forwards the
+// signal to the running child agent's whole process group (so no orphaned grandchildren survive),
+// runs the §18.3 rescue protocol if the snapshot was taken (print TREE_SHA + manual recovery
+// command, exit 3), or exits cleanly (129 SIGHUP / 130 SIGINT / 143 SIGTERM) pre-snapshot, and
+// restores the default signal disposition immediately before the final atomic update-ref so a
+// last-instant Ctrl-C isn't misreported as a failure.
+//
+// SIGHUP (Unix only — FR-K3): when the controlling terminal closes (closing the lazygit TUI,
+// quitting an IDE, a detaching terminal) the kernel delivers SIGHUP to the process group. Catching
+// it here routes the hangup through the rescue path (forward to child group → cancel ctx →
+// rescue-or-exit → release lock) instead of Go's default disposition, which would terminate raw
+// and orphan the lock file. Windows has no SIGHUP concept (FR-K7); the caught set is platform-
+// specific via caughtSignals() (signal_unix.go / signal_windows.go).
 //
 // Library-safe (D4): signal is opt-in (Install). A pkg/stagecoach consumer who never installs it
 // gets baseline behavior (their own ctx/signals; cmd.Cancel still kills the group). No behavior
@@ -22,7 +30,6 @@ import (
 	"os/signal"
 	"sync"
 	"sync/atomic"
-	"syscall"
 )
 
 // Options configures Install. All fields are optional — zero values are defaulted in Install.
@@ -57,7 +64,7 @@ type Options struct {
 // NOT by holding the pointer directly.
 type Handler struct {
 	opts   Options
-	ch     chan os.Signal     // buffered; signal.Notify delivers SIGINT/SIGTERM here
+	ch     chan os.Signal     // buffered; signal.Notify delivers SIGINT/SIGTERM/(Unix)SIGHUP here
 	cancel context.CancelFunc // cancels the signal-aware ctx (→ Execute unwinds + cmd.Cancel kills group)
 
 	childPID atomic.Int64 // registered child PID (0 = none); Setpgid ⇒ PGID==PID, so Kill(pid) ⇒ whole group
@@ -74,9 +81,9 @@ type Handler struct {
 // is installed (library use of pkg/stagecoach); all package wrappers are nil-safe then.
 var active atomic.Pointer[Handler]
 
-// Install sets up SIGINT/SIGTERM interception and returns a context cancelled on signal. Stores
-// the handler in active so the package wrappers (RegisterChild/SetSnapshot/…) reach it. Call ONCE
-// in main, BEFORE cmd.Execute. opts fields are defaulted if zero.
+// Install sets up SIGINT/SIGTERM/(Unix)SIGHUP interception and returns a context cancelled on
+// signal. Stores the handler in active so the package wrappers (RegisterChild/SetSnapshot/…)
+// reach it. Call ONCE in main, BEFORE cmd.Execute. opts fields are defaulted if zero.
 func Install(parent context.Context, opts Options) (context.Context, *Handler) {
 	// Default the injectable seams.
 	if opts.RescueFormat == nil {
@@ -99,8 +106,10 @@ func Install(parent context.Context, opts Options) (context.Context, *Handler) {
 
 	ctx, cancel := context.WithCancel(parent)
 	h := &Handler{opts: opts, cancel: cancel, ch: make(chan os.Signal, 1)}
-	// SIGTERM is a no-op path on Windows (harmless — compiles cross-platform, branch never fires there).
-	signal.Notify(h.ch, os.Interrupt, syscall.SIGTERM)
+	// The caught set is platform-specific via caughtSignals(): Unix catches SIGHUP too (FR-K3);
+	// Windows does not (FR-K7). SIGTERM is a no-op path on Windows (harmless — compiles
+	// cross-platform, the branch never fires there).
+	signal.Notify(h.ch, caughtSignals()...)
 	active.Store(h)
 	go h.run()
 	return ctx, h
@@ -151,7 +160,7 @@ func (h *Handler) handle(sig os.Signal) {
 		return
 	}
 	h.opts.OnRescueExit()               // pre-snapshot exit too (lock is held from default_action.go:59)
-	h.opts.Exit(exitCodeForSignal(sig)) // 130 SIGINT / 143 SIGTERM — "just exit" (§18.4 step 2)
+	h.opts.Exit(exitCodeForSignal(sig)) // 129 SIGHUP / 130 SIGINT / 143 SIGTERM — "just exit" (§18.4 step 2)
 }
 
 // ---- Nil-safe package wrappers (called by provider.Execute / generate.CommitStaged / runPipeline) ----
@@ -209,7 +218,7 @@ func ClearSnapshot() {
 func RestoreDefault() {
 	if h := active.Load(); h != nil {
 		if h.stopped.CompareAndSwap(false, true) {
-			signal.Stop(h.ch) // stop delivering SIGINT/SIGTERM to h.ch → default disposition restored
+			signal.Stop(h.ch) // stop delivering all caught signals (SIGINT/SIGTERM + Unix SIGHUP) to h.ch → default disposition restored
 			close(h.ch)       // let the goroutine's range exit
 		}
 	}
