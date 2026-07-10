@@ -2691,7 +2691,7 @@ func TestDecompose_StagedIndex_FRM1e(t *testing.T) {
 
 	// The message names each staged path + the FR-M1e phrase + both remedies.
 	msg := err.Error()
-	for _, want := range []string{"a.txt", "b.go", "2 file(s) are staged", "defense-in-depth check (FR-M1e)", "git reset", "stagecoach --single"} {
+	for _, want := range []string{"a.txt", "b.go", "requires an empty index", "2 file(s) are staged", "defense-in-depth check (FR-M1e)", "git reset", "stagecoach --single"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q missing %q", msg, want)
 		}

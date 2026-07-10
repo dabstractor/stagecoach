@@ -470,6 +470,77 @@ func TestVerifyFreezeSubset_ContentViolation(t *testing.T) {
 	}
 }
 
+// TestVerifyFreezeSubset_ConceptTitleWiring (FR-M1c): the PathViolation/ContentViolation tests
+// pass the generic "test-concept" literal and assert "test-concept" — which would still pass if
+// the production code hardcoded that string instead of threading conceptTitle via %q. This
+// dedicated test uses a DISTINGUISHABLE title (with spaces/colons) and asserts THAT title renders
+// verbatim in both the path- and content-violation errors, proving faithful %q threading.
+func TestVerifyFreezeSubset_ConceptTitleWiring(t *testing.T) {
+	const title = "feat: add user auth endpoint" // DISTINGUISHABLE — would FAIL if conceptTitle were hardcoded
+
+	repo := t.TempDir()
+	stgInitRepo(t, repo)
+	stgCommitRaw(t, repo, "initial")
+
+	stgWriteFile(t, repo, "a.txt", "aaa\n")
+	stgWriteFile(t, repo, "b.txt", "bbb\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := stgGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	tStartPaths, err := g.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		t.Fatalf("DiffTreeNames(base, tStart): %v", err)
+	}
+	deps := Deps{Git: g}
+
+	// (1) PATH branch: a post-freeze sentinel not in T_start.
+	stgWriteFile(t, repo, "sentinel.txt", "concurrent\n")
+	stgRunGit(t, repo, "add", "sentinel.txt")
+	treeI, err := g.WriteTree(ctx)
+	if err != nil {
+		t.Fatalf("WriteTree: %v", err)
+	}
+	perr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, title, treeI)
+	if perr == nil {
+		t.Fatal("expected path-violation error, got nil")
+	}
+	if !errors.Is(perr, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation, got %v", perr)
+	}
+	for _, want := range []string{title, "in concept 0", "sentinel.txt", "staged paths not in the frozen working-tree snapshot"} {
+		if !strings.Contains(perr.Error(), want) {
+			t.Errorf("path-violation error missing %q; got: %s", want, perr.Error())
+		}
+	}
+
+	// (2) CONTENT branch: reset the index (clear the sentinel) so treeI2 reflects only a.txt's
+	//     modified content, then modify a.txt to content not in T_start.
+	stgRunGit(t, repo, "reset")
+	stgWriteFile(t, repo, "a.txt", "modified\n")
+	stgRunGit(t, repo, "add", "a.txt")
+	treeI2, err := g.WriteTree(ctx)
+	if err != nil {
+		t.Fatalf("WriteTree: %v", err)
+	}
+	cerr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, title, treeI2)
+	if cerr == nil {
+		t.Fatal("expected content-violation error, got nil")
+	}
+	if !errors.Is(cerr, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation, got %v", cerr)
+	}
+	for _, want := range []string{title, "in concept 0", "a.txt", "staged content differs from the frozen working-tree snapshot"} {
+		if !strings.Contains(cerr.Error(), want) {
+			t.Errorf("content-violation error missing %q; got: %s", want, cerr.Error())
+		}
+	}
+}
+
 func TestVerifyFreezeSubset_EmptyStaging(t *testing.T) {
 	// Empty staging (treeI == baseTree) → changedTreeI is nil → both checks no-op → nil.
 	repo := t.TempDir()

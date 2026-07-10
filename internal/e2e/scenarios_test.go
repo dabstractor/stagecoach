@@ -403,6 +403,36 @@ exclude = ["excluded.txt"]
 			t.Fatalf("expected feature.go in committed tree, got: %v", names)
 		}
 	})
+
+	// S8_StagedIndex_NoDecompose (§20.5 routing-boundary regression net): with a NON-EMPTY index the
+	// CLI router (default_action.go) MUST route to the SINGLE-COMMIT path (exit 0, seed + 1 commit,
+	// the staged file committed) and must NOT reach Decompose()/FR-M1e. A subprocess FR-M1e-trigger
+	// is architecturally impossible (the router only calls runDecompose inside `if !hasStaged`), so
+	// this scenario pins the ROUTING BOUNDARY that makes FR-M1e defense-in-depth — not an FR-M1e
+	// trigger.
+	t.Run("S8_StagedIndex_NoDecompose", func(t *testing.T) {
+		cfg := writeStubConfig(t, stub, "")
+		repo := newRepo(t)
+		seedCommit(t, repo, "readme.md", "init")
+		writeFile(t, repo, "feat.txt", "feat\n")
+		stageFile(t, repo, "feat.txt") // a NON-EMPTY index → router routes to single-commit, NOT decompose
+		env := stubEnv(map[string]string{"STAGECOACH_STUB_OUT": "feat: add feat"})
+		res := runStagecoach(t, bin, repo, cfg, env, "--provider", "stub")
+		if res.ExitCode != 0 {
+			t.Fatalf("exit code = %d, want 0; stderr:\n%s", res.ExitCode, res.Stderr)
+		}
+		if n := commitCount(t, repo); n != 2 {
+			t.Fatalf("commit count = %d, want 2 (seed + 1 single commit; a staged index must not decompose)", n)
+		}
+		names := diffTreeNames(t, repo, headSHA(t, repo))
+		if !contains(names, "feat.txt") {
+			t.Errorf("commit files = %v; want feat.txt committed via the single-commit path", names)
+		}
+		// The routing boundary: a staged index must NOT reach decompose / FR-M1e.
+		if strings.Contains(res.Stderr, "requires an empty index") {
+			t.Errorf("stderr hit FR-M1e — decompose was reached with a staged index (routing bug):\n%s", res.Stderr)
+		}
+	})
 }
 
 // contains reports whether ss contains s.
