@@ -37,7 +37,7 @@ type Options struct {
 	Model       string        // "" → manifest default_model
 	SystemExtra string        // appended to the built system prompt (extra integrator instructions)
 	DryRun      bool          // if true, return the message WITHOUT committing (CommitSHA == "")
-	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (480s)
+	Timeout     time.Duration // per-attempt generation timeout; 0 → config default (120s)
 	Verbose     io.Writer     // optional; when set AND cfg.Verbose, diagnostics (resolved command, raw output, retries) are written here (the CLI passes stderr). nil ⇒ silent. Additive-only (PRD §14.1).
 	VerboseOn   bool          // when true, forces cfg.Verbose=true (highest precedence — CLI --verbose / library consumer override). Overrides config/env/git-config layers.
 	// WorkDescription activates work-description mode for the message role (PRD §9.26 FR-W1): a non-empty

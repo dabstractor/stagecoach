@@ -25,7 +25,7 @@ import (
 // child inherits the parent env. cmd.Dir is NOT set — the agent runs in the user's CWD.
 //
 // Timeout: when timeout > 0 a context.WithTimeout is derived (shadowing ctx — load-bearing: the later
-// ctx.Err() reads the timeout ctx). The Config.Timeout default is 480s (PRD FR25). timeout ≤ 0 ⇒ no
+// ctx.Err() reads the timeout ctx). The Config.Timeout default is 120s (PRD FR25). timeout ≤ 0 ⇒ no
 // timeout (the parent ctx still applies).
 //
 // Kill semantics (PRD §18.2/§18.4, FINDING 8): the child runs as its own process-group leader

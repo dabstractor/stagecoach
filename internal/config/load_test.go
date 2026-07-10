@@ -690,8 +690,8 @@ func TestLoad_GlobalFileOverridesDefaults(t *testing.T) {
 		t.Errorf("Provider=%q want pi (global file)", cfg.Provider)
 	}
 	// Other fields should be Defaults()
-	if cfg.Timeout != 480*time.Second {
-		t.Errorf("Timeout=%v want 480s (default)", cfg.Timeout)
+	if cfg.Timeout != 120*time.Second {
+		t.Errorf("Timeout=%v want 120s (default)", cfg.Timeout)
 	}
 }
 

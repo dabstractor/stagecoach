@@ -72,7 +72,7 @@ func ResolveRoleModel(role string, cfg Config) (provider, model, reasoning strin
 //
 //	[role.<role>].timeout  (CLI flag > env > file > git, all already merged into cfg.Roles by the loaders)
 //	> built-in role default  (planner = 480s; FR-R7 — the planner needs more time than message/stager/arbiter)
-//	> [defaults].timeout     (cfg.Timeout — the global; 480s today, 120s after P1.M2.T2)
+//	> [defaults].timeout     (cfg.Timeout — the global; 120s)
 //
 // By the time this runs, Load() has already overlaid every precedence layer into cfg.Roles[role].Timeout,
 // so this only checks the per-role entry, then the built-in role default, then the global. It does NOT

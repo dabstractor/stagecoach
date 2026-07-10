@@ -59,7 +59,7 @@ func envOr(key, def string) string {
 // and cfg.Model is the model. The inference provider is intentionally NOT a config field here — it is
 // applied to the manifest's default_provider in TestRealAgents (mirroring a user's
 // [provider.<name>] default_provider), the only field Render consults for the --provider flag (FR-R5b).
-// Timeout/MaxDuplicateRetries inherit config.Defaults() (480s/3).
+// Timeout/MaxDuplicateRetries inherit config.Defaults() (120s/3).
 func realConfig(name string) config.Config {
 	cfg := config.Defaults()
 	d := realDefaults[name]
@@ -133,7 +133,7 @@ func TestRealAgents(t *testing.T) {
 
 			logResolvedCommand(t, name, m, cfg)
 
-			// RUN: real agent via CommitStaged. Timeout per attempt = cfg.Timeout (480s).
+			// RUN: real agent via CommitStaged. Timeout per attempt = cfg.Timeout (120s).
 			res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
 			if err != nil {
 				t.Fatalf("real agent %s failed end-to-end: %v\n(resolved command logged above — distinguish manifest bug vs unavailable model)", name, err)

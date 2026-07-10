@@ -68,7 +68,7 @@ type Config struct {
 	Provider     string        `toml:"provider"`       // "" => auto-detect (PRD §15.2)
 	Model        string        `toml:"model"`          // "" => provider manifest default_model
 	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default; config init writes "off")
-	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 480s
+	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 120s
 	AutoStageAll *bool         `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4); *bool — nil ⇒ inherit lower layer (Defaults seeds true); non-nil incl. *false ⇒ explicit override
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
 
@@ -180,7 +180,7 @@ type Config struct {
 	ConfigVersion int `toml:"config_version"`
 }
 
-// Defaults returns the built-in Layer-1 configuration (PRD §16.1): timeout 480s, auto_stage_all
+// Defaults returns the built-in Layer-1 configuration (PRD §16.1): timeout 120s, auto_stage_all
 // true, max_diff_bytes 300000, max_md_lines 100, max_duplicate_retries 3, subject_target_chars 50,
 // max_commits 12. Output and StripCodeFence are nil (deferred to the manifest's Resolve() — §12.1).
 // Provider and Model are "" (Layer 1 does not pin them): empty Provider => auto-detect (PRD §15.2);
@@ -197,7 +197,7 @@ func Defaults() Config {
 		Provider:             "",
 		Model:                "",
 		Reasoning:            "", // FR-R6: off for every role by default; config init writes reasoning = "off" into [defaults] (FR-B1)
-		Timeout:              480 * time.Second,
+		Timeout:              120 * time.Second,
 		AutoStageAll:         boolPtr(true), // *bool (non-nil): lets a higher layer's explicit *false be the final word after overlay (mirrors DiffContext intPtr(1))
 		Verbose:              false,
 		NoColor:              false,

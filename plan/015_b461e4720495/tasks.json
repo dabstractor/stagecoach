@@ -119,7 +119,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Resolution & Defaults — ResolveRoleTimeout + planner 480s built-in default + global 120s",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Add the ResolveRoleTimeout function (mirroring ResolveRoleModel), the planner 480s built-in default, and change the global default from 480s to 120s (fixing all pinning tests).",
           "tasks": [
             {
@@ -152,14 +152,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Change global default 480s→120s + fix pinning tests",
-              "status": "Ready",
+              "status": "Complete",
               "description": "The global timeout default changes from 480s to 120s (FR-R7). The planner retains 480s via its built-in default. All tests and help text that pin the old 480s default must be updated.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Change global default 480s→120s and fix all pinning tests",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -186,14 +186,14 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Single-commit path: resolve message-role timeout at all call sites",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The single-commit path (message role) has 8 Execute call sites across generate.go, multiturn.go, workdesc.go, and hook/exec.go. Each must resolve the message-role timeout.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Update generate.go CommitStaged to use message-role timeout",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -209,7 +209,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Update multiturn.go + workdesc.go + hook/exec.go to use message-role timeout",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
