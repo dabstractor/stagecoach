@@ -93,11 +93,18 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	// HARD ERROR when the path was explicit (a typo'd --config must not silently fall back to
 	// auto-detection and invoke an unintended agent). loadTOML's (nil,nil) contract is preserved.
 	var fileLoaded bool // true when ANY config file (global or repo-local) was loaded — used by the advisory
+	globalInert := false // true when the GLOBAL file is inert (zero active settings) — FR-B9 notice suppression
 	if g, err := loadTOML(globalPath); err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
 	} else if g != nil {
 		fileLoaded = true
 		overlay(&cfg, g)
+		// FR-B9: an inert global file (all-commented/template) has nothing to migrate. Capture once so the
+		// v3-migration notice below can be suppressed (Issue 2). The repo-local file is NOT considered here —
+		// FR-B9 scopes the false alarm to the global/template file `config upgrade` targets.
+		if raw, rerr := os.ReadFile(globalPath); rerr == nil {
+			globalInert = IsInert(string(raw))
+		}
 	} else if explicit {
 		return nil, fmt.Errorf("config file not found: %s", globalPath)
 	} else if !opts.DisableBootstrap {
@@ -112,6 +119,11 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 		} else if g != nil {
 			fileLoaded = true
 			overlay(&cfg, g)
+			// FR-B9: a just-bootstrapped file is populated (never inert), but compute this for symmetry
+			// with the explicit/discovery path above so the notice suppression is uniform.
+			if raw, rerr := os.ReadFile(globalPath); rerr == nil {
+				globalInert = IsInert(string(raw))
+			}
 		}
 	}
 
@@ -158,11 +170,20 @@ func Load(ctx context.Context, opts LoadOpts) (*Config, error) {
 	// default_provider into the model slash-prefix BEFORE the caller's provider.DecodeUserOverrides
 	// (which would silently drop the now-removed field). Idempotent; invents nothing. The in-memory
 	// Config is then v3-shaped (ConfigVersion set to current). One-time deprecation notice below.
+	//
+	// FR-B9 (Issue 2): an inert global file (zero active settings, e.g. the `config init --template`
+	// reference) must NOT trigger the notice — a commented `# config_version = 3` is not a "missing"
+	// version, and there is no `default_provider` to fold. The migration itself is a harmless no-op on
+	// an inert file (migrateV2ToV3 invents nothing), so we still normalize ConfigVersion in memory;
+	// only the NOTICE is suppressed. The notice fires ONLY when the global file has at least one active
+	// setting AND its version is older/missing.
 	if fileLoaded && cfg.ConfigVersion < CurrentConfigVersion {
 		orig := cfg.ConfigVersion
 		migrateV2ToV3(&cfg)
 		cfg.ConfigVersion = CurrentConfigVersion
-		fmt.Fprint(noticeOut, migrationNotice(orig))
+		if !globalInert {
+			fmt.Fprint(noticeOut, migrationNotice(orig))
+		}
 	} else if msg := configVersionNotice(fileLoaded, cfg.ConfigVersion); msg != "" {
 		// version > current (ahead) — the only remaining live configVersionNotice case in Load
 		// (version==current ⇒ ""; the older/missing cases are handled by the migration branch above).

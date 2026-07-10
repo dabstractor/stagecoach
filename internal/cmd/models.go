@@ -141,7 +141,7 @@ func renderModelBlock(cmd *cobra.Command, t modelTarget, cfg *config.Config) {
 	if len(argv) > 0 {
 		timeout := 120 * time.Second
 		if cfg != nil {
-			timeout = cfg.Timeout // bound (FR25 knob; default 120s)
+			timeout = cfg.Timeout // bound (FR25 knob; default 480s)
 		}
 		var vb *ui.Verbose
 		if cfg != nil && cfg.Verbose {

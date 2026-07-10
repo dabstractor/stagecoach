@@ -574,14 +574,22 @@ func TestConfigInit_TemplateFlag_CollisionSafe(t *testing.T) {
 // config init tests -- --force
 // ---------------------------------------------------------------------------
 
-func TestConfigInit_Force_OverwritesPopulated(t *testing.T) {
+func TestConfigInit_Force_PreservesActiveSettings(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	_, _, globalDir := setupNoRepo(t)
-	// Pre-create the config file with some content
-	writeConfigFile(t, globalDir, "config.toml", `provider = "mine"
-`)
+	// Pre-create a hand-tuned config with active settings in proper sections (FR-B8 Issue-3 repro).
+	preExisting := `config_version = 3
+[defaults]
+provider = "claude"
+model = "sonnet"
+timeout = "60s"
+[role.planner]
+provider = "agy"
+model = "gemini-3.1-pro"
+`
+	writeConfigFile(t, globalDir, "config.toml", preExisting)
 
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
@@ -598,23 +606,48 @@ func TestConfigInit_Force_OverwritesPopulated(t *testing.T) {
 	}
 	content := string(data)
 
-	// Should be the populated pi config, NOT "mine"
-	if !strings.Contains(content, `provider = "pi"`) {
-		t.Error("after --force overwrite, expected provider = \"pi\", got different content")
+	// FR-B8: every active user setting must be PRESERVED verbatim (not clobbered by the pi bootstrap).
+	if !strings.Contains(content, `provider = "claude"`) {
+		t.Errorf("[defaults] provider=claude was clobbered (FR-B8 violation)\n%s", content)
 	}
-	if strings.Contains(content, "mine") {
-		t.Error("after --force overwrite, old content \"mine\" should be gone")
+	if !strings.Contains(content, `model = "sonnet"`) {
+		t.Errorf("[defaults] model=sonnet was dropped (FR-B8 violation)\n%s", content)
+	}
+	if !strings.Contains(content, `timeout = "60s"`) {
+		t.Errorf("[defaults] timeout=60s was dropped (FR-B8 violation)\n%s", content)
+	}
+	if !strings.Contains(content, `provider = "agy"`) {
+		t.Errorf("[role.planner] provider=agy was dropped (FR-B8 violation)\n%s", content)
+	}
+	if !strings.Contains(content, `model = "gemini-3.1-pro"`) {
+		t.Errorf("[role.planner] model=gemini-3.1-pro was clobbered (FR-B8 violation)\n%s", content)
+	}
+
+	// The fresh template structure is still present (the refresh happened — this is a merge, not a skip).
+	if !strings.Contains(content, "config_version = 3") {
+		t.Errorf("fresh template missing config_version = 3\n%s", content)
+	}
+
+	// FR-B8: a timestamped backup of the prior config must exist alongside the written file.
+	matches, _ := filepath.Glob(filepath.Join(globalDir, "config.toml.bak.*"))
+	if len(matches) == 0 {
+		t.Errorf("no timestamped backup created at %s/*.bak.* (FR-B8 reversible-write guarantee)", globalDir)
 	}
 }
 
-func TestConfigInit_Force_OverwritesTemplate(t *testing.T) {
+func TestConfigInit_Force_Template_PreservesActiveSettings(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	_, _, globalDir := setupNoRepo(t)
-	// Pre-create the config file with some content
-	writeConfigFile(t, globalDir, "config.toml", `provider = "mine"
-`)
+	// Pre-create a hand-tuned config with active settings (the inert template has no active lines,
+	// so FR-B8 carries these in as new [section] blocks appended to the refreshed template).
+	preExisting := `config_version = 3
+[defaults]
+provider = "claude"
+model = "sonnet"
+`
+	writeConfigFile(t, globalDir, "config.toml", preExisting)
 
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
@@ -631,9 +664,18 @@ func TestConfigInit_Force_OverwritesTemplate(t *testing.T) {
 	}
 	content := string(data)
 
-	// Should be the exampleConfigTemplate
-	if content != exampleConfigTemplate {
-		t.Error("after --force --template overwrite, expected exampleConfigTemplate")
+	// FR-B8: the user's active settings survive even an inert-template refresh.
+	if !strings.Contains(content, `provider = "claude"`) {
+		t.Errorf("[defaults] provider=claude was dropped by --template refresh (FR-B8)\n%s", content)
+	}
+	if !strings.Contains(content, `model = "sonnet"`) {
+		t.Errorf("[defaults] model=sonnet was dropped by --template refresh (FR-B8)\n%s", content)
+	}
+
+	// FR-B8: a timestamped backup of the prior config must exist.
+	matches, _ := filepath.Glob(filepath.Join(globalDir, "config.toml.bak.*"))
+	if len(matches) == 0 {
+		t.Errorf("no timestamped backup created (FR-B8 reversible-write guarantee)")
 	}
 }
 
@@ -1187,6 +1229,42 @@ func TestConfigUpgrade_MalformedTOML(t *testing.T) {
 	data, _ := os.ReadFile(config.GlobalConfigPath())
 	if string(data) != "bad {toml\n" {
 		t.Error("file was modified (should be untouched — malformed TOML)")
+	}
+}
+
+func TestConfigUpgrade_InertFile_NoOp(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer restoreRootState(t, nil, origOut, origErr, origRunE)
+
+	_, _, globalDir := setupNoRepo(t)
+	// All-commented inert file (mirrors `config init --template` output — zero active settings).
+	inert := "# All-commented reference template (inert)\n" +
+		"# config_version = 3\n" +
+		"# [defaults]\n" +
+		"# provider = \"pi\"\n"
+	writeConfigFile(t, globalDir, "config.toml", inert)
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "upgrade"})
+
+	err := Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute err=%v, want nil (inert file is a no-op success)", err)
+	}
+	// FR-B9 corollary: report "inert — nothing to upgrade", NOT "Upgraded".
+	if !strings.Contains(out.String(), "inert") || !strings.Contains(out.String(), "nothing to upgrade") {
+		t.Errorf("stdout = %q, want to contain 'inert' + 'nothing to upgrade'", out.String())
+	}
+	if strings.Contains(out.String(), "Upgraded") {
+		t.Errorf("stdout = %q, must NOT say 'Upgraded' (inert file is a no-op)", out.String())
+	}
+
+	// The file must be byte-identical (no stray config_version appended).
+	after, _ := os.ReadFile(config.GlobalConfigPath())
+	if string(after) != inert {
+		t.Errorf("inert file was modified (should be byte-identical): before=%q after=%q", inert, after)
 	}
 }
 

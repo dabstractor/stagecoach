@@ -169,6 +169,15 @@ func runConfigUpgrade(cmd *cobra.Command, args []string) error {
 	if err := toml.Unmarshal(data, &probe); err != nil {
 		return exitcode.New(exitcode.Error, fmt.Errorf("config %s is not valid TOML: %w", path, err))
 	}
+	// FR-B9 (Issue 1): an inert file (zero active/uncommented settings, e.g. the `config init --template`
+	// reference) has nothing to upgrade — a commented `# config_version = 3` is not a "missing" version,
+	// and there is no default_provider to fold. Without this guard, upgrade appends a stray active
+	// `config_version = 3` line at the file's end and reports "Upgraded" — the exact defect FR-B9's
+	// corollary prohibits. Report an honest no-op and leave the file byte-identical.
+	if config.IsInert(string(data)) {
+		fmt.Fprintf(cmd.OutOrStdout(), "Config at %s is inert — nothing to upgrade.\n", path)
+		return nil
+	}
 	newContent, changed := upgradeConfigVersion(string(data), config.CurrentConfigVersion)
 	if !changed {
 		fmt.Fprintf(cmd.OutOrStdout(), "Config at %s is already at version %d (no changes).\n", path, config.CurrentConfigVersion)
@@ -419,6 +428,20 @@ func leadingHeaderEnd(lines []string) int {
 	return len(lines)
 }
 
+// mergeExistingActiveSettings reads the existing file at path (if any) and merges its active
+// (uncommented) settings into freshContent via config.MergeActiveSettings (FR-B8). Returns freshContent
+// unchanged when the file is absent or inert (nothing to preserve). Used by `config init --force` so a
+// template refresh never silently drops the user's hand-tuned values (Issue 3). A read error is ignored
+// defensively — a corrupt/unreadable existing file falls back to the fresh template rather than failing
+// the init (the backup + force guards still protect the user).
+func mergeExistingActiveSettings(path, freshContent string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return freshContent // absent or unreadable → nothing to merge
+	}
+	return config.MergeActiveSettings(freshContent, string(data))
+}
+
 // runConfigInit implements `stagecoach config init` (PRD §9.17 FR-B1/B2). Bootstraps a populated
 // working config by default (auto-detects provider + per-role models from the FR-D4 table), or writes
 // the inert exampleConfigTemplate when --template is passed. Refuses to overwrite unless --force.
@@ -448,6 +471,15 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 	}
 
 	force, _ := cmd.Flags().GetBool("force")
+	// FR-B8 (Issue 3): `config init --force` must preserve every active (uncommented) setting the user
+	// already had — it regenerates the template STRUCTURE but carries the user's values verbatim into the
+	// new file under their [table] headings, exactly like `config upgrade`. Without this, a user who
+	// hand-tunes their config and then runs `config init --force` to refresh the template silently loses
+	// every customization. The merge is a no-op when the existing file is absent or inert. A timestamped
+	// backup of the prior file is created by writeBootstrapFile (FR-B8 reversible-write guarantee).
+	if force {
+		content = mergeExistingActiveSettings(path, content)
+	}
 	if err := writeBootstrapFile(cmd, path, content, force); err != nil {
 		return err
 	}
@@ -463,6 +495,12 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 // writeBootstrapFile handles the shared file-write contract for both plain and interactive config init:
 // force-check (refuse to overwrite unless --force) + MkdirAll + WriteFile. Returns exitcode.New(Error, …)
 // on failure. Used by BOTH runConfigInit and runConfigInitInteractive (DRY — one place for the contract).
+//
+// FR-B8 reversible-write guarantee: when force=true AND an existing file is being overwritten, a
+// timestamped backup of the prior file is created alongside it (config.WriteTimestampedBackup) so every
+// config change is undoable. The backup is created BEFORE the overwrite; a backup failure is a hard
+// error (never clobber without a recoverable copy). A first-time write (no existing file) has nothing
+// to back up and proceeds normally.
 func writeBootstrapFile(cmd *cobra.Command, path, content string, force bool) error {
 	if !force {
 		if _, err := os.Stat(path); err == nil {
@@ -474,6 +512,20 @@ func writeBootstrapFile(cmd *cobra.Command, path, content string, force bool) er
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return exitcode.New(exitcode.Error, fmt.Errorf("create config dir %s: %w", filepath.Dir(path), err))
+	}
+
+	// FR-B8 reversible-write guarantee: when overwriting an existing file (--force), create a timestamped
+	// backup BEFORE the overwrite so every config change is undoable. A first-time write (no prior file)
+	// has nothing to back up; WriteTimestampedBackup returns ("", nil) in that case. A backup failure is a
+	// hard error — never clobber a user's config without a recoverable copy.
+	if force {
+		if _, err := os.Stat(path); err == nil {
+			if backup, berr := config.WriteTimestampedBackup(path); berr != nil {
+				return exitcode.New(exitcode.Error, fmt.Errorf("backup existing config %s: %w", path, berr))
+			} else if backup != "" {
+				fmt.Fprintf(cmd.OutOrStderr(), "Backed up previous config to %s\n", backup)
+			}
+		}
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

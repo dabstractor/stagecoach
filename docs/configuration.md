@@ -83,7 +83,7 @@ config_version = 3
 provider = "claude"
 reasoning = "off"   # off|low|medium|high; off by default for every role (FR-R6)
 # model          = ""
-# timeout        = "120s"
+# timeout        = "480s"
 # auto_stage_all = true
 # verbose        = false
 
@@ -130,7 +130,7 @@ These are the values when no config file, env var, git-config key, or flag sets 
 |--------|---------|--------|
 | `provider` | `""` (auto-detect) | `config.Defaults()` |
 | `model` | `""` (manifest `default_model`) | `config.Defaults()` |
-| `timeout` | `120s` | `config.Defaults()` |
+| `timeout` | `480s` | `config.Defaults()` |
 | `auto_stage_all` | `true` | `config.Defaults()` |
 | `verbose` | `false` | `config.Defaults()` |
 | `max_diff_bytes` | `300000` | `config.Defaults()` |

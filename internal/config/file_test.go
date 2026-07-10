@@ -110,7 +110,7 @@ func TestLoadTOMLMissing(t *testing.T) {
 // --- Test C: TestOverlayPartial (CONTRACT CASE) ---
 
 func TestOverlayPartial(t *testing.T) {
-	dst := Defaults()                                                 // Layer-1 baseline (AutoStageAll=true, MaxDiffBytes=300000, Timeout=120s, …)
+	dst := Defaults()                                                 // Layer-1 baseline (AutoStageAll=true, MaxDiffBytes=300000, Timeout=480s, …)
 	src := &Config{Timeout: 90 * time.Second, Output: strPtr("json")} // PARTIAL: only 2 fields set
 	overlay(&dst, src)
 	if dst.Timeout != 90*time.Second {
@@ -784,7 +784,7 @@ func TestOverlayNilSrc(t *testing.T) {
 	if dst.Provider != "" {
 		t.Errorf("Provider changed: %q", dst.Provider)
 	}
-	if dst.Timeout != 120*time.Second {
+	if dst.Timeout != 480*time.Second {
 		t.Errorf("Timeout changed: %v", dst.Timeout)
 	}
 	if !dst.AutoStageAllValue() {

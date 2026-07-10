@@ -586,8 +586,8 @@ func TestLoad_GlobalFileOverridesDefaults(t *testing.T) {
 		t.Errorf("Provider=%q want pi (global file)", cfg.Provider)
 	}
 	// Other fields should be Defaults()
-	if cfg.Timeout != 120*time.Second {
-		t.Errorf("Timeout=%v want 120s (default)", cfg.Timeout)
+	if cfg.Timeout != 480*time.Second {
+		t.Errorf("Timeout=%v want 480s (default)", cfg.Timeout)
 	}
 }
 
@@ -1942,6 +1942,40 @@ func TestLoad_ConfigVersionAdvisory_Missing(t *testing.T) {
 	}
 	if !strings.Contains(got, "config upgrade") {
 		t.Errorf("advisory = %q, want to contain 'config upgrade'", got)
+	}
+}
+
+// TestLoad_ConfigVersionAdvisory_InertFileSuppressed (FR-B9, Issue 2) verifies the load-time
+// migration notice does NOT fire on an inert file (zero active settings) — the all-commented
+// reference template written by `config init --template`. A commented `# config_version = 3` is
+// not a "missing" version needing remediation, and there is no default_provider to fold. The
+// ConfigVersion is still normalized in memory (the migration is a harmless no-op); only the NOTICE
+// is suppressed. This is the false alarm FR-B9 was written to kill.
+func TestLoad_ConfigVersionAdvisory_InertFileSuppressed(t *testing.T) {
+	_, repo, globalDir := loadEnvSetup(t)
+	chdir(t, repo)
+	// All-commented inert file (mirrors `config init --template` output — zero active settings).
+	writeConfigFile(t, globalDir, "config.toml", "# All-commented reference template (inert)\n"+
+		"# config_version = 3\n"+
+		"# [defaults]\n"+
+		"# provider = \"pi\"\n")
+
+	origNoticeOut := noticeOut
+	var buf strings.Builder
+	noticeOut = &buf
+	defer func() { noticeOut = origNoticeOut }()
+
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	// ConfigVersion is still normalized to current in memory (migration is a harmless no-op on inert).
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		t.Errorf("ConfigVersion=%d want %d (normalized in memory)", cfg.ConfigVersion, CurrentConfigVersion)
+	}
+	// FR-B9: NO notice on an inert file — the false alarm is suppressed.
+	if got := buf.String(); got != "" {
+		t.Errorf("advisory on inert file = %q, want empty (FR-B9: no false alarm on inert files)", got)
 	}
 }
 
