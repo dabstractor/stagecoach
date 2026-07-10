@@ -18,28 +18,40 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Add Timeout field to RoleConfig + fileRoleConfig + rewrite materialize",
-              "status": "Planned",
+              "status": "Ready",
               "description": "The foundational struct change: add a per-role timeout field to both the resolved and file-decode config structs, and rewrite the materialize loop that currently uses a direct type conversion that will break.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S1",
                   "title": "Add Timeout to RoleConfig + fileRoleConfig + rewrite materialize loop",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
-                  "prd_selectors": ["h3.31", "h2.16", "h3.77", "h3.80", "h2.15"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 1 (HIGHEST RISK). The materialize loop at file.go:316 uses `c.Roles[role] = RoleConfig(frc)` — a direct struct type conversion that works ONLY because both structs have identical string fields. Adding `Timeout time.Duration` to RoleConfig while fileRoleConfig.Timeout stays `string` will BREAK this conversion.\n2. INPUT: The existing `RoleConfig` struct (config.go:36-40) has {Provider, Model, Reasoning string}. The existing `fileRoleConfig` struct (file.go:23-27) mirrors it with the same string fields. The materialize loop (file.go:311-317) converts fileRoleConfig→RoleConfig via direct struct conversion.\n3. LOGIC: Implement PRD §9.15 FR-R7 and §16.4 per-role timeout field. (a) Add `Timeout time.Duration` to `RoleConfig` in `internal/config/config.go` after the Reasoning field, with comment '// per-role generation timeout (FR-R7); 0 ⇒ inherit global [defaults].timeout'. (b) Add `Timeout string` to `fileRoleConfig` in `internal/config/file.go` after Reasoning, with comment '// §16.4 duration string, e.g. \"480s\"; parsed in materialize'. (c) CRITICAL: rewrite the materialize loop (file.go ~311-317) to construct RoleConfig FIELD-BY-FIELD instead of the type conversion. For each role's fileRoleConfig, parse `frc.Timeout` string into `time.Duration` using the existing `parseTimeout` helper from load.go (NOT time.ParseDuration — parseTimeout accepts both \"120s\" and bare \"120\", matching env/flag behavior). Handle empty string (\"\") as 0 (inherit global). Wrap parse errors with role context: `fmt.Errorf(\"parse config: [role.%s].timeout: %w\", role, err)`.\n4. OUTPUT: `RoleConfig` has a new `Timeout time.Duration` field (0 = inherit). The materialize loop correctly parses per-role timeout strings. The overlay function (next subtask) will field-merge it.\n5. DOCS: none — internal struct change, no user-facing/config surface change yet (docs land when flags are added in P1.M1.T2)."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 1 (HIGHEST RISK). The materialize loop at file.go:316 uses `c.Roles[role] = RoleConfig(frc)` — a direct struct type conversion that works ONLY because both structs have identical string fields. Adding `Timeout time.Duration` to RoleConfig while fileRoleConfig.Timeout stays `string` will BREAK this conversion.\n2. INPUT: The existing `RoleConfig` struct (config.go:36-40) has {Provider, Model, Reasoning string}. The existing `fileRoleConfig` struct (file.go:23-27) mirrors it with the same string fields. The materialize loop (file.go:311-317) converts fileRoleConfig→RoleConfig via direct struct conversion.\n3. LOGIC: Implement PRD §9.15 FR-R7 and §16.4 per-role timeout field. (a) Add `Timeout time.Duration` to `RoleConfig` in `internal/config/config.go` after the Reasoning field, with comment '// per-role generation timeout (FR-R7); 0 ⇒ inherit global [defaults].timeout'. (b) Add `Timeout string` to `fileRoleConfig` in `internal/config/file.go` after Reasoning, with comment '// §16.4 duration string, e.g. \"480s\"; parsed in materialize'. (c) CRITICAL: rewrite the materialize loop (file.go ~311-317) to construct RoleConfig FIELD-BY-FIELD instead of the type conversion. For each role's fileRoleConfig, parse `frc.Timeout` string into `time.Duration` using the existing `parseTimeout` helper from load.go (NOT time.ParseDuration — parseTimeout accepts both \"120s\" and bare \"120\", matching env/flag behavior). Handle empty string (\"\") as 0 (inherit global). Wrap parse errors with role context: `fmt.Errorf(\"parse config: [role.%s].timeout: %w\", role, err)`.\n4. OUTPUT: `RoleConfig` has a new `Timeout time.Duration` field (0 = inherit). The materialize loop correctly parses per-role timeout strings. The overlay function (next subtask) will field-merge it.\n5. DOCS: none — internal struct change, no user-facing/config surface change yet (docs land when flags are added in P1.M1.T2).",
+                  "prd_selectors": [
+                    "h3.31",
+                    "h2.16",
+                    "h3.77",
+                    "h3.80",
+                    "h2.15"
+                  ]
                 },
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Add timeout field-merge to overlay function",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1"],
-                  "prd_selectors": ["h3.31", "h3.77", "h3.80"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The overlay function (file.go:440-457) does per-role field-merge for Provider/Model/Reasoning using non-empty string guards. Timeout uses a different zero-value: `time.Duration(0)` instead of empty string. The guard must be `if rc.Timeout != 0` (non-zero-wins), mirroring how the global Config.Timeout overlay works (file.go:399 area).\n2. INPUT: `RoleConfig.Timeout time.Duration` field from P1.M1.T1.S1. The overlay function at `internal/config/file.go` merges src→dst per-role field-by-field (higher layer wins per field).\n3. LOGIC: In the overlay function's per-role loop (file.go ~446-455), after the Reasoning field-merge branch, add: `if rc.Timeout != 0 { existing.Timeout = rc.Timeout }`. This ensures a higher-layer [role.planner] timeout=480s overrides a lower-layer [role.planner] timeout=300s without erasing the provider/model/reasoning from the lower layer.\n4. OUTPUT: Per-role timeout field-merge works correctly across config layers (global file → repo file → git-config → env → flag).\n5. DOCS: none — internal merge logic, no user-facing surface change."
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The overlay function (file.go:440-457) does per-role field-merge for Provider/Model/Reasoning using non-empty string guards. Timeout uses a different zero-value: `time.Duration(0)` instead of empty string. The guard must be `if rc.Timeout != 0` (non-zero-wins), mirroring how the global Config.Timeout overlay works (file.go:399 area).\n2. INPUT: `RoleConfig.Timeout time.Duration` field from P1.M1.T1.S1. The overlay function at `internal/config/file.go` merges src→dst per-role field-by-field (higher layer wins per field).\n3. LOGIC: In the overlay function's per-role loop (file.go ~446-455), after the Reasoning field-merge branch, add: `if rc.Timeout != 0 { existing.Timeout = rc.Timeout }`. This ensures a higher-layer [role.planner] timeout=480s overrides a lower-layer [role.planner] timeout=300s without erasing the provider/model/reasoning from the lower layer.\n4. OUTPUT: Per-role timeout field-merge works correctly across config layers (global file → repo file → git-config → env → flag).\n5. DOCS: none — internal merge logic, no user-facing surface change.",
+                  "prd_selectors": [
+                    "h3.31",
+                    "h3.77",
+                    "h3.80"
+                  ]
                 }
               ]
             },
@@ -54,11 +66,17 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add setRoleTimeout helper + env-loop _TIMEOUT branch",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1"],
-                  "prd_selectors": ["h3.24", "h3.31", "h3.77"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: load.go:33-62 has three setRole* helpers (setRoleProvider, setRoleModel, setRoleReasoning) using the map-value-copy write-back idiom (REQUIRED for Go maps). load.go:293-305 has the per-role env loop reading _PROVIDER, _MODEL, _REASONING. The `roleNames` slice (load.go:17) is `[]string{\"planner\",\"stager\",\"message\",\"arbiter\"}`. The `parseTimeout` helper (load.go:615-625) handles both \"120s\" and bare \"120\".\n2. INPUT: `RoleConfig.Timeout time.Duration` field from P1.M1.T1.S1.\n3. LOGIC: (a) Add `setRoleTimeout(role string, d time.Duration)` to `internal/config/load.go` following the EXACT idiom of setRoleReasoning (lazy map alloc, value-copy, write-back). Setting timeout does NOT clobber provider/model/reasoning (FR-R3 field-merge). (b) In the per-role env loop (load.go ~293-305), add after the _REASONING branch: `if v, ok := os.LookupEnv(prefix + \"_TIMEOUT\"); ok && v != \"\" { d, err := parseTimeout(v); if err != nil { return fmt.Errorf(\"%s_TIMEOUT: %w\", prefix, err) }; cfg.setRoleTimeout(role, d) }`.\n4. OUTPUT: `STAGECOACH_PLANNER_TIMEOUT=480s` (and stager/message/arbiter) are parsed and stored in cfg.Roles[role].Timeout.\n5. DOCS: none — env-var surface documented when CLI flags land in S2 and docs sync in P1.M4."
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: load.go:33-62 has three setRole* helpers (setRoleProvider, setRoleModel, setRoleReasoning) using the map-value-copy write-back idiom (REQUIRED for Go maps). load.go:293-305 has the per-role env loop reading _PROVIDER, _MODEL, _REASONING. The `roleNames` slice (load.go:17) is `[]string{\"planner\",\"stager\",\"message\",\"arbiter\"}`. The `parseTimeout` helper (load.go:615-625) handles both \"120s\" and bare \"120\".\n2. INPUT: `RoleConfig.Timeout time.Duration` field from P1.M1.T1.S1.\n3. LOGIC: (a) Add `setRoleTimeout(role string, d time.Duration)` to `internal/config/load.go` following the EXACT idiom of setRoleReasoning (lazy map alloc, value-copy, write-back). Setting timeout does NOT clobber provider/model/reasoning (FR-R3 field-merge). (b) In the per-role env loop (load.go ~293-305), add after the _REASONING branch: `if v, ok := os.LookupEnv(prefix + \"_TIMEOUT\"); ok && v != \"\" { d, err := parseTimeout(v); if err != nil { return fmt.Errorf(\"%s_TIMEOUT: %w\", prefix, err) }; cfg.setRoleTimeout(role, d) }`.\n4. OUTPUT: `STAGECOACH_PLANNER_TIMEOUT=480s` (and stager/message/arbiter) are parsed and stored in cfg.Roles[role].Timeout.\n5. DOCS: none — env-var surface documented when CLI flags land in S2 and docs sync in P1.M4.",
+                  "prd_selectors": [
+                    "h3.24",
+                    "h3.31",
+                    "h3.77"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -66,9 +84,15 @@
                   "title": "Add 4 --<role>-timeout CLI flags + flag-loop parsing",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T2.S1"],
-                  "prd_selectors": ["h3.73", "h3.31", "h3.80"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: root.go:78-97 has per-role flag vars (flagPlannerProvider, etc.) as package-level strings. root.go:235-259 registers per-role reasoning + message flags via `pf.StringVar(...)`. The per-role flag loop (load.go:427-445) reads --<role>-provider/model/reasoning via fs.Changed gating. The global --timeout flag is at root.go:133 with help text 'default 480s' (must change to 120s in P1.M2.T2).\n2. INPUT: setRoleTimeout helper from P1.M1.T2.S1. The parseTimeout helper (load.go:615).\n3. LOGIC: (a) Add 4 package-level string vars to root.go: `flagPlannerTimeout`, `flagStagerTimeout`, `flagMessageTimeout`, `flagArbiterTimeout`. (b) Register 4 flags in root.go init() after the reasoning block (~line 259): `pf.StringVar(&flagPlannerTimeout, \"planner-timeout\", \"\", \"Per-role generation timeout for the planner (env STAGECOACH_PLANNER_TIMEOUT; git stagecoach.role.planner.timeout)\")` — repeat for stager, message, arbiter. (c) In loadFlags (load.go ~427-445), add after the reasoning branch in the per-role loop: `if fs.Changed(role + \"-timeout\") { if v, err := fs.GetString(role + \"-timeout\"); err == nil { if d, perr := parseTimeout(v); perr == nil { cfg.setRoleTimeout(role, d) } } }`.\n4. OUTPUT: `stagecoach --planner-timeout 600s` correctly overrides only the planner's timeout.\n5. DOCS: [Mode A] Update `docs/cli.md` global flags table — add `--planner-timeout`, `--stager-timeout`, `--message-timeout`, `--arbiter-timeout` rows to the per-role flags section. This rides WITH the work."
+                  "dependencies": [
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: root.go:78-97 has per-role flag vars (flagPlannerProvider, etc.) as package-level strings. root.go:235-259 registers per-role reasoning + message flags via `pf.StringVar(...)`. The per-role flag loop (load.go:427-445) reads --<role>-provider/model/reasoning via fs.Changed gating. The global --timeout flag is at root.go:133 with help text 'default 480s' (must change to 120s in P1.M2.T2).\n2. INPUT: setRoleTimeout helper from P1.M1.T2.S1. The parseTimeout helper (load.go:615).\n3. LOGIC: (a) Add 4 package-level string vars to root.go: `flagPlannerTimeout`, `flagStagerTimeout`, `flagMessageTimeout`, `flagArbiterTimeout`. (b) Register 4 flags in root.go init() after the reasoning block (~line 259): `pf.StringVar(&flagPlannerTimeout, \"planner-timeout\", \"\", \"Per-role generation timeout for the planner (env STAGECOACH_PLANNER_TIMEOUT; git stagecoach.role.planner.timeout)\")` — repeat for stager, message, arbiter. (c) In loadFlags (load.go ~427-445), add after the reasoning branch in the per-role loop: `if fs.Changed(role + \"-timeout\") { if v, err := fs.GetString(role + \"-timeout\"); err == nil { if d, perr := parseTimeout(v); perr == nil { cfg.setRoleTimeout(role, d) } } }`.\n4. OUTPUT: `stagecoach --planner-timeout 600s` correctly overrides only the planner's timeout.\n5. DOCS: [Mode A] Update `docs/cli.md` global flags table — add `--planner-timeout`, `--stager-timeout`, `--message-timeout`, `--arbiter-timeout` rows to the per-role flags section. This rides WITH the work.",
+                  "prd_selectors": [
+                    "h3.73",
+                    "h3.31",
+                    "h3.80"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -76,9 +100,16 @@
                   "title": "Add per-role git-config reading (NEW infrastructure — stagecoach.role.<role>.timeout)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T2.S1"],
-                  "prd_selectors": ["h3.24", "h3.31", "h3.79", "h3.80"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 2. The git-config layer (internal/config/git.go) reads NO per-role keys today — not even for provider/model/reasoning (the --planner-model help text references stagecoach.role.planner but that key is NOT actually read). The global timeout is read at git.go:148-156 via `gitConfigGet(repoDir, \"stagecoach.timeout\")` + parseTimeout. The `roleNames` slice and `setRoleTimeout` helper are available.\n2. INPUT: setRoleTimeout helper from P1.M1.T2.S1. The parseTimeout helper. The gitConfigGet function already in git.go.\n3. LOGIC: In `loadGitConfig(repoDir)` (git.go), after the global `stagecoach.timeout` block (~line 157), add a per-role loop: `for _, role := range roleNames { key := \"stagecoach.role.\" + role + \".timeout\"; if v, found, err := gitConfigGet(repoDir, key); err != nil { return nil, err } else if found { d, perr := parseTimeout(v); if perr != nil { return nil, fmt.Errorf(\"git config %s: %w\", key, perr) }; c.setRoleTimeout(role, d) } }`. NOTE: this adds per-role git-config for timeout ONLY (not provider/model/reasoning — those are separate and not part of this FR). The roleNames slice must be accessible from git.go (it is in the same `config` package at load.go:17).\n4. OUTPUT: `git config stagecoach.role.planner.timeout 600s` correctly overrides the planner's timeout via the git-config layer (precedence layer 4).\n5. DOCS: [Mode A] Update `docs/configuration.md` git-config section — add `stagecoach.role.<role>.timeout` to the per-role git-config example/keys table. This rides WITH the work."
+                  "dependencies": [
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 2. The git-config layer (internal/config/git.go) reads NO per-role keys today — not even for provider/model/reasoning (the --planner-model help text references stagecoach.role.planner but that key is NOT actually read). The global timeout is read at git.go:148-156 via `gitConfigGet(repoDir, \"stagecoach.timeout\")` + parseTimeout. The `roleNames` slice and `setRoleTimeout` helper are available.\n2. INPUT: setRoleTimeout helper from P1.M1.T2.S1. The parseTimeout helper. The gitConfigGet function already in git.go.\n3. LOGIC: In `loadGitConfig(repoDir)` (git.go), after the global `stagecoach.timeout` block (~line 157), add a per-role loop: `for _, role := range roleNames { key := \"stagecoach.role.\" + role + \".timeout\"; if v, found, err := gitConfigGet(repoDir, key); err != nil { return nil, err } else if found { d, perr := parseTimeout(v); if perr != nil { return nil, fmt.Errorf(\"git config %s: %w\", key, perr) }; c.setRoleTimeout(role, d) } }`. NOTE: this adds per-role git-config for timeout ONLY (not provider/model/reasoning — those are separate and not part of this FR). The roleNames slice must be accessible from git.go (it is in the same `config` package at load.go:17).\n4. OUTPUT: `git config stagecoach.role.planner.timeout 600s` correctly overrides the planner's timeout via the git-config layer (precedence layer 4).\n5. DOCS: [Mode A] Update `docs/configuration.md` git-config section — add `stagecoach.role.<role>.timeout` to the per-role git-config example/keys table. This rides WITH the work.",
+                  "prd_selectors": [
+                    "h3.24",
+                    "h3.31",
+                    "h3.79",
+                    "h3.80"
+                  ]
                 }
               ]
             }
@@ -104,9 +135,16 @@
                   "title": "Add ResolveRoleTimeout + defaultRoleTimeouts map (planner=480s)",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M1.T1.S1"],
-                  "prd_selectors": ["h3.31", "h2.16", "h3.77", "h3.80"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: `ResolveRoleModel` in `internal/config/roles.go` (lines 34-64) is the EXACT template. It checks cfg.Roles[role] for per-role overrides, then falls back to cfg.Provider/cfg.Model/cfg.Reasoning. There are NO per-role timeout defaults today — `role_defaults.go` has only the FR-D4 provider×role→model table. The global default is currently `480 * time.Second` in Defaults() (config.go:197) — this subtask adds the planner built-in but does NOT yet change the global default (that's P1.M2.T2).\n2. INPUT: `RoleConfig.Timeout time.Duration` field (from P1.M1.T1.S1). The existing `ResolveRoleModel` pattern. The `Config.Timeout` global field.\n3. LOGIC: (a) Add a `defaultRoleTimeouts` map in `internal/config/roles.go` (or `role_defaults.go`): `var defaultRoleTimeouts = map[string]time.Duration{\"planner\": 480 * time.Second}`. Stager/message/arbiter are absent (inherit global). (b) Add `func ResolveRoleTimeout(role string, cfg Config) time.Duration` in `internal/config/roles.go`, mirroring ResolveRoleModel's structure: first check `cfg.Roles[role].Timeout` (if non-zero, use it); if zero, check `defaultRoleTimeouts[role]` (if present, use it — the planner 480s built-in); if absent, fall back to `cfg.Timeout` (the global). This gives the precedence: per-role override > built-in role default (planner) > global default. (c) Document the function with the same style as ResolveRoleModel's doc comment, referencing FR-R7.\n4. OUTPUT: `config.ResolveRoleTimeout(\"planner\", cfg)` returns 480s by default (built-in), overridable. `config.ResolveRoleTimeout(\"message\", cfg)` returns cfg.Timeout (the global, which P1.M2.T2 changes to 120s). Consumers (P1.M3) call this at each Execute site.\n5. DOCS: none — internal resolution function, no direct user-facing surface (the flags/precedence are documented in P1.M1.T2.S2/S3)."
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: `ResolveRoleModel` in `internal/config/roles.go` (lines 34-64) is the EXACT template. It checks cfg.Roles[role] for per-role overrides, then falls back to cfg.Provider/cfg.Model/cfg.Reasoning. There are NO per-role timeout defaults today — `role_defaults.go` has only the FR-D4 provider×role→model table. The global default is currently `480 * time.Second` in Defaults() (config.go:197) — this subtask adds the planner built-in but does NOT yet change the global default (that's P1.M2.T2).\n2. INPUT: `RoleConfig.Timeout time.Duration` field (from P1.M1.T1.S1). The existing `ResolveRoleModel` pattern. The `Config.Timeout` global field.\n3. LOGIC: (a) Add a `defaultRoleTimeouts` map in `internal/config/roles.go` (or `role_defaults.go`): `var defaultRoleTimeouts = map[string]time.Duration{\"planner\": 480 * time.Second}`. Stager/message/arbiter are absent (inherit global). (b) Add `func ResolveRoleTimeout(role string, cfg Config) time.Duration` in `internal/config/roles.go`, mirroring ResolveRoleModel's structure: first check `cfg.Roles[role].Timeout` (if non-zero, use it); if zero, check `defaultRoleTimeouts[role]` (if present, use it — the planner 480s built-in); if absent, fall back to `cfg.Timeout` (the global). This gives the precedence: per-role override > built-in role default (planner) > global default. (c) Document the function with the same style as ResolveRoleModel's doc comment, referencing FR-R7.\n4. OUTPUT: `config.ResolveRoleTimeout(\"planner\", cfg)` returns 480s by default (built-in), overridable. `config.ResolveRoleTimeout(\"message\", cfg)` returns cfg.Timeout (the global, which P1.M2.T2 changes to 120s). Consumers (P1.M3) call this at each Execute site.\n5. DOCS: none — internal resolution function, no direct user-facing surface (the flags/precedence are documented in P1.M1.T2.S2/S3).",
+                  "prd_selectors": [
+                    "h3.31",
+                    "h2.16",
+                    "h3.77",
+                    "h3.80"
+                  ]
                 }
               ]
             },
@@ -123,9 +161,15 @@
                   "title": "Change global default 480s→120s and fix all pinning tests",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h3.77", "h2.15", "h3.73"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 5. The global default 480s is pinned in: config.go:197 (`Timeout: 480 * time.Second`), config.go:68 comment, config.go:180 doc comment, bootstrap.go:161 commented template, root.go:133 help text 'default 480s'. Tests that pin 480s: config_test.go:20-21, file_test.go:113+787, load_test.go:589-590.\n2. INPUT: ResolveRoleTimeout from P1.M2.T1.S1 (the planner 480s is now a built-in, so changing the global to 120s does NOT affect the planner).\n3. LOGIC: (a) Change `Defaults()` in config.go:197: `Timeout: 120 * time.Second` (was 480). (b) Update comments in config.go:68 and :180 to say '120s'. (c) Update root.go:133 help text to 'default 120s'. (d) Update bootstrap.go:161 commented template `# timeout = \"120s\"`. (e) Fix ALL pinning tests: config_test.go:20-21 change assertion to `120*time.Second`; file_test.go:113+787 same; load_test.go:589-590 same. Search for any other `480` references in test files with `grep -rn '480.*time.Second\\|480s' internal/` and fix them. The planner's 480s comes from defaultRoleTimeouts (P1.M2.T1.S1), NOT from the global default — verify planner tests still pass (they should if they call ResolveRoleTimeout).\n4. OUTPUT: Global default is 120s; planner default is 480s via built-in; all tests pass.\n5. DOCS: [Mode A] Update `docs/configuration.md` default-value table row for timeout (480s→120s) and the `[defaults] timeout = \"120s\"` example. This rides WITH the work."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/015_b461e4720495/architecture/critical_findings.md Finding 5. The global default 480s is pinned in: config.go:197 (`Timeout: 480 * time.Second`), config.go:68 comment, config.go:180 doc comment, bootstrap.go:161 commented template, root.go:133 help text 'default 480s'. Tests that pin 480s: config_test.go:20-21, file_test.go:113+787, load_test.go:589-590.\n2. INPUT: ResolveRoleTimeout from P1.M2.T1.S1 (the planner 480s is now a built-in, so changing the global to 120s does NOT affect the planner).\n3. LOGIC: (a) Change `Defaults()` in config.go:197: `Timeout: 120 * time.Second` (was 480). (b) Update comments in config.go:68 and :180 to say '120s'. (c) Update root.go:133 help text to 'default 120s'. (d) Update bootstrap.go:161 commented template `# timeout = \"120s\"`. (e) Fix ALL pinning tests: config_test.go:20-21 change assertion to `120*time.Second`; file_test.go:113+787 same; load_test.go:589-590 same. Search for any other `480` references in test files with `grep -rn '480.*time.Second\\|480s' internal/` and fix them. The planner's 480s comes from defaultRoleTimeouts (P1.M2.T1.S1), NOT from the global default — verify planner tests still pass (they should if they call ResolveRoleTimeout).\n4. OUTPUT: Global default is 120s; planner default is 480s via built-in; all tests pass.\n5. DOCS: [Mode A] Update `docs/configuration.md` default-value table row for timeout (480s→120s) and the `[defaults] timeout = \"120s\"` example. This rides WITH the work.",
+                  "prd_selectors": [
+                    "h3.77",
+                    "h2.15",
+                    "h3.73"
+                  ]
                 }
               ]
             }
@@ -151,9 +195,15 @@
                   "title": "Update generate.go CommitStaged to use message-role timeout",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h3.21", "h3.40", "h2.13"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: generate.go:287-289 already resolves the message role's model via `config.ResolveRoleModel(\"message\", cfg)`. generate.go:335 passes `cfg.Timeout` to provider.Execute. The multi-turn total-budget line (generate.go ~423-426) computes `cfg.Timeout * turns` for the progress message.\n2. INPUT: `config.ResolveRoleTimeout(\"message\", cfg)` from P1.M2.T1.S1.\n3. LOGIC: (a) At the top of CommitStaged (near line 287 where msgModel is resolved), resolve `msgTimeout := config.ResolveRoleTimeout(\"message\", cfg)`. (b) At generate.go:335, change `cfg.Timeout` to `msgTimeout`. (c) At the multi-turn budget line (~423-426), change `cfg.Timeout * time.Duration(turns)` to `msgTimeout * time.Duration(turns)` so the progress line reflects the correct message-role budget (FR-T5). (d) Pass `msgTimeout` into the multi-turn Run call if it takes cfg.Timeout internally (see S2).\n4. OUTPUT: The single-commit message path uses the message role's resolved timeout (120s default, overridable via --message-timeout / [role.message].timeout / etc.).\n5. DOCS: none — internal wiring, the flags/docs are already added in P1.M1.T2."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: generate.go:287-289 already resolves the message role's model via `config.ResolveRoleModel(\"message\", cfg)`. generate.go:335 passes `cfg.Timeout` to provider.Execute. The multi-turn total-budget line (generate.go ~423-426) computes `cfg.Timeout * turns` for the progress message.\n2. INPUT: `config.ResolveRoleTimeout(\"message\", cfg)` from P1.M2.T1.S1.\n3. LOGIC: (a) At the top of CommitStaged (near line 287 where msgModel is resolved), resolve `msgTimeout := config.ResolveRoleTimeout(\"message\", cfg)`. (b) At generate.go:335, change `cfg.Timeout` to `msgTimeout`. (c) At the multi-turn budget line (~423-426), change `cfg.Timeout * time.Duration(turns)` to `msgTimeout * time.Duration(turns)` so the progress line reflects the correct message-role budget (FR-T5). (d) Pass `msgTimeout` into the multi-turn Run call if it takes cfg.Timeout internally (see S2).\n4. OUTPUT: The single-commit message path uses the message role's resolved timeout (120s default, overridable via --message-timeout / [role.message].timeout / etc.).\n5. DOCS: none — internal wiring, the flags/docs are already added in P1.M1.T2.",
+                  "prd_selectors": [
+                    "h3.21",
+                    "h3.40",
+                    "h2.13"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -161,9 +211,16 @@
                   "title": "Update multiturn.go + workdesc.go + hook/exec.go to use message-role timeout",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M3.T1.S1"],
-                  "prd_selectors": ["h3.40", "h3.42", "h3.36", "h2.13"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: multiturn.go:165, 176, 187 pass `cfg.Timeout` per turn (multi-turn is a message-role fallback). workdesc.go:75, 106, 122 pass `cfg.Timeout` per read round (also message-role). hook/exec.go:182 passes `cfg.Timeout` (hook mode resolves the message role). All three are message-role paths. The multiturn.Run function and workdesc functions receive `cfg` (the Config struct) as a parameter — they can call `config.ResolveRoleTimeout(\"message\", cfg)` internally.\n2. INPUT: `config.ResolveRoleTimeout(\"message\", cfg)` from P1.M2.T1.S1. The existing cfg parameter available in each function.\n3. LOGIC: (a) In multiturn.go, at the top of Run(), resolve `msgTimeout := config.ResolveRoleTimeout(\"message\", cfg)` and replace all 3 `cfg.Timeout` references (lines 165, 176, 187) with `msgTimeout`. (b) In workdesc.go, resolve the same at the top of the read-loop function and replace all 3 references (lines 75, 106, 122). (c) In hook/exec.go line 182, replace `cfg.Timeout` with `config.ResolveRoleTimeout(\"message\", cfg)`. Ensure each function has the `config` package import (it should already, since they use config.Config).\n4. OUTPUT: All message-role call sites use the message role's resolved timeout.\n5. DOCS: none — internal wiring."
+                  "dependencies": [
+                    "P1.M3.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: multiturn.go:165, 176, 187 pass `cfg.Timeout` per turn (multi-turn is a message-role fallback). workdesc.go:75, 106, 122 pass `cfg.Timeout` per read round (also message-role). hook/exec.go:182 passes `cfg.Timeout` (hook mode resolves the message role). All three are message-role paths. The multiturn.Run function and workdesc functions receive `cfg` (the Config struct) as a parameter — they can call `config.ResolveRoleTimeout(\"message\", cfg)` internally.\n2. INPUT: `config.ResolveRoleTimeout(\"message\", cfg)` from P1.M2.T1.S1. The existing cfg parameter available in each function.\n3. LOGIC: (a) In multiturn.go, at the top of Run(), resolve `msgTimeout := config.ResolveRoleTimeout(\"message\", cfg)` and replace all 3 `cfg.Timeout` references (lines 165, 176, 187) with `msgTimeout`. (b) In workdesc.go, resolve the same at the top of the read-loop function and replace all 3 references (lines 75, 106, 122). (c) In hook/exec.go line 182, replace `cfg.Timeout` with `config.ResolveRoleTimeout(\"message\", cfg)`. Ensure each function has the `config` package import (it should already, since they use config.Config).\n4. OUTPUT: All message-role call sites use the message role's resolved timeout.\n5. DOCS: none — internal wiring.",
+                  "prd_selectors": [
+                    "h3.40",
+                    "h3.42",
+                    "h3.36",
+                    "h2.13"
+                  ]
                 }
               ]
             },
@@ -180,9 +237,16 @@
                   "title": "Update planner.go, stager.go, message.go, arbiter.go to use per-role timeouts",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h3.30", "h3.31", "h2.13", "h3.52"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: planner.go:124, stager.go:110, message.go:155, arbiter.go:100 all pass `deps.Config.Timeout` to provider.Execute. Each role function already calls `config.ResolveRoleModel(role, deps.Config)` to get its model (e.g., stager.go:91). The `config` package is already imported. Each role has distinct timeout semantics on failure (planner→ErrPlannerFailed non-rescue; stager→ErrStagerFailed; message→RescueError ErrTimeout exit 124; arbiter→graceful null) — only the timeout VALUE changes, not the error handling.\n2. INPUT: `config.ResolveRoleTimeout(role, deps.Config)` from P1.M2.T1.S1.\n3. LOGIC: In each of the 4 role files, at the point where the role's model is resolved (alongside the existing `config.ResolveRoleModel` call), add `timeout := config.ResolveRoleTimeout(\"<role>\", deps.Config)` and replace the `deps.Config.Timeout` argument in the provider.Execute call with `timeout`. Specifically: (a) planner.go: resolve `plannerTimeout := config.ResolveRoleTimeout(\"planner\", deps.Config)` near line 91, use at line 124. (b) stager.go: resolve `stagerTimeout := config.ResolveRoleTimeout(\"stager\", deps.Config)` near line 91, use at line 110. (c) message.go: resolve `messageTimeout := config.ResolveRoleTimeout(\"message\", deps.Config)` near the model resolution, use at line 155. (d) arbiter.go: resolve `arbiterTimeout := config.ResolveRoleTimeout(\"arbiter\", deps.Config)` near its model resolution, use at line 100.\n4. OUTPUT: Each decompose role uses its own resolved timeout. The planner gets 480s by default (built-in), others get 120s (global), each independently tunable.\n5. DOCS: none — internal wiring."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: planner.go:124, stager.go:110, message.go:155, arbiter.go:100 all pass `deps.Config.Timeout` to provider.Execute. Each role function already calls `config.ResolveRoleModel(role, deps.Config)` to get its model (e.g., stager.go:91). The `config` package is already imported. Each role has distinct timeout semantics on failure (planner→ErrPlannerFailed non-rescue; stager→ErrStagerFailed; message→RescueError ErrTimeout exit 124; arbiter→graceful null) — only the timeout VALUE changes, not the error handling.\n2. INPUT: `config.ResolveRoleTimeout(role, deps.Config)` from P1.M2.T1.S1.\n3. LOGIC: In each of the 4 role files, at the point where the role's model is resolved (alongside the existing `config.ResolveRoleModel` call), add `timeout := config.ResolveRoleTimeout(\"<role>\", deps.Config)` and replace the `deps.Config.Timeout` argument in the provider.Execute call with `timeout`. Specifically: (a) planner.go: resolve `plannerTimeout := config.ResolveRoleTimeout(\"planner\", deps.Config)` near line 91, use at line 124. (b) stager.go: resolve `stagerTimeout := config.ResolveRoleTimeout(\"stager\", deps.Config)` near line 91, use at line 110. (c) message.go: resolve `messageTimeout := config.ResolveRoleTimeout(\"message\", deps.Config)` near the model resolution, use at line 155. (d) arbiter.go: resolve `arbiterTimeout := config.ResolveRoleTimeout(\"arbiter\", deps.Config)` near its model resolution, use at line 100.\n4. OUTPUT: Each decompose role uses its own resolved timeout. The planner gets 480s by default (built-in), others get 120s (global), each independently tunable.\n5. DOCS: none — internal wiring.",
+                  "prd_selectors": [
+                    "h3.30",
+                    "h3.31",
+                    "h2.13",
+                    "h3.52"
+                  ]
                 }
               ]
             }
@@ -208,9 +272,18 @@
                   "title": "Unit tests for ResolveRoleTimeout + config loading + default change",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M3.T1.S2", "P1.M3.T2.S1"],
-                  "prd_selectors": ["h3.31", "h3.24", "h3.77", "h3.80", "h2.20"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Existing test patterns: config_test.go tests Defaults(); load_test.go tests env/flag layers; file_test.go tests file loading + overlay; roles_test.go tests ResolveRoleModel. The test suite uses a temp git repo pattern for git-config tests (git_test.go). roleNames is `[]string{\"planner\",\"stager\",\"message\",\"arbiter\"}`.\n2. INPUT: All per-role timeout infrastructure from P1.M1, P1.M2, P1.M3.\n3. LOGIC: Write tests following existing patterns: (a) roles_test.go: TestResolveRoleTimeout — planner returns 480s with no overrides; message returns 120s (global); planner with per-role override returns the override; message with [role.message].timeout returns that. (b) load_test.go: TestEnvRoleTimeout — STAGECOACH_PLANNER_TIMEOUT=600s sets planner timeout; TestFlagRoleTimeout — --stager-timeout 300s sets stager timeout. (c) file_test.go: TestFileRoleTimeout — [role.arbiter] timeout=\"200s\" parsed correctly in materialize; TestOverlayRoleTimeout — higher layer overrides lower layer timeout field without erasing other fields. (d) git_test.go: TestGitConfigRoleTimeout — stagecoach.role.planner.timeout=500 in git config sets planner timeout. (e) Verify the default change: config_test.go confirms Defaults().Timeout==120s; roles_test.go confirms ResolveRoleTimeout(\"planner\", Defaults())==480s.\n4. OUTPUT: All per-role timeout paths have test coverage; `go test ./internal/config/... ./internal/decompose/... ./internal/generate/...` passes.\n5. DOCS: none — tests are not user-facing docs."
+                  "dependencies": [
+                    "P1.M3.T1.S2",
+                    "P1.M3.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Existing test patterns: config_test.go tests Defaults(); load_test.go tests env/flag layers; file_test.go tests file loading + overlay; roles_test.go tests ResolveRoleModel. The test suite uses a temp git repo pattern for git-config tests (git_test.go). roleNames is `[]string{\"planner\",\"stager\",\"message\",\"arbiter\"}`.\n2. INPUT: All per-role timeout infrastructure from P1.M1, P1.M2, P1.M3.\n3. LOGIC: Write tests following existing patterns: (a) roles_test.go: TestResolveRoleTimeout — planner returns 480s with no overrides; message returns 120s (global); planner with per-role override returns the override; message with [role.message].timeout returns that. (b) load_test.go: TestEnvRoleTimeout — STAGECOACH_PLANNER_TIMEOUT=600s sets planner timeout; TestFlagRoleTimeout — --stager-timeout 300s sets stager timeout. (c) file_test.go: TestFileRoleTimeout — [role.arbiter] timeout=\"200s\" parsed correctly in materialize; TestOverlayRoleTimeout — higher layer overrides lower layer timeout field without erasing other fields. (d) git_test.go: TestGitConfigRoleTimeout — stagecoach.role.planner.timeout=500 in git config sets planner timeout. (e) Verify the default change: config_test.go confirms Defaults().Timeout==120s; roles_test.go confirms ResolveRoleTimeout(\"planner\", Defaults())==480s.\n4. OUTPUT: All per-role timeout paths have test coverage; `go test ./internal/config/... ./internal/decompose/... ./internal/generate/...` passes.\n5. DOCS: none — tests are not user-facing docs.",
+                  "prd_selectors": [
+                    "h3.31",
+                    "h3.24",
+                    "h3.77",
+                    "h3.80",
+                    "h2.20"
+                  ]
                 }
               ]
             },
@@ -227,9 +300,17 @@
                   "title": "Update README + docs/how-it-works + docs/configuration overview for per-role timeouts",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M4.T1.S1"],
-                  "prd_selectors": ["h3.31", "h2.16", "h3.77", "h3.80", "h2.15"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: README.md has no timeout documentation today. docs/how-it-works.md covers the decompose pipeline and per-role provider/model config. docs/configuration.md has timeout in the defaults table (480s→120s, updated as Mode A in P1.M2.T2.S1) and the [role.*] section. docs/cli.md has the per-role flags table (Mode A added in P1.M1.T2.S2).\n2. INPUT: All per-role timeout work from P1.M1–P1.M4.T1.\n3. LOGIC: (a) docs/configuration.md: update the per-role configuration section (§16.4 equivalent) to mention per-role timeout alongside provider/model/reasoning. Add `[role.planner]` timeout example. Update the [defaults] timeout example to say '# global fallback for every role (FR-R7); planner defaults to 480s'. (b) docs/how-it-works.md: if there's a per-role configuration overview, add a note that each role resolves its own timeout, with the planner getting 480s by default. (c) README.md: add a brief mention to the per-role config section (if it exists) or the CLI reference that --<role>-timeout is available. (d) Verify docs/cli.md global flags table has correct default (120s, not 480s).\n4. OUTPUT: Documentation consistently describes per-role timeouts as a feature across all docs.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task for Phase 1."
+                  "dependencies": [
+                    "P1.M4.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: README.md has no timeout documentation today. docs/how-it-works.md covers the decompose pipeline and per-role provider/model config. docs/configuration.md has timeout in the defaults table (480s→120s, updated as Mode A in P1.M2.T2.S1) and the [role.*] section. docs/cli.md has the per-role flags table (Mode A added in P1.M1.T2.S2).\n2. INPUT: All per-role timeout work from P1.M1–P1.M4.T1.\n3. LOGIC: (a) docs/configuration.md: update the per-role configuration section (§16.4 equivalent) to mention per-role timeout alongside provider/model/reasoning. Add `[role.planner]` timeout example. Update the [defaults] timeout example to say '# global fallback for every role (FR-R7); planner defaults to 480s'. (b) docs/how-it-works.md: if there's a per-role configuration overview, add a note that each role resolves its own timeout, with the planner getting 480s by default. (c) README.md: add a brief mention to the per-role config section (if it exists) or the CLI reference that --<role>-timeout is available. (d) Verify docs/cli.md global flags table has correct default (120s, not 480s).\n4. OUTPUT: Documentation consistently describes per-role timeouts as a feature across all docs.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task for Phase 1.",
+                  "prd_selectors": [
+                    "h3.31",
+                    "h2.16",
+                    "h3.77",
+                    "h3.80",
+                    "h2.15"
+                  ]
                 }
               ]
             }
@@ -265,8 +346,12 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h3.17", "h2.13", "h3.30"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The Git interface (git.go ~L131-163) has `HasStagedChanges(ctx) (bool, error)` and `StagedFileCount(ctx) (int, error)`. StagedFileCount (git.go:1331) runs `git diff --cached --name-only` but only counts lines, discarding the paths. The implementation pattern for gitRunner methods uses `g.run(ctx, g.workDir, ...)` which returns `(stdout, stderr, code, err)`.\n2. INPUT: The existing gitRunner pattern and Git interface.\n3. LOGIC: (a) Add `StagedNames(ctx context.Context) ([]string, error)` to the `Git` interface in `internal/git/git.go` (near StagedFileCount at ~L163). Doc comment: 'StagedNames returns the paths of files currently staged (git diff --cached --name-only). Returns nil/empty if nothing is staged. Used by FR-M1e to name offending staged paths in the decompose re-check error.' (b) Implement on `*gitRunner` following the StagedFileCount pattern: run `git diff --cached --name-only`, split on newlines, filter empty strings, return []string. (c) Update ALL test fakes/mocks that implement the Git interface to add a StagedNames method. Search for `type.*Git.*interface` or struct mocks in test files.\n4. OUTPUT: `deps.Git.StagedNames(ctx)` returns `[]string` of staged file paths for use in the FR-M1e error message.\n5. DOCS: none — internal git primitive, no user-facing surface."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The Git interface (git.go ~L131-163) has `HasStagedChanges(ctx) (bool, error)` and `StagedFileCount(ctx) (int, error)`. StagedFileCount (git.go:1331) runs `git diff --cached --name-only` but only counts lines, discarding the paths. The implementation pattern for gitRunner methods uses `g.run(ctx, g.workDir, ...)` which returns `(stdout, stderr, code, err)`.\n2. INPUT: The existing gitRunner pattern and Git interface.\n3. LOGIC: (a) Add `StagedNames(ctx context.Context) ([]string, error)` to the `Git` interface in `internal/git/git.go` (near StagedFileCount at ~L163). Doc comment: 'StagedNames returns the paths of files currently staged (git diff --cached --name-only). Returns nil/empty if nothing is staged. Used by FR-M1e to name offending staged paths in the decompose re-check error.' (b) Implement on `*gitRunner` following the StagedFileCount pattern: run `git diff --cached --name-only`, split on newlines, filter empty strings, return []string. (c) Update ALL test fakes/mocks that implement the Git interface to add a StagedNames method. Search for `type.*Git.*interface` or struct mocks in test files.\n4. OUTPUT: `deps.Git.StagedNames(ctx)` returns `[]string` of staged file paths for use in the FR-M1e error message.\n5. DOCS: none — internal git primitive, no user-facing surface.",
+                  "prd_selectors": [
+                    "h3.17",
+                    "h2.13",
+                    "h3.30"
+                  ]
                 }
               ]
             },
@@ -283,9 +368,16 @@
                   "title": "Add HasStagedChanges re-check at top of Decompose() with StagedNames-based error",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M1.T1.S1"],
-                  "prd_selectors": ["h3.30", "h2.13", "h3.65", "h3.70"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Decompose() at decompose.go:141 has an explicit doc-comment (L121-122) saying 'Decompose does NOT re-check this; it assumes correct routing.' FR-M1e CHANGES that contract. FreezeWorkingTree (called at decompose.go:165) calls AddAll first — so any pre-existing staged content gets folded into T_start silently. The check MUST go before FreezeWorkingTree, specifically before the mode-routing escape-hatch check (line 147) is ideal — actually, the check should go AFTER the escape-hatch (Single/Commits==1 returns early and uses CommitStaged which handles staged content normally) but BEFORE FreezeWorkingTree. The Deps struct (decompose/roles.go:55) has `Git git.Git` for calling HasStagedChanges and StagedNames.\n2. INPUT: `StagedNames()` from P2.M1.T1.S1. The existing `HasStagedChanges()` on the Git interface.\n3. LOGIC: (a) In Decompose() at decompose.go, AFTER the mode-routing escape-hatch (after line 149, the `if deps.Config.Single || deps.Config.Commits == 1 { return ... }` block) and BEFORE RevParseHEAD/baseTree derivation, add the FR-M1e re-check: `hasStaged, err := deps.Git.HasStagedChanges(ctx); if err != nil { return DecomposeResult{}, fmt.Errorf(\"%w: check staged changes: %w\", ErrDecomposeFailed, err) }; if hasStaged { names, _ := deps.Git.StagedNames(ctx); return DecomposeResult{}, fmt.Errorf(\"decompose requires an empty index, but %d file(s) are staged: %s. This is a defense-in-depth check (FR-M1e) — the trigger should have routed to the single-commit path. Run `git reset` to unstage, or `stagecoach --single` for the one-commit behavior\", len(names), strings.Join(names, \", \")) }`. (b) Update the doc-comment at L121-122 to say Decompose NOW re-asserts the empty-index precondition (FR-M1e, defense-in-depth).\n4. OUTPUT: A stale/buggy trigger that routes to Decompose with a non-empty index now fails loudly with a clear, actionable error naming the offending paths, instead of silently sweeping them into T_start.\n5. DOCS: [Mode A] Update `docs/how-it-works.md` decompose section to mention the FR-M1e defense-in-depth re-check. This rides WITH the work."
+                  "dependencies": [
+                    "P2.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: Decompose() at decompose.go:141 has an explicit doc-comment (L121-122) saying 'Decompose does NOT re-check this; it assumes correct routing.' FR-M1e CHANGES that contract. FreezeWorkingTree (called at decompose.go:165) calls AddAll first — so any pre-existing staged content gets folded into T_start silently. The check MUST go before FreezeWorkingTree, specifically before the mode-routing escape-hatch check (line 147) is ideal — actually, the check should go AFTER the escape-hatch (Single/Commits==1 returns early and uses CommitStaged which handles staged content normally) but BEFORE FreezeWorkingTree. The Deps struct (decompose/roles.go:55) has `Git git.Git` for calling HasStagedChanges and StagedNames.\n2. INPUT: `StagedNames()` from P2.M1.T1.S1. The existing `HasStagedChanges()` on the Git interface.\n3. LOGIC: (a) In Decompose() at decompose.go, AFTER the mode-routing escape-hatch (after line 149, the `if deps.Config.Single || deps.Config.Commits == 1 { return ... }` block) and BEFORE RevParseHEAD/baseTree derivation, add the FR-M1e re-check: `hasStaged, err := deps.Git.HasStagedChanges(ctx); if err != nil { return DecomposeResult{}, fmt.Errorf(\"%w: check staged changes: %w\", ErrDecomposeFailed, err) }; if hasStaged { names, _ := deps.Git.StagedNames(ctx); return DecomposeResult{}, fmt.Errorf(\"decompose requires an empty index, but %d file(s) are staged: %s. This is a defense-in-depth check (FR-M1e) — the trigger should have routed to the single-commit path. Run `git reset` to unstage, or `stagecoach --single` for the one-commit behavior\", len(names), strings.Join(names, \", \")) }`. (b) Update the doc-comment at L121-122 to say Decompose NOW re-asserts the empty-index precondition (FR-M1e, defense-in-depth).\n4. OUTPUT: A stale/buggy trigger that routes to Decompose with a non-empty index now fails loudly with a clear, actionable error naming the offending paths, instead of silently sweeping them into T_start.\n5. DOCS: [Mode A] Update `docs/how-it-works.md` decompose section to mention the FR-M1e defense-in-depth re-check. This rides WITH the work.",
+                  "prd_selectors": [
+                    "h3.30",
+                    "h2.13",
+                    "h3.65",
+                    "h3.70"
+                  ]
                 }
               ]
             },
@@ -303,8 +395,12 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h3.30", "h2.13", "h3.70"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: verifyFreezeSubset at stager.go:158-196 has two error messages: (A) path check — 'freeze violation: concept %d staged paths not present in T_start: %s' and (B) content check — 'freeze violation: concept %d staged content not traceable to T_start: %s'. Both use numeric index `i` for the concept and provide no remedy. The function receives `(ctx, deps, baseTree, tStart, tStartPaths, i, treeI)` — it does NOT receive the concept title. The call site is in runLoop (decompose.go ~558-562) which has access to `concepts[i]` (prompt.PlannerCommit with a Title field).\n2. INPUT: The existing verifyFreezeSubset function and its single call site in runLoop.\n3. LOGIC: (a) Add a `conceptTitle string` parameter to verifyFreezeSubset (after the `i int` parameter). Update the call site in runLoop to pass `concepts[i].Title`. (b) Rewrite error message (A) to: 'decompose: freeze violation in concept %d (%q): staged paths not in the frozen working-tree snapshot: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (c) Rewrite error message (B) to: 'decompose: freeze violation in concept %d (%q): staged content differs from the frozen working-tree snapshot for: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (d) Update the two tests that assert on the old message text (decompose_test.go:768 checks 'sentinel.txt'; stager_test.go:376 checks 'not present in T_start') to match the new phrasing while still checking the paths are named.\n4. OUTPUT: Freeze violation errors are clear, actionable, and identify the concept by title. The opaque 'not traceable to T_start' phrasing is replaced.\n5. DOCS: none — error message improvement, no user-facing documentation surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: verifyFreezeSubset at stager.go:158-196 has two error messages: (A) path check — 'freeze violation: concept %d staged paths not present in T_start: %s' and (B) content check — 'freeze violation: concept %d staged content not traceable to T_start: %s'. Both use numeric index `i` for the concept and provide no remedy. The function receives `(ctx, deps, baseTree, tStart, tStartPaths, i, treeI)` — it does NOT receive the concept title. The call site is in runLoop (decompose.go ~558-562) which has access to `concepts[i]` (prompt.PlannerCommit with a Title field).\n2. INPUT: The existing verifyFreezeSubset function and its single call site in runLoop.\n3. LOGIC: (a) Add a `conceptTitle string` parameter to verifyFreezeSubset (after the `i int` parameter). Update the call site in runLoop to pass `concepts[i].Title`. (b) Rewrite error message (A) to: 'decompose: freeze violation in concept %d (%q): staged paths not in the frozen working-tree snapshot: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (c) Rewrite error message (B) to: 'decompose: freeze violation in concept %d (%q): staged content differs from the frozen working-tree snapshot for: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (d) Update the two tests that assert on the old message text (decompose_test.go:768 checks 'sentinel.txt'; stager_test.go:376 checks 'not present in T_start') to match the new phrasing while still checking the paths are named.\n4. OUTPUT: Freeze violation errors are clear, actionable, and identify the concept by title. The opaque 'not traceable to T_start' phrasing is replaced.\n5. DOCS: none — error message improvement, no user-facing documentation surface change.",
+                  "prd_selectors": [
+                    "h3.30",
+                    "h2.13",
+                    "h3.70"
+                  ]
                 }
               ]
             }
@@ -330,9 +426,17 @@
                   "title": "Unit + e2e tests for FR-M1e re-assertion and FR-M1c error improvements",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P2.M1.T2.S1", "P2.M1.T3.S1"],
-                  "prd_selectors": ["h3.94", "h3.98", "h3.30", "h2.20"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decompose_test.go has freeze-violation tests at L736+ (TestDecompose_StagerFreezeViolation) using the deps.stager injection seam. stager_test.go has TestVerifyFreezeSubset_PathViolation/ContentViolation at L310+ using direct calls. internal/e2e/scenarios_test.go has decompose e2e scenarios with real temp repos.\n2. INPUT: All freeze-hardening work from P2.M1.\n3. LOGIC: (a) decompose_test.go: Add TestDecompose_NonEmptyIndex FR-M1e — create a temp repo, stage a file, call Decompose() directly (bypassing the CLI router), assert it returns a non-nil error containing 'requires an empty index' and the staged path name. (b) stager_test.go: Update TestVerifyFreezeSubset_PathViolation and _ContentViolation to assert the new error format (concept title present, clearer phrasing, paths still named). Add a test that passes a conceptTitle and verifies it appears in the error. (c) e2e/scenarios_test.go or a new e2e test: add a scenario that simulates the defense-in-depth path — seed a repo, stage files, attempt decompose, verify the clear error. This covers the §20.5 'every bug found in the wild becomes a scenario here' directive.\n4. OUTPUT: FR-M1e and FR-M1c have comprehensive test coverage; `go test ./internal/decompose/... ./internal/e2e/...` passes.\n5. DOCS: none — tests are not user-facing docs."
+                  "dependencies": [
+                    "P2.M1.T2.S1",
+                    "P2.M1.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: decompose_test.go has freeze-violation tests at L736+ (TestDecompose_StagerFreezeViolation) using the deps.stager injection seam. stager_test.go has TestVerifyFreezeSubset_PathViolation/ContentViolation at L310+ using direct calls. internal/e2e/scenarios_test.go has decompose e2e scenarios with real temp repos.\n2. INPUT: All freeze-hardening work from P2.M1.\n3. LOGIC: (a) decompose_test.go: Add TestDecompose_NonEmptyIndex FR-M1e — create a temp repo, stage a file, call Decompose() directly (bypassing the CLI router), assert it returns a non-nil error containing 'requires an empty index' and the staged path name. (b) stager_test.go: Update TestVerifyFreezeSubset_PathViolation and _ContentViolation to assert the new error format (concept title present, clearer phrasing, paths still named). Add a test that passes a conceptTitle and verifies it appears in the error. (c) e2e/scenarios_test.go or a new e2e test: add a scenario that simulates the defense-in-depth path — seed a repo, stage files, attempt decompose, verify the clear error. This covers the §20.5 'every bug found in the wild becomes a scenario here' directive.\n4. OUTPUT: FR-M1e and FR-M1c have comprehensive test coverage; `go test ./internal/decompose/... ./internal/e2e/...` passes.\n5. DOCS: none — tests are not user-facing docs.",
+                  "prd_selectors": [
+                    "h3.94",
+                    "h3.98",
+                    "h3.30",
+                    "h2.20"
+                  ]
                 }
               ]
             },
@@ -349,9 +453,16 @@
                   "title": "Update README + docs overview for freeze hardening (FR-M1e + FR-M1c)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h3.30", "h2.13", "h3.70", "h2.20"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/how-it-works.md covers the decompose pipeline, the freeze boundary (T_start), and the FR-M1b/M1c/M1d freeze enforcement. The FR-M1e re-check was added as Mode A in P2.M1.T2.S1 (a note in the decompose section). README.md has a safety/reliability section.\n2. INPUT: All freeze-hardening work from P2.M1 + P2.M2.T1.\n3. LOGIC: (a) docs/how-it-works.md: ensure the freeze enforcement section covers FR-M1e (defense-in-depth re-check) and the improved FR-M1c error messages as part of the reliability story. The Mode A note from P2.M1.T2.S1 may be sufficient — verify and extend if needed. (b) README.md: if there's a reliability/safety section, add a brief note that decompose re-asserts its preconditions as defense-in-depth. Keep it concise — this is an internal hardening, not a user-facing feature.\n4. OUTPUT: Documentation covers the freeze hardening coherently.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task for Phase 2."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/how-it-works.md covers the decompose pipeline, the freeze boundary (T_start), and the FR-M1b/M1c/M1d freeze enforcement. The FR-M1e re-check was added as Mode A in P2.M1.T2.S1 (a note in the decompose section). README.md has a safety/reliability section.\n2. INPUT: All freeze-hardening work from P2.M1 + P2.M2.T1.\n3. LOGIC: (a) docs/how-it-works.md: ensure the freeze enforcement section covers FR-M1e (defense-in-depth re-check) and the improved FR-M1c error messages as part of the reliability story. The Mode A note from P2.M1.T2.S1 may be sufficient — verify and extend if needed. (b) README.md: if there's a reliability/safety section, add a brief note that decompose re-asserts its preconditions as defense-in-depth. Keep it concise — this is an internal hardening, not a user-facing feature.\n4. OUTPUT: Documentation covers the freeze hardening coherently.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task for Phase 2.",
+                  "prd_selectors": [
+                    "h3.30",
+                    "h2.13",
+                    "h3.70",
+                    "h2.20"
+                  ]
                 }
               ]
             }

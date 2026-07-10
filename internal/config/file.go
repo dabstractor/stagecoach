@@ -19,11 +19,13 @@ import (
 
 // fileRoleConfig is the FILE decode twin of config.RoleConfig (§16.4). A [role.planner] table decodes into
 // fc.Role["planner"] EXACTLY as a [provider.pi] table decodes into fc.Provider["pi"]. materialize converts
-// each to a typed RoleConfig. Both fields "" ⇒ the role inherits the global [defaults] (FR-R2).
+// each to a typed RoleConfig (parsing the Timeout duration string via parseTimeout). Both fields "" (and
+// Timeout "") ⇒ the role inherits the global [defaults] (FR-R2).
 type fileRoleConfig struct {
 	Provider  string `toml:"provider"`
 	Model     string `toml:"model"`
 	Reasoning string `toml:"reasoning"`
+	Timeout   string `toml:"timeout"` // §16.4 duration string, e.g. "480s"; parsed in materialize (parseTimeout accepts "480s" OR bare "480")
 }
 
 // fileConfig is the §16.2 file decode target: NESTED (matches [defaults]/[generation]/[role.X]/[provider.X]),
@@ -195,7 +197,11 @@ func loadTOML(path string) (*Config, error) {
 		}
 	}
 
-	return materialize(&fc, timeout, hookTimeout), nil
+	cfg, err := materialize(&fc, timeout, hookTimeout)
+	if err != nil {
+		return nil, err // surface role-context error verbatim (avoid double "parse config" wrap)
+	}
+	return cfg, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +212,11 @@ func loadTOML(path string) (*Config, error) {
 // Pure: receives already-parsed durations. Non-zero overlay semantics mean
 // a file cannot override a field to its zero value (false, 0, ""). See the v1
 // limitation documented on Config.Providers and in the PRP design call #3.
-func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
+// The per-role table is built FIELD-BY-FIELD (not via RoleConfig(frc) conversion,
+// which would break now that RoleConfig.Timeout is time.Duration while fileRoleConfig.Timeout
+// is string) and each role's Timeout string is parsed via parseTimeout, with the role name
+// wrapped into any parse error (the role name is only in scope inside the roles loop).
+func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) (*Config, error) {
 	c := &Config{Timeout: timeout, HookTimeout: hookTimeout} // zero if file didn't set one (overlay skips zero — correct)
 	d, g := &fc.Defaults, &fc.Generation
 
@@ -308,16 +318,34 @@ func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) *Config {
 	if fc.ConfigVersion != 0 {
 		c.ConfigVersion = fc.ConfigVersion
 	}
-	// V2 per-role table — convert map[string]fileRoleConfig → map[string]RoleConfig, copying every present
-	// role (an all-empty [role.X] ⇒ "inherit global", harmless — mirrors Providers' whole-map copy).
+	// V2 per-role table — convert map[string]fileRoleConfig → map[string]RoleConfig via FIELD-BY-FIELD
+	// construction (NOT RoleConfig(frc) conversion: that compiled only while both structs were all-strings,
+	// and breaks now that RoleConfig.Timeout is time.Duration while fileRoleConfig.Timeout is string). Each
+	// role's Timeout duration string is parsed via parseTimeout (accepts "480s" AND bare "480", mirroring
+	// env/flag/git), with the role name wrapped into any parse error. Empty Timeout ⇒ 0 ⇒ inherit global
+	// (the S2 overlay guard + P1.M2.T1's ResolveRoleTimeout apply it). An all-empty [role.X] ⇒ "inherit global",
+	// harmless — mirrors Providers' whole-map copy.
 	if len(fc.Role) > 0 {
 		c.Roles = make(map[string]RoleConfig, len(fc.Role))
 		for role, frc := range fc.Role {
-			c.Roles[role] = RoleConfig(frc)
+			var rt time.Duration
+			if frc.Timeout != "" { // "" ⇒ inherit (stay 0)
+				d, perr := parseTimeout(frc.Timeout) // parseTimeout: "480s" OR bare "480" (load.go)
+				if perr != nil {
+					return nil, fmt.Errorf("parse config: [role.%s].timeout: %w", role, perr)
+				}
+				rt = d
+			}
+			c.Roles[role] = RoleConfig{
+				Provider:  frc.Provider,
+				Model:     frc.Model,
+				Reasoning: frc.Reasoning,
+				Timeout:   rt, // 0 ⇒ inherit global [defaults].timeout
+			}
 		}
 	}
 	c.Providers = fc.Provider // nil-safe: nil if no [provider] table
-	return c
+	return c, nil
 }
 
 // ---------------------------------------------------------------------------

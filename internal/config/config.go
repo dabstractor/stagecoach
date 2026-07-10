@@ -19,24 +19,27 @@ func intPtr(i int) *int { return &i }
 // decomposition + binary filtering.
 const CurrentConfigVersion = 3
 
-// RoleConfig holds a per-role provider/model/reasoning override (PRD §16.4, §9.15 FR-R1–R6).
-// A role is one of "planner", "stager", "message", "arbiter" (§13.6.2). Any field "" ⇒
-// the role inherits the global [defaults] (FR-R2); a non-empty value overrides just that
+// RoleConfig holds a per-role provider/model/reasoning/timeout override (PRD §16.4, §9.15 FR-R1–R7).
+// A role is one of "planner", "stager", "message", "arbiter" (§13.6.2). Any field "" (or Timeout 0)
+// ⇒ the role inherits the global [defaults] (FR-R2); a non-empty/non-zero value overrides just that
 // field (FR-R3 field-merge across layers). Model strings are provider-specific (FR-R5):
 // a role's Model is interpreted by that role's resolved Provider's manifest, so changing
 // a role's Provider without updating its Model is a configuration error stagecoach surfaces.
 // For multi-provider agents (pi/opencode/agy) Provider is required when Model is set (FR-R5b).
 // Reasoning controls thinking effort (off|low|medium|high; FR-R6); "" ⇒ inherit the global
 // [defaults].reasoning, which is "off" for every role out of the box (no shipped per-role default).
+// Timeout is the per-role generation timeout (FR-R7); 0 ⇒ inherit the global [defaults].timeout
+// (duration-non-zero discipline mirrors Config.Timeout — the S2 overlay guard is `!= 0`).
 //
 // Config.Roles (below) carries the RESOLVED per-role table; it is toml:"-" because the
 // [role.<role>] FILE tables decode into fileConfig's fileRoleConfig map (S2) and
 // materialize/overlay into this typed map — the same raw-map→typed-field pattern
 // Config.Providers uses.
 type RoleConfig struct {
-	Provider  string `toml:"provider"`
-	Model     string `toml:"model"`
-	Reasoning string `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default)
+	Provider  string        `toml:"provider"`
+	Model     string        `toml:"model"`
+	Reasoning string        `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default)
+	Timeout   time.Duration `toml:"timeout"`   // per-role generation timeout (FR-R7); 0 ⇒ inherit global [defaults].timeout (toml tag is cosmetic — Config.Roles is toml:"-")
 }
 
 // Config is the fully-resolved Stagecoach configuration: the single value produced by the 7-layer

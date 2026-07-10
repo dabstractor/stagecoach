@@ -540,6 +540,54 @@ timeout = "120"
 
 // --- TestLoadTOML_V2Fields ---
 
+// TestLoadTOMLRoleTimeoutMalformed proves a malformed [role.<role>].timeout fails at LOAD time
+// (FR-R7, P1.M1.T1.S1): loadTOML→materialize surfaces the role-context parse error verbatim. This
+// is the load-time-failure requirement (a bad per-role timeout must not silently pass to generation).
+func TestLoadTOMLRoleTimeoutMalformed(t *testing.T) {
+	body := `
+[defaults]
+provider = "pi"
+
+[role.planner]
+timeout = "not-a-duration"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if cfg != nil {
+		t.Errorf("malformed role timeout: cfg=%v, want nil", cfg)
+	}
+	if err == nil {
+		t.Fatal("malformed role timeout: err=nil, want error")
+	}
+	if !strings.Contains(err.Error(), "[role.planner].timeout") {
+		t.Errorf("err=%q, want it to contain '[role.planner].timeout'", err.Error())
+	}
+}
+
+// TestLoadTOMLRoleTimeoutValid proves a valid [role.planner].timeout parses through loadTOML→materialize
+// and lands on the resolved Config.Roles["planner"].Timeout as a time.Duration (FR-R7, P1.M1.T1.S1).
+// Note: after S1 alone the overlay field-merge is NOT yet present (S2), but the global-file-only path
+// here has no overlay, so the value survives loadTOML directly.
+func TestLoadTOMLRoleTimeoutValid(t *testing.T) {
+	body := `
+[defaults]
+provider = "pi"
+
+[role.planner]
+timeout = "480s"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if err != nil || cfg == nil {
+		t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+	}
+	if cfg.Roles["planner"].Timeout != 480*time.Second {
+		t.Errorf("Roles[planner].Timeout = %v, want 480s", cfg.Roles["planner"].Timeout)
+	}
+}
+
+// --- TestLoadTOML_V2Fields ---
+
 // TestLoadTOML_V2Fields proves the v2 file keys decode + materialize: config_version, [generation]
 // max_commits/binary_extensions, and [role.<role>] tables (incl. a PARTIAL role whose Provider is "" — the
 // field-level decode, not a whole-block). Mirrors TestLoadTOMLValid.
@@ -834,7 +882,10 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range materializeCases {
 		t.Run("materialize/"+tc.name, func(t *testing.T) {
 			fc := &fileConfig{Generation: fileGeneration{DiffContext: tc.fileDC, TokenLimit: tc.fileTL}}
-			c := materialize(fc, 0, 0)
+			c, err := materialize(fc, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
 			if tc.wantDC == nil {
 				if c.DiffContext != nil {
 					t.Errorf("DiffContext = %v, want nil (materialize must not seed a default)", c.DiffContext)
@@ -887,9 +938,15 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range overlayCases {
 		t.Run("overlay/"+tc.name, func(t *testing.T) {
 			cfg := Defaults() // DiffContext = intPtr(1); TokenLimit = 0
-			g := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0, 0)
+			g, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
 			overlay(&cfg, g)
-			r := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0, 0)
+			r, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
 			overlay(&cfg, r)
 			if cfg.DiffContext == nil {
 				t.Fatalf("DiffContext = nil after overlay; Defaults() must seed intPtr(1) so nil is impossible here")
@@ -994,7 +1051,10 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 				Defaults:   fileDefaults{AutoStageAll: tc.fileASA},
 				Generation: fileGeneration{MultiTurnFallback: tc.fileMTF},
 			}
-			c := materialize(fc, 0, 0)
+			c, err := materialize(fc, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
 			// AutoStageAll
 			if tc.wantASA == nil {
 				if c.AutoStageAll != nil {
@@ -1057,12 +1117,15 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 	for _, tc := range overlayCases {
 		t.Run("overlay/"+tc.name, func(t *testing.T) {
 			cfg := Defaults() // AutoStageAll=boolPtr(true); MultiTurnFallback=boolPtr(true)
-			g := materialize(&fileConfig{
+			g, err := materialize(&fileConfig{
 				Defaults:   fileDefaults{AutoStageAll: tc.global.asa},
 				Generation: fileGeneration{MultiTurnFallback: tc.global.mtf},
 			}, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
 			overlay(&cfg, g)
-			r := materialize(&fileConfig{
+			r, err := materialize(&fileConfig{
 				Defaults:   fileDefaults{AutoStageAll: tc.repo.asa},
 				Generation: fileGeneration{MultiTurnFallback: tc.repo.mtf},
 			}, 0, 0)
@@ -1139,6 +1202,84 @@ max_diff_bytes = 1000
 		}
 		if dst.MultiTurnFallbackValue() != true {
 			t.Fatalf("after overlay: MultiTurnFallbackValue() = %v, want true (default inherited)", dst.MultiTurnFallbackValue())
+		}
+	})
+}
+
+// --- TestMaterializeRoleTimeout ---
+
+// TestMaterializeRoleTimeout is the FR-R7 load-bearing proof for P1.M1.T1.S1: [role.<role>].timeout
+// decodes into fileRoleConfig.Timeout and materialize parses it via parseTimeout into RoleConfig.Timeout
+// (a time.Duration). Calls materialize DIRECTLY (NOT loadTOML→overlay) because the overlay field-merge
+// for Timeout is the NEXT subtask (S2) — after S1 alone a per-role timeout in a REPO file is dropped at
+// overlay, so the direct-materialize form is the correct scope for this assertion. Covers: "480s" Go
+// duration string, bare "480" integer seconds (proves parseTimeout, NOT time.ParseDuration which rejects
+// bare ints), ""/omitted ⇒ 0 (inherit global), a malformed value ⇒ error wrapping the role name, and a
+// two-role table where only the set role has a non-zero Timeout.
+func TestMaterializeRoleTimeout(t *testing.T) {
+	cases := []struct {
+		name      string
+		timeout   string // fileRoleConfig.Timeout; "" ⇒ omit/inherit
+		omit      bool   // true ⇒ do not set the Timeout field at all (mirrors a table without the key)
+		want      time.Duration
+		wantError string // non-empty ⇒ expect an error whose message contains this substring
+	}{
+		{"duration_string", "480s", false, 480 * time.Second, ""},
+		{"bare_int_seconds", "480", false, 480 * time.Second, ""}, // proves parseTimeout (not ParseDuration, which rejects bare "480")
+		{"go_duration_2m", "2m", false, 2 * time.Minute, ""},
+		{"empty_inherits_zero", "", false, 0, ""},  // "" ⇒ 0 ⇒ inherit global [defaults].timeout
+		{"omitted_inherits_zero", "", true, 0, ""}, // key absent ⇒ 0 ⇒ inherit global
+		{"malformed", "not-a-dur", false, 0, "[role.planner].timeout"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			frc := fileRoleConfig{Timeout: tc.timeout}
+			if tc.omit {
+				frc.Timeout = "" // mirrors a [role.planner] table with no timeout key
+			}
+			fc := &fileConfig{Role: map[string]fileRoleConfig{"planner": frc}}
+			cfg, err := materialize(fc, 0, 0)
+			if tc.wantError != "" {
+				if err == nil {
+					t.Fatalf("materialize: err=nil, want error containing %q", tc.wantError)
+				}
+				if !strings.Contains(err.Error(), tc.wantError) {
+					t.Errorf("err=%q, want it to contain %q", err.Error(), tc.wantError)
+				}
+				if cfg != nil {
+					t.Errorf("materialize: cfg=%v, want nil on error", cfg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("materialize: %v", err)
+			}
+			if cfg == nil || cfg.Roles == nil {
+				t.Fatalf("materialize: cfg=%v, want non-nil Config with Roles populated", cfg)
+			}
+			got := cfg.Roles["planner"].Timeout
+			if got != tc.want {
+				t.Errorf("Roles[planner].Timeout = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// Two roles: only the one with a timeout set has a non-zero Timeout; the other stays 0 (inherit).
+	t.Run("two_roles_only_one_set", func(t *testing.T) {
+		fc := &fileConfig{Role: map[string]fileRoleConfig{
+			"planner": {Timeout: "480s"},
+			"stager":  {}, // omitted ⇒ 0 ⇒ inherit global
+		}}
+		cfg, err := materialize(fc, 0, 0)
+		if err != nil {
+			t.Fatalf("materialize: %v", err)
+		}
+		if cfg.Roles["planner"].Timeout != 480*time.Second {
+			t.Errorf("Roles[planner].Timeout = %v, want 480s", cfg.Roles["planner"].Timeout)
+		}
+		if cfg.Roles["stager"].Timeout != 0 {
+			t.Errorf("Roles[stager].Timeout = %v, want 0 (inherit global)", cfg.Roles["stager"].Timeout)
 		}
 	})
 }
