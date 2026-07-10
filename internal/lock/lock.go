@@ -342,6 +342,29 @@ func Status(repoPath string) (path string, contents LockContents, alive bool, or
 	return path, contents, alive, orphan, nil
 }
 
+// IsOrphaned reports whether the holder described by contents APPEARS orphaned — i.e.
+// reparented to init/a subreaper (appearsOrphaned) — AND is alive (processAlive). READ-ONLY
+// (FR52 preserved). It is the SHARED holder-orphan predicate consumed by `stagecoach lock
+// status` (FR-K4, via Status) and the Busy-message orphan hint (FR-K5). It mirrors Status's
+// alive→orphan order EXACTLY so the diagnostic read path and the Busy message can never
+// disagree.
+//
+// Conservative: empty/malformed pid → false (strconv.Atoi fails); a dead holder → false (a
+// dead pid holds no flock — reapStaleLocks reaps it on the next Acquire — so it is never a
+// "uselessly-held" orphan worth a kill hint); any appearsOrphaned ambiguity → false. On
+// Windows processAlive is always-true and appearsOrphaned always-false → false (FR-K7). The
+// orphan==true path (a genuine ppid==1 holder) is proven by the E2E harness (P1.M4.T1.S1).
+func IsOrphaned(contents LockContents) bool {
+	pid, err := strconv.Atoi(contents.Pid)
+	if err != nil {
+		return false // empty/malformed pid → can't assess
+	}
+	if !processAlive(pid, contents.Hostname) {
+		return false // dead holder is reaped, not "uselessly held" — no kill hint
+	}
+	return appearsOrphaned(pid) // alive → ppid==1 ⇒ reparented (conservative: false on ambiguity)
+}
+
 // IsHeldError reports whether err is a *HeldError.
 func IsHeldError(err error) bool {
 	var he *HeldError

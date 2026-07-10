@@ -291,6 +291,12 @@ func runPush(ctx context.Context, stderr io.Writer, g git.Git, cfg config.Config
 	return nil
 }
 
+// orphanChecker is the holder-orphan predicate used by the Busy-message orphan hint (FR-K5). It
+// defaults to lock.IsOrphaned; tests override it to exercise the hint branch without producing a
+// genuine reparented-to-init holder (which only the E2E harness — P1.M4.T1.S1 — can do reliably).
+// Same package-level func-var seam idiom as interactiveStdinIsTTY (config_init_interactive.go).
+var orphanChecker = lock.IsOrphaned
+
 // handleLockContention implements the FR52 / §18.5 contention behavior when lock.Acquire returns a
 // *lock.HeldError. It never blocks and never force-breaks the lock. No-op fast path: if the holder
 // published a snapshot AND the contender's own write-tree (index-read-only, safe without the lock) is
@@ -324,9 +330,16 @@ func handleLockContention(stderr io.Writer, heldErr *lock.HeldError, g git.Git, 
 		hostname = "<unknown>"
 	}
 	fmt.Fprintf(stderr,
-		"stagecoach: another stagecoach run is already in progress on %s (pid %s on %s). "+
-			"Your newly-staged changes will remain staged — re-run stagecoach after it finishes. Lock: %s.\n",
+		"stagecoach: another stagecoach run is already in progress on %s (pid %s on %s).\n"+
+			"Your newly-staged changes will remain staged — re-run stagecoach after it finishes.\n\n"+
+			"Lock: %s\n",
 		repo, pid, hostname, heldErr.Path)
+	if heldErr.Contents.Pid != "" && orphanChecker(heldErr.Contents) {
+		fmt.Fprintf(stderr,
+			"The holder's launcher appears to have exited — it may be orphaned and holding this "+
+				"lock uselessly. You may safely `kill %s` or `rm %s` to clear it. See `stagecoach lock status`.\n",
+			heldErr.Contents.Pid, heldErr.Path)
+	}
 	return exitcode.New(exitcode.Busy, nil) // exit 5, SILENT
 }
 

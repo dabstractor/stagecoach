@@ -277,6 +277,33 @@ func TestStatus_LockPathError(t *testing.T) {
 	}
 }
 
+// TestIsOrphaned pins the exported holder-orphan predicate (FR-K5 Busy hint + FR-K4 lock status).
+// It mirrors Status's alive→orphan order exactly: Atoi → processAlive → appearsOrphaned. The parse
+// guards (empty/malformed pid → false) are cross-platform; the self path requires Hostname==this host
+// so processAlive takes the Kill(pid,0) path (not the foreign-host conservative-true short-circuit).
+// A dead-pid case is already covered by TestAppearsOrphaned_DeadPidIsConservativeFalse (a dead holder
+// → processAlive false → IsOrphaned false); the orphan==true path (ppid==1) is the E2E harness's job
+// (P1.M4.T1.S1) — not pinned here because it is flaky/OS-dependent under subreapers.
+func TestIsOrphaned(t *testing.T) {
+	// Parse guard — empty pid → false (conservative; mirrors Status's Atoi-error branch).
+	if IsOrphaned(LockContents{Pid: ""}) {
+		t.Errorf("IsOrphaned(empty Pid) = true, want false")
+	}
+	// Parse guard — malformed pid → false.
+	if IsOrphaned(LockContents{Pid: "not-a-pid"}) {
+		t.Errorf("IsOrphaned(malformed Pid) = true, want false")
+	}
+	// Self: alive on this host → IsOrphaned mirrors appearsOrphaned(self) (the SAME primitive Status
+	// reports). Hostname MUST be this host so processAlive takes the Kill(pid,0) path (not the
+	// foreign-host short-circuit, which would make IsOrphaned blindly trust appearsOrphaned).
+	host, _ := os.Hostname()
+	self := strconv.Itoa(os.Getpid())
+	want := appearsOrphaned(os.Getpid())
+	if got := IsOrphaned(LockContents{Pid: self, Hostname: host}); got != want {
+		t.Errorf("IsOrphaned(self=%s) = %v, want %v (appearsOrphaned(self))", self, got, want)
+	}
+}
+
 // TestAcquire_ReapingIdempotent verifies contract (c): a second Acquire on the
 // same repo (after Release) with no new dead files does NOT re-reap anything —
 // the surviving fixtures (live/foreign/malformed) are stable across two Acquire

@@ -61,6 +61,12 @@ func TestHandleLockContention_NoOpFastPath(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleLockContention_Busy_TreeDiffers(t *testing.T) {
+	// Pin the seam so the hint's absence does not depend on the runner's process tree (a deterministic
+	// not-orphaned holder). The holder here is NOT orphaned → the FR-K5 hint must be ABSENT.
+	orig := orphanChecker
+	t.Cleanup(func() { orphanChecker = orig })
+	orphanChecker = func(lock.LockContents) bool { return false }
+
 	held := &lock.HeldError{
 		Contents: lock.LockContents{
 			Pid:      "4242",
@@ -85,6 +91,18 @@ func TestHandleLockContention_Busy_TreeDiffers(t *testing.T) {
 	msg := buf.String()
 	if !strings.Contains(msg, "4242") || !strings.Contains(msg, "testhost") {
 		t.Errorf("stderr = %q, want to contain pid '4242' and host 'testhost'", msg)
+	}
+	// FR-K5: the lock path is on its OWN line (copy-pasteable), not buried mid-sentence.
+	if !strings.Contains(msg, "\nLock: /x.lock\n") {
+		t.Errorf("stderr = %q, want '\\nLock: /x.lock\\n' on its own line", msg)
+	}
+	// Regression guard: the OLD buried-in-sentence form is GONE.
+	if strings.Contains(msg, "finishes. Lock:") {
+		t.Errorf("stderr = %q, must NOT contain the old buried 'finishes. Lock:' form", msg)
+	}
+	// The holder is not orphaned → the hint must be ABSENT.
+	if strings.Contains(msg, "holder's launcher") {
+		t.Errorf("stderr = %q, hint must be ABSENT when not orphaned", msg)
 	}
 }
 
@@ -230,6 +248,130 @@ func TestHandleLockContention_SilentExits(t *testing.T) {
 			t.Errorf("Busy exit: err.Error() = %q, want empty (silent)", err.Error())
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleLockContention_Busy_OrphanHint — FR-K5: when the holder APPEARS
+// orphaned (seam forced true) AND pid is non-empty, the hint follows Lock:
+// naming the REAL pid, the lock path, and `stagecoach lock status`.
+// ---------------------------------------------------------------------------
+
+func TestHandleLockContention_Busy_OrphanHint(t *testing.T) {
+	orig := orphanChecker
+	t.Cleanup(func() { orphanChecker = orig })
+	orphanChecker = func(lock.LockContents) bool { return true } // force orphan==true
+
+	held := &lock.HeldError{
+		Contents: lock.LockContents{Pid: "4242", Hostname: "testhost", Repo: "/r", Snapshot: ""},
+		Path:     "/x.lock",
+	}
+	g := &contentionFakeGit{}
+
+	var buf bytes.Buffer
+	err := handleLockContention(&buf, held, g, context.Background())
+
+	if code := exitcode.For(err); code != exitcode.Busy {
+		t.Errorf("exitcode.For(err) = %d, want %d (Busy)", code, exitcode.Busy)
+	}
+	if err.Error() != "" {
+		t.Errorf("err.Error() = %q, want empty (silent)", err.Error())
+	}
+	msg := buf.String()
+	// Lock on its own line.
+	if !strings.Contains(msg, "\nLock: /x.lock\n") {
+		t.Errorf("want '\\nLock: /x.lock\\n' own line; got %q", msg)
+	}
+	// Hint names the REAL pid + the lock path + the status pointer.
+	if !strings.Contains(msg, "kill 4242") {
+		t.Errorf("hint must name the real pid ('kill 4242'); got %q", msg)
+	}
+	if !strings.Contains(msg, "rm /x.lock") {
+		t.Errorf("hint must name the lock path ('rm /x.lock'); got %q", msg)
+	}
+	if !strings.Contains(msg, "stagecoach lock status") {
+		t.Errorf("hint must point at 'stagecoach lock status'; got %q", msg)
+	}
+	if !strings.Contains(msg, "holder's launcher appears to have exited") {
+		t.Errorf("hint wording missing ('holder's launcher appears to have exited'); got %q", msg)
+	}
+	// The hint must NOT substitute the <unknown> fallback into the kill instruction.
+	if strings.Contains(msg, "kill <unknown>") {
+		t.Errorf("hint must use the REAL pid, not '<unknown>'; got %q", msg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleLockContention_Busy_NoOrphanHint — the hint is ABSENT when the
+// holder is not orphaned (seam false). The new own-line Lock format is present.
+// ---------------------------------------------------------------------------
+
+func TestHandleLockContention_Busy_NoOrphanHint(t *testing.T) {
+	orig := orphanChecker
+	t.Cleanup(func() { orphanChecker = orig })
+	orphanChecker = func(lock.LockContents) bool { return false } // holder not orphaned
+
+	held := &lock.HeldError{
+		Contents: lock.LockContents{Pid: "4242", Hostname: "testhost", Repo: "/r", Snapshot: ""},
+		Path:     "/x.lock",
+	}
+	g := &contentionFakeGit{}
+
+	var buf bytes.Buffer
+	err := handleLockContention(&buf, held, g, context.Background())
+
+	if code := exitcode.For(err); code != exitcode.Busy {
+		t.Errorf("exitcode.For(err) = %d, want %d (Busy)", code, exitcode.Busy)
+	}
+	if err.Error() != "" {
+		t.Errorf("err.Error() = %q, want empty (silent)", err.Error())
+	}
+	msg := buf.String()
+	if !strings.Contains(msg, "\nLock: /x.lock\n") {
+		t.Errorf("Lock own line still present; got %q", msg)
+	}
+	if strings.Contains(msg, "holder's launcher") {
+		t.Errorf("hint must be ABSENT when not orphaned; got %q", msg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleLockContention_Busy_NoOrphanHintWhenPidEmpty — the Pid != "" guard
+// is INDEPENDENT of the predicate: even with the seam CLAIMING orphan==true,
+// an empty pid NEVER emits the hint (the kill instruction needs a real pid).
+// The Issue-4b <unknown> fallback still renders in the main message.
+// ---------------------------------------------------------------------------
+
+func TestHandleLockContention_Busy_NoOrphanHintWhenPidEmpty(t *testing.T) {
+	orig := orphanChecker
+	t.Cleanup(func() { orphanChecker = orig })
+	orphanChecker = func(lock.LockContents) bool { return true } // predicate CLAIMS orphan
+
+	held := &lock.HeldError{
+		Contents: lock.LockContents{Pid: "", Hostname: "testhost", Repo: "/r", Snapshot: ""},
+		Path:     "/x.lock",
+	}
+	g := &contentionFakeGit{}
+
+	var buf bytes.Buffer
+	err := handleLockContention(&buf, held, g, context.Background())
+
+	if code := exitcode.For(err); code != exitcode.Busy {
+		t.Errorf("exitcode.For(err) = %d, want %d (Busy)", code, exitcode.Busy)
+	}
+	if err.Error() != "" {
+		t.Errorf("err.Error() = %q, want empty (silent)", err.Error())
+	}
+	msg := buf.String()
+	if strings.Contains(msg, "holder's launcher") {
+		t.Errorf("hint must be ABSENT when pid is empty (guard independent of predicate); got %q", msg)
+	}
+	if !strings.Contains(msg, "\nLock: /x.lock\n") {
+		t.Errorf("Lock own line still present; got %q", msg)
+	}
+	// The Issue-4b fallback '<unknown>' still renders in the main message.
+	if !strings.Contains(msg, "<unknown>") {
+		t.Errorf("pid fallback '<unknown>' must still render; got %q", msg)
+	}
 }
 
 // ---------------------------------------------------------------------------

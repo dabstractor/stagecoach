@@ -140,7 +140,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Lock Diagnostics — lock status + Busy Message (FR-K4/K5)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Add a read-only `stagecoach lock status` subcommand (FR-K4) and reformat the Busy contention message with the lock path on its own line and an orphan hint (FR-K5). Both consume a shared orphan-detection helper.",
           "tasks": [
             {
@@ -194,14 +194,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Busy message reformat — lock path on own line + orphan hint (FR-K5)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Reformat the contention Busy message so the lock path is on its own line (scriptable), and add an orphan hint when the holder appears orphaned.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Refactor handleLockContention with orphan hint and lock path on own line",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1"
@@ -227,14 +227,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "E2E scenario tests for orphaned-run lock reclamation (§20.5)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Per §20.5: launch stagecoach from a short-lived parent that exits mid-generation and assert the holder self-exits via the parent-death watchdog, the lock file is removed, and HEAD+index are unchanged. Drive SIGHUP. Assert lock status reports correctly. Assert the opt-out suppresses the watchdog.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Orphaned-run lock reclamation e2e scenarios",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
