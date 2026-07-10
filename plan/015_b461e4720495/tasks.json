@@ -329,7 +329,7 @@
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Freeze Re-assertion & Error Improvement",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Add the StagedNames git primitive (needed for FR-M1e to name offending staged paths), the FR-M1e empty-index re-assertion in Decompose(), and the FR-M1c error message improvements (concept title + actionable remedy).",
           "tasks": [
             {
@@ -385,14 +385,14 @@
               "type": "Task",
               "id": "P2.M1.T3",
               "title": "FR-M1c: improve verifyFreezeSubset error messages (concept title + actionable remedy)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "The current error messages already name offending paths but use opaque phrasing ('not traceable to T_start'), identify concepts by numeric index, and provide no remedy. FR-M1c improves these to be clear and actionable.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T3.S1",
                   "title": "Improve verifyFreezeSubset errors: concept title + clearer phrasing + remedy",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: verifyFreezeSubset at stager.go:158-196 has two error messages: (A) path check — 'freeze violation: concept %d staged paths not present in T_start: %s' and (B) content check — 'freeze violation: concept %d staged content not traceable to T_start: %s'. Both use numeric index `i` for the concept and provide no remedy. The function receives `(ctx, deps, baseTree, tStart, tStartPaths, i, treeI)` — it does NOT receive the concept title. The call site is in runLoop (decompose.go ~558-562) which has access to `concepts[i]` (prompt.PlannerCommit with a Title field).\n2. INPUT: The existing verifyFreezeSubset function and its single call site in runLoop.\n3. LOGIC: (a) Add a `conceptTitle string` parameter to verifyFreezeSubset (after the `i int` parameter). Update the call site in runLoop to pass `concepts[i].Title`. (b) Rewrite error message (A) to: 'decompose: freeze violation in concept %d (%q): staged paths not in the frozen working-tree snapshot: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (c) Rewrite error message (B) to: 'decompose: freeze violation in concept %d (%q): staged content differs from the frozen working-tree snapshot for: %s. This indicates concurrent working-tree changes were picked up by the stager. Aborting to protect the freeze boundary.' (d) Update the two tests that assert on the old message text (decompose_test.go:768 checks 'sentinel.txt'; stager_test.go:376 checks 'not present in T_start') to match the new phrasing while still checking the paths are named.\n4. OUTPUT: Freeze violation errors are clear, actionable, and identify the concept by title. The opaque 'not traceable to T_start' phrasing is replaced.\n5. DOCS: none — error message improvement, no user-facing documentation surface change.",
@@ -417,14 +417,14 @@
               "type": "Task",
               "id": "P2.M2.T1",
               "title": "Tests for FR-M1e re-assertion and FR-M1c error improvements",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Unit tests for the Decompose re-check and the improved verifyFreezeSubset errors, plus an e2e scenario for the defense-in-depth re-assertion.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M2.T1.S1",
                   "title": "Unit + e2e tests for FR-M1e re-assertion and FR-M1c error improvements",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T2.S1",

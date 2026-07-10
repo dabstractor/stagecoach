@@ -153,10 +153,11 @@ func freezeSnapshot(ctx context.Context, deps Deps) (string, error) {
 // Empty changedTreeI (empty staging / treeI == baseTree) ⇒ both checks trivially pass ⇒ no false
 // positive on the FR-M8 empty-skip.
 //
-// Returns nil if the subset holds; ErrFreezeViolation-wrapped error naming the offending path(s)
-// on a path-not-in-T_start or content-mismatch; ErrDecomposeFailed-wrapped error on a DiffTreeNames
-// git failure. The caller (runLoop) owns drainMsg+return-partial on violation.
-func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string, tStartPaths []string, i int, treeI string) error {
+// Returns nil if the subset holds; an ErrFreezeViolation-wrapped error on a path-not-in-T_start
+// or content-mismatch that names the concept by TITLE (conceptTitle, rendered via %q) alongside the
+// offending path(s) and uses plain-language phrasing with a remedy; ErrDecomposeFailed-wrapped error
+// on a DiffTreeNames git failure. The caller (runLoop) owns drainMsg+return-partial on violation.
+func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string, tStartPaths []string, i int, conceptTitle string, treeI string) error {
 	// (A) PATH check: tree[i]'s changed paths must all be in T_start's changed set.
 	changedTreeI, err := deps.Git.DiffTreeNames(ctx, baseTree, treeI)
 	if err != nil {
@@ -170,8 +171,10 @@ func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string,
 		}
 	}
 	if len(extra) > 0 {
-		return fmt.Errorf("%w: concept %d staged paths not present in T_start: %s",
-			ErrFreezeViolation, i, strings.Join(extra, ", "))
+		return fmt.Errorf("%w in concept %d (%q): staged paths not in the frozen working-tree snapshot: %s. "+
+			"This indicates concurrent working-tree changes were picked up by the stager. "+
+			"Aborting to protect the freeze boundary.",
+			ErrFreezeViolation, i, conceptTitle, strings.Join(extra, ", "))
 	}
 
 	// (B) CONTENT check: tree[i]'s changed paths must carry T_start's blob content.
@@ -190,8 +193,10 @@ func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string,
 		}
 	}
 	if len(mismatch) > 0 {
-		return fmt.Errorf("%w: concept %d staged content not traceable to T_start: %s",
-			ErrFreezeViolation, i, strings.Join(mismatch, ", "))
+		return fmt.Errorf("%w in concept %d (%q): staged content differs from the frozen working-tree snapshot for: %s. "+
+			"This indicates concurrent working-tree changes were picked up by the stager. "+
+			"Aborting to protect the freeze boundary.",
+			ErrFreezeViolation, i, conceptTitle, strings.Join(mismatch, ", "))
 	}
 	return nil
 }

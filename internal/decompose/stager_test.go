@@ -367,7 +367,7 @@ func TestVerifyFreezeSubset_Happy(t *testing.T) {
 	}
 
 	deps := Deps{Git: g}
-	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI); err != nil {
+	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, "test-concept", treeI); err != nil {
 		t.Fatalf("verifyFreezeSubset(happy): %v", err)
 	}
 }
@@ -403,7 +403,7 @@ func TestVerifyFreezeSubset_PathViolation(t *testing.T) {
 	}
 
 	deps := Deps{Git: g}
-	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI)
+	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, "test-concept", treeI)
 	if err == nil {
 		t.Fatal("expected error for path violation, got nil")
 	}
@@ -413,8 +413,11 @@ func TestVerifyFreezeSubset_PathViolation(t *testing.T) {
 	if !strings.Contains(err.Error(), "sentinel.txt") {
 		t.Errorf("error missing 'sentinel.txt'; got: %s", err.Error())
 	}
-	if !strings.Contains(err.Error(), "not present in T_start") {
-		t.Errorf("error missing 'not present in T_start'; got: %s", err.Error())
+	if !strings.Contains(err.Error(), "staged paths not in the frozen working-tree snapshot") {
+		t.Errorf("error missing 'staged paths not in the frozen working-tree snapshot'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "test-concept") {
+		t.Errorf("error missing concept title 'test-concept'; got: %s", err.Error())
 	}
 }
 
@@ -449,7 +452,7 @@ func TestVerifyFreezeSubset_ContentViolation(t *testing.T) {
 	}
 
 	deps := Deps{Git: g}
-	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI)
+	err = verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, "test-concept", treeI)
 	if err == nil {
 		t.Fatal("expected error for content violation, got nil")
 	}
@@ -459,8 +462,11 @@ func TestVerifyFreezeSubset_ContentViolation(t *testing.T) {
 	if !strings.Contains(err.Error(), "a.txt") {
 		t.Errorf("error missing 'a.txt'; got: %s", err.Error())
 	}
-	if !strings.Contains(err.Error(), "not traceable to T_start") {
-		t.Errorf("error missing 'not traceable to T_start'; got: %s", err.Error())
+	if !strings.Contains(err.Error(), "staged content differs from the frozen working-tree snapshot") {
+		t.Errorf("error missing 'staged content differs from the frozen working-tree snapshot'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "test-concept") {
+		t.Errorf("error missing concept title 'test-concept'; got: %s", err.Error())
 	}
 }
 
@@ -480,7 +486,7 @@ func TestVerifyFreezeSubset_EmptyStaging(t *testing.T) {
 	tStart := baseTree
 
 	deps := Deps{Git: g}
-	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, treeI); err != nil {
+	if err := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, 0, "test-concept", treeI); err != nil {
 		t.Fatalf("verifyFreezeSubset(empty staging): %v", err)
 	}
 }

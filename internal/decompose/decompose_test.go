@@ -770,8 +770,11 @@ func TestDecompose_StagerFreezeViolation(t *testing.T) {
 	if !strings.Contains(err.Error(), "sentinel.txt") {
 		t.Errorf("error missing 'sentinel.txt'; got: %s", err.Error())
 	}
-	if !strings.Contains(err.Error(), "not present in T_start") {
-		t.Errorf("error missing 'not present in T_start'; got: %s", err.Error())
+	if !strings.Contains(err.Error(), "staged paths not in the frozen working-tree snapshot") {
+		t.Errorf("error missing 'staged paths not in the frozen working-tree snapshot'; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "c1") {
+		t.Errorf("error missing concept title 'c1'; got: %s", err.Error())
 	}
 	// HEAD unchanged — only "initial" exists.
 	if got := dcmLogCount(t, repo); got != 1 {

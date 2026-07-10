@@ -580,7 +580,7 @@ func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, ba
 		// paths, with T_start content). The orchestrator owns the freeze boundary — the external
 		// stager is NOT trusted. NON-RESCUE on violation: drain the in-flight message + return the
 		// partial commits that already landed (mirrors ErrStagerMovedHEAD).
-		if vErr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, i, treeI); vErr != nil {
+		if vErr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, i, concepts[i].Title, treeI); vErr != nil {
 			drainMsg(inflight)
 			return commits, nil, vErr
 		}
