@@ -162,6 +162,11 @@ type Git interface {
 	// notice. Read-only with respect to refs and the index.
 	StagedFileCount(ctx context.Context) (int, error)
 
+	// StagedNames returns the paths of files currently staged (git diff --cached --name-only).
+	// Returns nil/empty if nothing is staged. Used by FR-M1e to name offending staged paths in the
+	// decompose re-check error.
+	StagedNames(ctx context.Context) ([]string, error)
+
 	// RevParseTree returns the tree SHA of a commit-ish: ref is "HEAD", a branch name, or a commit SHA.
 	// It runs `git rev-parse <ref>^{tree}`, where the `^{tree}` suffix peels the commit-ish to its tree
 	// object (the tree a commit points at). It is the producer of tree[-1] — the original-parent tree
@@ -1346,6 +1351,31 @@ func (g *gitRunner) StagedFileCount(ctx context.Context) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// StagedNames returns the PATHS of files currently staged — the list StagedFileCount discards to
+// return only its count. It is the FR-M1e primitive: the decompose re-check (P2.M1.T2.S1) calls it to
+// NAME the offending staged paths in the "something is staged, can't decompose" error. It runs the
+// IDENTICAL `git diff --cached --name-only` command as StagedFileCount (see that method's comment block
+// above for the --name-only-not-`--quiet` rationale and the newline-split/edge-case notes — StagedNames
+// shares ALL of it), with the SAME err-first unwrap, the SAME `code != 0` (not a specific code, G5)
+// error branch, and the SAME error-message format. The only difference is the return: it COLLECTS the
+// trimmed non-empty lines into a []string instead of counting them. Read-only w.r.t. refs and the index.
+func (g *gitRunner) StagedNames(ctx context.Context) ([]string, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir, "diff", "--cached", "--name-only")
+	if err != nil {
+		return nil, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("git diff --cached --name-only: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	var names []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			names = append(names, t) // trailing newline → final "" element skipped; empty output → nil/empty
+		}
+	}
+	return names, nil
 }
 
 // RevParseTree returns the tree SHA of a commit-ish (ref = "HEAD", a branch, or a commit SHA) via
