@@ -57,6 +57,10 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--message-model <name>` | string | "" | `STAGECOACH_MESSAGE_MODEL` | — | Per-role model override for the message composer |
 | `--message-reasoning <level>` | string | "" | `STAGECOACH_MESSAGE_REASONING` | — | Per-role reasoning for the message composer |
 | `--arbiter-reasoning <level>` | string | "" | `STAGECOACH_ARBITER_REASONING` | — | Per-role reasoning for the arbiter |
+| `--planner-timeout <dur>` | string | "" | `STAGECOACH_PLANNER_TIMEOUT` | — | Per-role generation timeout for the planner (e.g. `"600s"` or `600`) |
+| `--stager-timeout <dur>` | string | "" | `STAGECOACH_STAGER_TIMEOUT` | — | Per-role generation timeout for the (tooled) staging agent (e.g. `"300s"` or `300`) |
+| `--message-timeout <dur>` | string | "" | `STAGECOACH_MESSAGE_TIMEOUT` | — | Per-role generation timeout for the message composer (e.g. `"120s"` or `120`) |
+| `--arbiter-timeout <dur>` | string | "" | `STAGECOACH_ARBITER_TIMEOUT` | — | Per-role generation timeout for the leftover arbiter (e.g. `"120s"` or `120`) |
 | `--version` | — | — | — | — | Print the build version (`"dev"` for a local build; the release tag for a released binary) |
 | `--help`, `-h` | — | — | — | — | Print help |
 
@@ -446,6 +450,10 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--message-model` | `STAGECOACH_MESSAGE_MODEL` | — |
 | `--message-reasoning` | `STAGECOACH_MESSAGE_REASONING` | — |
 | `--arbiter-reasoning` | `STAGECOACH_ARBITER_REASONING` | — |
+| `--planner-timeout` | `STAGECOACH_PLANNER_TIMEOUT` | — |
+| `--stager-timeout` | `STAGECOACH_STAGER_TIMEOUT` | — |
+| `--message-timeout` | `STAGECOACH_MESSAGE_TIMEOUT` | — |
+| `--arbiter-timeout` | `STAGECOACH_ARBITER_TIMEOUT` | — |
 | — (no flag) | `STAGECOACH_NO_PARENT_WATCHDOG` | `stagecoach.noParentWatchdog` (also `[generation].no_parent_watchdog` in config) |
 
 ## Examples

@@ -78,6 +78,10 @@ var (
 	flagArbiterProvider  string
 	flagArbiterModel     string
 	flagArbiterReasoning string
+	flagPlannerTimeout   string
+	flagStagerTimeout    string
+	flagMessageTimeout   string
+	flagArbiterTimeout   string
 )
 
 // Behavioral flags (NOT Config fields; read directly by the default-action RunE in S2 / dry-run in S4).
@@ -250,6 +254,15 @@ func init() {
 		"Per-role reasoning override for the message composer (env STAGECOACH_MESSAGE_REASONING; git stagecoach.role.message)")
 	pf.StringVar(&flagArbiterReasoning, "arbiter-reasoning", "",
 		"Per-role reasoning override for the leftover arbiter (env STAGECOACH_ARBITER_REASONING; git stagecoach.role.arbiter)")
+	// §9.15 FR-R7 / §15.2 — per-role generation timeout flags (string, zero default; loadFlags reads via fs.Changed).
+	pf.StringVar(&flagPlannerTimeout, "planner-timeout", "",
+		"Per-role generation timeout for the decomposition planner, e.g. \"600s\" or 600 (env STAGECOACH_PLANNER_TIMEOUT; git stagecoach.role.planner.timeout)")
+	pf.StringVar(&flagStagerTimeout, "stager-timeout", "",
+		"Per-role generation timeout for the (tooled) staging agent, e.g. \"300s\" or 300 (env STAGECOACH_STAGER_TIMEOUT; git stagecoach.role.stager.timeout)")
+	pf.StringVar(&flagMessageTimeout, "message-timeout", "",
+		"Per-role generation timeout for the message composer, e.g. \"120s\" or 120 (env STAGECOACH_MESSAGE_TIMEOUT; git stagecoach.role.message.timeout)")
+	pf.StringVar(&flagArbiterTimeout, "arbiter-timeout", "",
+		"Per-role generation timeout for the leftover arbiter, e.g. \"120s\" or 120 (env STAGECOACH_ARBITER_TIMEOUT; git stagecoach.role.arbiter.timeout)")
 	// --version is auto-added by cobra (Version field above); --help/-h is cobra's built-in.
 
 	// Wrap flag-usage text to the live terminal width. Cobra's default usage template calls

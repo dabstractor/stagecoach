@@ -465,6 +465,17 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 				cfg.setRoleReasoning(role, v)
 			}
 		}
+		// §9.15 FR-R7 / §15.2 — per-role generation timeout via CLI flag (layer 7, DIRECT-set via
+		// setRoleTimeout). Mirrors the global --timeout flag handling above EXACTLY: Changed→GetString→
+		// parseTimeout→set. loadFlags has NO error return, so a malformed value is silently ignored
+		// (same as the global --timeout); parseTimeout accepts "600s" and bare "600".
+		if fs.Changed(role + "-timeout") {
+			if v, err := fs.GetString(role + "-timeout"); err == nil {
+				if d, perr := parseTimeout(v); perr == nil {
+					cfg.setRoleTimeout(role, d)
+				}
+			}
+		}
 	}
 
 	// Decompose flags (PRD §9.14 FR-M2, §15.2).

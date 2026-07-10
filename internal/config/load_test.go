@@ -62,6 +62,7 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 	for _, role := range roleNames {
 		fs.String(role+"-provider", "", "")
 		fs.String(role+"-model", "", "")
+		fs.String(role+"-timeout", "", "")
 	}
 	// V2 decompose flags (PRD §9.14 FR-M2, §15.2)
 	fs.Int("commits", 0, "")
@@ -509,6 +510,51 @@ func TestLoadFlags_PerRole(t *testing.T) {
 	loadFlags(&cfg, fs)
 	if rc := cfg.Roles["planner"]; rc.Provider != "agy" || rc.Model != "codex-2.5-pro" {
 		t.Errorf("Roles[planner]=%+v want {agy codex-2.5-pro}", rc)
+	}
+}
+
+// TestLoadFlags_PerRoleTimeout proves the per-role -timeout flag branch in loadFlags: duration form
+// ("600s") AND bare-int form ("300" — proves parseTimeout, NOT time.ParseDuration) parse, and that a
+// per-role timeout does NOT clobber other per-role fields on the same role (FR-R3 field-merge with
+// --planner-provider). A role with no -timeout flag is untouched.
+func TestLoadFlags_PerRoleTimeout(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	if err := fs.Set("planner-timeout", "600s"); err != nil { // duration form
+		t.Fatal(err)
+	}
+	if err := fs.Set("stager-timeout", "300"); err != nil { // bare-int form (proves parseTimeout)
+		t.Fatal(err)
+	}
+	if err := fs.Set("planner-provider", "agy"); err != nil { // field-merge: same role, different field
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if rc := cfg.Roles["planner"]; rc.Timeout != 600*time.Second || rc.Provider != "agy" {
+		t.Errorf("Roles[planner]=%+v want Timeout=600s Provider=agy (field-merge)", rc)
+	}
+	if rc := cfg.Roles["stager"]; rc.Timeout != 300*time.Second {
+		t.Errorf("Roles[stager].Timeout=%v want 300s (bare int via parseTimeout)", rc.Timeout)
+	}
+	// unset role: message has no -timeout → Timeout stays 0 (Changed==false → skipped)
+	if rc, ok := cfg.Roles["message"]; ok && rc.Timeout != 0 {
+		t.Errorf("message timeout should be 0/absent, got %v", rc.Timeout)
+	}
+}
+
+// TestLoadFlags_PerRoleTimeout_MalformedIgnored proves a malformed --planner-timeout value is
+// SILENTLY ignored (loadFlags has NO error return; mirrors the global --timeout flag). planner.Timeout
+// stays at whatever the lower layers set (0 here).
+func TestLoadFlags_PerRoleTimeout_MalformedIgnored(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	if err := fs.Set("planner-timeout", "not-a-dur"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs) // MUST NOT panic / MUST NOT error (loadFlags returns nothing)
+	// malformed value silently ignored → planner.Timeout stays 0 (no lower layer set it)
+	if rc, ok := cfg.Roles["planner"]; ok && rc.Timeout != 0 {
+		t.Errorf("malformed --planner-timeout should be ignored, got Roles[planner].Timeout=%v", rc.Timeout)
 	}
 }
 
@@ -1072,6 +1118,25 @@ func TestLoad_PerRoleFlagBeatsEnv(t *testing.T) {
 	}
 	if rc := cfg.Roles["planner"]; rc.Model != "flag-model" {
 		t.Errorf("Roles[planner].Model=%q want flag-model (flag > env)", rc.Model)
+	}
+}
+
+// TestLoad_PerRoleTimeout_FlagBeatsEnv proves the per-role timeout CLI flag (layer 7) beats the
+// per-role timeout env var (layer 5) on the full Load() path.
+func TestLoad_PerRoleTimeout_FlagBeatsEnv(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGECOACH_PLANNER_TIMEOUT", "480s") // env layer 5
+	fs := newFlagSet(t)
+	if err := fs.Set("planner-timeout", "600s"); err != nil { // flag layer 7 (wins)
+		t.Fatal(err)
+	}
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if rc := cfg.Roles["planner"]; rc.Timeout != 600*time.Second {
+		t.Errorf("Roles[planner].Timeout=%v want 600s (flag > env)", rc.Timeout)
 	}
 }
 
