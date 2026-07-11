@@ -207,7 +207,7 @@ Upgrade an existing config's `config_version` to the current schema version (3) 
 ```bash
 stagecoach config upgrade
 # Already at version 3 →  "Config at ~/.config/stagecoach/config.toml is already at version 3 (no changes)."
-# Upgraded from v1  →  "Upgraded config at ~/.config/stagecoach/config.toml to version 3."
+# Upgraded from v1  →  "Backed up previous config to <path>.bak.<ts>" then "Upgraded config at ~/.config/stagecoach/config.toml to version 3."
 # No file          →  "no config file at <path> (run 'stagecoach config init' first)"  (exit 1)
 ```
 
