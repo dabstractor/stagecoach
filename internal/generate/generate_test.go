@@ -889,6 +889,22 @@ func TestCommitStaged_EditGate(t *testing.T) {
 	})
 }
 
+// TestErrEmptyMessage_NoStagecoachPrefix pins Issue 5's fix: ErrEmptyMessage's literal must NOT start
+// with "stagecoach: " — cmd/stagecoach/main.go:67 prepends "stagecoach: " to every error, so a
+// prefixed literal would double to "stagecoach: stagecoach: empty commit message — aborted".
+// errors.Is (identity) is unaffected by the literal text; this asserts the LITERAL STRING (the
+// user-facing string after main.go adds its prefix) to prove the fix and lock it against regression.
+func TestErrEmptyMessage_NoStagecoachPrefix(t *testing.T) {
+	if strings.HasPrefix(ErrEmptyMessage.Error(), "stagecoach: ") {
+		t.Errorf("ErrEmptyMessage literal has a 'stagecoach: ' prefix (%q); main.go:67 would double it",
+			ErrEmptyMessage.Error())
+	}
+	const want = "empty commit message — aborted" // preserve the em-dash — (U+2014)
+	if got := ErrEmptyMessage.Error(); got != want {
+		t.Errorf("ErrEmptyMessage.Error() = %q, want %q", got, want)
+	}
+}
+
 // --- FR-T1 multi-turn fallback trigger gate tests (P1.M1.T3.S3) ---
 //
 // These focus on the wiring of the FR-T1 gate inside CommitStaged (PRD §9.24):

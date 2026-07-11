@@ -168,7 +168,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Minor Fixes — Token Gate Floor, Doubled Prefix, Auto-Stage Grammar (Issues 4, 5, 6)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Fix three Minor issues: (Issue 4) FR3j token-limit invariant violated for very small token_limit values — add irreducible floor rejection; (Issue 5) doubled 'stagecoach:' prefix in --edit empty-message abort; (Issue 6) auto-stage notice uses '(1 files)' grammar. All three are small, localized fixes. See architecture/minor_fixes.md.",
           "tasks": [
             {
@@ -212,14 +212,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Fix doubled 'stagecoach:' prefix in --edit empty-message abort (Issue 5)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Remove the 'stagecoach:' prefix from the ErrEmptyMessage literal in internal/generate/finalize.go:45, since main.go:67 unconditionally prepends it. The sentinel identity (errors.Is) is preserved. Update any tests that assert on the literal string.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Remove prefix from ErrEmptyMessage literal and update test assertions",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/minor_fixes.md §Issue 5. `var ErrEmptyMessage = errors.New(\"stagecoach: empty commit message — aborted\")` at internal/generate/finalize.go:45. `cmd/stagecoach/main.go:67`: `fmt.Fprintf(os.Stderr, \"stagecoach: %v\\n\", err)` — prepends 'stagecoach: ' to any non-empty error. Result: 'stagecoach: stagecoach: empty commit message — aborted' (double prefix). The sentinel is propagated BARE via generate.go:486, decompose.go:409, message.go:254. exitcode.go:65 checks `errors.Is(err, generate.ErrEmptyMessage)`. Tests: internal/generate/generate_test.go:858-883 and internal/decompose/message_test.go reference ErrEmptyMessage.\n2. INPUT: ErrEmptyMessage at finalize.go:45. main.go:67 error printing. All propagation paths return the BARE sentinel.\n3. LOGIC: (a) Change finalize.go:45 from `errors.New(\"stagecoach: empty commit message — aborted\")` to `errors.New(\"empty commit message — aborted\")`. The sentinel identity is preserved (same *errors.errorString pointer; errors.Is still works). Both the --edit path (finalize.go:118) and the hooks-empty path (message.go:254 returns generate.ErrEmptyMessage) are fixed by this one change. (b) Search for any test that asserts on the literal string containing 'stagecoach: empty commit message' and update it to expect 'empty commit message' (without the prefix). Check internal/generate/generate_test.go and internal/decompose/message_test.go. (c) Run `go test ./internal/generate/ ./internal/decompose/ -v` to verify.\n4. OUTPUT: The --edit abort now prints 'stagecoach: empty commit message — aborted' (single prefix). The sentinel identity is unchanged so errors.Is and exitcode.For still map it to exit 1.\n5. DOCS: none — internal error message formatting, no user-facing config/API surface.",
@@ -234,14 +234,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Fix auto-stage notice '(1 files)' grammar (Issue 6)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "In internal/cmd/default_action.go:150, conditionally singularize 'files' to 'file' when the count is 1. Add a test for the n=1 singular case.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Add conditional singular/plural in auto-stage notice and update tests",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/minor_fixes.md §Issue 6. The format string is at internal/cmd/default_action.go:150: `fmt.Fprintln(stderr, u.Yellow(fmt.Sprintf(\"Nothing staged — staging all changes (%d files).\", n)))`. `n` comes from `g.StagedFileCount(ctx)` at line 143. The n==0 clean-tree path returns early at lines 147-150 (skips the notice). Existing test at internal/cmd/default_action_test.go:460 asserts 'Nothing staged — staging all changes (2 files).' (n=2 — stays green).\n2. INPUT: The format string at default_action.go:150. The `u.Yellow` colorizer wrapper. The `n` int variable.\n3. LOGIC: (a) At default_action.go:150, replace the hardcoded plural with a conditional: `noun := \"files\"; if n == 1 { noun = \"file\" }; fmt.Fprintln(stderr, u.Yellow(fmt.Sprintf(\"Nothing staged — staging all changes (%d %s).\", n, noun)))`. (b) In default_action_test.go, add a test case for n=1 that asserts the notice contains '(1 file)' (singular). The existing n=2 test at line 460 continues to assert '(2 files)'. Run `go test ./internal/cmd/ -v -run TestRunDefault_AutoStageNotice`.\n4. OUTPUT: The auto-stage notice now correctly prints '1 file' for a single file and 'N files' for multiple.\n5. DOCS: none — minor UI text polish, no config/API surface.",
@@ -272,7 +272,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Review and update README.md for changeset-level impacts",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2",
