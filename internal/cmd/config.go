@@ -183,6 +183,15 @@ func runConfigUpgrade(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Config at %s is already at version %d (no changes).\n", path, config.CurrentConfigVersion)
 		return nil
 	}
+	// FR-B8 reversible-write guarantee (mirrors writeBootstrapFile): back up the prior config BEFORE the overwrite so
+	// every upgrade is undoable. runConfigUpgrade already proved the file exists (os.ReadFile at the top succeeded and
+	// returned on IsNotExist), so no os.Stat guard is needed; WriteTimestampedBackup is nil-safe for a missing file anyway.
+	// The backup fires ONLY here — the no-file / malformed-TOML / inert / already-current gates all returned early above.
+	if backup, berr := config.WriteTimestampedBackup(path); berr != nil {
+		return exitcode.New(exitcode.Error, fmt.Errorf("backup existing config %s: %w", path, berr))
+	} else if backup != "" {
+		fmt.Fprintf(cmd.OutOrStderr(), "Backed up previous config to %s\n", backup)
+	}
 	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil {
 		return exitcode.New(exitcode.Error, fmt.Errorf("write config %s: %w", path, err))
 	}
