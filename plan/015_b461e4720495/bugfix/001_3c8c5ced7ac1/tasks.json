@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Bug Fix Implementation — Config Bootstrap, Upgrade Backup, and Minor Polish",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Fix 6 issues found during end-to-end testing: 1 Critical (bootstrap stager-fallback writes invalid bare pi model), 2 Major (commented-out pi block invalid models; config upgrade missing backup), 3 Minor (token-limit sub-270 floor violation; doubled stagecoach: prefix; auto-stage grammar). All fixes are grounded in the architecture research in plan/015_b461e4720495/bugfix/001_3c8c5ced7ac1/architecture/.",
       "milestones": [
         {
@@ -258,21 +258,21 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Sync changeset-level documentation",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Final documentation sweep: review and update cross-cutting docs (README.md, docs/how-it-works.md, docs/cli.md) that summarize the whole changeset. Per-file docs that were directly touched (docs/configuration.md token_limit floor, docs/providers.md commented-block note) are already handled as Mode A in their implementing subtasks.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Review README.md, docs/how-it-works.md, and docs/cli.md for any references to the behaviors changed by this bugfix. Update where stale.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Review and update README.md for changeset-level impacts",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2",
@@ -293,7 +293,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Review docs/how-it-works.md and docs/cli.md for changeset-level impacts",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2",
