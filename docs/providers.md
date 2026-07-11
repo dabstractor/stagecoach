@@ -122,7 +122,7 @@ Out of the box, each agent role is assigned a model sized to its job (PRD §9.16
 | **message** | fast | Commit-message generation is a short-text task — the cheapest/fastest tier suffices. |
 | **arbiter** | mid | Needs reasoning to evaluate diffs, but not the flagship — mid-tier balances quality and cost. |
 
-The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/role_defaults.go`. The config bootstrap (`config init`) uses these defaults — EXCEPT for **pi**, whose per-role models are written EMPTY (pi needs an inference-provider prefix on the model, FR-R5b; its shipped per-role models are blank so you supply backend/model, e.g. `zai/gpt-5.4`). The pi row below is the compiled-in default, not the bootstrap output. Model names are 2026-07 baselines — FR-D5 mandates periodic re-verification per provider.
+The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/role_defaults.go`. The config bootstrap (`config init`) uses these defaults — EXCEPT for **pi**, whose per-role models are written EMPTY in BOTH the active `[role.*]` block AND the commented-out pi block (pi needs an inference-provider prefix on the model, FR-R5b; its shipped per-role models are blank so you supply backend/model, e.g. `zai/gpt-5.4`). The pi row below is the compiled-in default, not the bootstrap output. Model names are 2026-07 baselines — FR-D5 mandates periodic re-verification per provider.
 
 | Provider | planner | stager | message | arbiter |
 |----------|---------|--------|---------|--------|

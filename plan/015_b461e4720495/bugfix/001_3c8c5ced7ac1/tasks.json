@@ -90,14 +90,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Fix commented-out pi provider block to use blank/prefixed models (Issue 2)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "In the commented-block generation loop of buildBootstrapConfig (bootstrap.go:205-222), when the provider is pi (a provider_flag provider), write the models as blank with a guidance comment, OR write placeholder-prefixed example models. Any uncommented value must be FR-R5b-valid.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Modify commented-block loop to blank pi models with guidance comment",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -112,7 +112,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Add test for commented-out pi block FR-R5b validity",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"

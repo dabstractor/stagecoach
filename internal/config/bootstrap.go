@@ -232,7 +232,21 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		if other == nil {
 			continue
 		}
+		piCommented := name == "pi"
+		if piCommented {
+			// pi is a multi-backend provider (FR-R5b): a bare model (no '/') is a hard error. Blank the
+			// commented models so uncommenting yields a valid (model-less) config the user fills in —
+			// mirroring the target=="pi" active-block blanking above. (other is a fresh per-call copy from
+			// DefaultModelsForProvider, so this mutation is isolated to this map.)
+			for role := range other {
+				other[role] = ""
+			}
+		}
 		b.WriteString("\n# === " + name + " (installed) — uncomment a [role.*] block to route that role to " + name + " ===\n")
+		if piCommented {
+			b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
+			b.WriteString("# e.g. model = \"zai/gpt-5.4\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
+		}
 		writeCommentedRoleBlock(&b, "planner", name, other["planner"])
 		writeCommentedRoleBlock(&b, "stager", name, other["stager"])
 		writeCommentedRoleBlock(&b, "message", name, other["message"])
