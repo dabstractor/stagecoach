@@ -46,6 +46,7 @@ Each v2.1 capability maps to a specific doc anchor:
 - **`--edit` / `--push`** → [cli.md](cli.md) (global flags)
 - **Discovery** → [cli.md#models-provider](cli.md#models-provider) · [cli.md#config-init](cli.md#config-init)
 - **Concurrency & lock reclamation** → [how-it-works.md#per-repo-run-lock-fr52](how-it-works.md#per-repo-run-lock-fr52) · [cli.md#lock-status](cli.md#lock-status) · [configuration.md#environment-variables](configuration.md#environment-variables) (`no_parent_watchdog`)
+- **Chrome-disable (v2.9)** → [providers.md#tools-disable-asymmetry](providers.md#tools-disable-asymmetry) — every provider renders chrome-less where the agent CLI allows it.
 
 ## Product specification
 

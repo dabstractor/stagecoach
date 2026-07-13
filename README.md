@@ -342,6 +342,8 @@ No. Stagecoach uses `git write-tree` + `git commit-tree` + `git update-ref` (ato
 
 If the launcher closed without killing stagecoach — you closed the lazygit TUI, quit your IDE, or detached the terminal mid-run — the orphaned run **self-exits** via a parent-death watchdog (FR-K1) and releases the lock, so it never strands. `stagecoach lock status` (FR-K4) shows the holder's path and liveness so you can decide whether to `kill`/`rm` yourself; it never force-breaks a live lock.
 
+And the commit-message call itself is **chrome-less** where the agent allows it — skills, extensions, context files, and MCP servers are switched off (pi, claude), so nothing loads, spawns, or injects around the call; providers that expose no such switch document the gap instead ([docs/providers.md](docs/providers.md#tools-disable-asymmetry)).
+
 ### Does it send my code anywhere new?
 
 No. It shells out to *your* agent under *your* existing auth and billing. Stagecoach never opens an HTTP connection to any API — your agent does, exactly as it would if you ran it manually.
