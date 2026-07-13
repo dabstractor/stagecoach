@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Manifest verification, CHROME-DISABLE notes, and tests",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Audit each of the 7 built-in providers' bare_flags against captured --help findings for chrome-disable surfaces. Add CHROME-DISABLE notes to each provider's doc-comment block. Add test assertions pinning the chrome-disable contract. Mirror notes in providers/*.toml reference files.",
           "tasks": [
             {
@@ -72,14 +72,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Tests asserting the chrome-disable contract",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add focused assertions in internal/provider/builtin_test.go that pin the chrome-disable contract where it is testable from the manifest struct (no real agent needed). Assert pi/claude chrome-disable flag presence, read-only-constrained provider constraint-flag presence, and a lightweight note/flag consistency check.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add chrome-disable contract assertions to builtin_test.go",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -114,7 +114,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Add Chrome-disable column and asymmetry bullet to docs/providers.md",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"

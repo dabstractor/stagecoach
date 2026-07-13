@@ -737,6 +737,83 @@ func TestBuiltinManifests_QwenCodeFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Test: ChromeDisableContract — FR-C2 (chrome-disable) + FR-C4(b) (read-only constraint),
+//       asserted ORDER-INDEPENDENTLY on every built-in provider's BareFlags.
+// ---------------------------------------------------------------------------
+
+// TestBuiltinManifests_ChromeDisableContract asserts the FR-C2 chrome-disable and FR-C4(b)
+// read-only-constraint contracts on every built-in provider's BareFlags, ORDER-INDEPENDENTLY.
+// The existing TestBuiltinManifests_*Fields tests pin exact order via reflect.DeepEqual (fragile
+// under benign reordering); this complements them with a contains-style contract check that names
+// the missing flag clearly. Values verified against the landed builtin.go (S1).
+//
+// FR-C2 (§9.28): pi/claude expose per-surface chrome-disable switches → assert those flag TOKENS
+//
+//	are present. FR-C4(b) (§12.7.1): the 5 read-only-constrained providers keep their never-mutate
+//	constraint flag → assert it (mutation safety, NOT chrome — FR-C4 is explicit).
+func TestBuiltinManifests_ChromeDisableContract(t *testing.T) {
+	m := BuiltinManifests()
+
+	t.Run("pi_chrome_surfaces_FR-C2", func(t *testing.T) {
+		want := []string{"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files"}
+		for _, flag := range want {
+			if !containsToken(m["pi"].BareFlags, flag) {
+				t.Errorf("pi BareFlags missing chrome-disable flag %s (FR-C2): %v", flag, m["pi"].BareFlags)
+			}
+		}
+	})
+
+	t.Run("claude_chrome_surfaces_FR-C2", func(t *testing.T) {
+		for _, flag := range []string{"--tools", "--setting-sources"} {
+			if !containsToken(m["claude"].BareFlags, flag) {
+				t.Errorf("claude BareFlags missing chrome-disable flag %s (FR-C2): %v", flag, m["claude"].BareFlags)
+			}
+		}
+	})
+
+	t.Run("readonly_constraint_FR-C4b", func(t *testing.T) {
+		// FR-C4(b): the read-only, never-mutate constraint flag is present for each read-only-
+		// constrained provider. (Mutation safety, NOT chrome — FR-C4 is explicit the constraint is
+		// NOT a chrome substitute.) Values verified against landed builtin.go.
+		// NOTE: codex uses --ephemeral (NOT --ask-for-approval — that is not a `codex exec` flag;
+		// builtin.go:340-342 explains it was replaced).
+		cases := []struct {
+			name        string
+			provider    string
+			pair        [2]string // adjacent flag+value; empty if none
+			extraTokens []string  // additional standalone tokens
+			wantEmpty   bool      // opencode: empty BareFlags by design
+		}{
+			{"codex", "codex", [2]string{"--sandbox", "read-only"}, []string{"--ephemeral"}, false},
+			{"cursor", "cursor", [2]string{"--mode", "ask"}, []string{"--trust"}, false},
+			{"agy", "agy", [2]string{"--mode", "plan"}, nil, false},
+			{"qwen-code", "qwen-code", [2]string{"--approval-mode", "default"}, nil, false},
+			{"opencode", "opencode", [2]string{}, nil, true},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				flags := m[tc.provider].BareFlags
+				if tc.wantEmpty {
+					if len(flags) != 0 {
+						t.Errorf("%s BareFlags = %v, want empty (opencode `run` is inherently read-only; FR-C4b)", tc.provider, flags)
+					}
+					return
+				}
+				if tc.pair[0] != "" && !containsPair(flags, tc.pair[0], tc.pair[1]) {
+					t.Errorf("%s BareFlags missing adjacent pair %q %q (FR-C4b): %v", tc.provider, tc.pair[0], tc.pair[1], flags)
+				}
+				for _, tok := range tc.extraTokens {
+					if !containsToken(flags, tok) {
+						t.Errorf("%s BareFlags missing token %s (FR-C4b): %v", tc.provider, tok, flags)
+					}
+				}
+			})
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Test 21: ListModelsCommand — 4 populated builtins carry the expected argv; 4 are nil.
 // ---------------------------------------------------------------------------
 
