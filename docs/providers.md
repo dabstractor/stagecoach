@@ -79,7 +79,7 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, q
 |----------|----------|-----------|-----------|----------------|-------------------|----------------------|----------------|--------|
 | `pi` | stdin | `-p` | `--model` | "" (user must set) | `--system-prompt` | Explicit `--no-*` flags | extensions/skills/templates/context off (`--no-*`); MCP use suppressed (servers may connect — tracked limitation) | ✓ yes |
 | `claude` | stdin | `-p` | `--model` | `sonnet` | `--system-prompt` | Explicit `--tools ""` + settings flags | via `--tools ""` + `--setting-sources ""` | ✓ yes |
-| `opencode` | positional | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | no per-surface switch; read-only by design — documented limitation | — no |
+| `opencode` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | no per-surface switch; read-only by design — documented limitation | — no |
 | `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | no per-surface switch; read-only constraint only — documented limitation | — no |
 | `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | no per-surface switch; read-only constraint only — documented limitation | — no |
 | `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | no per-surface switch; read-only constraint only — documented limitation | — no |
