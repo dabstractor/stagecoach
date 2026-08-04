@@ -319,6 +319,9 @@ func TestInteractive_Force_Overwrites(t *testing.T) {
 	// Pre-create the config file.
 	writeConfigFile(t, globalDir, "config.toml", "provider = \"old\"\n")
 
+	// CI has no agents on $PATH; place a stub `pi` so detection is deterministic.
+	stubBinOnPath(t, "pi")
+
 	// Force TTY and pipe accept-all answers.
 	origTTY := interactiveStdinIsTTY
 	interactiveStdinIsTTY = func() bool { return true }
@@ -347,6 +350,9 @@ func TestInteractive_ProviderPreSelect(t *testing.T) {
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	_, _, _ = setupNoRepo(t)
+
+	// CI has no agents on $PATH; place a stub `claude` so the explicit pin is detected.
+	stubBinOnPath(t, "claude")
 
 	origTTY := interactiveStdinIsTTY
 	interactiveStdinIsTTY = func() bool { return true }
@@ -457,6 +463,10 @@ func TestInteractive_UnknownProviderPin_Exits1(t *testing.T) {
 
 	_, _, _ = setupNoRepo(t)
 
+	// CI has no agents on $PATH; place a stub `pi` so the installed-check passes and the --provider
+	// bogus validation (the actual point of this test) is reached.
+	stubBinOnPath(t, "pi")
+
 	origTTY := interactiveStdinIsTTY
 	interactiveStdinIsTTY = func() bool { return true }
 	defer func() { interactiveStdinIsTTY = origTTY }()
@@ -484,6 +494,9 @@ func TestInteractive_WritesFileWithEdits(t *testing.T) {
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 
 	_, _, _ = setupNoRepo(t)
+
+	// CI has no agents on $PATH; place a stub `claude` so the explicit pin is detected.
+	stubBinOnPath(t, "claude")
 
 	origTTY := interactiveStdinIsTTY
 	interactiveStdinIsTTY = func() bool { return true }

@@ -1580,6 +1580,10 @@ func TestProgressLabel_DecomposeMainLineVisible(t *testing.T) {
 	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
 
 	repo := setupStubRepo(t, "feat: decompose label")
+	// CI has no built-in agents on $PATH; place a stub `pi` so the FR-D4 stager fallback resolves
+	// (the bare stub provider has no tooled_flags) and ResolveRoles succeeds — letting the progress
+	// label print before the planner runs.
+	stubBinOnPath(t, "pi")
 	// Leave un-staged dirty files → triggers decompose routing.
 	writeFile(t, repo, "dirty.txt", "changes")
 	writeFile(t, repo, "dirty2.txt", "more")
@@ -1607,6 +1611,8 @@ func TestProgressLabel_DecomposeVerboseRoles(t *testing.T) {
 	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
 
 	repo := setupStubRepo(t, "feat: verbose roles")
+	// CI has no built-in agents on $PATH; place a stub `pi` so the FR-D4 stager fallback resolves.
+	stubBinOnPath(t, "pi")
 	// Leave un-staged dirty files → triggers decompose routing.
 	writeFile(t, repo, "dirty.txt", "changes")
 	writeFile(t, repo, "dirty2.txt", "more")
@@ -1684,6 +1690,8 @@ func TestProgressLabel_OneFileBypass_NotDecomposing(t *testing.T) {
 	defer restoreRootState(t, origArgs, origOut, origErr, origRunE)
 
 	repo := setupStubRepo(t, "feat: one file bypass")
+	// CI has no built-in agents on $PATH; place a stub `pi` so the FR-D4 stager fallback resolves.
+	stubBinOnPath(t, "pi")
 	// EXACTLY one un-staged dirty file → FR-M2b one-file short-circuit bypasses the planner.
 	writeFile(t, repo, "only.txt", "only\n")
 

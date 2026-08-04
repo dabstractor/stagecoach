@@ -9,15 +9,18 @@ import (
 	"github.com/dabstractor/stagecoach/internal/provider"
 )
 
-// goRegistry builds a Registry with overrides that set Command to "go" on the named providers,
-// making them "installed" (exec.LookPath("go") succeeds in CI). Other built-ins keep their
-// default Command (e.g. "pi", "claude") which are typically absent → not installed.
+// goRegistry builds a Registry with overrides that set BOTH Detect and Command to "go" on the named
+// providers, making them "installed" (exec.LookPath("go") succeeds in CI). Both must be set: the
+// built-ins ship a non-empty Detect (e.g. pi→"pi"), and Manifest.DetectCommand() returns Detect FIRST
+// (falling back to Command only when Detect is empty) — so overriding Command alone leaves the
+// built-in Detect in place and IsInstalled probes the real agent name, which is absent in CI.
+// Other built-ins keep their default Detect/Command (e.g. "pi", "claude") → not installed.
 func goRegistry(t *testing.T, names []string, extraOverrides map[string]provider.Manifest) *provider.Registry {
 	t.Helper()
 	overrides := make(map[string]provider.Manifest, len(names)+len(extraOverrides))
 	for _, name := range names {
-		cmd := "go"
-		overrides[name] = provider.Manifest{Command: &cmd}
+		goCmd := "go"
+		overrides[name] = provider.Manifest{Command: &goCmd, Detect: &goCmd}
 	}
 	for name, ov := range extraOverrides {
 		if base, ok := overrides[name]; ok {

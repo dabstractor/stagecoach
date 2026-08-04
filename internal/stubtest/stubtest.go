@@ -38,6 +38,12 @@ var (
 
 // Build compiles ./cmd/stubagent ONCE per test process (cached) and returns its path. Skips t if
 // the go toolchain isn't on PATH. The path is reused across all tests in the binary.
+//
+// CWD-independence: tests routinely chdir into temp dirs before Build is called, so the `go build`
+// invocation MUST NOT depend on the process CWD to locate go.mod. The build runs with Dir set to the
+// module root, discovered from this file's own source path (robust as long as the test binary isn't
+// built with -trimpath, which go test never does by default). Without this, the build fails with
+// "go.mod file not found" and — worse — poisons the sync.Once cache, breaking every later stub test.
 func Build(t testing.TB) string {
 	t.Helper()
 	stubOnce.Do(func() {
@@ -55,13 +61,38 @@ func Build(t testing.TB) string {
 			name = "stubagent.exe"
 		}
 		stubPath = filepath.Join(dir, name)
-		// Import-path form resolves from any cwd (no cmd.Dir needed).
+		// Import-path form resolves the package, but `go build` STILL needs go.mod reachable from the
+		// working directory — so set Dir to the module root (independent of the test's chdir).
 		build := exec.Command(goPath, "build", "-o", stubPath, "github.com/dabstractor/stagecoach/cmd/stubagent")
+		if root := moduleRoot(); root != "" {
+			build.Dir = root
+		}
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("go build stubagent: %v\n%s", err, out)
 		}
 	})
 	return stubPath
+}
+
+// moduleRoot returns the stagecoach module root (the directory holding go.mod), discovered from
+// this file's own source path so it is independent of the process CWD. Used by Build to run `go build`
+// from a valid module location even when the calling test has chdir'd elsewhere. Returns "" if the
+// source path cannot be resolved or no ancestor holds go.mod (e.g. a -trimpath build); Build then
+// falls back to the process CWD (the historical behavior).
+func moduleRoot() string {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok || thisFile == "" {
+		return ""
+	}
+	for d := filepath.Dir(thisFile); d != "" && d != "."; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d
+		}
+		if d == filepath.Dir(d) { // reached filesystem root
+			break
+		}
+	}
+	return ""
 }
 
 // optsEnvMap is the single source of truth for the STAGECOACH_STUB_* knobs (Env and Manifest both use it).

@@ -19,11 +19,11 @@ import (
 //     Record each carried key so step 3 knows what is still owed.
 //  3. Any old active setting NOT present in fresh is carried into fresh:
 //     - If its section ALREADY exists in fresh, the owed key is INSERTED into that section (right
-//       after the section header — ahead of any commented keys, so it lands as active TOML under the
-//       right heading; appending a second `[section]` block would be invalid TOML).
+//     after the section header — ahead of any commented keys, so it lands as active TOML under the
+//     right heading; appending a second `[section]` block would be invalid TOML).
 //     - If its section does NOT exist in fresh, a new `[section]` block is appended at the end
-//       (FR-B8: "An active setting whose section the new template lacks is appended in its own
-//       [section] block").
+//     (FR-B8: "An active setting whose section the new template lacks is appended in its own
+//     [section] block").
 //
 // PURE (no I/O). The result is always valid TOML when both inputs are. The `config_version` key is
 // intentionally NOT carried from existing: the fresh template carries the current schema version, and

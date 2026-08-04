@@ -102,7 +102,16 @@ func TestHooksPath_LinkedWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HooksPath err = %v, want nil", err)
 	}
-	want := filepath.Join(repo, ".git", "hooks") // common dir, not the worktree's private dir
+	// `git rev-parse --git-path hooks` for a linked worktree returns the COMMON dir's hooks path as an
+	// ABSOLUTE path that git resolves through symlinks (on macOS $TMPDIR lives under /var → /private/var;
+	// Windows temp dirs may traverse junctions). t.TempDir() returns the UNRESOLVED path, so resolve it
+	// before building the expected value or the comparison fails on macOS/Windows (not on Linux, where
+	// /tmp has no symlink indirection).
+	resolvedRepo, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(repo): %v", err)
+	}
+	want := filepath.Join(resolvedRepo, ".git", "hooks") // common dir, not the worktree's private dir
 	if got != want {
 		t.Fatalf("HooksPath = %q, want %q (common dir hooks)", got, want)
 	}

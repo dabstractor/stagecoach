@@ -861,6 +861,9 @@ func TestLazygitEntry_ConfigPath(t *testing.T) {
 
 func TestIntegrateInstall_Lazygit_Dispatch(t *testing.T) {
 	e := newIsolatedLazygitEntry(t, "")
+	// CI does not install lazygit; place a stub binary so Detect (exec.LookPath) succeeds — the
+	// dispatch gates on the tool being on $PATH (FR-I2).
+	stubBinOnPath(t, "lazygit")
 	ctx := context.Background()
 	reg := integrate.NewRegistry([]integrate.Entry{e})
 
@@ -887,6 +890,8 @@ func TestIntegrateInstall_Lazygit_Dispatch(t *testing.T) {
 
 func TestIntegrateRemove_Lazygit_Dispatch(t *testing.T) {
 	e := newIsolatedLazygitEntry(t, "")
+	// CI does not install lazygit; place a stub binary so Detect (exec.LookPath) succeeds.
+	stubBinOnPath(t, "lazygit")
 	ctx := context.Background()
 
 	// Install first.

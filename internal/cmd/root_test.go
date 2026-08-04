@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -14,12 +15,44 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/dabstractor/stagecoach/internal/exitcode"
+	"github.com/dabstractor/stagecoach/internal/stubtest"
 )
 
 // ---------------------------------------------------------------------------
 // Test helpers (copied from internal/config/load_test.go and internal/git/git_test.go
 // — _test.go helpers are not importable across packages).
 // ---------------------------------------------------------------------------
+
+// stubBinOnPath makes provider/tool detection deterministic by placing a copy of the cross-platform
+// stubagent binary (internal/stubtest) under each of names in a fresh temp dir PREPENDED to $PATH.
+// Use for tests that flow through exec.LookPath (`config init` detection, `models`, lazygit Detect,
+// the decompose FR-D4 stager fallback). CI runners install none of pi/claude/lazygit, so without this
+// such tests pass on a developer's machine (which has those binaries) yet fail in CI. On Windows the
+// copy gets a .exe suffix so LookPath resolves it via PATHEXT. Skips the test if the go toolchain is
+// unavailable (stubtest.Build cannot compile the stub).
+//
+// PREPENDS (does not replace) $PATH, so git and other tools remain discoverable; only the named
+// agents are guaranteed detectable, regardless of what else the host happens to have installed.
+func stubBinOnPath(t *testing.T, names ...string) {
+	t.Helper()
+	src := stubtest.Build(t)
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read stub binary: %v", err)
+	}
+	dir := t.TempDir()
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	for _, name := range names {
+		dst := filepath.Join(dir, name+ext)
+		if err := os.WriteFile(dst, data, 0755); err != nil {
+			t.Fatalf("write stub %q: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
 
 // initRepo creates a minimal git repo in dir for testing.
 func initRepo(t *testing.T, dir string) {

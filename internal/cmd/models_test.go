@@ -375,6 +375,8 @@ func TestModels_AllEmpty(t *testing.T) {
 	flagModelsAll = false // reset from any prior --all test
 
 	setupRepo(t)
+	// CI has no agents on $PATH; place a stub `pi` so --all has a detected provider to list.
+	stubBinOnPath(t, "pi")
 	// We can't guarantee no providers are on PATH (real pi, claude, etc. may exist).
 	// Instead, test the --all + arg error which is independent of detection.
 	// The "no providers detected" case for --all is implicitly covered by the
@@ -523,6 +525,8 @@ func TestModels_DefaultResolved_ExplicitProvider(t *testing.T) {
 	setupRepo(t)
 
 	// Create a user-defined provider "myagent" with a fake binary, and set it as default.
+	// CI has no agents on $PATH; place a stub `claude` so the explicit `models claude` arg is detected.
+	stubBinOnPath(t, "claude")
 	tmpDir := t.TempDir()
 	stubPath := filepath.Join(tmpDir, "myagent-bin")
 	stubBody := "#!/bin/sh\nexit 0\n"

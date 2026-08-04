@@ -1192,6 +1192,9 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 				Defaults:   fileDefaults{AutoStageAll: tc.repo.asa},
 				Generation: fileGeneration{MultiTurnFallback: tc.repo.mtf},
 			}, 0, 0)
+			if err != nil {
+				t.Fatalf("materialize repo: %v", err)
+			}
 			overlay(&cfg, r)
 			if cfg.AutoStageAll == nil {
 				t.Fatalf("AutoStageAll = nil after overlay; Defaults() must seed boolPtr(true) so nil is impossible here")
