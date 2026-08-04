@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -315,7 +316,11 @@ func runHook(ctx context.Context, timeout time.Duration, hookPath string, args [
 	gitDir, workTree string, extraEnv map[string]string, opts HookOpts) error {
 	hctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(hctx, hookPath, args...) // []string; NO shell (§19)
+	name, argv, err := hookInvocation(hookPath, args)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(hctx, name, argv...) // []string; NO shell (§19)
 	cmd.Dir = workTree
 	env := append(os.Environ(), "GIT_EDITOR=:", "GIT_DIR="+gitDir)
 	for k, v := range extraEnv {
@@ -339,12 +344,97 @@ func runHook(ctx context.Context, timeout time.Duration, hookPath string, args [
 
 // hookExecutable reports whether path exists and is executable (git's access(X_OK) parity —
 // external_deps.md §4). Absent/non-executable ⇒ the caller silently skips the hook (never an error).
+// On Windows there is no executable bit (Go's os.Stat never sets 0o100 for regular files there), so
+// any present non-directory file is considered runnable — matching git's own Windows behavior (a hook
+// runs if the file exists). runHook then routes #!-scripts through their interpreter.
 func hookExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return false
 	}
+	if runtime.GOOS == "windows" {
+		return true
+	}
 	return info.Mode().Perm()&0o100 != 0 // owner-executable bit
+}
+
+// hookInvocation resolves the os/exec command for a hook script. On Unix the kernel honors the
+// shebang, so the hook path runs directly. On Windows, CreateProcess ignores shebangs, so a #!-script
+// must be invoked through its interpreter: the shebang line is parsed and the interpreter is resolved
+// from PATH (Git for Windows ships sh.exe/bash.exe in its usr/bin, which the runner puts on PATH).
+// #!/usr/bin/env <X> is honored (interpreter = X). If the named interpreter is missing, shell-family
+// shebangs (#!/bin/sh, #!/bin/bash, …) fall back to `sh` so the common case still works. A file
+// without a shebang runs directly (native .exe/.bat/.cmd). Non-Windows always returns (hookPath, args).
+func hookInvocation(hookPath string, args []string) (string, []string, error) {
+	if runtime.GOOS != "windows" {
+		return hookPath, args, nil
+	}
+	interp, optArgs, ok := readShebang(hookPath)
+	if !ok {
+		return hookPath, args, nil // no shebang → direct exec (native binary)
+	}
+	name := filepath.Base(interp)
+	if _, lerr := exec.LookPath(name); lerr != nil {
+		// Interpreter not on PATH. For shell-family shebangs, fall back to `sh` (ubiquitous on Windows
+		// runners via Git for Windows); a non-shell shebang we can't satisfy runs directly and fails loudly.
+		if isShellShebang(interp) {
+			if _, serr := exec.LookPath("sh"); serr == nil {
+				return "sh", append([]string{hookPath}, args...), nil
+			}
+		}
+		return hookPath, args, nil
+	}
+	full := append(append([]string{}, optArgs...), hookPath)
+	full = append(full, args...)
+	return name, full, nil
+}
+
+// readShebang opens hookPath and, if it begins with `#!`, parses the shebang line into the interpreter
+// path plus any option arguments. #!/usr/bin/env <X> is unwrapped so X is treated as the interpreter.
+// Pure w.r.t. the filesystem beyond the single Read; returns ok=false for missing/non-shebang files
+// (and for read errors, which defer to direct exec in the caller).
+func readShebang(hookPath string) (interp string, optArgs []string, ok bool) {
+	f, err := os.Open(hookPath)
+	if err != nil {
+		return "", nil, false
+	}
+	var head [256]byte
+	n, _ := f.Read(head[:])
+	_ = f.Close()
+	interp, optArgs, ok = parseShebang(head[:n])
+	return interp, optArgs, ok
+}
+
+// parseShebang parses the interpreter and option arguments from a `#!`-prefixed byte buffer. Returns
+// ok=false when the buffer is too short, lacks the `#!` marker, or carries no interpreter. For
+// `#!/usr/bin/env bash`, the interpreter is `bash` (env is unwrapped). Pure and OS-independent so the
+// Windows hook-exec path can be unit-tested on any platform.
+func parseShebang(head []byte) (interp string, optArgs []string, ok bool) {
+	if len(head) < 2 || head[0] != '#' || head[1] != '!' {
+		return "", nil, false
+	}
+	line := strings.SplitN(string(head), "\n", 2)[0]
+	fields := strings.Fields(strings.TrimSpace(line[2:]))
+	if len(fields) == 0 {
+		return "", nil, false
+	}
+	interp = fields[0]
+	optArgs = fields[1:]
+	if filepath.Base(interp) == "env" && len(optArgs) > 0 {
+		interp = optArgs[0] // #!/usr/bin/env bash → bash
+		optArgs = optArgs[1:]
+	}
+	return interp, optArgs, true
+}
+
+// isShellShebang reports whether the shebang interpreter is a POSIX-shell family program, used by
+// hookInvocation's `sh` fallback on Windows when the exact interpreter isn't on PATH.
+func isShellShebang(interp string) bool {
+	switch filepath.Base(interp) {
+	case "sh", "bash", "dash", "zsh", "ksh", "ash", "busybox":
+		return true
+	}
+	return false
 }
 
 // shouldSkipStagecoachPrepareCommitMsg implements FR-V4 recursion prevention: if the installed
