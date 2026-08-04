@@ -1,0 +1,9 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Major Issues (Should Fix)
+  h3.0 Issue 1: docs/providers.md opencode Delivery column says "positional" but the binary uses "stdin"
+ h2.2 Minor Issues (Nice to Fix)
+  h3.1 Issue 2: docs/how-it-works.md safety paragraph categorizes only 4 of 7 providers ("codex, cursor" omits agy/qwen-code/opencode)
+ h2.3 Testing Summary
+---
+code:3 para:9 list:3

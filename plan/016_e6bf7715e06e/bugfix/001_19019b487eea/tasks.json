@@ -1,0 +1,109 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Documentation Drift Remediation (v2.9 chrome-disable aftermath)",
+      "status": "Complete",
+      "description": "Fix two documentation drift defects introduced by the v2.9 chrome-disable feature's documentation commits (b8f081d rewrote the providers.md table rows; 71e57c7a rewrote the how-it-works.md safety paragraph). Both are pure documentation edits — no source code, no manifest, no test logic changes. The chrome-disable feature itself is functionally correct and fully tested; only the surrounding prose the task re-touched was left stale.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Fix both identified documentation inconsistencies",
+          "status": "Complete",
+          "description": "Correct the opencode Delivery value in docs/providers.md (Major Issue 1) and complete the provider enumeration in the docs/how-it-works.md safety paragraph (Minor Issue 2). Then perform a final cross-doc consistency sweep to verify no other drift remains.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Fix opencode Delivery column drift in docs/providers.md",
+              "status": "Complete",
+              "description": "The opencode row in the 7-provider table reports `positional` for Delivery, but the shipped binary, builtin.go, builtin_test.go decode-parity TOML, and providers/opencode.toml all agree the value is `stdin`. This drift was introduced when commit b8f081d rewrote the table row to add the Chrome-disable column and carried the stale PRD §12.6 value forward. Fix the single table cell to restore byte-faithfulness with the binary.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Correct opencode row Delivery cell from 'positional' to 'stdin' in docs/providers.md",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/016_e6bf7715e06e/bugfix/001_19019b487eea/architecture/system_context.md §Defect 1 for the full binary cross-check and root-cause git-blame trace. The opencode row is line 82 of docs/providers.md. The Delivery column is the 2nd column in the markdown table (column order: Provider, Delivery, Print flag, Model flag, Default model, System prompt flag, Tool-disable approach, Chrome-disable, Stager?). The current cell text is the literal word `positional`; it must become the literal word `stdin`.\n2. INPUT: The authoritative value is `stdin`, confirmed from FOUR independent sources: (a) binary — `stagecoach providers show opencode` prints `prompt_delivery = 'stdin'`; (b) source — internal/provider/builtin.go line 327 `PromptDelivery: strPtr(\"stdin\")` inside builtinOpenCode(); (c) reference TOML — providers/opencode.toml line 45 `prompt_delivery = \"stdin\"`; (d) test TOML — internal/provider/builtin_test.go line 87 decode-parity block. No other column in the opencode row changes. No other table row changes (all 6 other providers already match the binary — verified 2026-07-13).\n3. LOGIC: In docs/providers.md, locate line 82 (the `| \\`opencode\\` |` table row). Change the Delivery cell from `positional` to `stdin`. Do NOT alter any other cell in that row, any other row, the table header, or any prose elsewhere in the file. The file's own \"Rendered command\" guidance and the providers/opencode.toml RENDERED COMMAND header already correctly show stdin piping (`< \"<sys>\\n\\n<user payload>\"`), so no cascade edits are needed.\n4. OUTPUT: docs/providers.md with line 82's opencode Delivery cell reading `stdin`. After the change, all 7 provider rows in the table must have Delivery values matching their binary `prompt_delivery` (pi=stdin, claude=stdin, opencode=stdin, codex=stdin, cursor=positional, agy=stdin, qwen-code=stdin). The file must remain valid markdown with consistent table column alignment.\n5. DOCS: [Mode A] This IS a documentation file edit — the fix is the doc update. No separate docs subtask needed. Verify no other doc file references the opencode delivery method as 'positional' (check README.md, docs/how-it-works.md, docs/README.md — none should need changes based on prior research, but verify).",
+                  "prd_selectors": [
+                    "h2.1",
+                    "h3.0",
+                    "h1.0",
+                    "h2.0",
+                    "para.3",
+                    "code.0"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Fix safety paragraph provider enumeration in docs/how-it-works.md",
+              "status": "Complete",
+              "description": "The '### Safety invariant' paragraph (line 197) makes a universal claim ('Every built-in manifest constrains the agent to a read-only mode') but names only 4 of 7 providers in its two-category partition. The read-only-constraint category should contain 5 providers (codex, cursor, agy, qwen-code, opencode) per the same file's provider table and the docs/providers.md Chrome-disable column. Fix the parenthetical to be either exhaustive or explicitly exemplary.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Expand read-only constraint flags parenthetical to cover all 5 constrained providers",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/016_e6bf7715e06e/bugfix/001_19019b487eea/architecture/system_context.md §Defect 2 for the full analysis. The paragraph is line 197 of docs/how-it-works.md. The current text reads: '… either via explicit tool-disable flags (pi, claude) or read-only constraint flags (codex, cursor). …' — only 4 of 7 providers are named. The 3 omitted providers (agy, qwen-code, opencode) ARE read-only-constrained (agy via --mode plan; qwen-code via --approval-mode default; opencode's `run` subcommand is read-only by design). The sentence starts with 'Every built-in manifest' — a universal claim that implies exhaustiveness.\n2. INPUT: The 5 read-only-constrained providers and their mechanisms (verified against internal/provider/builtin.go bare_flags and docs/providers.md Tool-disable approach column): codex (--sandbox read-only --ephemeral), cursor (--mode ask --trust), agy (--mode plan), qwen-code (--approval-mode default), opencode (run subcommand, read-only by design). The 2 explicit-switch providers (pi, claude) are correctly named and need no change.\n3. LOGIC: In docs/how-it-works.md line 197, replace the parenthetical `(codex, cursor)` with an expanded form. Two acceptable options (the PRD §Issue 2 Suggested Fix offers both):\n   - PREFERRED (exhaustive): `read-only constraint flags (codex, cursor, agy, qwen-code; opencode's \\`run\\` is read-only by design)` — matches the universal 'Every' claim and lists all 5.\n   - ALTERNATIVE (exemplary): `read-only constraint flags (e.g. codex, cursor)` — smaller change, but slightly weakens precision.\n   Use the exhaustive form unless it makes the sentence unwieldy. Do NOT change the 'explicit tool-disable flags (pi, claude)' parenthetical — it is correct (pi and claude are the only two explicit-switch providers). Do NOT change any other sentence in the paragraph. The remainder of the paragraph (chrome-less sentence, cross-reference link) stays untouched.\n4. OUTPUT: docs/how-it-works.md line 197 with the read-only constraint flags parenthetical naming all 5 constrained providers (or using 'e.g.'). The sentence must read naturally and accurately. The provider list must be consistent with docs/providers.md's Tool-disable approach column and the Chrome-disable column.\n5. DOCS: [Mode A] This IS a documentation file edit — the fix is the doc update. No separate docs subtask needed.",
+                  "prd_selectors": [
+                    "h2.2",
+                    "h3.1",
+                    "h1.0",
+                    "h2.0",
+                    "para.4",
+                    "list.0"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Sync changeset-level documentation",
+              "status": "Complete",
+              "description": "Final cross-doc consistency sweep after both fixes. Verify that the docs/providers.md provider table is fully consistent with the binary for all 7 providers (not just opencode), and that the docs/how-it-works.md safety paragraph's provider lists are consistent with the docs/providers.md table. This is the Mode B catch-all that ensures the v2.9 chrome-disable changeset ships with no remaining documentation drift.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Verify all 7 provider rows in docs/providers.md match binary values and cross-reference docs/how-it-works.md prose consistency",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/016_e6bf7715e06e/bugfix/001_19019b487eea/architecture/system_context.md §Full 7-provider cross-check — the binary cross-check was already performed during research and opencode was the only mismatch (now fixed by P1.M1.T1.S1). This subtask is a VERIFICATION gate, not a new implementation.\n2. INPUT: The edited docs/providers.md (from P1.M1.T1.S1) and edited docs/how-it-works.md (from P1.M1.T2.S1). The binary can be rebuilt with `go build -o /tmp/stagecoach_verify ./cmd/stagecoach` and queried with `/tmp/stagecoach_verify providers show <name>`.\n3. LOGIC: Perform a final consistency sweep:\n   (a) Rebuild the binary and cross-check ALL 7 providers' prompt_delivery values against the docs/providers.md Delivery column (must be 7/7 match). Expected: pi=stdin, claude=stdin, opencode=stdin, codex=stdin, cursor=positional, agy=stdin, qwen-code=stdin.\n   (b) Verify the docs/how-it-works.md safety paragraph (line ~197) provider lists are consistent with the docs/providers.md Tool-disable approach column: the explicit-switch group (pi, claude) and the read-only-constraint group (codex, cursor, agy, qwen-code, opencode) must partition all 7 providers with no overlap or omission.\n   (c) Scan docs/providers.md, docs/how-it-works.md, docs/README.md, and README.md for any remaining reference to opencode delivery as 'positional' (grep -rn 'positional.*opencode\\|opencode.*positional'). Expected: zero matches in docs (the only remaining 'positional' in docs/providers.md should be the cursor row, which is correct).\n   (d) Verify the docs/providers.md 'Tools-disable asymmetry' section (line ~93-100) is consistent — it already names all 5 constrained providers in the 'Chrome is a separate axis' bullet, so it should need no changes, but verify.\n   If any inconsistency is found, fix it in the same doc file. If all checks pass, no edits needed.\n4. OUTPUT: A verified docs/ directory with zero documentation drift against the binary. All cross-references between docs/providers.md and docs/how-it-works.md are consistent.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync task. It depends on all implementing subtasks (P1.M1.T1.S1 and P1.M1.T2.S1) and runs last. If README.md needs any touch (e.g., if it references opencode delivery), update it here.",
+                  "prd_selectors": [
+                    "h1.0",
+                    "h2.0",
+                    "h2.1",
+                    "h2.2",
+                    "h3.0",
+                    "h3.1",
+                    "h2.3",
+                    "para.5",
+                    "para.6",
+                    "para.7",
+                    "para.8",
+                    "para.9"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
