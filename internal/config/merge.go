@@ -85,7 +85,6 @@ func MergeActiveSettings(fresh, existing string) string {
 	// after each existing section's header, insert that section's owed keys (with a preservation note).
 	inserted := map[string]bool{} // sections whose owed keys were inserted in-place
 	out := make([]string, 0, len(freshLines)+32)
-	section = ""
 	for _, line := range freshLines {
 		out = append(out, line)
 		if m := activeTableHeaderRe.FindStringSubmatch(line); m != nil {
@@ -150,7 +149,7 @@ func MergeActiveSettings(fresh, existing string) string {
 // formatKV renders an active key=value line. `val` is the raw value string exactly as captured by
 // ActiveSettings (already trimmed, NOT unquoted — carried verbatim per FR-B8). One trailing newline
 // is NOT included (callers add it). A bare key with an empty value renders as `key = ""` so the line
-// remains valid TOML (ActiveSettings trims the value, so an original `key = ""` is captured as `` and
+// remains valid TOML (ActiveSettings trims the value, so an original `key = ""` is captured as “ and
 // must be re-quoted here to stay valid).
 func formatKV(key, val string) string {
 	if val == "" {
