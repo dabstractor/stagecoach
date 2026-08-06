@@ -1,6 +1,6 @@
 # Stagecoach — Future Spec (deferred & rejected ideas)
 
-Companion to `PRD.md` (v2.1). The PRD carries **no stubs or placeholders**: if a capability is
+Companion to `PRD.md` (v3.0). The PRD carries **no stubs or placeholders**: if a capability is
 described there, it is in scope. Everything else — ideas we like but haven't specified, ideas
 blocked on external factors, and ideas we have deliberately rejected — lives here, each with its
 reasoning, so future revisions don't re-litigate them from scratch.
@@ -96,9 +96,8 @@ plan-tokens.** Until then: rejected, not deferred-by-laziness.
 | **Generate N messages + pick** (aicommits) | Interactive selection contradicts the non-interactive default; also no parity (opencommit only has a regenerate loop). |
 | **Interactive file multiselect when nothing staged** (opencommit) | Superseded by multi-commit decomposition (PRD §13.6), which solves the same problem without a picker. |
 | **Push-after-commit *prompt*** (opencommit) | The prompt is the objection, not the push: accepted as the non-interactive `--push` flag (PRD FR-P1). |
-| **Large-diff chunking — lossy map-reduce form** (aicommits) | The *summarize-each-chunk-then-combine* flavor degrades message quality and is permanently rejected. NOTE: a **lossless** multi-turn priming form (full diff delivered across request-sized session turns) has graduated to the spec — see PRD §9.24 (FR-T1–T12). The rejection above applies only to the lossy form; the original premise ("agent contexts are 200k+; byte caps bound the payload") is withdrawn — a provider's per-request reliability ceiling can fall well below its advertised window, which is exactly what §9.24 addresses. |
+| **Large-diff chunking — lossy map-reduce form** (aicommits) | The *summarize-each-chunk-then-combine* flavor degrades message quality and is permanently rejected. (The lossless multi-turn alternative is in scope instead — PRD §9.24, FR-T1–T12 — which is a distinct approach, not an exception to this rejection.) |
 | **`--clipboard` mode** (aicommits) | `stagecoach --dry-run --no-color \| wl-copy` (or `pbcopy`) is the same feature without per-platform clipboard dependencies. |
-| **Self-update command** (aicommits) | **SUPERSEDED by PRD §9.29 (v3.0; FR-U1–U12) — see Appendix F.** The v2.1 rejection ("package managers own binary updates") assumed self-update meant a tool that downloads and overwrites its own binary, which fights whatever package manager installed it and gets silently reverted on that manager's next upgrade. With the distribution surface widening to npm/Winget/Nix/mise/asdf on top of Brew/Scoop/AUR/go-install, that concern got sharper, not softer. v3.0 reverses the rejection via the **inverse architecture — install-method-aware, delegate-first**: `stagecoach upgrade` detects the install method and delegates to that channel's native updater wherever one exists, prints the command where it needs privileges (AUR) or is declarative (Nix), and self-swaps ONLY for the direct-binary (curl\|sh/manual) channel — it never overwrites a package-manager-owned file, so it cannot fight a manager. The original rejection (a self-overwriting binary) does not apply to the delegate-first design. |
 | **`config describe`** (opencommit) | The populated bootstrap (FR-B1) plus `config init --template` already document every key in place. |
 | **Locale i18n file trees** (opencommit: 20 files) | The *feature* shipped (`--locale`, FR-F6) — as one prompt line. The model is the translator; maintaining 20 locale files is incumbent baggage. |
 
