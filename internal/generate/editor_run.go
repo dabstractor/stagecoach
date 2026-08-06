@@ -23,4 +23,3 @@ func runEditorCommand(ctx context.Context, editor, editMsgPath string) error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
-

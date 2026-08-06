@@ -357,6 +357,7 @@ func TestAcquire_ReapingIdempotent(t *testing.T) {
 		}
 	}
 }
+
 // TestAcquire_Contention_HeldError verifies that a second Acquire on the same
 // repo returns *HeldError with the holder's parsed contents, and that after
 // Release a third Acquire succeeds (auto-release on close).
@@ -411,4 +412,3 @@ func TestAcquire_Contention_HeldError(t *testing.T) {
 	}
 	l3.Release()
 }
-

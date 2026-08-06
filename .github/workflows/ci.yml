@@ -39,11 +39,12 @@ jobs:
         # Intentionally NOT in the matrix (still first-class release targets — see cross-build):
         #   macos-13       = macos/amd64 (Intel) — runner deprecated by GitHub; stalled 24h under
         #                   -race. darwin/amd64 is compile-checked in the cross-build step instead.
-        #   windows-latest = windows/amd64 — the suite is Unix-centric (SIGINT signal paths,
-        #                   #!/bin/sh fake editors, git.exe PATH/TOML-path assumptions) and is not
-        #                   ported to run (only build) on Windows yet. windows/{amd64,arm64} are
-        #                   compile-checked in cross-build, matching goreleaser's CGO_ENABLED=0 model.
-        os: [ubuntu-latest, macos-latest]
+        #   windows-latest runs the full -race suite natively (windows/amd64); windows/arm64 is
+        #                   compile-checked in the cross-build step (no arm64 Windows runner). The
+        #                   suite is cross-platform: shell-script fixtures use compiled stubs, git
+        #                   hooks route #!/bin/sh through MSYS sh, and Windows-only behaviors
+        #                   (flock no-op, no executable bit) are handled where they differ.
+        os: [ubuntu-latest, macos-latest, windows-latest]
         go: ['1.24', '1.25']
     steps:
       - uses: actions/checkout@v4
@@ -57,11 +58,12 @@ jobs:
         # Compile-checks every goreleaser target that is not the host's native (os,arch), so all 6
         # release targets (PRD §21.2/G9) are verified without paying for QEMU test emulation.
         # CGO_ENABLED=0 matches .goreleaser.yaml: no C cross-toolchain needed, reproducible from
-        # any host. Covers linux/arm64, darwin/{amd64,arm64}, windows/{amd64,arm64}.
+        # any host. Covers linux/arm64, darwin/{amd64,arm64}, windows/arm64 (windows/amd64 is built
+        # + race-tested natively by the windows-latest matrix job).
         env:
           CGO_ENABLED: 0
         run: |
-          for pair in linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+          for pair in linux/arm64 darwin/amd64 darwin/arm64 windows/arm64; do
             goos=${pair%/*}; goarch=${pair#*/}
             echo "::group::GOOS=$goos GOARCH=$goarch"
             GOOS=$goos GOARCH=$goarch go build ./...
