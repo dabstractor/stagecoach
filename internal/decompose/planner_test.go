@@ -440,17 +440,21 @@ func TestCallPlanner_DiffsFrozenTStart(t *testing.T) {
 	commitRaw(t, repo, "initial")
 	writeFile(t, repo, "a.txt", "changed content") // UNSTAGED
 
-	// Build a planner stub that captures its stdin payload.
+	// Build a planner stub that captures its stdin payload (compiled stub; the old
+	// capture.sh /bin/sh script cannot run on Windows).
 	captureDir := t.TempDir()
 	captureFile := captureDir + "/payload"
-	captureScript := captureDir + "/capture.sh"
-	if err := os.WriteFile(captureScript, []byte(`#!/bin/sh
-cat > "`+captureFile+`"
-echo '`+validSingleJSON+`'`), 0o755); err != nil {
-		t.Fatalf("write capture script: %v", err)
-	}
+	captureBin := stubtest.BuildCapture(t)
 	m := stubtest.Manifest(bin, stubtest.Options{Out: validSingleJSON})
-	m.Command = &captureScript
+	m.Command = &captureBin
+	for _, kv := range stubtest.CaptureEnv(captureFile, validSingleJSON) {
+		for i := 0; i < len(kv); i++ {
+			if kv[i] == '=' {
+				m.Env[kv[:i]] = kv[i+1:]
+				break
+			}
+		}
+	}
 
 	deps := plannerDeps(t, repo, m)
 

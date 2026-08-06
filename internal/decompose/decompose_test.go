@@ -195,32 +195,23 @@ func dcmShaResolves(t *testing.T, repo, sha string) bool {
 	return err == nil
 }
 
-// dcmScriptArbiter builds a provider.Manifest whose Command is a shell script that parses SHAs
-// from the arbiter's STDIN prompt (each commit's SHA is a bare 40-hex line). The script emits
-// {"target": "<sha>"} for the chosen SHA. mode is "tip" (last SHA) or "mid" (2nd SHA).
+// dcmScriptArbiter builds a provider.Manifest whose Command is the compiled
+// stubarbiter binary — the cross-platform twin of the historical arbiter.sh
+// /bin/sh script. It parses SHAs from the arbiter's STDIN prompt (each commit's
+// SHA is a bare 40-hex line) and emits {"target": "<sha>"} for the chosen SHA.
+// mode is "tip" (last SHA) or "mid" (2nd SHA), selected via STAGECOACH_ARBITER_MODE.
 func dcmScriptArbiter(t *testing.T, bin string, mode string) provider.Manifest {
 	t.Helper()
-	var script string
 	switch mode {
-	case "tip":
-		script = `#!/bin/sh
-sha=$(sed -n 's/^\([0-9a-f]\{40\}\)$/\1/p' | tail -n 1)
-printf '{"target": "%s"}\n' "$sha"
-`
-	case "mid":
-		script = `#!/bin/sh
-sha=$(sed -n 's/^\([0-9a-f]\{40\}\)$/\1/p' | sed -n '2p')
-printf '{"target": "%s"}\n' "$sha"
-`
+	case "tip", "mid":
+		// valid mode
 	default:
 		t.Fatalf("dcmScriptArbiter: unknown mode %q", mode)
 	}
-	path := t.TempDir() + "/arbiter.sh"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatalf("write arbiter script: %v", err)
-	}
+	path := stubtest.BuildArbiter(t)
 	m := stubtest.Manifest(bin, stubtest.Options{Out: ""})
 	m.Command = &path
+	m.Env["STAGECOACH_ARBITER_MODE"] = mode
 	return m
 }
 

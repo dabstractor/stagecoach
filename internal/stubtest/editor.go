@@ -236,3 +236,75 @@ func copyFile(src, dst string) error {
 	_, err = io.Copy(out, in)
 	return err
 }
+
+// buildOnceFor compiles a cmd/stub* binary ONCE per process (cached), mirroring
+// Build/BuildEditor/BuildTee/BuildCLI. name is the output basename (gets .exe on
+// Windows); pkg is the import path. Returns the binary path. Shared by the
+// decompose arbiter/capture stubs.
+func buildOnceFor(t testing.TB, once *sync.Once, path *string, name, pkg, label string) string {
+	t.Helper()
+	once.Do(func() {
+		goPath, err := exec.LookPath("go")
+		if err != nil {
+			t.Skipf("go toolchain not on PATH; cannot build %s: %v", label, err)
+			return
+		}
+		dir, err := os.MkdirTemp("", "stagecoach-"+label+"-*")
+		if err != nil {
+			t.Fatalf("mkdtemp: %v", err)
+		}
+		binName := name
+		if runtime.GOOS == "windows" {
+			binName = name + ".exe"
+		}
+		*path = filepath.Join(dir, binName)
+		build := exec.Command(goPath, "build", "-buildvcs=false", "-o", *path, pkg)
+		if root := moduleRoot(); root != "" {
+			build.Dir = root
+		}
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("go build %s: %v\n%s", label, err, out)
+		}
+	})
+	return *path
+}
+
+var (
+	arbiterOnce sync.Once
+	arbiterPath string
+)
+
+// BuildArbiter compiles ./cmd/stubarbiter (cached) — the cross-platform twin of
+// the decompose arbiter.sh /bin/sh script. Mode is selected at RUN time via the
+// STAGECOACH_ARBITER_MODE env var ("tip"|"mid"); use ArbiterModeEnv to build it.
+func BuildArbiter(t testing.TB) string {
+	t.Helper()
+	return buildOnceFor(t, &arbiterOnce, &arbiterPath, "stubarbiter",
+		"github.com/dabstractor/stagecoach/cmd/stubarbiter", "stubarbiter")
+}
+
+// ArbiterModeEnv returns the env assignment selecting the arbiter's SHA choice.
+func ArbiterModeEnv(mode string) string { return "STAGECOACH_ARBITER_MODE=" + mode }
+
+var (
+	captureOnce sync.Once
+	capturePath string
+)
+
+// BuildCapture compiles ./cmd/stubcapture (cached) — the cross-platform twin of
+// the decompose capture.sh /bin/sh script (writes stdin to a file, prints a
+// canned response). Capture file + output are selected at RUN time via
+// STAGECOACH_CAPTURE_FILE / STAGECOACH_CAPTURE_OUT; use CaptureEnv to build them.
+func BuildCapture(t testing.TB) string {
+	t.Helper()
+	return buildOnceFor(t, &captureOnce, &capturePath, "stubcapture",
+		"github.com/dabstractor/stagecoach/cmd/stubcapture", "stubcapture")
+}
+
+// CaptureEnv returns the env assignments driving stubcapture.
+func CaptureEnv(file, out string) []string {
+	return []string{
+		"STAGECOACH_CAPTURE_FILE=" + file,
+		"STAGECOACH_CAPTURE_OUT=" + out,
+	}
+}
