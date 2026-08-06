@@ -1,0 +1,73 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Commit-identity transparency regression net (FR-39a)",
+      "status": "Ready",
+      "description": "Codify FR-39a — the permanent guarantee that stagecoach is invisible in commit metadata — as an executable regression net. The invariant ALREADY holds in production code (verified: zero GIT_AUTHOR_*/GIT_COMMITTER_* env, zero user.name/user.email config writes, runWithInput never sets cmd.Env). This phase's deliverable is therefore test + guard + in-code doc tag, NOT a behavior change. It exists so a future 'helpful' fallback identity, branding trailer, or config-init identity write cannot silently land.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Assert the invariant the code already upholds",
+          "status": "Planned",
+          "description": "Land the §20.2 'commit-identity transparency' invariant in two complementary forms — a behavioral success-path test (commits carry git's resolved identity, never a stagecoach brand) and a structural source-scan guard (no production code path writes identity config or sets identity env) — plus an FR-39a doc tag making the guarantee grep-discoverable from code.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Behavioral + structural assertion of FR-39a",
+              "status": "Planned",
+              "description": "Add the FR-39a regression net: (A) a success-path behavioral test proving a stagecoach commit's author/committer == git-resolved identity and its message has no stagecoach-branding trailer; (B) a structural source-scan guard proving no production .go path writes identity config or sets identity env; (C) an in-code FR-39a doc tag on the existing runWithInput/CommitTree comments. No production behavior change — the invariant already holds.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Commit-identity transparency test + structural guard + doc tag",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": [
+                    "h3.25",
+                    "h2.9",
+                    "h3.69",
+                    "h2.13",
+                    "h2.19",
+                    "h3.98",
+                    "h2.20"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-39a is a DEFENSIVE guarantee that the production code ALREADY upholds. Verified this session: grep for GIT_AUTHOR_*/GIT_COMMITTER_* across internal/ cmd/ pkg/ (excluding _test.go) returns ZERO hits; the only production user.name/user.email occurrence is a COMMENT at internal/git/git.go:520; CommitTree (internal/git/git.go:680) calls runWithInput (internal/git/git.go:522) which deliberately NEVER sets cmd.Env, so the git commit-tree child inherits the parent environment and resolves author/committer itself. Therefore this subtask writes TESTS + a doc tag only — it MUST NOT change commit behavior. See plan/018_29b859efcd56/architecture/{fr39a_findings.md, test_patterns.md}.\n2. INPUT: The existing commit path: generate.CommitStaged(ctx, Deps{Git, Manifest}, cfg) (internal/generate/generate.go:188) returns (Result, error); Result.CommitSHA (generate.go:72) is the landed commit SHA on success (err==nil). The stub provider: stubtest.Build(t) builds the stub binary; stubtest.Manifest(bin, stubtest.Options{Out: \"<canned message>\"}) returns a provider.Manifest whose stub emits Out once and exits 0 — that canned message is the ONLY content allowed in the resulting commit message. Shared package-generate fixture helpers (defined in internal/generate/generate_test.go): initRepo(t,dir):26, headSHA(t,dir):49, commitRaw(t,dir,msg):55, gitOut(t,dir,args...):61, plus writeFile/stageFile available package-wide. The repo-local identity helper to mirror: setIdentityConfig at internal/git/committree_test.go:17 (writes 'user.name <X>'/'user.email <Y>' via git config).\n3. LOGIC — DELIVERABLE A (behavioral test): Add a dedicated TestCommitIdentityTransparency in internal/generate/invariants_test.go (the §20.2 home). Do NOT add a row to the existing TestInvariants table — that table is failure-path-only (every scenario expects err != nil); this is a SUCCESS path. Reuse the shared fixture: initRepo(t,repo); commitRaw(t,repo,\"initial\"); writeFile+stageFile a 'staged.txt'. Then run two sub-cases (use t.Run): (a) 'baseline identity' — resolve expected identity BEFORE the run via gitOut(t,repo,\"config\",\"user.name\") + \"config\",\"user.email\" (set by initRepo/fixture; if not set, seed via git config like setIdentityConfig), run stubtest.Manifest(bin,stubtest.Options{Out:\"feat: add widget\"}) through CommitStaged, assert err==nil and res.CommitSHA!=\"\", then compare git log -1 --format='%an <%ae> | %cn <%ce>' res.CommitSHA against the resolved \"<name> <email> | <name> <email>\" — they MUST match exactly; ALSO assert the commit MESSAGE (git log -1 --format=%B) trimmed == the canned \"feat: add widget\" exactly (no Co-Authored-By:/Generated-by:/machine-made trailer appended). (b) 'transparency-without-authorship' — pre-seed repo-local git config user.name \"stagecoach agent\" + user.email \"agent@stagecoach.local\" (mirror setIdentityConfig, internal/git/committree_test.go:17), run CommitStaged, and assert the resulting commit IS stamped with those EXACT values (proving stagecoach passes a deliberately stagecoach-LOOKING identity through rather than overriding it). \n   DELIVERABLE B (structural guard): Add TestNoIdentityWritesInProduction in internal/git/git_test.go (the constrained surface lives in package git). Mirror the proven self-source-scan precedent TestRun_NoPlumbing at internal/hook/exec_test.go:340 (reads a .go file, splits lines, skips blank + //-prefixed lines, fails on strings.Contains of forbidden tokens). Generalize: walkDir internal/ AND cmd/ .go files; SKIP any path ending in _test.go (legitimate scaffolding) and SKIP the guard's own file; for each production .go NON-COMMENT line, FAIL if it contains a forbidden identity-write signal. Match on actual call-site string literals, not bare substrings in comments: forbidden tokens are the six env keys as string literals \"GIT_AUTHOR_NAME\",\"GIT_AUTHOR_EMAIL\",\"GIT_AUTHOR_DATE\",\"GIT_COMMITTER_NAME\",\"GIT_COMMITTER_EMAIL\",\"GIT_COMMITTER_DATE\", AND identity-config writes signalled by the string literals \"user.name\" or \"user.email\" appearing in a non-comment line (the ONLY existing production occurrence is the comment at git.go:520, which is //-prefixed and thus skipped — verify the guard reports ZERO hits on the current tree). Assert the walk visited > 0 production files so a path-resolution bug cannot pass vacuously. Resolve repo root robustly (Go test CWD = package dir; compute the repo root once via filepath containing go.mod, or anchor on runtime.Caller).\n   DELIVERABLE C (doc tag — Mode A): Append ' (FR-39a — commit-identity transparency)' to the existing comment block at internal/git/git.go:518-521 (the 'Identity: cmd.Env is NOT set here...' comment), and add one sentence citing FR-39a to the CommitTree doc comment at internal/git/git.go:672-679 (e.g. 'Per FR-39a, no GIT_AUTHOR_*/GIT_COMMITTER_* env is set and no user.name/user.email config is written, so author/committer are exactly git's resolved identity — stagecoach is invisible in commit metadata.'). Keep the comment-skip in DELIVERABLE B working AFTER the tag (the tag is on a //-line, so it is skipped — do not let it self-trip the guard).\n   VERIFICATION (do all): go test ./internal/generate/ ./internal/git/ ./internal/config/ passes green; the structural guard reports zero forbidden hits on the current tree; AND prove the guard FIRES by temporarily injecting a forbidden line (e.g. append a non-comment exec.Command(\"git\",\"config\",\"user.name\",...) call, or a os.Setenv(\"GIT_COMMITTER_NAME\",...) line) into a production file, re-running the guard to confirm it fails, then reverting. Prove the behavioral test FIRES by temporarily setting cmd.Env with GIT_COMMITTER_NAME in runWithInput (or seeding a divergent identity mid-run) to confirm the identity-mismatch assertion fails, then reverting.\n   MOCKING: No external services. The stub provider (internal/stubtest) IS the mock for the LLM agent — it emits a canned commit message and exits 0. Real git binary runs in a temp repo (the existing pattern). No network, no real provider.\n4. OUTPUT: A green internal/generate/invariants_test.go::TestCommitIdentityTransparency (two sub-cases), a green internal/git/git_test.go::TestNoIdentityWritesInProduction, and the two FR-39a doc-tag edits in internal/git/git.go. These are consumed downstream only as the executable form of PRD §20.2 (no further subtask consumes their interfaces — they are the terminal regression net for this delta).\n5. DOCS: [Mode A] This subtask's DELIVERABLE C IS the doc edit — tag the runWithInput comment (internal/git/git.go:518-521) and cite FR-39a in the CommitTree doc comment (internal/git/git.go:672-679). No docs/*.md change is required here (FR-39a is an internal invariant; confirmed zero commit-identity mentions in docs/ today). Changeset-level README/how-it-works sweep is handled by P1.M1.T2.S1. This rides WITH the work — do not create a separate docs subtask."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Mode B catch-all: formally decide whether the FR-39a changeset requires any changeset-level (overview/README) documentation. FR-39a is a defensive internal invariant with no CLI flag, no config key, and no user-visible output, and the README makes no AI-branding claim to retract — so the likely outcome is 'no change needed'. This task exists so that decision is made explicitly and recorded rather than skipped, per SOW §5.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Sweep README.md + docs/how-it-works.md for any FR-39a documentation surface",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": [
+                    "h3.25",
+                    "h2.9",
+                    "h2.19",
+                    "h3.106"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-39a is a defensive/permanent guarantee that codifies existing behavior. PRD §3 states Mode B (changeset-level docs) 'does not apply': FR-39a adds no CLI flag, no config key, no output change, and the README makes no AI-branding claim to retract. Verified this session: grep for commit-identity / FR-39a / user.name / GIT_AUTHOR across docs/ returns ZERO hits — no docs page discusses commit identity. This subtask is the formal gate that confirms or overrides that conclusion; it MAY conclude 'no change needed' (a valid, documented outcome).\n2. INPUT: The completed regression net from P1.M1.T1.S1 (the in-code FR-39a doc tags at internal/git/git.go:518-521 and :672-679, plus the new tests). The two candidate changeset-level files: README.md (repo root — the marketing/feature surface) and docs/how-it-works.md (the plumbing narrative). Read both for any claim about HOW stagecoach creates commits or what identity/attribution it applies.\n3. LOGIC: (a) Read README.md fully (mdsel README.md for a TOC is acceptable) and scan for any section describing commit authorship, AI attribution, 'commits as you', metadata, or branding — if any such claim is inaccurate or would benefit from the FR-39a guarantee being stated (e.g. a 'stagecoach never impersonates you' or 'commits are yours' bullet), add a one-line statement of the guarantee; if README makes NO such claim, make NO edit. (b) Read docs/how-it-works.md's plumbing/commit section; if it describes commit-tree authorship, add a one-line note that author/committer are git's resolved identity (FR-39a, no stagecoach branding) ONLY if it currently implies otherwise; if it is silent or already correct, make NO edit. (c) If no edit is warranted in either file, record the decision in a one-line commit message note / PR comment: 'FR-39a: no changeset-level doc change required — internal invariant, no user-facing surface.' The canonical requirement text already lives in PRD.md (the source commit 347b23f) and the in-code FR-39a tags (P1.M1.T1.S1) are the code-side documentation.\n4. OUTPUT: Either (i) a minimal, accurate README.md and/or docs/how-it-works.md edit stating the commit-identity-transparency guarantee, OR (ii) a documented 'no change needed' decision. No fabricated feature claims; do not over-document an internal invariant.\n5. DOCS: [Mode B] This IS the changeset-level documentation task. It depends on P1.M1.T1.S1 (the in-code tags must exist first) and sweeps only overview/cross-cutting docs. Per-file docs that the implementing subtask directly touches were handled Mode A in P1.M1.T1.S1."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
