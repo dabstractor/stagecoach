@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Foundation: comparable version, exit code 6, [upgrade] config table, GitHub Releases client",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The reusable primitives every upgrade path consumes: a comparable (semver) version of the running binary, the UpdateAvailable=6 exit code, the global-only [upgrade] config table (channel/source_repo), and the HTTP client for the GitHub Releases API (the one named network exception to §19). All injectable/mockable for tests.",
           "tasks": [
             {
@@ -77,7 +77,7 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "GitHub Releases HTTP client (the named §19 exception) + asset/checksum primitives",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The HTTP client that fetches release metadata and downloads the selected archive + checksums.txt, SHA256-verifying it. The ONLY stagecoach surface that makes network calls. Injectable base-URL + *http.Client so tests use httptest, not the real API.",
               "subtasks": [
                 {
@@ -96,7 +96,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T3.S2",
                   "title": "Asset + checksums.txt download + SHA256 verification primitives",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T3.S1"
@@ -121,14 +121,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Install-method detection cascade",
-              "status": "Planned",
+              "status": "Researching",
               "description": "detectChannel() — explicit override → package-manager DB query → path heuristics → default direct. Read-only, best-effort, logged at --verbose, bounded by a short timeout so a hung query cannot stall an upgrade.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "detectChannel() cascade (override → PM DB → path heuristics → direct)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §7. os.Executable() → resolved realpath (filepath.EvalSymlinks) for path heuristics. Channels (FR-U2): brew, scoop, winget, pacman(AUR), npm, mise, asdf, nix, go-install, direct. The npm wrapper sets STAGECOACH_INSTALL_METHOD=npm (external_deps.md §3) — the explicit-override branch reads it. PM DB queries: `brew list stagecoach`, `scoop list stagecoach`/`scoop prefix stagecoach`, `winget list` (Windows), `pacman -Q stagecoach-bin`, `npm ls -g --depth=0`, `mise ls`, `asdf list`. Path roots: Homebrew Cellar (/opt/homebrew/Cellar, /usr/local/Cellar), Scoop shims (scoop\\shims), npm global node_modules, Nix /nix/store, $GOPATH/bin (go install), /usr/bin (AUR). Ambiguous → 'direct'.\n2. INPUT: os.Executable() + os.Getenv('STAGECOACH_INSTALL_METHOD') + an injected command-runner interface (for tests) + GOOS.\n3. LOGIC: New internal/upgrade/detect.go. Define a Channel type (string enum) and `Detect(ctx) (Channel, evidence string, err error)`. Cascade in FR-U2 priority: (a) explicit override env/flag → that channel (validate it's a known channel; flag is passed in by the command layer P1.M4); (b) PM DB queries — each runs via a thin exec wrapper with a context timeout (default ~3s each; skip on GOOS mismatch e.g. winget only on windows, brew/scoop/pacman only where relevant) and parses stdout/exit for ownership; first confirming query wins, return its channel + evidence; (c) path heuristics on realpath(exe) — prefix-match the known roots; (d) default 'direct'. Log each attempted step at --verbose (the command layer passes a verbose flag / logger). NEVER mutate; queries are read-only. Expose an exec-runner seam (interface) so tests inject canned outputs (no real brew/scoop on CI).\n4. OUTPUT: detect.go + table/property tests (override wins; each PM-query branch returns its channel on a canned 'installed' stdout and skips on 'not installed'; path-heuristic prefix matches; default direct). go test passes; cross-platform via GOOS guards.\n5. MOCKING: injectable exec-runner + injectable os.Executable (pass the exe path in) + injectable GOOS. CI has none of these PMs installed → tests use the injected seams.",
