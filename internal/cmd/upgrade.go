@@ -21,10 +21,10 @@
 // artifacts + checksums (never an arbitrary URL, never the agent APIs).
 //
 // Scope: this file owns the command SHELL — the command definition, its 9 LOCAL flags,
-// flag validation, and effective channel/source-repo resolution. The actual
-// --check / normal / --rollback DISPATCH (calling internal/upgrade's Check/Swap/
-// Rollback/Delegate) is P1.M4.T2.S1; runUpgrade's dispatch body here is a clearly-
-// marked PLACEHOLDER (P1.M4.T2.S1 replaces it; the validation + resolution stay).
+// flag validation, and effective channel/source-repo resolution — PLUS the runUpgrade
+// DISPATCH entry (the three-way branch + detect→direct-swap|delegate routing). The path
+// helpers (runCheck/runDirectSwap/runDelegate) and the injectable test seams live in
+// upgrade_run.go (P1.M4.T2.S1).
 //
 // Registered via init() — ZERO edits to root.go (the providers.go/hook.go/integrate.go/
 // lock.go pattern). The 9 flags are LOCAL to upgradeCmd.Flags() (NOT persistent) so they
@@ -32,6 +32,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -39,6 +41,7 @@ import (
 
 	"github.com/dabstractor/stagecoach/internal/config"
 	"github.com/dabstractor/stagecoach/internal/exitcode"
+	"github.com/dabstractor/stagecoach/internal/upgrade"
 )
 
 // upgrade flags (FR-U9/U10). Zero defaults so presence is detectable. Bound to PACKAGE
@@ -142,9 +145,9 @@ func validateUpgradeFlags(fs *pflag.FlagSet) error {
 }
 
 // runUpgrade implements `stagecoach upgrade` (PRD §9.29): validate flags, resolve the
-// effective channel/source-repo, then DISPATCH. The dispatch (--check / normal
-// detect→delegate|swap / --rollback) is P1.M4.T2.S1 — until then this is a no-op
-// placeholder that exercises the validation + resolution (which P1.M4.T2.S1 keeps).
+// effective channel/source-repo, then DISPATCH to the three paths (--check / normal
+// detect→delegate|swap / --rollback). The dispatch + the path helpers + the injectable
+// test seams live in upgrade_run.go (P1.M4.T2.S1).
 //
 // Resolution (FR-U10): flag > [upgrade] config (global only) > Defaults. NO env for
 // channel/source-repo (FR-U10 lists only config + flags). config.LoadUpgradeConfig reads
@@ -178,12 +181,62 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 		effSourceRepo = flagSourceRepo
 	}
 
-	// TODO(P1.M4.T2.S1): dispatch --check / normal (detect→delegate|swap) / --rollback to
-	// internal/upgrade. The dispatch consumes effChannel/effSourceRepo (+ flagInstallMethod/
-	// STAGECOACH_INSTALL_METHOD + flagTargetVersion/flagForce/flagYes). Until then this is a
-	// no-op placeholder that USES effChannel/effSourceRepo (so they aren't "declared and not
-	// used"); P1.M4.T2.S1 removes this notice and inserts the real dispatch.
-	fmt.Fprintf(cmd.ErrOrStderr(),
-		"stagecoach upgrade: not yet implemented (channel=%s source=%s)\n", effChannel, effSourceRepo)
-	return nil
+	// Dispatch (PRD §9.29 FR-U1–U12; §15.4 exit block 0/1/6 ONLY). The three paths consume the
+	// LANDED internal/upgrade primitives via the package-cmd seams in upgrade_run.go:
+	//   - --rollback (FR-U8) → upgradeRollback; ErrNoBackup ⇒ "no backup …" + exit 0.
+	//   - --check (FR-U6)    → runCheck: ResolveTarget + CurrentSemver + Compare; behind ⇒ exit 6.
+	//   - normal (FR-U1)     → upgradeDetect; ChannelDirect (or --force+warning) ⇒ runDirectSwap;
+	//                          else ⇒ runDelegate.
+	// NEVER os.Exit — returns exitcode.New(exitcode.Error, err) / exitcode.New(exitcode.UpdateAvailable,
+	// nil) / nil; main maps via exitcode.For (mirrors every RunE).
+	return dispatchUpgrade(cmd.Context(), cmd, effChannel, effSourceRepo)
+}
+
+// dispatchUpgrade is the thin dispatcher runUpgrade delegates to (kept in upgrade.go next to
+// runUpgrade for readability; the path helpers + seams live in upgrade_run.go). It implements the
+// three-way branch on flagRollback/flagCheck/normal and the detect→direct-swap|delegate routing for
+// the normal path. It reads the S1 flagX package vars (flagRollback/flagCheck/flagForce/flagYes/
+// flagInstallMethod/flagTargetVersion) directly. NEVER os.Exit; returns exitcode.New/nil.
+func dispatchUpgrade(ctx context.Context, cmd *cobra.Command, effChannel, effSourceRepo string) error {
+	log := verboseLog(cmd.ErrOrStderr())
+
+	// --rollback path (FR-U8): one-step undo of a prior direct-binary upgrade.
+	if flagRollback {
+		ver, err := upgradeRollback(ctx)
+		if errors.Is(err, upgrade.ErrNoBackup) {
+			fmt.Fprintln(cmd.OutOrStdout(), "no backup — nothing to roll back")
+			return nil // exit 0
+		}
+		if err != nil {
+			return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: rollback: %w", err)) // exit 1
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "restored stagecoach %s\n", ver)
+		return nil // exit 0
+	}
+
+	client := upgradeNewClient(effSourceRepo, upgradeToken())
+
+	// --check path (FR-U6): check-only; exit 6 if behind, 0 if up-to-date/dev.
+	if flagCheck {
+		return runCheck(ctx, cmd, client, effChannel)
+	}
+
+	// Normal path (FR-U1): detect the install method, then route.
+	ch, evidence, err := upgradeDetect(ctx, flagInstallMethod, log)
+	if err != nil {
+		// ErrUnknownChannel (a bad --install-method) or the os.Executable failure ⇒ exit 1.
+		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+	}
+	log("detected install method: " + string(ch) + " (" + evidence + ")")
+
+	// ChannelDirect is the ONLY self-swap-eligible channel (FR-U1/U5). --force overrides a detected
+	// package-manager install and self-swaps too (FR-U1) — warn first so the user knows a PM-owned
+	// binary is about to be overwritten (the PM's next upgrade may revert it).
+	if ch == upgrade.ChannelDirect || flagForce {
+		if flagForce && ch != upgrade.ChannelDirect {
+			fmt.Fprintln(cmd.ErrOrStderr(), "stagecoach: warning: --force overriding a detected "+string(ch)+" install (FR-U1); self-swapping")
+		}
+		return runDirectSwap(ctx, cmd, client, effChannel)
+	}
+	return runDelegate(ctx, cmd, ch)
 }

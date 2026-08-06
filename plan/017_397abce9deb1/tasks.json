@@ -311,14 +311,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Run orchestration: --check / normal / --rollback paths",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The runUpgrade dispatcher that routes the resolved flags+config to the three paths: --check (resolve+compare, exit 6/0), --rollback (P1.M3.T3), and the normal path (Detect→Delegate-or-direct-swap). Resolves GITHUB_TOKEN, the injectable HTTP client/seams, and verbose logging.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "runUpgrade dispatcher (--check / normal detect→delegate|swap / --rollback)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S2",
@@ -350,7 +350,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "--check: exit 6 when behind, exit 0 when up-to-date (httptest fake releases)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T2.S1"
