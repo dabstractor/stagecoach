@@ -32,6 +32,14 @@ import (
 	"github.com/dabstractor/stagecoach/internal/stubtest"
 )
 
+// toShellPath converts a native path to a form safe to embed verbatim in a /bin/sh
+// script (e.g. touch <path>). Windows backslashes are sh escape characters, so
+// they are flipped to forward slashes (MSYS sh accepts C:/... style). No-op on
+// Unix where filepath.Separator is already '/'.
+func toShellPath(p string) string {
+	return strings.ReplaceAll(p, "\\", "/")
+}
+
 // initTempRepo creates a temp git repo with repo-local identity + a seed commit, returns its dir.
 // (Own copy — the white-box generate_test.go initRepo is in package generate, unimportable here.)
 func initTempRepo(t *testing.T) string {
@@ -86,7 +94,12 @@ func TestCommitStaged_PreCommitFreeze_HoldsForLiveStagedSentinel(t *testing.T) {
 	tmp := t.TempDir()
 	ready := filepath.Join(tmp, "ready")
 	proceed := filepath.Join(tmp, "proceed")
-	hookBody := "#!/bin/sh\ntouch " + ready + "\nwhile [ ! -f " + proceed + " ]; do sleep 0.02; done\nexit 0\n"
+	// Shell scripts embed these paths verbatim; Windows backslashes would be
+	// re-interpreted as escapes by sh. Use forward-slash paths (MSYS sh accepts
+	// C:/... style). No-op on Unix.
+	readySh := toShellPath(ready)
+	proceedSh := toShellPath(proceed)
+	hookBody := "#!/bin/sh\ntouch " + readySh + "\nwhile [ ! -f " + proceedSh + " ]; do sleep 0.02; done\nexit 0\n"
 	hooksDir := filepath.Join(repo, ".git", "hooks")
 	if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), []byte(hookBody), 0o755); err != nil {
 		t.Fatalf("write pre-commit hook: %v", err)

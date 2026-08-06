@@ -19,6 +19,8 @@ package generate
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -26,6 +28,22 @@ import (
 	"github.com/dabstractor/stagecoach/internal/git"
 	"github.com/dabstractor/stagecoach/internal/stubtest"
 )
+
+// waitForMarker blocks until the file at path exists (the stub agent writes it
+// once it has drained stdin = generation is in-flight) or the timeout elapses.
+// Used to make cancellation/detection tests deterministic across platforms
+// (Windows git spawns are slower, so a blind time.Sleep can land pre-snapshot).
+func waitForMarker(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("waitForMarker: %s not written within %s (stub never reached generation)", path, timeout)
+}
 
 // repoSnapshot captures the pre-run repo state for the §20.2 invariant comparison.
 type repoSnapshot struct {
@@ -225,9 +243,15 @@ func TestInvariants(t *testing.T) {
 					_, e := CommitStaged(cctx, Deps{Git: git.New(repo), Manifest: m}, config.Defaults())
 					done <- e
 				}()
-				// Let snapshot (step 3) + generation start — snapshot is microseconds,
-				// stub sleeps 3000ms → snapshot is long done → TreeSHA is non-empty.
-				time.Sleep(150 * time.Millisecond)
+				// Wait until generation is actually in-flight (the stub has drained its stdin
+				// and written the readiness marker) BEFORE cancelling. A blind time.Sleep is
+				// timing-sensitive: on Windows git spawns are slower, so 150ms could land
+				// DURING the snapshot (pre-rescue) and surface a bare context.Canceled instead
+				// of a *RescueError. Polling the marker makes the cancel deterministically hit
+				// the Execute/generation path on every platform.
+				marker := filepath.Join(t.TempDir(), "marker")
+				m.Env["STAGECOACH_STUB_MARKER"] = marker
+				waitForMarker(t, marker, 2*time.Second)
 				cancel() // simulate SIGINT: ctx cancelled → Execute returns context.Canceled
 				err := <-done
 				if err != nil {

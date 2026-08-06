@@ -282,12 +282,19 @@ func TestCommitStaged_CASFailure(t *testing.T) {
 	// Let the orchestrator snapshot + enter generation (stub sleeping 400ms).
 	time.Sleep(150 * time.Millisecond)
 
-	// Move HEAD mid-generation with a commit whose tree DIFFERS from the snapshot (add c.txt on
-	// top of the still-staged b.txt), so the CAS error takes the generic "HEAD moved" path rather
-	// than the already-committed fast path (covered by TestCommitStaged_CASFailure_AlreadyCommitted).
-	writeFile(t, repo, "c.txt", "concurrent change")
-	stageFile(t, repo, "c.txt")
-	gitOut(t, repo, "commit", "-m", "concurrent commit")
+	// Move HEAD mid-generation with a commit whose tree DIFFERS from the snapshot, so the CAS
+	// error takes the generic "HEAD moved" path rather than the already-committed fast path
+	// (covered by TestCommitStaged_CASFailure_AlreadyCommitted).
+	//
+	// Cross-platform note: `git commit` (after staging c.txt) races the orchestrator's
+	// FreezeWorkingTree (AddAll+WriteTree) on the LIVE .git/index. On Windows the mandatory
+	// index.lock collides ("Unable to create '.git/index.lock': File exists"). Following the
+	// decompose CAS test's precedent, move HEAD via `commit-tree` + `update-ref`, which NEVER
+	// touch the index. commit-tree from HEAD^{tree} yields the seed tree {initial}, which
+	// always differs from the b.txt snapshot {initial,b.txt} -> always the "HEAD moved" path.
+	tree := gitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	c := gitOut(t, repo, "commit-tree", tree, "-p", "HEAD", "-m", "concurrent commit")
+	gitOut(t, repo, "update-ref", "HEAD", c)
 	concurrent := headSHA(t, repo)
 
 	err := <-done
@@ -346,17 +353,26 @@ func TestCommitStaged_CASFailure_AlreadyCommitted(t *testing.T) {
 	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: x", SleepMS: 400})
 	cfg := config.Defaults()
 
+	// Capture the staged b.txt tree BEFORE starting the orchestrator. CommitStaged's
+	// FreezeWorkingTree (AddAll+WriteTree on the live index) will recompute the SAME tree (b.txt
+	// is already staged; AddAll is a no-op), so this == the snapshot tree T. Capturing it up front
+	// avoids racing the orchestrator's index access on Windows (mandatory index.lock), and lets us
+	// build the concurrent same-tree commit via `commit-tree` + `update-ref` (no index touch).
+	sameTree := gitOut(t, repo, "write-tree")
+
 	done := make(chan error, 1)
 	go func() {
 		_, e := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
 		done <- e
 	}()
 
-	// Let the orchestrator snapshot (freeze b.txt into tree T) + enter generation.
+	// Let the orchestrator snapshot (freeze b.txt into tree T == sameTree) + enter generation.
 	time.Sleep(150 * time.Millisecond)
 
-	// Race a NON-empty commit of the SAME staged b.txt → a commit whose tree == the snapshot tree T.
-	gitOut(t, repo, "commit", "-m", "concurrent same-tree")
+	// Race a commit whose tree == the snapshot tree T (commit-tree from the pre-captured sameTree;
+	// update-ref never touches the index -> no Windows index.lock collision with the orchestrator).
+	c := gitOut(t, repo, "commit-tree", sameTree, "-p", "HEAD", "-m", "concurrent same-tree")
+	gitOut(t, repo, "update-ref", "HEAD", c)
 	concurrent := headSHA(t, repo)
 
 	err := <-done
@@ -830,12 +846,10 @@ func TestCommitStaged_EditGate(t *testing.T) {
 		writeFile(t, repo, "new.txt", "hello world")
 		stageFile(t, repo, "new.txt")
 
-		// Create a fake editor script that rewrites the message.
-		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
-		if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'edited subject' > \"$1\"\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("GIT_EDITOR", script)
+		// Fake editor that rewrites the message (cross-platform compiled stub;
+		// the old fakeeditor.sh /bin/sh script cannot run on Windows).
+		t.Setenv("GIT_EDITOR", stubtest.BuildEditor(t))
+		stubtest.SetEditorEnv(t, stubtest.EditorOptions{Msg: "edited subject"})
 
 		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
 		cfg := config.Defaults()
@@ -863,12 +877,11 @@ func TestCommitStaged_EditGate(t *testing.T) {
 		writeFile(t, repo, "new.txt", "hello world")
 		stageFile(t, repo, "new.txt")
 
-		// Create a fake editor that truncates the file (empty → abort).
-		script := filepath.Join(t.TempDir(), "fakeeditor.sh")
-		if err := os.WriteFile(script, []byte("#!/bin/sh\n: > \"$1\"\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("GIT_EDITOR", script)
+		// Fake editor that truncates the file (empty -> abort). Cross-platform
+		// compiled stub (Msg="" truncates); the old fakeeditor.sh cannot run on
+		// Windows.
+		t.Setenv("GIT_EDITOR", stubtest.BuildEditor(t))
+		stubtest.SetEditorEnv(t, stubtest.EditorOptions{Msg: ""})
 
 		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
 		cfg := config.Defaults()

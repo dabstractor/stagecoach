@@ -707,23 +707,12 @@ func TestMultiTurnGate_TokenLimitZero_ParseFail_NoRetryInstr(t *testing.T) {
 	stageFile(t, repo, "new.txt")
 
 	// Tee-wrapper: appends each invocation's stdin (followed by a boundary marker) to captureFile,
-	// then pipes the SAME stdin into the real stub (passed as $1 via Subcommand). Pure /bin/sh; no
-	// content reaches a shell eval (cat/heredoc only) so the diff payload is never re-interpreted.
+	// then pipes the SAME stdin into the real stub (passed as argv[1] via Subcommand). The compiled
+	// stubtee binary is the cross-platform twin of the historical tee-wrap.sh /bin/sh script (which
+	// cannot be execed directly on Windows, where CreateProcess ignores the shebang). It tees stdin
+	// to $STAGECOACH_TEST_CAPTURE then re-pipes it into the real stub.
 	captureFile := filepath.Join(t.TempDir(), "captures.txt")
-	wrapper := filepath.Join(t.TempDir(), "tee-wrap.sh")
-	wrapperBody := "#!/bin/sh\n" +
-		"stub=\"$1\"; shift\n" +
-		"tmp=$(mktemp)\n" +
-		"cat > \"$tmp\"\n" +
-		"cat \"$tmp\" >> \"$STAGECOACH_TEST_CAPTURE\"\n" +
-		"printf '\\n---CAPTURE-BOUNDARY---\\n' >> \"$STAGECOACH_TEST_CAPTURE\"\n" +
-		"cat \"$tmp\" | \"$stub\" \"$@\"\n" +
-		"rc=$?\n" +
-		"rm -f \"$tmp\"\n" +
-		"exit $rc\n"
-	if err := os.WriteFile(wrapper, []byte(wrapperBody), 0o755); err != nil {
-		t.Fatalf("write wrapper: %v", err)
-	}
+	wrapper := stubtest.BuildTee(t)
 
 	// Build the stub manifest as usual (call-varying script), then RETARGET Command at the wrapper and
 	// pass the real stub path as Subcommand[0] (rendered as the wrapper's $1). Add the capture path to

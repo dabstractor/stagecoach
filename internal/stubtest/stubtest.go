@@ -29,6 +29,7 @@ type Options struct {
 	Output         string // manifest Output; "" → "raw"
 	StripCodeFence *bool  // manifest StripCodeFence; nil → true
 	ArgsFile       string // STAGECOACH_STUB_ARGSFILE (writes the stub's os.Args to this path — observe rendered argv)
+	Marker         string // STAGECOACH_STUB_MARKER (writes "1" to this path once stdin is drained — generation in-flight signal)
 }
 
 var (
@@ -108,6 +109,9 @@ func optsEnvMap(o Options) map[string]string {
 	}
 	if o.ArgsFile != "" {
 		m["STAGECOACH_STUB_ARGSFILE"] = o.ArgsFile
+	}
+	if o.Marker != "" {
+		m["STAGECOACH_STUB_MARKER"] = o.Marker
 	}
 	if o.Script != "" {
 		m["STAGECOACH_STUB_SCRIPT"] = o.Script

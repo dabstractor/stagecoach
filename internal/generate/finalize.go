@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -99,12 +98,9 @@ func EditMessage(ctx context.Context, msg string, cfg config.Config, editCtx Edi
 		editor = firstNonEmpty(os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi")
 	}
 
-	// 4. Invoke via sh -c (the value is shell-interpreted — may contain args). Interactive stdio.
-	cmd := exec.CommandContext(ctx, "sh", "-c", editor+" \"$@\"", "--", editMsgPath)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// 4. Invoke the editor (shell-interpreted on Unix via sh -c for git parity;
+	// direct argv exec on Windows where sh is not on PATH). Interactive stdio.
+	if err := runEditorCommand(ctx, editor, editMsgPath); err != nil {
 		return "", fmt.Errorf("--edit: editor %q exited with error: %w", editor, err) // abort (e.g. vim :cq)
 	}
 
