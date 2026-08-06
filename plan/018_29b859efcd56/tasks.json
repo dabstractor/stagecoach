@@ -4,14 +4,14 @@
       "type": "Phase",
       "id": "P1",
       "title": "Commit-identity transparency regression net (FR-39a)",
-      "status": "Ready",
+      "status": "Complete",
       "description": "Codify FR-39a — the permanent guarantee that stagecoach is invisible in commit metadata — as an executable regression net. The invariant ALREADY holds in production code (verified: zero GIT_AUTHOR_*/GIT_COMMITTER_* env, zero user.name/user.email config writes, runWithInput never sets cmd.Env). This phase's deliverable is therefore test + guard + in-code doc tag, NOT a behavior change. It exists so a future 'helpful' fallback identity, branding trailer, or config-init identity write cannot silently land.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Assert the invariant the code already upholds",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Land the §20.2 'commit-identity transparency' invariant in two complementary forms — a behavioral success-path test (commits carry git's resolved identity, never a stagecoach brand) and a structural source-scan guard (no production code path writes identity config or sets identity env) — plus an FR-39a doc tag making the guarantee grep-discoverable from code.",
           "tasks": [
             {
@@ -45,14 +45,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Sync changeset-level documentation",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Mode B catch-all: formally decide whether the FR-39a changeset requires any changeset-level (overview/README) documentation. FR-39a is a defensive internal invariant with no CLI flag, no config key, and no user-visible output, and the README makes no AI-branding claim to retract — so the likely outcome is 'no change needed'. This task exists so that decision is made explicitly and recorded rather than skipped, per SOW §5.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Sweep README.md + docs/how-it-works.md for any FR-39a documentation surface",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
