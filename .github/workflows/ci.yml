@@ -21,17 +21,30 @@ jobs:
   build-test:
     name: test (${{ matrix.os }} / go${{ matrix.go }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20         # Hard backstop. go test's own -timeout only fires in-process; a
+                               # stalled test binary / OS crash-reporter can bypass it (this is what
+                               # hung deprecated macos-13 for 24h). Keep all matrix jobs bounded.
     strategy:
       fail-fast: false
       matrix:
-        # Maps PRD §20.4's {linux,macos,windows} x {amd64,arm64} onto native GitHub runners:
-        #   ubuntu-latest  = linux/amd64
-        #   macos-13       = macos/amd64  (Intel)
-        #   macos-latest   = macos/arm64  (Apple Silicon)  <-- real arm64 TEST coverage
-        #   windows-latest = windows/amd64
-        # linux/arm64 + windows/arm64 are compile-checked in the cross-build step below.
-        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
-        go: ['1.22', '1.23']
+        # Native TEST runners for PRD §20.4 — only platforms whose test suite is designed to execute
+        # on them are exercised with `go test -race`:
+        #   ubuntu-latest  = linux/amd64   (primary dev platform; full race-enabled suite)
+        #   macos-latest   = macos/arm64   (Apple Silicon)
+        #
+        # Go toolchain floor is 1.24: macos-latest now runs macOS 26 (Tahoe), whose dyld rejects
+        # Go <1.24 binaries missing the LC_UUID load command (golang/go#78012, fixed in Go 1.24).
+        # Go 1.22/1.23 crash instantly on macos-latest with `dyld: missing LC_UUID load command`.
+        #
+        # Intentionally NOT in the matrix (still first-class release targets — see cross-build):
+        #   macos-13       = macos/amd64 (Intel) — runner deprecated by GitHub; stalled 24h under
+        #                   -race. darwin/amd64 is compile-checked in the cross-build step instead.
+        #   windows-latest = windows/amd64 — the suite is Unix-centric (SIGINT signal paths,
+        #                   #!/bin/sh fake editors, git.exe PATH/TOML-path assumptions) and is not
+        #                   ported to run (only build) on Windows yet. windows/{amd64,arm64} are
+        #                   compile-checked in cross-build, matching goreleaser's CGO_ENABLED=0 model.
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.24', '1.25']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -40,12 +53,20 @@ jobs:
           cache: true            # auto-keyed on go.sum
       - name: Build
         run: go build ./...
-      - name: Cross-build arm64 (covers linux/arm64 + windows/arm64 compile)
-        # Proves the arm64 targets COMPILE without paying for/suffering QEMU test emulation.
+      - name: Cross-build all non-native release targets
+        # Compile-checks every goreleaser target that is not the host's native (os,arch), so all 6
+        # release targets (PRD §21.2/G9) are verified without paying for QEMU test emulation.
+        # CGO_ENABLED=0 matches .goreleaser.yaml: no C cross-toolchain needed, reproducible from
+        # any host. Covers linux/arm64, darwin/{amd64,arm64}, windows/{amd64,arm64}.
+        env:
+          CGO_ENABLED: 0
         run: |
-          go env -w GOARCH=arm64 GOOS=linux   && go build ./...
-          go env -w GOARCH=arm64 GOOS=windows && go build ./...
-          go env -u GOARCH GOOS
+          for pair in linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos=${pair%/*}; goarch=${pair#*/}
+            echo "::group::GOOS=$goos GOARCH=$goarch"
+            GOOS=$goos GOARCH=$goarch go build ./...
+            echo "::endgroup::"
+          done
       - name: Test (race)
         run: go test -race ./...
 
