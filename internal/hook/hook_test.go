@@ -4,9 +4,27 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// assertScriptMode verifies the hook file's executable mode. On Unix this is the
+// exact 0o755 (ScriptMode) perm; on Windows there is no executable bit (os.Stat
+// reports 0666 for every regular file), so we only assert it is a regular file.
+// Mirrors the cmd/hook_test.go Windows handling.
+func assertScriptMode(t *testing.T, info os.FileInfo) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		if info.IsDir() {
+			t.Errorf("hook is a directory, want a regular file")
+		}
+		return
+	}
+	if info.Mode().Perm() != ScriptMode {
+		t.Errorf("file perm = %o, want %o", info.Mode().Perm(), ScriptMode)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Detect
@@ -86,9 +104,7 @@ func TestInstall_Fresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != ScriptMode {
-		t.Errorf("file perm = %o, want %o", info.Mode().Perm(), ScriptMode)
-	}
+	assertScriptMode(t, info)
 	data, _ := os.ReadFile(filepath.Join(dir, HookFilename))
 	if string(data) != hookScript(false, "") {
 		t.Errorf("file content mismatch")
@@ -111,9 +127,7 @@ func TestInstall_IdempotentReinstall(t *testing.T) {
 		t.Errorf("content changed on reinstall")
 	}
 	info, _ := os.Stat(filepath.Join(dir, HookFilename))
-	if info.Mode().Perm() != ScriptMode {
-		t.Errorf("file perm = %o, want %o after reinstall", info.Mode().Perm(), ScriptMode)
-	}
+	assertScriptMode(t, info)
 }
 
 func TestInstall_Strict(t *testing.T) {

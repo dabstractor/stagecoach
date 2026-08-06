@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -156,6 +157,14 @@ func TestLoadStagecoachIgnore_ReadError(t *testing.T) {
 	}
 	_, err := LoadStagecoachIgnore(filePath, ui.NewVerbose(nil, false))
 	if err == nil {
+		// On Windows, reading "<file>/.stagecoachignore" yields ERROR_PATH_NOT_FOUND,
+		// which Go maps to os.ErrNotExist — so LoadStagecoachIgnore treats it as a
+		// missing file (FR-X2 no-op) and returns (nil, nil). That is a legitimate
+		// cross-platform outcome (a repoRoot that is a file has no ignore file); the
+		// non-ENOENT error-wrapping branch this test covers is Unix-only here.
+		if runtime.GOOS == "windows" {
+			t.Skip("repoRoot-is-a-file yields ErrNotExist on Windows (no-op), not a wrapped error")
+		}
 		t.Fatal("expected error when repoRoot is a file, got nil")
 	}
 	if !strings.Contains(err.Error(), "read .stagecoachignore") {

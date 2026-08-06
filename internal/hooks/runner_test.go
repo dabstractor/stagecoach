@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +47,16 @@ func installHook(t *testing.T, repo, name, body string) {
 // hookPath returns repo/.git/hooks/<name> (the default hooksDir for a temp repo).
 func hookPath(repo, name string) string {
 	return filepath.Join(repo, ".git", "hooks", name)
+}
+
+// shellPath converts a native path to a form safe to embed verbatim in a /bin/sh
+// hook body (e.g. `touch <path>`). Windows backslashes are sh escape characters,
+// so they are flipped to forward slashes (MSYS sh accepts C:/... style). No-op on
+// Unix where filepath.Separator is already '/'. The product runner invokes
+// #!/bin/sh hooks via sh on Windows (hookInvocation in runner.go), so the hook
+// body runs under MSYS sh and needs POSIX-style paths.
+func shellPath(p string) string {
+	return strings.ReplaceAll(p, "\\", "/")
 }
 
 // --- runner test fixture ---
@@ -260,7 +271,7 @@ func TestRunCommitHooks_NoVerify_SkipsPreCommitAndCommitMsg_PrepareRuns(t *testi
 	marker := filepath.Join(repo, "prepare-ran")
 	installHook(t, repo, "pre-commit", `exit 1`) // would abort if not skipped
 	installHook(t, repo, "commit-msg", `exit 1`) // would abort if not skipped
-	installHook(t, repo, "prepare-commit-msg", `touch `+marker)
+	installHook(t, repo, "prepare-commit-msg", `touch `+shellPath(marker))
 
 	cfg := defaultCfg()
 	cfg.NoVerify = true
@@ -308,7 +319,7 @@ func TestRunCommitHooks_DryRun_SkipsPreCommit_RunsCommitMsg(t *testing.T) {
 func TestRunPostCommit_DryRun_NoOp(t *testing.T) {
 	repo, _, _, g := primeRunnerRepo(t)
 	marker := filepath.Join(repo, "post-ran")
-	installHook(t, repo, "post-commit", `touch `+marker)
+	installHook(t, repo, "post-commit", `touch `+shellPath(marker))
 
 	if err := RunPostCommit(context.Background(), g, defaultCfg(), HookOpts{DryRun: true}); err != nil {
 		t.Errorf("RunPostCommit (dry-run) err = %v, want nil", err)
@@ -367,6 +378,10 @@ func TestRunCommitHooks_PrepareCommitMsg_StripsComments(t *testing.T) {
 // --- 11. non-executable pre-commit → silent skip (X_OK parity) ---
 
 func TestRunCommitHooks_NonExecutablePreCommit_Skip(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-executable-bit skip is Unix-only: Windows has no executable bit, so a present " +
+			"hook file always runs (git parity) — see hookExecutable in runner.go")
+	}
 	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
 	// A pre-commit that exists but is NOT executable → silently skipped (git access(X_OK) parity).
 	if err := os.WriteFile(hookPath(repo, "pre-commit"), []byte("#!/bin/sh\nexit 1\n"), 0o644); err != nil {
@@ -401,7 +416,10 @@ func TestHookExecutable(t *testing.T) {
 	if !hookExecutable(exe) {
 		t.Errorf("hookExecutable(%q) = false, want true (0755)", exe)
 	}
-	if hookExecutable(nonExe) {
+	// On Windows there is no executable bit, so hookExecutable treats every present
+	// non-directory file as runnable (matching git's own Windows behavior — see
+	// runner.go). The 0644-vs-0755 distinction is therefore Unix-only.
+	if runtime.GOOS != "windows" && hookExecutable(nonExe) {
 		t.Errorf("hookExecutable(%q) = true, want false (0644)", nonExe)
 	}
 	if hookExecutable(filepath.Join(dir, "absent")) {
@@ -624,7 +642,7 @@ func TestRunCommitHooks_PrepareCommitMsg_ArgcIsOne(t *testing.T) {
 	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
 
 	argcFile := filepath.Join(repo, "argc.txt")
-	installHook(t, repo, "prepare-commit-msg", `echo "ARGC=$#" > `+argcFile)
+	installHook(t, repo, "prepare-commit-msg", `echo "ARGC=$#" > `+shellPath(argcFile))
 
 	cfg := defaultCfg()
 	_, _, err := RunCommitHooks(context.Background(), g, cfg, snapshotTree, parentSHA,
