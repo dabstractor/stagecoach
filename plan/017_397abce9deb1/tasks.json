@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Foundation: comparable version, exit code 6, [upgrade] config table, GitHub Releases client",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The reusable primitives every upgrade path consumes: a comparable (semver) version of the running binary, the UpdateAvailable=6 exit code, the global-only [upgrade] config table (channel/source_repo), and the HTTP client for the GitHub Releases API (the one named network exception to §19). All injectable/mockable for tests.",
           "tasks": [
             {
@@ -77,14 +77,14 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "GitHub Releases HTTP client (the named §19 exception) + asset/checksum primitives",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The HTTP client that fetches release metadata and downloads the selected archive + checksums.txt, SHA256-verifying it. The ONLY stagecoach surface that makes network calls. Injectable base-URL + *http.Client so tests use httptest, not the real API.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "Release-metadata fetch (latest/all-by-tag/pinned) with optional token auth + error mapping",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/architecture/external_deps.md §1. net/http is stdlib (no new go.mod dep). API: GET /repos/{owner}/{repo}/releases/latest → {tag_name, assets:[{name,browser_download_url,size}], prerelease, draft}; /releases (array, for --prerelease); /releases/tags/{tag} (pinned, --version). Auth: STAGECOACH_GITHUB_TOKEN then GITHUB_TOKEN → 'Authorization: Bearer <t>'. MUST set User-Agent (Go default UA sometimes rejected). FR-U11: network/rate-limit errors abort before any write.\n2. INPUT: owner/repo (string, from LoadUpgradeConfig().SourceRepo or --source-repo flag), channel (stable/prerelease), optional pinned tag. A *http.Client and base URL (injectable for tests).\n3. LOGIC: New package internal/upgrade/releases.go exposing a `Client` struct { HTTP *http.Client; BaseURL string; Repo string; Token string } and methods: LatestStable(ctx) (Release, error); LatestAdmittingPrereleases(ctx) (Release, error) (filters draft=false, admits prerelease, picks highest semver via P1.M1.T1.S2 Compare); ReleaseByTag(ctx, tag) (Release, error). Release struct: Tag, Assets []Asset{ Name, DownloadURL string; Size int64 }. Errors: typed (ErrNoReleases, ErrRateLimited, ErrHTTP) wrapping status + message; 404→ErrNoReleases; 403/429→ErrRateLimited (hint: set a token). Token resolution: explicit param; the command layer (P1.M4) resolves STAGECOACH_GITHUB_TOKEN/GITHUB_TOKEN env. BaseURL default 'https://api.github.com'; tests inject httptest.Server.URL. Stream-safe (do not buffer whole JSON; or buffer — releases JSON is small).\n4. OUTPUT: New releases.go + tests against an httptest fake server (latest returns a canned release; 404→ErrNoReleases; 403→ErrRateLimited; prerelease-filter picks highest non-draft). go test passes.\n5. DOCS: [Mode A] package doc comment stating this is the SOLE network surface + the §19 scoping.",
@@ -96,7 +96,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T3.S2",
                   "title": "Asset + checksums.txt download + SHA256 verification primitives",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T3.S1"
