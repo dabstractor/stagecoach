@@ -1543,17 +1543,43 @@ func TestDecompose_CASAbortPartial(t *testing.T) {
 	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
 	deps, buf := dcmOutBuffer(t, repo, roles)
 
-	// External HEAD move: a goroutine moves HEAD after c1 is published but before c2's CAS.
-	// The message agent sleep (1000ms) creates the timing window:
-	//   iter 0: stage c1, freeze, publish(nil), launch msg[0] (sleep 1000ms)
-	//   iter 1: stage c2, freeze, publish(msg[0]) → drain (wait ~1000ms) → publishCommit c1 → success
-	//     → launch msg[1] (sleep 1000ms)
-	//   iter 2: stage c3, freeze, publish(msg[1]) → drain (wait ~1000ms) → goroutine fired at
-	//     1500ms → HEAD moved → publishCommit c2 → CAS failure!
-	//   So: 1 commit landed (c1), CAS fails on c2. Partial = 1 commit.
+	// External HEAD move, made deterministic on two axes:
+	//
+	// (1) WHEN: poll git state until c1 has committed ("feat: add a" in log) but c2 has NOT, AND
+	// c3 is staged ("c.txt" in the index). That conjunction means we are inside the msg[1] drain
+	// window — the main loop is blocked in publish() draining concept c2's message, so NO stager is
+	// running and the §19 "stager moved HEAD" guard cannot fire on our move. (A blind time.Sleep
+	// could land during a stager call → "stager moved HEAD" abort, or before c1 landed → 0 commits.)
+	// A brief armed-delay clears c3's stager post-HEAD snapshot before we touch the ref.
+	//
+	// (2) HOW: build the move with `git commit-tree` from HEAD's tree, NOT `git commit --allow-empty`.
+	// The latter captures the STAGED INDEX; c2's stager stages b.txt before c1 commits, so an
+	// --allow-empty commit then has tree {a.txt,b.txt} == c2's frozen snapshot, tripping the
+	// "already committed / Nothing to do" CASError path instead of "HEAD moved". commit-tree from
+	// HEAD^{tree} yields tree {a.txt}, which always differs from c2's {a.txt,b.txt} → always
+	// "HEAD moved", exactly 1 commit (c1) landed. commit-tree/update-ref never touch the index.
 	go func() {
-		time.Sleep(1500 * time.Millisecond)
-		dcmRunGit(t, repo, "commit", "--allow-empty", "-m", "external head move")
+		deadline := time.Now().Add(30 * time.Second)
+		armed := false
+		for time.Now().Before(deadline) {
+			logOut, _ := exec.Command("git", "-C", repo, "log", "--format=%s").CombinedOutput()
+			idxOut, _ := exec.Command("git", "-C", repo, "diff", "--cached", "--name-only").CombinedOutput()
+			s := string(logOut)
+			if strings.Contains(s, "feat: add a") && !strings.Contains(s, "feat: add b") && strings.Contains(string(idxOut), "c.txt") {
+				if !armed {
+					armed = true
+					time.Sleep(150 * time.Millisecond) // past c3 stager's post-HEAD snapshot; well inside the ~1s drain
+					continue
+				}
+				tree := dcmRunGit(t, repo, "rev-parse", "HEAD^{tree}")
+				c := dcmRunGit(t, repo, "commit-tree", tree, "-p", "HEAD", "-m", "external head move")
+				dcmRunGit(t, repo, "update-ref", "HEAD", c)
+				return
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		// deadline expired without hitting the c1-committed/c3-staged window — leave HEAD alone;
+		// the test's own assertions will fail rather than risk a late move racing a finished test.
 	}()
 
 	// Well-behaved stager seam: stages files only (no HEAD movement — the guard would catch it).
