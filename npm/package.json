@@ -26,5 +26,9 @@
     "ai",
     "commit-message",
     "cli"
-  ]
+  ],
+  "dependencies": {
+    "tar": "^7.5.22",
+    "extract-zip": "^2.0.1"
+  }
 }

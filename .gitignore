@@ -10,8 +10,11 @@ cmd/stubagent/stubagent
 *.dylib
 
 # Dependency directories
-/node_modules/
+node_modules/
 /venv/
+
+# npm subpackage lockfile + cache (npm/ is a published subpackage; lock regenerated at install)
+npm/package-lock.json
 
 # Environment files
 .env

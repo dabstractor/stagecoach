@@ -406,14 +406,14 @@
           "type": "Milestone",
           "id": "P2.M1",
           "title": "npm wrapper (@dabstractor/stagecoach)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "A thin JS package whose postinstall downloads the matching prebuilt native binary from GitHub Releases into a cache (SHA256-verified) and whose bin execs the cached binary — the esbuild/turbo/prisma pattern. Gives `npx stagecoach` (zero-install trial) and `npm i -g stagecoach`. The shim sets STAGECOACH_INSTALL_METHOD=npm so `stagecoach upgrade` delegates to npm instead of self-swapping the cached binary.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "npm wrapper package (package.json + shim + postinstall)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Author the JS package: package.json (bin, postinstall), the exec shim (sets STAGECOACH_INSTALL_METHOD=npm, spawns the cached binary, forwards argv/stdio/exit), and the postinstall download+verify+extract logic with an --ignore-scripts fallback message.",
               "subtasks": [
                 {
@@ -432,7 +432,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T1.S2",
                   "title": "install.cjs postinstall (platform→asset, download+SHA256-verify, extract to cache)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -446,7 +446,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T1.S3",
                   "title": "CI publish step (npm publish on tag) + version-sync + smoke test",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P2.M1.T1.S1",
