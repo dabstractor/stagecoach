@@ -3,6 +3,7 @@ package upgrade
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -364,6 +365,42 @@ func TestDetect_Path_GoInstallViaGOPATH(t *testing.T) {
 	ch, _, ok := d.detectPath()
 	if !ok || ch != ChannelGoInstall {
 		t.Errorf("detectPath go-install = %q,%v, want go-install,true", ch, ok)
+	}
+}
+
+// TestDetect_Path_GoInstallDefaultGOPATH is the BUG-002 regression: GOPATH unset (the common
+// modern-Go case) but HOME set → a binary under $HOME/go/bin must be detected as go-install via
+// the ~/go default (matches `go env GOPATH`).
+func TestDetect_Path_GoInstallDefaultGOPATH(t *testing.T) {
+	home := "/tmp/fakehome"
+	d := &Detector{
+		ExePath: filepath.Join(home, "go", "bin", "stagecoach"),
+		GOOS:    "linux",
+		Env: func(k string) string {
+			if k == "HOME" {
+				return home
+			}
+			return "" // GOPATH unset
+		},
+	}
+	ch, _, ok := d.detectPath()
+	if !ok || ch != ChannelGoInstall {
+		t.Errorf("detectPath default-GOPATH = %q,%v, want go-install,true", ch, ok)
+	}
+}
+
+// TestDetect_Path_GoInstallNoFalsePositiveWhenHOMEUnset is the BUG-002 no-false-positive guard:
+// both GOPATH and HOME unset → even a ~/go/bin-style ExePath must NOT be detected as go-install
+// (no HOME ⇒ no default GOPATH to resolve ⇒ falls through to direct).
+func TestDetect_Path_GoInstallNoFalsePositiveWhenHOMEUnset(t *testing.T) {
+	d := &Detector{
+		ExePath: "/home/me/go/bin/stagecoach", // looks like a go-install path
+		GOOS:    "linux",
+		Env:     func(k string) string { return "" }, // GOPATH and HOME both unset
+	}
+	ch, _, ok := d.detectPath()
+	if ok && ch == ChannelGoInstall {
+		t.Errorf("detectPath false-positive go-install = %q,%v, want no go-install match (HOME unknown)", ch, ok)
 	}
 }
 

@@ -368,12 +368,24 @@ func (d *Detector) detectPath() (Channel, string, bool) {
 		}
 	}
 
-	// go-install via $GOPATH/bin (default ~/go/bin when GOPATH is unset). Resolved from the injected
-	// env getter so a test can set GOPATH without touching the real environment.
-	if gopath := d.envOr("GOPATH", ""); gopath != "" {
+	// go-install via $GOPATH/bin. When GOPATH is explicitly set, use it; when GOPATH is UNSET (the
+	// overwhelmingly common modern-Go case — `go env GOPATH` defaults to ~/go), fall back to $HOME/go
+	// so a binary installed via `go install ...@latest` under the default ~/go/bin is detected as
+	// go-install (FR-U2/FR-U3) instead of misrouted to direct (BUG-002). Resolved from the injected
+	// env getter so a test can set GOPATH/HOME without touching the real environment. An explicit
+	// GOPATH always wins; the HOME-based default applies only when GOPATH is empty.
+	gopath := d.envOr("GOPATH", "")
+	evidence := "path: $GOPATH/bin"
+	if gopath == "" {
+		if home := d.envOr("HOME", ""); home != "" {
+			gopath = filepath.Join(home, "go")
+			evidence = "path: ~/go/bin (default GOPATH)"
+		}
+	}
+	if gopath != "" {
 		goBin := filepath.Clean(filepath.Join(gopath, "bin")) + string(filepath.Separator)
 		if strings.HasPrefix(real, goBin) || strings.HasPrefix(lower, strings.ToLower(goBin)) {
-			return ChannelGoInstall, "path: $GOPATH/bin", true
+			return ChannelGoInstall, evidence, true
 		}
 	}
 
