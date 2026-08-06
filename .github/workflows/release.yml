@@ -5,6 +5,10 @@
 #   HOMEBREW_TAP_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/homebrew-tap
 #   SCOOP_BUCKET_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/scoop-bucket
 #   AUR_SSH_PRIVATE_KEY        SSH private key for the AUR account (only if the `aurs:` block is kept)
+#   NPM_TOKEN                  npm AUTOMATION token (npmjs.com → Access Tokens → "Automation";
+#                              bypasses publish 2FA for non-interactive CI). Settings → Secrets → Actions.
+#                              NOTE: use an AUTOMATION token, NOT a "Publish" token — a Publish token
+#                              fails with "requires a one-time password" if the account has publish 2FA on.
 # (GITHUB_TOKEN is auto-provided — no secret needed for the GitHub Release itself.)
 name: release
 
@@ -51,3 +55,50 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+  # --- npm wrapper publish (PRD §21.2 "Beyond goreleaser"; external_deps.md §3) ----------------
+  # goreleaser has NO native npm pipe, so @dabstractor/stagecoach is published by a SEPARATE job.
+  # `needs: goreleaser` ensures the GitHub Release (archives + checksums) EXISTS before users
+  # `npm install` — the postinstall fetches the binary from that Release. Without `needs:` the two
+  # jobs run concurrently and npm could publish before the Release exists, 404'ing early installers.
+  npm-publish:
+    name: Publish npm wrapper
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4   # default fetch-depth 1 is fine — npm-publish needs no changelog history
+
+      - name: Set up Node 20 + npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'        # contract; satisfies package.json engines.node (>=18)
+          registry-url: 'https://registry.npmjs.org'   # writes ~/.npmrc auth line (NODE_AUTH_TOKEN resolved at publish step)
+
+      - name: Sync package.json version from tag
+        # The committed npm/package.json version is the 0.0.0 dev placeholder; the RELEASE version is
+        # the tag without leading v (goreleaser {{.Version}}). Bump it TRANSIENTLY (no commit/tag);
+        # `npm version --no-git-tag-version` skips all git ops INCLUDING the dirty-tree check, so it
+        # is robust in a clean CI checkout.
+        working-directory: npm
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"   # refs/tags/v1.2.0 -> 1.2.0 ; v1.2.0-rc.1 -> 1.2.0-rc.1
+          echo "Publishing @dabstractor/stagecoach@$VERSION"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Validate deps resolve (no postinstall, no lockfile)
+        # --ignore-scripts: do NOT run postinstall (install.cjs would download the REAL binary — the
+        #   publish ships JS ONLY; the binary is fetched at USER install time, not publish time).
+        # --no-package-lock: do NOT create a lockfile (it would be included by npm pack/publish and
+        #   pollute the published tarball).
+        working-directory: npm
+        run: npm install --ignore-scripts --no-package-lock
+
+      - name: Publish to npm
+        # --access public: REQUIRED — @dabstractor/stagecoach is scoped (scoped packages default to
+        #   private/restricted; a bare `npm publish` is rejected or publishes privately).
+        # NODE_AUTH_TOKEN is resolved from THIS step's env by the ~/.npmrc that setup-node wrote.
+        working-directory: npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

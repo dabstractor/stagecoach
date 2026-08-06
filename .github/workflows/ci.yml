@@ -139,3 +139,53 @@ jobs:
               exit fail
             }
           ' coverage.out
+
+  # --- (5) npm wrapper smoke (PRD §21.2; S1 shim + S2 installer) -------------------
+  # Catches npm-wrapper regressions on every PR BEFORE a release. Runs S1's npm/test/smoke.cjs
+  # (shim: fake-cached binary -> exec + STAGECOACH_INSTALL_METHOD=npm + exit-code propagation +
+  # the no-cache fallback) and S2's npm/test/install.test.cjs (installer: local fixture server
+  # -> download + SHA256-verify + extract + checksum-mismatch abort-before-write).
+  #
+  # Platform notes:
+  #   * smoke.cjs SKIPS win32 itself (S1's contract: the fake binary is not a real PE .exe), so on
+  #     windows it is a no-op that prints 'skipped' and exits 0.
+  #   * install.test.cjs is GATED to non-windows (see the step-level `if`): S2's test builds the
+  #     fixture archive with tar.c({gzip:true}) ALWAYS — even when assetName ends in .zip (win32) —
+  #     so on a windows runner install.cjs would call extractZip on a tar.gz stream and THROW,
+  #     failing the happy-path assertion. The windows zip-extraction path is a DOCUMENTED GAP,
+  #     pending a real-zip fixture from S2 / a future task.
+  #   * windows-latest still adds value here: the syntax checks (`node --check`) + the deps-resolve
+  #     (`npm install --ignore-scripts`) run there, catching OS-specific resolution regressions.
+  npm-smoke:
+    name: npm wrapper smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Shim + installer syntax check
+        run: |
+          node --check npm/bin/stagecoach.js
+          node --check npm/install.cjs
+      - name: Fetch wrapper deps (no postinstall)
+        # tar + extract-zip for S2's install.test.cjs. --ignore-scripts so install.cjs (postinstall)
+        # does NOT run (the 0.0.0 dev guard would also skip it, but be explicit).
+        working-directory: npm
+        run: npm install --ignore-scripts
+      - name: Shim smoke (fake-cached binary)
+        # S1's smoke: places a fake binary in a temp cache, runs the shim, asserts exec + env tag +
+        # exit-code propagation + the no-cache fallback. SKIPS on win32 (prints 'skipped', exit 0).
+        run: node npm/test/smoke.cjs
+      - name: Installer smoke (fixture server; tar.gz path)
+        # S2's smoke: builds a fixture archive + checksums, serves via local http, asserts download +
+        # SHA256-verify + extract + checksum-mismatch abort-before-write. GATED to non-windows
+        # (S2's fixture is tar.gz even for .zip-named assets, so the windows zip path is uncovered).
+        if: matrix.os != 'windows-latest'
+        working-directory: npm
+        run: node test/install.test.cjs
