@@ -118,6 +118,9 @@ model = "sonnet"
 # hook_timeout          = "10m"    # per-hook execution timeout (§9.25 FR-V6); file + default only
 # no_verify             = false    # skip pre-commit and commit-msg hooks (§9.25 FR-V5; mirrors `git commit --no-verify`); CANNOT disable-via-file is N/A (default is already false)
 # no_parent_watchdog    = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run (§9.27 FR-K6)
+# [upgrade]                              # self-update (§9.29); GLOBAL config only — no per-repo meaning
+# channel     = "stable"                  # stable | prerelease (admits -rc/-beta tags; = --prerelease)
+# source_repo = "dabstractor/stagecoach"  # release source; override for a fork. Compile-time default.
 # ...
 ```
 
@@ -152,8 +155,12 @@ These are the values when no config file, env var, git-config key, or flag sets 
 | `hook_timeout` | `10m` | `config.Defaults()` (§9.25 FR-V6 — per-hook execution timeout; file + default only) |
 | `no_verify` | `false` | `config.Defaults()` (§9.25 FR-V5 — skip pre-commit/commit-msg hooks; mirrors `git commit --no-verify`) |
 | `no_parent_watchdog` | `false` | `config.Defaults()` (§9.27 FR-K6 — parent-death watchdog runs by default) |
+| `channel` | `"stable"` | `config.Defaults()` (§9.29 FR-U10 — `[upgrade]`, **global-only**; `"prerelease"` admits `-rc`/`-beta` tags) |
+| `source_repo` | `"dabstractor/stagecoach"` | `config.Defaults()` (§9.29 FR-U10 — release source; override for a fork) |
 
 `NoColor` is TTY-aware at runtime (set by the UI layer); it is not a file field and has no config-file key.
+
+> **`[upgrade]` is global-only.** The `[upgrade]` table (§9.29 FR-U10) is read from the **GLOBAL** config file only — a per-repo `.stagecoach.toml` `[upgrade]` is **ignored** (a `--verbose` note is printed by `stagecoach upgrade`). `config.Load()` never propagates `[upgrade]` into the resolved config; the `stagecoach upgrade` command reads it via the dedicated `config.LoadUpgradeConfig()` reader. `CurrentConfigVersion` is unchanged (3): `[upgrade]` is additive (FR-B4) and never emits a config advisory.
 
 > **Hook execution knobs.** Two `[generation]` knobs control the §9.25 hook-execution surface (pre-commit / prepare-commit-msg / commit-msg / post-commit):
 >

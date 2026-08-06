@@ -28,6 +28,15 @@ type fileRoleConfig struct {
 	Timeout   string `toml:"timeout"` // §16.4 duration string, e.g. "480s"; parsed in materialize (parseTimeout accepts "480s" OR bare "480")
 }
 
+// fileUpgrade is the FILE decode twin of config.UpgradeConfig (§9.29 FR-U10). A global [upgrade]
+// table decodes into fc.Upgrade. materialize() does NOT copy it into Config (the resolver must not
+// surface [upgrade] — global-only via LoadUpgradeConfig); it exists as the decode target for the
+// dedicated reader. Channel/SourceRepo are plain strings (no duration parsing needed).
+type fileUpgrade struct {
+	Channel    string `toml:"channel"`
+	SourceRepo string `toml:"source_repo"`
+}
+
 // fileConfig is the §16.2 file decode target: NESTED (matches [defaults]/[generation]/[role.X]/[provider.X]),
 // with Timeout as a STRING ("120s") because go-toml/v2 cannot decode "120s" into time.Duration and the
 // resolved Config is flat/plain (S1). loadTOML materializes this into a *Config. UNEXPORTED.
@@ -37,6 +46,7 @@ type fileConfig struct {
 	Generation    fileGeneration            `toml:"generation"`
 	Role          map[string]fileRoleConfig `toml:"role"`     // V2 — [role.<role>] per-role tables (§16.4)
 	Provider      map[string]map[string]any `toml:"provider"` // nil if the file has no [provider] table
+	Upgrade       fileUpgrade               `toml:"upgrade"`  // §9.29 FR-U10 — [upgrade] table (global-only; NOT propagated by materialize)
 }
 
 type fileDefaults struct {

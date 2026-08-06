@@ -42,6 +42,20 @@ type RoleConfig struct {
 	Timeout   time.Duration `toml:"timeout"`   // per-role generation timeout (FR-R7); 0 ⇒ inherit global [defaults].timeout (toml tag is cosmetic — Config.Roles is toml:"-")
 }
 
+// UpgradeConfig is the global-only self-update configuration (PRD §9.29 FR-U10): which release
+// channel to track and which owner/repo to fetch releases from. It is decoded from the [upgrade]
+// TOML table by fileConfig.Upgrade (file.go) and surfaced to the upgrade command via the DEDICATED
+// global-only reader LoadUpgradeConfig (upgrade.go) — NOT via the 7-layer config.Load resolver
+// (which would (a) trigger the FR-B3 first-run bootstrap write and (b) read the per-repo
+// .stagecoach.toml, both of which FR-U10/v3_scope_boundary forbid for [upgrade]). Config.Upgrade
+// (below) carries the built-in DEFAULTS only; it is toml:"-" and is NEVER populated by the file
+// loaders, so the resolver cannot leak a repo [upgrade] into the resolved config (global-only is
+// structural). Defaults: Channel="stable", SourceRepo="dabstractor/stagecoach" (PRD §16.1).
+type UpgradeConfig struct {
+	Channel    string `toml:"channel"`     // "stable" (default) | "prerelease" (= --prerelease; admits -rc/-beta tags)
+	SourceRepo string `toml:"source_repo"` // "owner/repo"; default "dabstractor/stagecoach" (set for a fork/self-host)
+}
+
 // Config is the fully-resolved Stagecoach configuration: the single value produced by the 7-layer
 // precedence resolver (PRD §16.1, FR34) and read by every consumer — the TOML/git/env/CLI loaders
 // (P1.M1.T4.S2-S4), the provider registry (P1.M2.T3), and the generation pipeline.
@@ -172,6 +186,14 @@ type Config struct {
 	// path the only active role is "message", so a nil Roles is exactly equivalent to v1 (back-compatible).
 	Roles map[string]RoleConfig `toml:"-"`
 
+	// Upgrade holds the global-only self-update config DEFAULTS (PRD §9.29 FR-U10). toml:"-": Config is
+	// never decoded from a §16.2 file (fileConfig is), and the [upgrade] table is intentionally NOT
+	// propagated by materialize()/overlay() — the resolver must not read [upgrade] (global-only, and
+	// reading would risk the FR-B3 bootstrap write + a per-repo leak). The upgrade command reads
+	// [upgrade] via LoadUpgradeConfig() (global file only). This field always holds Defaults() after a
+	// Load(); it exists as the typed home for the defaults and the seed LoadUpgradeConfig starts from.
+	Upgrade UpgradeConfig `toml:"-"`
+
 	// V2 schema version (PRD §9.17 FR-B4). Metadata, NOT a precedence layer (§16.1): on load it is
 	// compared to CurrentConfigVersion for an advisory warning; it does not participate in value
 	// resolution. Decoded from the top-level config_version key in S2; Defaults() leaves it 0 (unset;
@@ -230,6 +252,10 @@ func Defaults() Config {
 		Roles:                nil, // no per-role overrides → all roles use the global (§16.4 FR-R2)
 		ConfigVersion:        0,   // UNSET sentinel — the load-time advisory (P1.M4.T1.S1) compares the resolved
 		//                              value to CurrentConfigVersion; 0 ⇒ no source declared a schema version.
+		Upgrade: UpgradeConfig{
+			Channel:    "stable",                 // §9.29 FR-U10 default; "prerelease" admits -rc/-beta (= --prerelease)
+			SourceRepo: "dabstractor/stagecoach", // §9.29 FR-U10 / §16.1 compile-time default (override for a fork)
+		},
 	}
 }
 

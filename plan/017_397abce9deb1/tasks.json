@@ -1,29 +1,29 @@
 {
   "backlog": [
     {
-      "id": "P1",
       "type": "Phase",
+      "id": "P1",
       "title": "Self-update core — stagecoach upgrade (FR-U1–U12, → G26)",
       "status": "Planned",
       "description": "Implement the install-method-aware, delegate-first self-updater: detect how the binary was installed and delegate to that channel's native updater wherever one exists, falling back to a SHA256-verified, atomic, rollback-able direct-binary swap ONLY for the direct-binary channel. Walled off from the commit-generation core (no repo/lock/index/provider interaction). Supersedes the v2.1 self-update rejection. See plan/017_397abce9deb1/architecture/{system_context,external_deps,v3_scope_boundary}.md.",
       "milestones": [
         {
-          "id": "P1.M1",
           "type": "Milestone",
+          "id": "P1.M1",
           "title": "Foundation: comparable version, exit code 6, [upgrade] config table, GitHub Releases client",
           "status": "Planned",
           "description": "The reusable primitives every upgrade path consumes: a comparable (semver) version of the running binary, the UpdateAvailable=6 exit code, the global-only [upgrade] config table (channel/source_repo), and the HTTP client for the GitHub Releases API (the one named network exception to §19). All injectable/mockable for tests.",
           "tasks": [
             {
-              "id": "P1.M1.T1",
               "type": "Task",
+              "id": "P1.M1.T1",
               "title": "Comparable version + exit code 6",
               "status": "Complete",
               "description": "Add the UpdateAvailable=6 exit code and a comparable version representation of the running binary (distinct from main.go's display-only resolveVersion).",
               "subtasks": [
                 {
-                  "id": "P1.M1.T1.S1",
                   "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
                   "title": "Add UpdateAvailable=6 exit code + For()/sentinel wiring",
                   "status": "Complete",
                   "story_points": 1,
@@ -35,8 +35,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M1.T1.S2",
                   "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
                   "title": "Comparable (semver) version of the running binary",
                   "status": "Complete",
                   "story_points": 2,
@@ -52,17 +52,17 @@
               ]
             },
             {
-              "id": "P1.M1.T2",
               "type": "Task",
+              "id": "P1.M1.T2",
               "title": "[upgrade] config table (global-only) + LoadUpgradeConfig seam",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Add the optional, additive [upgrade] config table (channel, source_repo) read by the upgrade command from the GLOBAL config file only — without invoking full config.Load (which needs a repo dir and triggers the FR-B3 bootstrap write). Per FR-B4 this additive table does NOT bump CurrentConfigVersion and does NOT emit an upgrade advisory.",
               "subtasks": [
                 {
-                  "id": "P1.M1.T2.S1",
                   "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
                   "title": "UpgradeConfig struct + global-file-only LoadUpgradeConfig + defaults + global-only ignore",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: internal/config/config.go Config struct + Defaults() (CurrentConfigVersion=3). load.go resolves via 7 layers needing a repo dir; file.go decodes fileConfig. The upgrade command has a NO-OP PersistentPreRunE (it runs outside a git repo and must not trigger config.Load's first-run bootstrap write — v3_scope_boundary.md). So [upgrade] needs a DEDICATED reader, not the full resolver. FR-U10: [upgrade] is global-only; a per-repo .stagecoach.toml [upgrade] is ignored with a --verbose note. FR-B4: additive → do NOT bump CurrentConfigVersion, do NOT emit an advisory.\n2. INPUT: internal/config/{config.go,file.go,defaults.go,load.go} and the XDG global config path resolver already used by the file loader.\n3. LOGIC: (a) Add `UpgradeConfig` struct { Channel string; SourceRepo string } to config.go (toml:\"upgrade\" nested under a new [upgrade] table — decode via fileConfig.Upgrade). Seed Defaults(): Channel=\"stable\", SourceRepo=\"dabstractor/stagecoach\" (PRD §16.1 defaults). (b) Add a NEW exported helper `config.LoadUpgradeConfig() (UpgradeConfig, error)` that reads ONLY the global config file (XDG path, the same path resolution as the global file loader) and decodes its [upgrade] table with Defaults applied; it does NOT read repo file/git-config/env/flags and does NOT write/ bootstrap. This is the seam the upgrade command (P1.M4.T1) calls. (c) Document that a per-repo .stagecoach.toml [upgrade] is intentionally NOT read here (global-only). (d) Verify CurrentConfigVersion stays 3 and no load-time advisory fires for a file lacking [upgrade] (add a test: load a global file without [upgrade] → defaults; load one with [upgrade] → merged; an older-version file with [upgrade] still works, no advisory).\n4. OUTPUT: Modified config.go/defaults.go/file.go + new LoadUpgradeConfig + tests. go test ./internal/config/ passes; CurrentConfigVersion unchanged.\n5. DOCS: [Mode A] add the [upgrade] table rows to docs/configuration.md (channel, source_repo, global-only note) and the inline config.go field comments.",
@@ -74,17 +74,17 @@
               ]
             },
             {
-              "id": "P1.M1.T3",
               "type": "Task",
+              "id": "P1.M1.T3",
               "title": "GitHub Releases HTTP client (the named §19 exception) + asset/checksum primitives",
               "status": "Planned",
               "description": "The HTTP client that fetches release metadata and downloads the selected archive + checksums.txt, SHA256-verifying it. The ONLY stagecoach surface that makes network calls. Injectable base-URL + *http.Client so tests use httptest, not the real API.",
               "subtasks": [
                 {
-                  "id": "P1.M1.T3.S1",
                   "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
                   "title": "Release-metadata fetch (latest/all-by-tag/pinned) with optional token auth + error mapping",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/architecture/external_deps.md §1. net/http is stdlib (no new go.mod dep). API: GET /repos/{owner}/{repo}/releases/latest → {tag_name, assets:[{name,browser_download_url,size}], prerelease, draft}; /releases (array, for --prerelease); /releases/tags/{tag} (pinned, --version). Auth: STAGECOACH_GITHUB_TOKEN then GITHUB_TOKEN → 'Authorization: Bearer <t>'. MUST set User-Agent (Go default UA sometimes rejected). FR-U11: network/rate-limit errors abort before any write.\n2. INPUT: owner/repo (string, from LoadUpgradeConfig().SourceRepo or --source-repo flag), channel (stable/prerelease), optional pinned tag. A *http.Client and base URL (injectable for tests).\n3. LOGIC: New package internal/upgrade/releases.go exposing a `Client` struct { HTTP *http.Client; BaseURL string; Repo string; Token string } and methods: LatestStable(ctx) (Release, error); LatestAdmittingPrereleases(ctx) (Release, error) (filters draft=false, admits prerelease, picks highest semver via P1.M1.T1.S2 Compare); ReleaseByTag(ctx, tag) (Release, error). Release struct: Tag, Assets []Asset{ Name, DownloadURL string; Size int64 }. Errors: typed (ErrNoReleases, ErrRateLimited, ErrHTTP) wrapping status + message; 404→ErrNoReleases; 403/429→ErrRateLimited (hint: set a token). Token resolution: explicit param; the command layer (P1.M4) resolves STAGECOACH_GITHUB_TOKEN/GITHUB_TOKEN env. BaseURL default 'https://api.github.com'; tests inject httptest.Server.URL. Stream-safe (do not buffer whole JSON; or buffer — releases JSON is small).\n4. OUTPUT: New releases.go + tests against an httptest fake server (latest returns a canned release; 404→ErrNoReleases; 403→ErrRateLimited; prerelease-filter picks highest non-draft). go test passes.\n5. DOCS: [Mode A] package doc comment stating this is the SOLE network surface + the §19 scoping.",
@@ -93,8 +93,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M1.T3.S2",
                   "type": "Subtask",
+                  "id": "P1.M1.T3.S2",
                   "title": "Asset + checksums.txt download + SHA256 verification primitives",
                   "status": "Planned",
                   "story_points": 2,
@@ -111,22 +111,22 @@
           ]
         },
         {
-          "id": "P1.M2",
           "type": "Milestone",
+          "id": "P1.M2",
           "title": "Install-method detection + delegation (FR-U2, FR-U3, FR-U4)",
           "status": "Planned",
           "description": "Resolve HOW the running binary was installed (the 9-channel detection cascade) and, for non-direct channels, delegate to that channel's own native updater — running it where it is per-user/non-destructive, printing it where it needs privileges (AUR) or is declarative (Nix). Never auto-elevate. Never overwrite a manager-owned binary except via --force.",
           "tasks": [
             {
-              "id": "P1.M2.T1",
               "type": "Task",
+              "id": "P1.M2.T1",
               "title": "Install-method detection cascade",
               "status": "Planned",
               "description": "detectChannel() — explicit override → package-manager DB query → path heuristics → default direct. Read-only, best-effort, logged at --verbose, bounded by a short timeout so a hung query cannot stall an upgrade.",
               "subtasks": [
                 {
-                  "id": "P1.M2.T1.S1",
                   "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
                   "title": "detectChannel() cascade (override → PM DB → path heuristics → direct)",
                   "status": "Planned",
                   "story_points": 2,
@@ -139,15 +139,15 @@
               ]
             },
             {
-              "id": "P1.M2.T2",
               "type": "Task",
+              "id": "P1.M2.T2",
               "title": "Delegation dispatcher (FR-U3 table + FR-U4 run-vs-print)",
               "status": "Planned",
               "description": "For a detected non-direct channel, map it to the channel's own updater command and either RUN it (per-user, non-destructive channels) or PRINT it (needs privileges / declarative). Direct channel is NOT handled here — it routes to the direct-swap milestone (P1.M3). Never auto-elevate.",
               "subtasks": [
                 {
-                  "id": "P1.M2.T2.S1",
                   "type": "Subtask",
+                  "id": "P1.M2.T2.S1",
                   "title": "delegate() — channel→updater table + run-vs-print policy",
                   "status": "Planned",
                   "story_points": 2,
@@ -165,22 +165,22 @@
           ]
         },
         {
-          "id": "P1.M3",
           "type": "Milestone",
+          "id": "P1.M3",
           "title": "Direct-binary swap (FR-U5, FR-U7, FR-U8, FR-U11) + --rollback",
           "status": "Planned",
           "description": "The ONLY self-swap path, used for the direct (curl|sh / manual-download) channel (or --force). Download the target archive, SHA256-verify against checksums.txt, sanity-run the new binary, back up the prior, atomically rename it into place (Unix) / two-step rename (Windows). Rollback restores the prior backup. Failure at any pre-swap step leaves the on-disk binary byte-for-byte unchanged.",
           "tasks": [
             {
-              "id": "P1.M3.T1",
               "type": "Task",
+              "id": "P1.M3.T1",
               "title": "Resolve target + download + verify + extract + sanity-run",
               "status": "Planned",
               "description": "The pre-swap half of the direct path: resolve the target release, select+download+verify the platform archive, extract the single binary, and sanity-run it (--version matches target, exit 0) before any swap. Abort on any failure, leaving only a temp file.",
               "subtasks": [
                 {
-                  "id": "P1.M3.T1.S1",
                   "type": "Subtask",
+                  "id": "P1.M3.T1.S1",
                   "title": "Resolve target release + select GOOS_GOARCH asset",
                   "status": "Planned",
                   "story_points": 1,
@@ -194,8 +194,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M3.T1.S2",
                   "type": "Subtask",
+                  "id": "P1.M3.T1.S2",
                   "title": "Download+verify+extract+sanity-run (abort-before-swap on any failure)",
                   "status": "Planned",
                   "story_points": 2,
@@ -211,15 +211,15 @@
               ]
             },
             {
-              "id": "P1.M3.T2",
               "type": "Task",
+              "id": "P1.M3.T2",
               "title": "Backup + atomic swap (per-platform) — the on-disk change",
               "status": "Planned",
               "description": "The ONLY subtask that changes the on-disk binary: back up the current binary one-deep (.stagecoach-backup / .exe.old) and atomically swap the verified+sanity-run new binary into place. Unix = single os.Rename; Windows = the deferred-delete rename-old/move-new dance. Non-writable target → print the exact sudo command, never auto-elevate.",
               "subtasks": [
                 {
-                  "id": "P1.M3.T2.S1",
                   "type": "Subtask",
+                  "id": "P1.M3.T2.S1",
                   "title": "Backup + atomic swap (Unix os.Rename / Windows .old dance) + non-writable→print sudo",
                   "status": "Planned",
                   "story_points": 2,
@@ -234,15 +234,15 @@
               ]
             },
             {
-              "id": "P1.M3.T3",
               "type": "Task",
+              "id": "P1.M3.T3",
               "title": "--rollback (FR-U8)",
               "status": "Planned",
               "description": "One-step restore of the immediately-prior backup over the current binary, using the same atomic-swap + sanity-run discipline. No backup → no-op reported as such.",
               "subtasks": [
                 {
-                  "id": "P1.M3.T3.S1",
                   "type": "Subtask",
+                  "id": "P1.M3.T3.S1",
                   "title": "Rollback: restore prior backup via swap+sanity-run; no-op when none",
                   "status": "Planned",
                   "story_points": 1,
@@ -259,22 +259,22 @@
           ]
         },
         {
-          "id": "P1.M4",
           "type": "Milestone",
+          "id": "P1.M4",
           "title": "CLI surface, run orchestration, and the e2e test harness",
           "status": "Planned",
           "description": "Wire everything into the `stagecoach upgrade` cobra command (walled off — no-op PersistentPreRunE, no repo/lock/provider), implement the three run paths (--check, normal detect→delegate-or-direct-swap, --rollback), the confirmation prompt, and the §20.5 e2e self-update scenarios. This milestone makes the feature runnable and regression-safe.",
           "tasks": [
             {
-              "id": "P1.M4.T1",
               "type": "Task",
+              "id": "P1.M4.T1",
               "title": "stagecoach upgrade command + local flags + wiring (walled off)",
               "status": "Planned",
               "description": "The cobra command, its LOCAL (non-persistent) flags, the no-op PersistentPreRunE that runs outside a git repo and skips config.Load, and registration via init() (zero edits to root.go). Help text disambiguates from the unrelated `config upgrade`.",
               "subtasks": [
                 {
-                  "id": "P1.M4.T1.S1",
                   "type": "Subtask",
+                  "id": "P1.M4.T1.S1",
                   "title": "cobra upgrade command + local flags + no-op PersistentPreRunE + registration",
                   "status": "Planned",
                   "story_points": 2,
@@ -292,8 +292,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M4.T1.S2",
                   "type": "Subtask",
+                  "id": "P1.M4.T1.S2",
                   "title": "Confirmation prompt (current→target + action) + --yes skip + run-vs-print output",
                   "status": "Planned",
                   "story_points": 1,
@@ -308,15 +308,15 @@
               ]
             },
             {
-              "id": "P1.M4.T2",
               "type": "Task",
+              "id": "P1.M4.T2",
               "title": "Run orchestration: --check / normal / --rollback paths",
               "status": "Planned",
               "description": "The runUpgrade dispatcher that routes the resolved flags+config to the three paths: --check (resolve+compare, exit 6/0), --rollback (P1.M3.T3), and the normal path (Detect→Delegate-or-direct-swap). Resolves GITHUB_TOKEN, the injectable HTTP client/seams, and verbose logging.",
               "subtasks": [
                 {
-                  "id": "P1.M4.T2.S1",
                   "type": "Subtask",
+                  "id": "P1.M4.T2.S1",
                   "title": "runUpgrade dispatcher (--check / normal detect→delegate|swap / --rollback)",
                   "status": "Planned",
                   "story_points": 2,
@@ -340,15 +340,15 @@
               ]
             },
             {
-              "id": "P1.M4.T3",
               "type": "Task",
+              "id": "P1.M4.T3",
               "title": "Integration tests + the §20.5 e2e self-update harness",
               "status": "Planned",
               "description": "The regression net for behaviors that only manifest against a real (httptest) release source and a real on-disk swap: --check exit 6/0, the direct-swap happy path, failure-safety (bad SHA256 / bad sanity-run abort before swap, on-disk unchanged), --rollback, and delegation refusing a manager-owned binary unless --force. Mirrors the §20.5 'self-update (v3.0)' scenario block.",
               "subtasks": [
                 {
-                  "id": "P1.M4.T3.S1",
                   "type": "Subtask",
+                  "id": "P1.M4.T3.S1",
                   "title": "--check: exit 6 when behind, exit 0 when up-to-date (httptest fake releases)",
                   "status": "Planned",
                   "story_points": 2,
@@ -361,8 +361,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M4.T3.S2",
                   "type": "Subtask",
+                  "id": "P1.M4.T3.S2",
                   "title": "Direct-swap happy path in a temp dir (download→verify→sanity→backup→rename)",
                   "status": "Planned",
                   "story_points": 2,
@@ -375,8 +375,8 @@
                   ]
                 },
                 {
-                  "id": "P1.M4.T3.S3",
                   "type": "Subtask",
+                  "id": "P1.M4.T3.S3",
                   "title": "Failure-safety + delegation-refuses-manager-owned + rollback (FR-U1/U8/U11)",
                   "status": "Planned",
                   "story_points": 2,
@@ -396,29 +396,29 @@
       ]
     },
     {
-      "id": "P2",
       "type": "Phase",
+      "id": "P2",
       "title": "Distribution surface expansion (PRD §21, → G27)",
       "status": "Planned",
       "description": "Add the channels goreleaser has no native pipe for, so stagecoach reaches the npm/Windows-default/Nix/version-manager audiences. Build/release/CI plumbing + JS/Nix/shell artifacts — NO new Go code in the commit path and no new FR surface (PRD §10.5). The npm wrapper's only interaction with the binary is setting STAGECOACH_INSTALL_METHOD=npm, which Phase 1's detection (P1.M2.T1) already reads. Largely independent of Phase 1 but logically follows it.",
       "milestones": [
         {
-          "id": "P2.M1",
           "type": "Milestone",
+          "id": "P2.M1",
           "title": "npm wrapper (@dabstractor/stagecoach)",
           "status": "Planned",
           "description": "A thin JS package whose postinstall downloads the matching prebuilt native binary from GitHub Releases into a cache (SHA256-verified) and whose bin execs the cached binary — the esbuild/turbo/prisma pattern. Gives `npx stagecoach` (zero-install trial) and `npm i -g stagecoach`. The shim sets STAGECOACH_INSTALL_METHOD=npm so `stagecoach upgrade` delegates to npm instead of self-swapping the cached binary.",
           "tasks": [
             {
-              "id": "P2.M1.T1",
               "type": "Task",
+              "id": "P2.M1.T1",
               "title": "npm wrapper package (package.json + shim + postinstall)",
               "status": "Planned",
               "description": "Author the JS package: package.json (bin, postinstall), the exec shim (sets STAGECOACH_INSTALL_METHOD=npm, spawns the cached binary, forwards argv/stdio/exit), and the postinstall download+verify+extract logic with an --ignore-scripts fallback message.",
               "subtasks": [
                 {
-                  "id": "P2.M1.T1.S1",
                   "type": "Subtask",
+                  "id": "P2.M1.T1.S1",
                   "title": "package.json + bin/stagecoach.js shim (STAGECOACH_INSTALL_METHOD=npm, exec cached binary)",
                   "status": "Planned",
                   "story_points": 2,
@@ -429,8 +429,8 @@
                   ]
                 },
                 {
-                  "id": "P2.M1.T1.S2",
                   "type": "Subtask",
+                  "id": "P2.M1.T1.S2",
                   "title": "install.cjs postinstall (platform→asset, download+SHA256-verify, extract to cache)",
                   "status": "Planned",
                   "story_points": 2,
@@ -443,8 +443,8 @@
                   ]
                 },
                 {
-                  "id": "P2.M1.T1.S3",
                   "type": "Subtask",
+                  "id": "P2.M1.T1.S3",
                   "title": "CI publish step (npm publish on tag) + version-sync + smoke test",
                   "status": "Planned",
                   "story_points": 1,
@@ -462,22 +462,22 @@
           ]
         },
         {
-          "id": "P2.M2",
           "type": "Milestone",
+          "id": "P2.M2",
           "title": "Winget (Windows default package manager)",
           "status": "Planned",
           "description": "Automated Winget manifest submission per release tag via a winget-releaser GitHub Action, complementing Scoop (power users) to reach the broad Windows 11 audience.",
           "tasks": [
             {
-              "id": "P2.M2.T1",
               "type": "Task",
+              "id": "P2.M2.T1",
               "title": "Winget release automation (winget-releaser Action + PackageIdentifier)",
               "status": "Planned",
               "description": "Wire the winget-releaser Action into release.yml so each tag opens a PR to microsoft/winget-pkgs with the version's installer manifest, and decide the canonical PackageIdentifier.",
               "subtasks": [
                 {
-                  "id": "P2.M2.T1.S1",
                   "type": "Subtask",
+                  "id": "P2.M2.T1.S1",
                   "title": "winget-releaser Action step + PackageIdentifier + release-asset URL wiring",
                   "status": "Planned",
                   "story_points": 2,
@@ -492,22 +492,22 @@
           ]
         },
         {
-          "id": "P2.M3",
           "type": "Milestone",
+          "id": "P2.M3",
           "title": "Nix flake (flake.nix, in-repo)",
           "status": "Planned",
           "description": "An in-repo flake.nix (no external repo, no secret, no registry gatekeeping) powering nix run / nix profile install / devbox / nix-shell, plus a vendorHash maintenance workflow.",
           "tasks": [
             {
-              "id": "P2.M3.T1",
               "type": "Task",
+              "id": "P2.M3.T1",
               "title": "flake.nix + vendorHash workflow + nix flake check CI",
               "status": "Planned",
               "description": "Author flake.nix using buildGoModule over the supported systems, keep vendorHash current, and add a nix flake check CI step so a stale vendorHash fails the build before release.",
               "subtasks": [
                 {
-                  "id": "P2.M3.T1.S1",
                   "type": "Subtask",
+                  "id": "P2.M3.T1.S1",
                   "title": "flake.nix (buildGoModule, default package, devShell) + nix flake check CI step",
                   "status": "Planned",
                   "story_points": 2,
@@ -522,22 +522,22 @@
           ]
         },
         {
-          "id": "P2.M4",
           "type": "Milestone",
+          "id": "P2.M4",
           "title": "mise / asdf plugins",
           "status": "Planned",
           "description": "~30-line shell-script plugins (asdf-compatible; mise uses the same) pointing at the GitHub Release archives, authored here as the canonical reference and linked from the README.",
           "tasks": [
             {
-              "id": "P2.M4.T1",
               "type": "Task",
+              "id": "P2.M4.T1",
               "title": "mise + asdf plugin scripts (bin/list-all, bin/install) + plugin-repo docs",
               "status": "Planned",
               "description": "Author the asdf/mise plugin scripts (list-all greps release tags; install downloads+extracts the platform archive), keep them in a plugins/ reference dir, and document the separate plugin-repo convention.",
               "subtasks": [
                 {
-                  "id": "P2.M4.T1.S1",
                   "type": "Subtask",
+                  "id": "P2.M4.T1.S1",
                   "title": "asdf/mise plugin scripts (list-all + install) + plugin-repo README + verify contract",
                   "status": "Planned",
                   "story_points": 2,
@@ -554,29 +554,29 @@
       ]
     },
     {
-      "id": "P3",
       "type": "Phase",
+      "id": "P3",
       "title": "Changeset-level documentation (Mode B) + spec reconciliation",
       "status": "Planned",
       "description": "Cross-cutting, whole-feature documentation that only makes sense once the v3.0 change lands: the README install-section rewrite (all channels live), the `stagecoach upgrade` surface in README CLI reference + FAQ, scoping the §19 'no network calls' amendment, and reconciling FUTURE_SPEC.md's now-superseded self-update rejection. Per-file docs (docs/cli.md upgrade command, docs/configuration.md [upgrade] row, exitcode.go/upgrade.go comments) are Mode A and already landed with their implementing subtasks.",
       "milestones": [
         {
-          "id": "P3.M1",
           "type": "Milestone",
+          "id": "P3.M1",
           "title": "Sync changeset-level docs (README + FUTURE_SPEC + §19 amendment)",
           "status": "Planned",
           "description": "The whole-feature documentation pass that depends on all of Phase 1 and Phase 2 landing: README install rewrite + CLI/FAQ, the §19 network-call scoping amendment, and the FUTURE_SPEC self-update reconciliation.",
           "tasks": [
             {
-              "id": "P3.M1.T1",
               "type": "Task",
+              "id": "P3.M1.T1",
               "title": "Sync README + FUTURE_SPEC + §19 amendment + .goreleaser notes",
               "status": "Planned",
               "description": "Update the cross-cutting docs: rewrite the README Install section so all channels (Homebrew/Scoop/Winget/npm/Nix/mise/asdf/go-install/curl|sh) are live; add `stagecoach upgrade` to the README CLI reference + FAQ; scope the §19 'no network calls' claim to the commit path with upgrade as the named exception; reconcile FUTURE_SPEC.md's self-update rejection (now superseded); and annotate .goreleaser.yaml with the new-channel 'Beyond goreleaser' pointers.",
               "subtasks": [
                 {
-                  "id": "P3.M1.T1.S1",
                   "type": "Subtask",
+                  "id": "P3.M1.T1.S1",
                   "title": "README install rewrite + upgrade CLI/FAQ + §19 amendment + FUTURE_SPEC reconcile + goreleaser notes",
                   "status": "Planned",
                   "story_points": 2,
