@@ -1,11 +1,9 @@
 package lock
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -48,12 +46,35 @@ func TestLockDir_CacheFallback(t *testing.T) {
 	}
 }
 
+// setHomeEnv sets the home-directory environment variables on every OS. On
+// Unix os.UserHomeDir reads $HOME; on Windows it reads %USERPROFILE%. Setting
+// both keeps the lockDir resolution tests meaningful and deterministic cross-
+// platform (they assert the exact resolved path).
+func setHomeEnv(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+}
+
 // TestLockDir_HomeFallback verifies ~/.cache/stagecoach/locks when both XDG vars are unset.
+// symlinkOrSkip creates a symlink target->link, skipping the test if the
+// process lacks the symlink privilege. On Windows this privilege
+// (SeCreateSymbolicLinkPrivilege) requires Developer Mode or admin rights; it
+// is NOT a code defect, just an environment limitation. GitHub Actions
+// windows-latest runners have Developer Mode enabled so the test runs there.
+// Mirrors the stdlib idiom (e.g. os_test.go symlink tests).
+func symlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("Symlink %s -> %s: %v (symlink privilege unavailable)", link, target, err)
+	}
+}
+
 func TestLockDir_HomeFallback(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	t.Setenv("XDG_CACHE_HOME", "")
 	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	setHomeEnv(t, tmpHome)
 
 	dir, err := lockDir()
 	if err != nil {
@@ -70,7 +91,7 @@ func TestLockDir_RejectedRelative(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", "rel/path")
 	t.Setenv("XDG_CACHE_HOME", "")
-	t.Setenv("HOME", tmpHome)
+	setHomeEnv(t, tmpHome)
 
 	dir, err := lockDir()
 	if err != nil {
@@ -88,8 +109,8 @@ func TestLockDir_RejectedRelative(t *testing.T) {
 func TestLockDir_NoCwdFallbackError(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	t.Setenv("XDG_CACHE_HOME", "")
-	t.Setenv("HOME", "")
-	// On most systems, unsetting HOME makes os.UserHomeDir() fail.
+	setHomeEnv(t, "")
+	// On most systems, unsetting HOME/USERPROFILE makes os.UserHomeDir() fail.
 	_, err := lockDir()
 	if err == nil {
 		t.Error("lockDir should return an error when no resolution path exists")
@@ -106,9 +127,7 @@ func TestHash_CanonicalSymlink(t *testing.T) {
 	}
 
 	tmpLink := filepath.Join(tmpDir, "link")
-	if err := os.Symlink(tmpRepo, tmpLink); err != nil {
-		t.Fatalf("Symlink: %v", err)
-	}
+	symlinkOrSkip(t, tmpRepo, tmpLink)
 
 	_, hash1 := lockHash(tmpRepo)
 	_, hash2 := lockHash(tmpLink)
@@ -154,9 +173,7 @@ func TestLockPath_CanonicalSymlink(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	tmpLink := filepath.Join(tmpDir, "link")
-	if err := os.Symlink(tmpRepo, tmpLink); err != nil {
-		t.Fatalf("Symlink: %v", err)
-	}
+	symlinkOrSkip(t, tmpRepo, tmpLink)
 
 	p1, err := lockPath(tmpRepo)
 	if err != nil {
@@ -229,9 +246,7 @@ func TestAcquire_RepoFieldIsCanonical(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	link := filepath.Join(tmpDir, "link")
-	if err := os.Symlink(realRepo, link); err != nil {
-		t.Fatalf("Symlink: %v", err)
-	}
+	symlinkOrSkip(t, realRepo, link)
 	canonical, _ := lockHash(link) // the expected canonical (EvalSymlinks(link) == realRepo)
 
 	l, err := Acquire(link) // acquire via the SYMLINK (raw path)
@@ -431,56 +446,6 @@ func TestSetSnapshot_MethodAfterRelease(t *testing.T) {
 	l.Release()
 	// Must not panic.
 	l.SetSnapshot("after-release-noop")
-}
-
-// TestAcquire_Contention_HeldError verifies that a second Acquire on the same
-// repo returns *HeldError with the holder's parsed contents, and that after
-// Release a third Acquire succeeds (auto-release on close).
-func TestAcquire_Contention_HeldError(t *testing.T) {
-	resetCurrent(t)
-	repo := t.TempDir()
-
-	l1, err := Acquire(repo)
-	if err != nil {
-		t.Fatalf("first Acquire: %v", err)
-	}
-
-	var l2 *Locker
-	var l2err error
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		l2, l2err = Acquire(repo)
-	}()
-	wg.Wait()
-
-	if l2 != nil {
-		t.Error("second Acquire should return nil Locker on contention")
-		l2.Release()
-	}
-	if l2err == nil {
-		t.Fatal("second Acquire should return an error on contention")
-	}
-
-	var he *HeldError
-	if !errors.As(l2err, &he) {
-		t.Fatalf("second Acquire error type = %T, want *HeldError", l2err)
-	}
-	if he.Contents.Pid != l1.pid {
-		t.Errorf("HeldError.Pid = %q, want %q", he.Contents.Pid, l1.pid)
-	}
-	if he.Path != l1.path {
-		t.Errorf("HeldError.Path = %q, want %q", he.Path, l1.path)
-	}
-
-	// Release and re-acquire should succeed.
-	l1.Release()
-	l3, err := Acquire(repo)
-	if err != nil {
-		t.Fatalf("third Acquire after Release: %v", err)
-	}
-	l3.Release()
 }
 
 // TestIsHeldError verifies the IsHeldError helper.

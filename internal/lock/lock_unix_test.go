@@ -3,12 +3,14 @@
 package lock
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -355,3 +357,58 @@ func TestAcquire_ReapingIdempotent(t *testing.T) {
 		}
 	}
 }
+// TestAcquire_Contention_HeldError verifies that a second Acquire on the same
+// repo returns *HeldError with the holder's parsed contents, and that after
+// Release a third Acquire succeeds (auto-release on close).
+//
+// Unix-only (//go:build !windows): flock contention is the behavior under
+// test, and flock is a documented no-op on Windows (see lock_windows.go) — the
+// §13.5 CAS is the safety guarantee there. A no-op flock means a second
+// Acquire always succeeds on Windows, so the contention assertion cannot hold.
+func TestAcquire_Contention_HeldError(t *testing.T) {
+	resetCurrent(t)
+	repo := t.TempDir()
+
+	l1, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("first Acquire: %v", err)
+	}
+
+	var l2 *Locker
+	var l2err error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		l2, l2err = Acquire(repo)
+	}()
+	wg.Wait()
+
+	if l2 != nil {
+		t.Error("second Acquire should return nil Locker on contention")
+		l2.Release()
+	}
+	if l2err == nil {
+		t.Fatal("second Acquire should return an error on contention")
+	}
+
+	var he *HeldError
+	if !errors.As(l2err, &he) {
+		t.Fatalf("second Acquire error type = %T, want *HeldError", l2err)
+	}
+	if he.Contents.Pid != l1.pid {
+		t.Errorf("HeldError.Pid = %q, want %q", he.Contents.Pid, l1.pid)
+	}
+	if he.Path != l1.path {
+		t.Errorf("HeldError.Path = %q, want %q", he.Path, l1.path)
+	}
+
+	// Release and re-acquire should succeed.
+	l1.Release()
+	l3, err := Acquire(repo)
+	if err != nil {
+		t.Fatalf("third Acquire after Release: %v", err)
+	}
+	l3.Release()
+}
+
