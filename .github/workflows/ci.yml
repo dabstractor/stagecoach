@@ -60,8 +60,11 @@ jobs:
         # CGO_ENABLED=0 matches .goreleaser.yaml: no C cross-toolchain needed, reproducible from
         # any host. Covers linux/arm64, darwin/{amd64,arm64}, windows/arm64 (windows/amd64 is built
         # + race-tested natively by the windows-latest matrix job).
+        # shell: bash — the loop uses bash syntax (for…do, ${pair%/*}); pin it so the step also works
+        # on windows-latest, whose default shell is PowerShell (which rejects this syntax).
         env:
           CGO_ENABLED: 0
+        shell: bash
         run: |
           for pair in linux/arm64 darwin/amd64 darwin/arm64 windows/arm64; do
             goos=${pair%/*}; goarch=${pair#*/}
