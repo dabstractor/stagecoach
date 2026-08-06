@@ -188,3 +188,53 @@ func TestUpgradeCommand_FlagValidation(t *testing.T) {
 		t.Errorf("--channel prerelease must pass; got %v", err)
 	}
 }
+
+// TestUpgradeFlagErrors_NoStagecoachPrefix is the BUG-2 regression: every error surfaced by
+// `stagecoach upgrade` must NOT carry a "stagecoach: " prefix of its own, because
+// cmd/stagecoach/main.go already prepends "stagecoach: " when printing any returned error
+// (fmt.Fprintf(os.Stderr, "stagecoach: %v\n", err)). A pre-prefixed message would double to
+// "stagecoach: stagecoach: ...". This mirrors every other command file's convention and
+// TestErrEmptyMessage_NoStagecoachPrefix's rule. validateUpgradeFlags produces the user-facing
+// mutex/enum messages, so its errors are the canonical place to pin the no-prefix contract.
+func TestUpgradeFlagErrors_NoStagecoachPrefix(t *testing.T) {
+	newFS := func() *pflag.FlagSet {
+		fs := pflag.NewFlagSet("upgrade", pflag.ContinueOnError)
+		fs.Bool("check", false, "")
+		fs.String("version", "", "")
+		fs.Bool("prerelease", false, "")
+		fs.Bool("rollback", false, "")
+		fs.String("channel", "", "")
+		return fs
+	}
+	orig := flagChannel
+	defer func() { flagChannel = orig }()
+
+	cases := map[string]func() error{
+		"version+prerelease mutex": func() error {
+			fs := newFS()
+			_ = fs.Set("version", "1.2.3")
+			_ = fs.Set("prerelease", "true")
+			return validateUpgradeFlags(fs)
+		},
+		"rollback+check mutex": func() error {
+			fs := newFS()
+			_ = fs.Set("rollback", "true")
+			_ = fs.Set("check", "true")
+			return validateUpgradeFlags(fs)
+		},
+		"channel enum": func() error {
+			flagChannel = "bogus"
+			return validateUpgradeFlags(newFS())
+		},
+	}
+	for name, fn := range cases {
+		err := fn()
+		if err == nil {
+			t.Errorf("%s: expected an error, got nil", name)
+			continue
+		}
+		if strings.HasPrefix(err.Error(), "stagecoach: ") {
+			t.Errorf("%s: error %q has a 'stagecoach: ' prefix (main.go would double it)", name, err.Error())
+		}
+	}
+}

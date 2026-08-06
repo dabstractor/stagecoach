@@ -204,9 +204,9 @@ func TestUpgradeCheck_Dev_Exit0(t *testing.T) {
 
 // TestUpgradeCheck_NoReleases_Exit1 is contract case (d): the fake returns 404 ⇒
 // Client.LatestStable ⇒ ErrNoReleases ⇒ runCheck wraps it as
-// fmt.Errorf("stagecoach: check: %w", ErrNoReleases) and returns exitcode.New(Error, …).
-// exitcode.For(err)==1 AND errors.Is(err, upgrade.ErrNoReleases)==true (the *ExitError.Unwrap
-// chain reaches the sentinel).
+// fmt.Errorf("check: %w", ErrNoReleases) and returns exitcode.New(Error, …)
+// (NO "stagecoach:" prefix — main.go adds it). exitcode.For(err)==1 AND
+// errors.Is(err, upgrade.ErrNoReleases)==true (the *ExitError.Unwrap chain reaches the sentinel).
 func TestUpgradeCheck_NoReleases_Exit1(t *testing.T) {
 	ts, _ := newCheckFake(t, "", http.StatusNotFound) // tag unused; 404 ⇒ {"message":"Not Found"}
 	setupCheckSeams(t, ts.URL)

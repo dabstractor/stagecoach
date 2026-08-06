@@ -900,6 +900,44 @@ func TestCommitStaged_EditGate(t *testing.T) {
 			t.Errorf("HEAD moved from %s to %s — abort must NOT create a commit", headBefore, got)
 		}
 	})
+
+	// BUG-1 regression: an edited subject + blank line + body MUST preserve the blank line in the
+	// committed message. The old stripCommentsAndTrim dropped every blank line, collapsing subject and
+	// body into one paragraph (git %s swallowed the body). Mirrors git's `strip` cleanup.
+	t.Run("fake editor preserves subject/body blank line", func(t *testing.T) {
+		bin := stubtest.Build(t)
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "new.txt", "hello world")
+		stageFile(t, repo, "new.txt")
+
+		t.Setenv("GIT_EDITOR", stubtest.BuildEditor(t))
+		const edited = "fix: real subject\n\nreal body line"
+		stubtest.SetEditorEnv(t, stubtest.EditorOptions{Msg: edited})
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add login"})
+		cfg := config.Defaults()
+		cfg.Edit = true
+
+		res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err != nil {
+			t.Fatalf("CommitStaged with --edit: %v", err)
+		}
+		if res.Message != edited {
+			t.Errorf("Message = %q, want %q (blank line must survive)", res.Message, edited)
+		}
+		// The raw commit object must contain the subject/blank/body structure (git cat-file -p).
+		raw := gitOut(t, repo, "cat-file", "-p", res.CommitSHA)
+		if !strings.Contains(raw, "fix: real subject\n\nreal body line") {
+			t.Errorf("commit object missing subject/body blank line; got:\n%s", raw)
+		}
+		// %s is the subject line alone — the body must NOT be folded into it.
+		subj := gitOut(t, repo, "log", "--format=%s", "-n1", res.CommitSHA)
+		if subj != "fix: real subject" {
+			t.Errorf("git %%s = %q, want %q (body must not be swallowed)", subj, "fix: real subject")
+		}
+	})
 }
 
 // TestErrEmptyMessage_NoStagecoachPrefix pins Issue 5's fix: ErrEmptyMessage's literal must NOT start

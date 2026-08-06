@@ -72,6 +72,15 @@ func TestStripCommentsAndTrim(t *testing.T) {
 		{"comment not inside kept line", "keep # inline\nkeep2", "keep # inline\nkeep2"},
 		{"trailing newline", "keep\n", "keep"},
 		{"carriage return trim", "keep\r\nkeep2\r", "keep\nkeep2"},
+
+		// BUG-1 regression: a single blank line separating subject and body MUST survive (git `strip`
+		// cleanup preserves the subject/body separator). The old impl dropped every blank line,
+		// collapsing subject+body into one paragraph.
+		{"subject + blank + body preserves the separator", "fix: real subject\n\nreal body line", "fix: real subject\n\nreal body line"},
+		{"leading blanks are dropped", "\n\nfix: subject\nbody", "fix: subject\nbody"},
+		{"trailing blanks are dropped", "fix: subject\nbody\n\n\n", "fix: subject\nbody"},
+		{"consecutive blanks collapse to one", "sub\n\n\n\nbody", "sub\n\nbody"},
+		{"blank line between comment blocks collapses", "keep\n# c\n\n\nkeep2", "keep\n\nkeep2"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

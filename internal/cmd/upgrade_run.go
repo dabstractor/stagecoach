@@ -171,12 +171,13 @@ func (cmdRunner) Run(ctx context.Context, name string, args ...string) (string, 
 // prodDetect is the production upgradeDetect: it builds a Detector with the package-cmd cmdRunner
 // (NON-NIL — detect.go treats nil Exec as SKIP, not prod), the upgradeExePath result for path
 // heuristics, runtime.GOOS, the --install-method override, os.Getenv, and the injected verbose logger;
-// then runs Detect. The override is the flagInstallMethod package var (S1). Errors are wrapped with
-// "stagecoach:" so they surface consistently (ErrUnknownChannel from a bad --install-method).
+// then runs Detect. The override is the flagInstallMethod package var (S1). Errors are surfaced as
+// PLAIN errors (no "stagecoach:" prefix — main.go adds it), consistent with every other RunE
+// (e.g. ErrUnknownChannel from a bad --install-method).
 func prodDetect(ctx context.Context, override string, log func(string)) (upgrade.Channel, string, error) {
 	exe, err := upgradeExePath()
 	if err != nil {
-		return "", "", fmt.Errorf("stagecoach: %w", err)
+		return "", "", fmt.Errorf("%w", err)
 	}
 	d := &upgrade.Detector{
 		Exec:     cmdRunner{}, // NON-NIL (nil skips PM probes — detect.go). osRunner is unexported.
@@ -201,7 +202,7 @@ func runCheck(ctx context.Context, cmd *cobra.Command, client *upgrade.Client, e
 		Prerelease: effChannel == "prerelease",
 	})
 	if err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: check: %w", err))
+		return exitcode.New(exitcode.Error, fmt.Errorf("check: %w", err))
 	}
 	latest := release.Tag
 	out := cmd.OutOrStdout()
@@ -227,7 +228,7 @@ func runDirectSwap(ctx context.Context, cmd *cobra.Command, client *upgrade.Clie
 	log := verboseLog(cmd.ErrOrStderr())
 	tempDir, err := os.MkdirTemp("", "stagecoach-upgrade-*")
 	if err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+		return exitcode.New(exitcode.Error, err)
 	}
 	// NO defer os.RemoveAll(tempDir): failure paths LEAVE it (FR-U11 inspection); Swap cleans it on success.
 	release, asset, err := upgrade.ResolveTarget(ctx, client, upgrade.ResolveOptions{
@@ -235,12 +236,12 @@ func runDirectSwap(ctx context.Context, cmd *cobra.Command, client *upgrade.Clie
 		Prerelease: effChannel == "prerelease",
 	})
 	if err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err)) // LEAVE tempDir
+		return exitcode.New(exitcode.Error, err) // LEAVE tempDir
 	}
 	log("target: " + release.Tag)
 	newBin, err := upgrade.StageNewBinary(ctx, client, release, asset, tempDir)
 	if err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err)) // LEAVE tempDir (FR-U11)
+		return exitcode.New(exitcode.Error, err) // LEAVE tempDir (FR-U11)
 	}
 	out := cmd.OutOrStdout()
 	ok, cerr := confirmUpgrade(displayCurrent(), release.Tag, "Self-swap the direct-binary install.", flagYes, cmd.InOrStdin(), out)
@@ -256,7 +257,7 @@ func runDirectSwap(ctx context.Context, cmd *cobra.Command, client *upgrade.Clie
 			printPrivilegeCommand(out, npe.Command) // echo .Command verbatim
 			return nil                              // exit 0 (FR-U4/U7 — never auto-elevate)
 		}
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", serr)) // exit 1
+		return exitcode.New(exitcode.Error, fmt.Errorf("%w", serr)) // exit 1
 	}
 	fmt.Fprintf(out, "stagecoach upgraded to %s\n", release.Tag)
 	return nil // exit 0 (Swap already cleaned tempDir)
@@ -294,7 +295,7 @@ func runDelegate(ctx context.Context, cmd *cobra.Command, ch upgrade.Channel) er
 	})
 	if err != nil {
 		// Start/LookPath/timeout failure — the PM binary is unavailable/hung ⇒ exit 1.
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+		return exitcode.New(exitcode.Error, err)
 	}
 	if !res.Ran {
 		// PRINT channel (AUR/Nix) — Delegate already printed the command; frame it. exit 0 (FR-U4).
@@ -303,7 +304,7 @@ func runDelegate(ctx context.Context, cmd *cobra.Command, ch upgrade.Channel) er
 	}
 	if res.ExitCode != 0 {
 		// The updater ran and reported failure. §15.4 is 0/1/6: map the raw code to exit 1 (NOT propagate it).
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %s updater exited %d", ch, res.ExitCode))
+		return exitcode.New(exitcode.Error, fmt.Errorf("%s updater exited %d", ch, res.ExitCode))
 	}
 	fmt.Fprintf(out, "stagecoach updated via %s\n", ch)
 	return nil // exit 0

@@ -158,7 +158,7 @@ func validateUpgradeFlags(fs *pflag.FlagSet) error {
 // nil on success. main maps via exitcode.For (mirrors every other RunE in this package).
 func runUpgrade(cmd *cobra.Command, _ []string) error {
 	if err := validateUpgradeFlags(cmd.Flags()); err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+		return exitcode.New(exitcode.Error, err)
 	}
 
 	// Resolve effective channel/source-repo (FR-U10): flag > [upgrade] config (global) > Defaults.
@@ -166,7 +166,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 	// never bootstraps a config (FR-B3 boundary), never reads the per-repo file (FR-U12).
 	uc, err := config.LoadUpgradeConfig()
 	if err != nil {
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+		return exitcode.New(exitcode.Error, err)
 	}
 
 	effChannel := uc.Channel // Defaults: "stable"
@@ -208,7 +208,7 @@ func dispatchUpgrade(ctx context.Context, cmd *cobra.Command, effChannel, effSou
 			return nil // exit 0
 		}
 		if err != nil {
-			return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: rollback: %w", err)) // exit 1
+			return exitcode.New(exitcode.Error, fmt.Errorf("rollback: %w", err)) // exit 1
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "restored stagecoach %s\n", ver)
 		return nil // exit 0
@@ -225,7 +225,7 @@ func dispatchUpgrade(ctx context.Context, cmd *cobra.Command, effChannel, effSou
 	ch, evidence, err := upgradeDetect(ctx, flagInstallMethod, log)
 	if err != nil {
 		// ErrUnknownChannel (a bad --install-method) or the os.Executable failure ⇒ exit 1.
-		return exitcode.New(exitcode.Error, fmt.Errorf("stagecoach: %w", err))
+		return exitcode.New(exitcode.Error, err)
 	}
 	log("detected install method: " + string(ch) + " (" + evidence + ")")
 

@@ -116,17 +116,37 @@ func EditMessage(ctx context.Context, msg string, cfg config.Config, editCtx Edi
 	return edited, nil
 }
 
-// stripCommentsAndTrim removes lines beginning with '#', trims trailing whitespace per line, drops empty
-// lines, and joins the survivors with '\n'. Mirrors git's prepare-commit-msg cleanup (comment-char '#').
+// stripCommentsAndTrim removes lines beginning with '#', trims trailing whitespace per line, and
+// joins the survivors with '\n'. Blank-line handling mirrors git's `commit.cleanup = strip` (the
+// default) so a hand-edited subject + blank + body keeps its body separator (FR-E1):
+//   - leading/trailing blank lines are dropped, and
+//   - runs of consecutive blank lines collapse to a single blank line,
+//
+// but a single inter-paragraph blank line (e.g. between subject and body) is preserved. The previous
+// implementation dropped EVERY blank line, collapsing subject and body into one paragraph.
 func stripCommentsAndTrim(s string) string {
 	var kept []string
+	prevBlank := true // suppress leading blanks (treat the start as if preceded by a blank)
 	for _, line := range strings.Split(s, "\n") {
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-		if t := strings.TrimRight(line, " \t\r"); t != "" {
-			kept = append(kept, t)
+		t := strings.TrimRight(line, " \t\r")
+		if t == "" {
+			// Collapse consecutive blanks to one and suppress leading blanks; trailing blanks are
+			// dropped below by trimming the final result.
+			if !prevBlank {
+				kept = append(kept, "")
+				prevBlank = true
+			}
+			continue
 		}
+		kept = append(kept, t)
+		prevBlank = false
+	}
+	// Drop trailing blank line(s) produced by a trailing-blank input (git strip trims them).
+	for len(kept) > 0 && kept[len(kept)-1] == "" {
+		kept = kept[:len(kept)-1]
 	}
 	return strings.Join(kept, "\n")
 }

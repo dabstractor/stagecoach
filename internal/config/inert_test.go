@@ -39,9 +39,9 @@ model = "gemini-3.1-pro"
 `
 		got := ActiveSettings(content)
 		want := map[string]map[string]string{
-			"":              {"config_version": "3"},
-			"defaults":      {"provider": "\"claude\"", "model": "\"sonnet\"", "timeout": "\"60s\""},
-			"role.planner":  {"provider": "\"agy\"", "model": "\"gemini-3.1-pro\""},
+			"":             {"config_version": "3"},
+			"defaults":     {"provider": "\"claude\"", "model": "\"sonnet\"", "timeout": "\"60s\""},
+			"role.planner": {"provider": "\"agy\"", "model": "\"gemini-3.1-pro\""},
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("ActiveSettings =\n%v\nwant\n%v", got, want)
