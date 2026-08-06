@@ -269,7 +269,7 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "stagecoach upgrade command + local flags + wiring (walled off)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The cobra command, its LOCAL (non-persistent) flags, the no-op PersistentPreRunE that runs outside a git repo and skips config.Load, and registration via init() (zero edits to root.go). Help text disambiguates from the unrelated `config upgrade`.",
               "subtasks": [
                 {
@@ -295,7 +295,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Confirmation prompt (current→target + action) + --yes skip + run-vs-print output",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"
@@ -311,14 +311,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Run orchestration: --check / normal / --rollback paths",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The runUpgrade dispatcher that routes the resolved flags+config to the three paths: --check (resolve+compare, exit 6/0), --rollback (P1.M3.T3), and the normal path (Detect→Delegate-or-direct-swap). Resolves GITHUB_TOKEN, the injectable HTTP client/seams, and verbose logging.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "runUpgrade dispatcher (--check / normal detect→delegate|swap / --rollback)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S2",
