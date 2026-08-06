@@ -111,6 +111,15 @@ func (r *osRunner) Run(ctx context.Context, name string, args ...string) (string
 	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout = &out
+	// WaitDelay bounds how long Run waits for the process (and any grandchild still holding the
+	// stdout pipe) to release its I/O AFTER the per-query timeout fires the context's Cancel. Without
+	// it, a hung PM that forks a helper — e.g. a shell wrapper around the real query, or `sh -c …`
+	// where sh forks its child instead of exec'ing it — keeps the stdout pipe open until that
+	// helper's OWN natural exit, so Run blocks well past the per-query bound FR-U2(b)/external_deps
+	// §7 require ("these queries must not hang"). WaitDelay = the same timeout window gives the
+	// killed process one bounded grace period to drain, then force-closes the pipe so Run returns
+	// promptly. No effect on the happy path / non-zero-exit path (Cancel only fires on a timeout).
+	cmd.WaitDelay = timeout
 
 	if err := cmd.Run(); err != nil {
 		// A context cancellation/timeout kills the child with a signal, which surfaces as a
@@ -357,13 +366,18 @@ func (d *Detector) detectPath() (Channel, string, bool) {
 	real = filepath.Clean(real)
 	lower := strings.ToLower(real)
 
-	// Static prefix/segment table (Homebrew Cellar, Scoop shims, Nix store). Matched via Contains on
-	// the lowercased path so (a) a true prefix like /opt/homebrew/Cellar/ matches whether or not the
-	// ExePath is the realpath into the Cellar, and (b) a mid-path Windows marker like \scoop\shims\
-	// matches inside a full C:\Users\me\scoop\shims\... path on a case-insensitive FS and in a
-	// cross-GOOS test (filepath.Clean keeps backslashes on Linux, so HasPrefix would miss the drive).
+	// Static prefix/segment table (Homebrew Cellar, Scoop shims, Nix store). Matched via Contains,
+	// SEPARATOR-AGNOSTICALLY: filepath.Clean rewrites separators to the HOST OS form (forward slash
+	// on unix, backslash on windows), but the table mixes Unix (/opt/homebrew/Cellar/) and Windows
+	// (\scoop\shims\) prefixes and must match identically on every host GOOS — FR-U2 tier (c) is
+	// cross-GOOS deterministic (a darwin/linux ExePath like /opt/homebrew/Cellar/... must resolve as
+	// brew even when the test runs on a windows runner, where Clean turns it into
+	// \opt\homebrew\Cellar\...). Normalize both sides to '/' before the Contains so a Clean'd
+	// backslash path still matches its forward-slash prefix (and vice-versa); case is folded via lower.
+	matchPath := strings.ReplaceAll(lower, "\\", "/")
 	for _, h := range pathHeuristics {
-		if strings.Contains(lower, strings.ToLower(h.prefix)) {
+		prefix := strings.ReplaceAll(strings.ToLower(h.prefix), "\\", "/")
+		if strings.Contains(matchPath, prefix) {
 			return h.channel, "path: " + h.prefix, true
 		}
 	}
