@@ -518,7 +518,8 @@ func (g *gitRunner) run(ctx context.Context, repo string, args ...string) (stdou
 //
 // Identity: cmd.Env is NOT set here, so the child inherits the parent environment. Production
 // callers commit AS the configured user (git resolves user.name/user.email from config/env);
-// tests set repo-local user.name/user.email via `git config` (see committree_test.go).
+// tests set repo-local user.name/user.email via `git config` (see committree_test.go)
+// (FR-39a — commit-identity transparency).
 func (g *gitRunner) runWithInput(ctx context.Context, repo string, stdin io.Reader, args ...string) (stdout string, stderr string, exitCode int, err error) {
 	gitPath, lerr := exec.LookPath("git")
 	if lerr != nil {
@@ -677,6 +678,10 @@ func (g *gitRunner) WriteTreeFrom(ctx context.Context, indexFile string) (sha st
 //
 // commit-tree fails (non-zero exit, 128 on git 2.x) when tree or a parent is not a valid object;
 // that is surfaced here as runWithInput's exitCode != 0 (err stays nil per its invariant).
+//
+// Per FR-39a, no GIT_AUTHOR_*/GIT_COMMITTER_* env is set and no user.name/user.email config is
+// written, so the commit's author/committer are exactly git's resolved identity — stagecoach is
+// invisible in commit metadata.
 func (g *gitRunner) CommitTree(ctx context.Context, tree string, parents []string, msg string) (sha string, err error) {
 	args := make([]string, 0, 4+len(parents)*2)
 	args = append(args, "commit-tree", tree)

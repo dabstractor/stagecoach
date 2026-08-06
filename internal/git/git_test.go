@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -318,4 +320,106 @@ func runGit(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+// TestNoIdentityWritesInProduction is the FR-39a structural guard: it walks the
+// production source tree (internal/ + cmd/, skipping _test.go) and FAILS if any
+// non-comment line introduces a git identity write — either by setting one of
+// the six GIT_AUTHOR_*/GIT_COMMITTER_* env keys, or by writing user.name /
+// user.email config. This makes the commit-identity transparency invariant
+// (PRD §9.9 FR-39a / §20.2) self-defending: a future "helpful" change that
+// brands stagecoach's commits cannot land silently. The production code already
+// upholds the invariant (runWithInput never sets cmd.Env); this guard keeps it.
+//
+// Self-trip avoidance (three layers keep the tree green):
+//  1. This guard lives in a _test.go file ⇒ skipped by the walk.
+//  2. The forbidden-token list below lives in this same _test.go file ⇒ skipped.
+//  3. Matching is on QUOTED string literals (e.g. `"GIT_AUTHOR_NAME"`,
+//     `"user.name"`) and // comment lines are skipped, so prose mentions of
+//     these keys in production comments (including the FR-39a doc tags in
+//     git.go) never false-positive.
+//
+// The walk resolves the repo root by walking UP from the test CWD (the package
+// dir) to the directory containing go.mod, then scans <root>/internal and
+// <root>/cmd. visited > 0 is asserted so a path-resolution bug fails loudly
+// instead of passing vacuously.
+func TestNoIdentityWritesInProduction(t *testing.T) {
+	root := findRepoRoot(t)
+
+	// QUOTED literals: match os.Setenv("GIT_AUTHOR_NAME", ...) / cmd.Env=[..."GIT_AUTHOR_NAME"...]
+	// call sites and exec.Command("git","config","user.name",...) call sites, NOT prose mentions.
+	forbidden := []string{
+		`"GIT_AUTHOR_NAME"`,
+		`"GIT_AUTHOR_EMAIL"`,
+		`"GIT_AUTHOR_DATE"`,
+		`"GIT_COMMITTER_NAME"`,
+		`"GIT_COMMITTER_EMAIL"`,
+		`"GIT_COMMITTER_DATE"`,
+		`"user.name"`,
+		`"user.email"`,
+	}
+
+	visited := 0
+	for _, sub := range []string{"internal", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, sub), func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(p, ".go") {
+				return nil
+			}
+			if strings.HasSuffix(p, "_test.go") {
+				return nil // legit scaffolding (fixtures, e2e harnesses) lives here
+			}
+			data, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return rerr
+			}
+			visited++
+			for i, line := range strings.Split(string(data), "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+					continue
+				}
+				for _, f := range forbidden {
+					if strings.Contains(trimmed, f) {
+						t.Errorf("%s:%d: forbidden identity-write token %s in: %s", p, i+1, f, trimmed)
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", sub, err)
+		}
+	}
+
+	if visited == 0 {
+		t.Fatal("walk visited 0 production .go files — path-resolution bug (guard passes vacuously)")
+	}
+	t.Logf("FR-39a guard scanned %d production .go files; zero identity writes found", visited)
+}
+
+// findRepoRoot walks UP from the test CWD (the package dir) until it finds a
+// directory containing go.mod, and returns that directory. Fails the test if
+// none is found (so the guard never passes vacuously on a mis-resolved root).
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("go.mod not found walking up from %s", os.Args[0])
+		}
+		dir = parent
+	}
 }

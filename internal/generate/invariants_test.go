@@ -19,8 +19,11 @@ package generate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -317,4 +320,89 @@ func TestInvariants(t *testing.T) {
 			assertInvariants(t, repo, before, treeSHA, wantHead)
 		})
 	}
+}
+
+// TestCommitIdentityTransparency is the SUCCESS-path form of PRD §20.2 / FR-39a
+// (commit-identity transparency). Unlike TestInvariants above (a FAILURE-path
+// table where every row expects err != nil), this proves that on a SUCCESSFUL
+// commit the landed commit's author/committer are EXACTLY git's resolved
+// identity — stagecoach adds no branded author/email and no Co-Authored-By /
+// Generated-by trailer. The production invariant already holds (runWithInput
+// in internal/git/git.go never sets cmd.Env); this makes it executable and
+// self-defending against a future regression.
+func TestCommitIdentityTransparency(t *testing.T) {
+	bin := stubtest.Build(t)
+
+	// (a) baseline identity: resolve expected author/committer from the fixture
+	// (initRepo seeds user.name "Test" / user.email "test@example.com").
+	t.Run("baseline_identity", func(t *testing.T) {
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "staged.txt", "x")
+		stageFile(t, repo, "staged.txt")
+
+		wantName := gitOut(t, repo, "config", "user.name")
+		wantEmail := gitOut(t, repo, "config", "user.email")
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: add widget"})
+		cfg := config.Defaults()
+		res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err != nil {
+			t.Fatalf("CommitStaged: %v", err)
+		}
+		if res.CommitSHA == "" {
+			t.Fatal("empty CommitSHA")
+		}
+
+		got := gitOut(t, repo, "log", "--format=%an <%ae> | %cn <%ce>", "-n1", res.CommitSHA)
+		want := fmt.Sprintf("%s <%s> | %s <%s>", wantName, wantEmail, wantName, wantEmail)
+		if got != want {
+			t.Errorf("identity mismatch:\n got %q\nwant %q", got, want)
+		}
+
+		// The commit message must be EXACTLY the stub's canned text — stagecoach
+		// appends no Co-Authored-By / Generated-by trailer.
+		if msg := strings.TrimSpace(gitOut(t, repo, "log", "--format=%B", "-n1", res.CommitSHA)); msg != "feat: add widget" {
+			t.Errorf("commit message = %q; want exactly %q (no trailer appended)", msg, "feat: add widget")
+		}
+	})
+
+	// (b) transparency-without-authorship: even when the repo's resolved identity
+	// itself looks "stagecoach-branded", stagecoach must pass it through verbatim
+	// (it never overrides/brand-rewrites identity). Mirrors setIdentityConfig
+	// (internal/git/committree_test.go) but seeds stagecoach-looking values.
+	t.Run("transparency_without_authorship", func(t *testing.T) {
+		repo := t.TempDir()
+		initRepo(t, repo)
+		commitRaw(t, repo, "initial")
+		writeFile(t, repo, "staged.txt", "x")
+		stageFile(t, repo, "staged.txt")
+
+		// Override the repo-local identity with stagecoach-looking values. The value
+		// may itself contain spaces ("stagecoach agent"), so rejoin everything after
+		// the key rather than taking only parts[1] like the single-word fixtures do.
+		for _, kv := range []string{"user.name=stagecoach agent", "user.email=agent@stagecoach.local"} {
+			key, val, _ := strings.Cut(kv, "=")
+			if out, err := exec.Command("git", "-C", repo, "config", key, val).CombinedOutput(); err != nil {
+				t.Fatalf("git config %s: %v\n%s", kv, err, out)
+			}
+		}
+
+		m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: pass-through check"})
+		cfg := config.Defaults()
+		res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+		if err != nil {
+			t.Fatalf("CommitStaged: %v", err)
+		}
+		if res.CommitSHA == "" {
+			t.Fatal("empty CommitSHA")
+		}
+
+		got := gitOut(t, repo, "log", "--format=%an <%ae> | %cn <%ce>", "-n1", res.CommitSHA)
+		want := "stagecoach agent <agent@stagecoach.local> | stagecoach agent <agent@stagecoach.local>"
+		if got != want {
+			t.Errorf("stagecoach-looking identity was NOT passed through verbatim:\n got %q\nwant %q", got, want)
+		}
+	})
 }
