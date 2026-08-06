@@ -399,7 +399,7 @@
       "type": "Phase",
       "id": "P2",
       "title": "Distribution surface expansion (PRD §21, → G27)",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Add the channels goreleaser has no native pipe for, so stagecoach reaches the npm/Windows-default/Nix/version-manager audiences. Build/release/CI plumbing + JS/Nix/shell artifacts — NO new Go code in the commit path and no new FR surface (PRD §10.5). The npm wrapper's only interaction with the binary is setting STAGECOACH_INSTALL_METHOD=npm, which Phase 1's detection (P1.M2.T1) already reads. Largely independent of Phase 1 but logically follows it.",
       "milestones": [
         {
@@ -495,21 +495,21 @@
           "type": "Milestone",
           "id": "P2.M3",
           "title": "Nix flake (flake.nix, in-repo)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "An in-repo flake.nix (no external repo, no secret, no registry gatekeeping) powering nix run / nix profile install / devbox / nix-shell, plus a vendorHash maintenance workflow.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M3.T1",
               "title": "flake.nix + vendorHash workflow + nix flake check CI",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Author flake.nix using buildGoModule over the supported systems, keep vendorHash current, and add a nix flake check CI step so a stale vendorHash fails the build before release.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M3.T1.S1",
                   "title": "flake.nix (buildGoModule, default package, devShell) + nix flake check CI step",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §5. flake.nix at repo root. buildGoModule { pname='stagecoach'; version (from the tag or 'unstable'); src=.{outPath=self;}; vendorHash; subPackages=['cmd/stagecoach']; CGO_ENABLED=0; }. Outputs over eachSystem [x86_64-linux aarch64-linux x86_64-darwin aarch64-darwin]. packages.default = the built binary; devShells.default = mkShell with go + gopls. vendorHash: set to lib.fakeHash initially, then run `nix build` to get the real hash; CI must keep it current (a stale hash after go.sum changes fails `nix flake check`).\n2. INPUT: go.mod (module path github.com/dabstractor/stagecoach, go 1.22), the cmd/stagecoach main package.\n3. LOGIC: New flake.nix + .gitignore entry (result, .direnv). Add a `nix-flake-check` job to .github/workflows/ci.yml: install Nix (cachix/install-nix-action), run `nix flake check` (this builds on linux; guard with continue-on-error:false but allow the vendorHash-mismatch to surface a clear message). Optionally add cachix for faster CI (DECISION: skip cachix for v3.0 — add later). Document the vendorHash update workflow (run `nix build`, copy the got-hash into flake.nix) in a comment + docs.\n4. OUTPUT: flake.nix + ci.yml nix job + .gitignore entries. Verify `nix flake check` passes locally (record in the subtask completion).\n5. DOCS: [Mode A] flake.nix header comment + a docs/packaging.md (or README install — README is Mode B/P3) Nix section.",
@@ -525,21 +525,21 @@
           "type": "Milestone",
           "id": "P2.M4",
           "title": "mise / asdf plugins",
-          "status": "Planned",
+          "status": "Researching",
           "description": "~30-line shell-script plugins (asdf-compatible; mise uses the same) pointing at the GitHub Release archives, authored here as the canonical reference and linked from the README.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M4.T1",
               "title": "mise + asdf plugin scripts (bin/list-all, bin/install) + plugin-repo docs",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Author the asdf/mise plugin scripts (list-all greps release tags; install downloads+extracts the platform archive), keep them in a plugins/ reference dir, and document the separate plugin-repo convention.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M4.T1.S1",
                   "title": "asdf/mise plugin scripts (list-all + install) + plugin-repo README + verify contract",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §6. asdf plugin contract: bin/list-all prints available versions (grep GitHub release tags — `git ls-remote --tags` or the releases API); bin/install uses $ASDF_INSTALL_TYPE/VERSION/INSTALL_PATH to download the platform archive + extract the binary to $ASDF_INSTALL_PATH/bin. mise is asdf-compatible (same bin/list-all + bin/install); mise plugins can be a plain asdf plugin referenced by repo URL. Convention: the plugin lives in a SEPARATE repo (asdf-stagecoach / mise-stagecoach); author the canonical scripts here under plugins/asdf-stagecoach/ and document that they're mirrored to the plugin repo.\n2. INPUT: goreleaser asset-name convention (platform→archive), the GitHub Releases tag source.\n3. LOGIC: New plugins/asdf-stagecoach/bin/list-all (POSIX sh: fetch tags via the GitHub API or `git ls-remote --tags`, strip leading v, print one per line) + plugins/asdf-stagecoach/bin/install (POSIX sh: detect OS/arch (uname -s/-m → goreleaser os/arch), download the matching archive + checksums, verify SHA256 (shasum -a 256 / sha256sum), extract stagecoach to $ASDF_INSTALL_PATH/bin/, chmod +x). Add plugins/asdf-stagecoach/README.md explaining: how to add (`asdf plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach` / `mise plugin add stagecoach ...`), and that this dir is the canonical source mirrored to the plugin repo. Verify the asdf/mise env-var contract at impl (record date).\n4. OUTPUT: plugins/asdf-stagecoach/{bin/list-all,bin/install,README.md} + a local smoke test of install against a fixture archive.\n5. DOCS: [Mode A] plugins/asdf-stagecoach/README.md; link from README install is Mode B/P3.",

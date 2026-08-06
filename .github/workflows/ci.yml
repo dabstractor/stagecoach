@@ -189,3 +189,22 @@ jobs:
         if: matrix.os != 'windows-latest'
         working-directory: npm
         run: node test/install.test.cjs
+
+  # --- (6) Nix flake check (PRD §21.2; external_deps.md §5) -----------------------
+  # Builds the flake's outputs for the current system (x86_64-linux). A stale vendorHash fails
+  # here with a clear "got: sha256-..." mismatch — paste it into flake.nix (see the flake.nix
+  # header comment for the vendorHash update workflow). No cachix for v3.0 (small Go static
+  # binary; add later). continue-on-error is intentionally FALSE (default) so a stale vendorHash
+  # fails the job and surfaces the got-hash — this is what keeps the Nix surface current.
+  nix-flake-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31   # flakes + nix-command enabled by default (no nix.conf step); pin moving major (FR-D5: ~v31 late 2025)
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: nix flake check
+        # Builds the x86_64-linux package (modern Nix defaults to the current system). On a
+        # first run with the lib.fakeHash placeholder, this fails with the got-hash to paste.
+        run: nix --print-build-logs flake check

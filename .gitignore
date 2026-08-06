@@ -43,3 +43,9 @@ Thumbs.db
 /bin/
 *.test
 coverage.out
+
+# Nix artifacts
+# (the flake LOCKFILE is NOT ignored — stagecoach is an application; it pins nixpkgs for CI)
+result
+result-*
+.direnv

@@ -71,3 +71,59 @@ by a one-time manual manifest submission that ESTABLISHES `dabstractor.Stagecoac
 > FR-D5 (verify at impl): re-confirm the `wingetcreate new` flow, the exact
 > `NestedInstallerType`/`NestedInstallerFiles` shape, and the `vedantmgoyal9/winget-releaser`
 > version against the current winget manifest spec + action release at implementation time.
+
+## Nix (flakes)
+
+Stagecoach ships a [Nix flake](https://nixos.wiki/wiki/Flakes) (`flake.nix` at the repo root)
+that builds the same binary goreleaser ships (`cmd/stagecoach`, `CGO_ENABLED=0`) via nixpkgs
+[`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#buildGoModule), over the four systems
+(x86_64-linux, aarch64-linux, x86_64-darwin, aarch64-darwin).
+
+```bash
+nix run github:dabstractor/stagecoach               # run without installing
+nix profile install github:dabstractor/stagecoach    # install into the user profile
+nix develop                                          # hermetic dev shell (go + gopls)
+nix build .#default && ./result/bin/stagecoach --help # local build
+```
+
+> The Nix-built binary reports version `dev` (the flake does not inject goreleaser's version
+> ldflags, and Go's VCS embedding is unavailable in the sandbox — source is copied to the store
+> without `.git`). For a real version string, use a goreleaser GitHub Release.
+
+### Keeping `vendorHash` current (maintainer)
+
+`buildGoModule` pins the Go dependency tree with a `vendorHash` in `flake.nix`. Every
+`go.mod`/`go.sum` change invalidates it. CI's `nix-flake-check` job fails with the new hash to
+paste. The update workflow:
+
+1. Set `vendorHash = pkgs.lib.fakeHash;` (the `sha256-AAAA...=` placeholder) if starting fresh.
+2. Run `nix build .#default` (or `nix flake check`). It fails with a fixed-output mismatch:
+
+   ```
+   specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      got:    sha256-<REAL-HASH>
+   ```
+
+3. Paste the `got:` value into `vendorHash` in `flake.nix`.
+4. Re-run `nix build`/`nix flake check` → green. Commit `flake.nix` (and `flake.lock` if it changed).
+
+`flake.lock` is committed (stagecoach is an application; the lock pins nixpkgs for reproducible
+CI). After a nixpkgs bump, run `nix flake update` and commit the new `flake.lock`.
+
+#### First-run note (no local Nix)
+
+If you do not have Nix installed locally, ship the flake with `vendorHash = pkgs.lib.fakeHash;`
+and commit it. The first CI `nix-flake-check` run will FAIL with the `got:` hash — copy that value
+into `vendorHash` in `flake.nix` and commit the fix. Likewise, the first CI run generates
+`flake.lock` (`nix flake check` resolves inputs); commit it in the same follow-up.
+
+### Release-day checklist (Nix)
+
+- [ ] `flake.nix` committed (with the REAL `vendorHash`, not `lib.fakeHash`).
+- [ ] `flake.lock` committed (pins nixpkgs for reproducible CI).
+- [ ] `.gitignore` has `result`, `result-*`, `.direnv` (and NOT `flake.lock`).
+- [ ] The CI `nix-flake-check` job is green on `main`.
+
+> FR-D5 (verify at impl): re-confirm the `cachix/install-nix-action` major version pin, that the
+> locked nixpkgs provides Go >= 1.22, and that `nix flake check` defaults to the current system
+> (modern Nix 2.21+) — building the x86_64-linux package on the ubuntu runner.
