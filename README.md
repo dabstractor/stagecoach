@@ -143,7 +143,7 @@ stagecoach --version   # stagecoach version dev
 
 ### Updating
 
-Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, Winget, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
+Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, Winget, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
 
 ```bash
 stagecoach upgrade             # detect → delegate (or self-swap), confirm, apply
