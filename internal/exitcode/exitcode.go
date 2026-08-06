@@ -1,4 +1,7 @@
-// Package exitcode maps Stagecoach errors to PRD §15.4 process exit codes (0/1/2/3/124).
+// Package exitcode maps Stagecoach errors to PRD §15.4 process exit codes (0/1/2/3/5/6/124).
+// Exit code 6 (UpdateAvailable) is the upgrade-path-only code produced solely by
+// `stagecoach upgrade --check` (PRD §15.4/FR-U12); it is walled off from the commit path
+// (§9.1–§9.28) and distinct from commit-path codes 2/3/5/124.
 // Shipped in P1.M4.T1.S1; verified and hardened in P1.M4.T3.S3.
 //
 // Constant names intentionally omit the "Exit" prefix (e.g. Success, not ExitSuccess) —
@@ -25,8 +28,14 @@ const (
 	NothingToCommit = 2   // clean tree after auto-stage, or nothing staged with --no-auto-stage
 	Rescue          = 3   // snapshot taken, commit not created — manual recovery printed
 	Busy            = 5   // another stagecoach run holds the per-repo lock; retry after it finishes (FR52 §18.5)
+	UpdateAvailable = 6   // a newer version is available; upgrade-path only (PRD §15.4/FR-U6/FR-U12); never returned by commit path
 	Timeout         = 124 // generation exceeded --timeout (mirrors GNU `timeout`)
 )
+
+// ErrUpdateAvailable is the upgrade-path sentinel (FR-U6/FR-U12) returned when
+// `stagecoach upgrade --check` finds a newer release. Use errors.Is to detect it;
+// For() maps both this sentinel and New(UpdateAvailable, nil) to exit code 6.
+var ErrUpdateAvailable = errors.New("stagecoach: a newer version is available")
 
 // ExitError lets a command force a specific exit code for an error that For()'s domain mapping
 // would otherwise default. Return from any RunE: `return exitcode.New(exitcode.Error, err)`.
@@ -58,6 +67,10 @@ func For(err error) int {
 	var ee *ExitError
 	if errors.As(err, &ee) {
 		return ee.Code
+	}
+	// Upgrade-path sentinel (FR-U12): 6 is upgrade-path only, never commit-path.
+	if errors.Is(err, ErrUpdateAvailable) {
+		return UpdateAvailable
 	}
 	if errors.Is(err, generate.ErrNothingToCommit) {
 		return NothingToCommit

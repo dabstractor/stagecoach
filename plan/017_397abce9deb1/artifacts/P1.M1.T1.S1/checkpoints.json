@@ -1,0 +1,181 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M1.T1.S1_1785999636885_pre-execution_5d9a7c19",
+      "taskId": "P1.M1.T1.S1",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S1.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-08-06T07:00:36.885Z"
+      },
+      "createdAt": "2026-08-06T07:00:36.885Z"
+    },
+    {
+      "id": "P1.M1.T1.S1_1785999692862_coder-response_722c039c",
+      "taskId": "P1.M1.T1.S1",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S1.md",
+        "stage": "coder-response",
+        "coderResponse": "All validation gates pass. Here's the summary:\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched."
+        },
+        "validationResults": [],
+        "timestamp": "2026-08-06T07:01:32.862Z"
+      },
+      "createdAt": "2026-08-06T07:01:32.862Z"
+    },
+    {
+      "id": "P1.M1.T1.S1_1785999693755_validation-gate-3_f06b362d",
+      "taskId": "P1.M1.T1.S1",
+      "label": "After validation gate 3",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S1.md",
+        "stage": "validation-gate-3",
+        "coderResponse": "All validation gates pass. Here's the summary:\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/exitcode/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/exitcode/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/exitcode/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t0.002s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test -race ./internal/exitcode/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          }
+        ],
+        "timestamp": "2026-08-06T07:01:33.755Z"
+      },
+      "createdAt": "2026-08-06T07:01:33.755Z"
+    },
+    {
+      "id": "P1.M1.T1.S1_1785999693757_complete_e0ba3b8e",
+      "taskId": "P1.M1.T1.S1",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S1.md",
+        "stage": "complete",
+        "coderResponse": "All validation gates pass. Here's the summary:\n\n```json\n{\n   \"result\": \"success\",\n   \"message\": \"P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched.\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S1 implemented successfully. Added exit code 6 (UpdateAvailable) to internal/exitcode/exitcode.go: new const UpdateAvailable=6 between Busy(5) and Timeout(124), new ErrUpdateAvailable sentinel error, new errors.Is branch in For() mapping the sentinel to 6, and updated package doc comment citing PRD §15.4/FR-U12. The existing errors.As(*ExitError) path already handles New(UpdateAvailable, nil)→6. All tests pass: 4 new TestFor rows (bare sentinel, wrapped sentinel, explicit ExitError nil err, explicit ExitError with err), TestFor_NoCommitPathYieldsUpdateAvailable regression guard iterating 9 commit-path sentinels asserting none yields 6 (FR-U12), and TestUpdateAvailableCodeValue const guard. Validation: go vet ✓, gofmt clean ✓, go test ✓ (all 23 subtests), go test -race ✓, go build ./... ✓. No commit-path branch modified or reordered; no new imports; no callers touched."
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/exitcode/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/exitcode/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/exitcode/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t0.002s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test -race ./internal/exitcode/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          }
+        ],
+        "timestamp": "2026-08-06T07:01:33.757Z"
+      },
+      "createdAt": "2026-08-06T07:01:33.757Z"
+    }
+  ],
+  "lastModified": "2026-08-06T07:01:33.757Z"
+}

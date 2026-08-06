@@ -30,6 +30,10 @@ func TestFor(t *testing.T) {
 		{"ErrCASFailed → 1", generate.ErrCASFailed, Error},
 		{"CASError → 1", &generate.CASError{Expected: "a", Actual: "b"}, Error},
 		{"generic error → 1", errors.New("anything else"), Error},
+		{"ErrUpdateAvailable → 6", ErrUpdateAvailable, UpdateAvailable},
+		{"wrapped ErrUpdateAvailable → 6 (errors.Is traverses %w)", fmt.Errorf("wrap: %w", ErrUpdateAvailable), UpdateAvailable},
+		{"explicit ExitError UpdateAvailable (nil err) → 6", New(UpdateAvailable, nil), UpdateAvailable},
+		{"explicit ExitError UpdateAvailable (with err) → 6", New(UpdateAvailable, errors.New("newer")), UpdateAvailable},
 	}
 
 	for _, tc := range tests {
@@ -46,6 +50,31 @@ func TestBusyCodeValue(t *testing.T) {
 	// Busy is 5 — distinct from 0/1/2/3/124; 4 is reserved (integration_seams §2).
 	if Busy != 5 {
 		t.Errorf("Busy = %d, want 5", Busy)
+	}
+}
+
+func TestFor_NoCommitPathYieldsUpdateAvailable(t *testing.T) {
+	commitPathErrors := []error{
+		generate.ErrNothingToCommit,
+		generate.ErrEmptyMessage,
+		&generate.RescueError{Kind: generate.ErrRescue},
+		&generate.RescueError{Kind: generate.ErrTimeout},
+		generate.ErrTimeout,
+		context.DeadlineExceeded,
+		generate.ErrCASFailed,
+		&generate.CASError{Expected: "a", Actual: "b"},
+		errors.New("generic commit-path failure"),
+	}
+	for _, err := range commitPathErrors {
+		if got := For(err); got == UpdateAvailable {
+			t.Errorf("commit-path error %v mapped to UpdateAvailable(6) -- 6 must be upgrade-path only", err)
+		}
+	}
+}
+
+func TestUpdateAvailableCodeValue(t *testing.T) {
+	if UpdateAvailable != 6 {
+		t.Errorf("UpdateAvailable = %d, want 6", UpdateAvailable)
 	}
 }
 

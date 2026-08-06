@@ -1,0 +1,57 @@
+[
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go vet ./internal/exitcode/",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "test -z \"$(gofmt -l internal/exitcode/)\"",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 2,
+    "description": "Level 2 gate",
+    "success": true,
+    "command": "go test ./internal/exitcode/",
+    "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t0.002s\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "go test -race ./internal/exitcode/",
+    "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/exitcode\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "go build ./...",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  }
+]
