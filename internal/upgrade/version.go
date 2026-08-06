@@ -10,6 +10,13 @@
 //
 // All implementation is stdlib-only (errors, strconv, strings) — no external semver
 // dependency is added, matching the repo's minimal-deps posture.
+//
+// releases.go adds the package's network surface — the GitHub Releases metadata client used by
+// stagecoach upgrade to resolve a target release (FR-U5 step 2, FR-U6). It is the SOLE network
+// call in stagecoach: §19 scopes "no network calls" to the commit path (§9.1–§9.28) and names
+// stagecoach upgrade as the explicit exception, which fetches ONLY the project's own release
+// tags, asset URLs, and asset sizes — never credentials, never a diff, never repo data. Like the
+// rest of the package it is stdlib-only (net/http + encoding/json).
 package upgrade
 
 import (
