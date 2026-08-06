@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# list-all — enumerate stagecoach versions for asdf/mise. (P2.M4.T1.S1; external_deps.md §6)
+#
+# Prints bare versions (leading 'v' stripped), ascending via sort -V (newest last), one per line.
+# asdf/mise do not hard-enforce order; ascending is the convention older asdf used to infer "latest"
+# from the last line. Errors go to stderr; only versions go to stdout.
+#
+# Uses `git ls-remote --refs --tags` (NOT the GitHub Releases API). The unauthenticated API is
+# rate-limited to 60 req/h/IP and list-all runs on every listing/tab-complete -> easily blown at
+# scale (CI behind NAT, corporate networks). git ls-remote has NO per-IP quota. See research §3.
+set -eu
+
+GIT_REPO="${STAGECOACH_GIT_REPO:-https://github.com/dabstractor/stagecoach.git}"
+
+# --refs excludes the peeled refs/tags/x^{} dereferenced duplicates (research §3 / GOTCHA 8).
+# Strip "<sha>\trefs/tags/" (sed # delimiter avoids / clashes), THEN strip a leading "v".
+# grep -E '^[0-9]' keeps only version-like tags (defensive; drops junk).
+# sort -V gives correct 1.2.9 -> 1.2.10 ascending ordering (ships in GNU coreutils + modern BSD).
+git ls-remote --refs --tags "$GIT_REPO" 2>/dev/null \
+  | sed 's#^.*refs/tags/##' \
+  | sed 's/^v//' \
+  | grep -E '^[0-9]' \
+  | sort -V

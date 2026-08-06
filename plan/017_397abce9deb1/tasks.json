@@ -399,7 +399,7 @@
       "type": "Phase",
       "id": "P2",
       "title": "Distribution surface expansion (PRD §21, → G27)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Add the channels goreleaser has no native pipe for, so stagecoach reaches the npm/Windows-default/Nix/version-manager audiences. Build/release/CI plumbing + JS/Nix/shell artifacts — NO new Go code in the commit path and no new FR surface (PRD §10.5). The npm wrapper's only interaction with the binary is setting STAGECOACH_INSTALL_METHOD=npm, which Phase 1's detection (P1.M2.T1) already reads. Largely independent of Phase 1 but logically follows it.",
       "milestones": [
         {
@@ -525,21 +525,21 @@
           "type": "Milestone",
           "id": "P2.M4",
           "title": "mise / asdf plugins",
-          "status": "Researching",
+          "status": "Complete",
           "description": "~30-line shell-script plugins (asdf-compatible; mise uses the same) pointing at the GitHub Release archives, authored here as the canonical reference and linked from the README.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M4.T1",
               "title": "mise + asdf plugin scripts (bin/list-all, bin/install) + plugin-repo docs",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Author the asdf/mise plugin scripts (list-all greps release tags; install downloads+extracts the platform archive), keep them in a plugins/ reference dir, and document the separate plugin-repo convention.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M4.T1.S1",
                   "title": "asdf/mise plugin scripts (list-all + install) + plugin-repo README + verify contract",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §6. asdf plugin contract: bin/list-all prints available versions (grep GitHub release tags — `git ls-remote --tags` or the releases API); bin/install uses $ASDF_INSTALL_TYPE/VERSION/INSTALL_PATH to download the platform archive + extract the binary to $ASDF_INSTALL_PATH/bin. mise is asdf-compatible (same bin/list-all + bin/install); mise plugins can be a plain asdf plugin referenced by repo URL. Convention: the plugin lives in a SEPARATE repo (asdf-stagecoach / mise-stagecoach); author the canonical scripts here under plugins/asdf-stagecoach/ and document that they're mirrored to the plugin repo.\n2. INPUT: goreleaser asset-name convention (platform→archive), the GitHub Releases tag source.\n3. LOGIC: New plugins/asdf-stagecoach/bin/list-all (POSIX sh: fetch tags via the GitHub API or `git ls-remote --tags`, strip leading v, print one per line) + plugins/asdf-stagecoach/bin/install (POSIX sh: detect OS/arch (uname -s/-m → goreleaser os/arch), download the matching archive + checksums, verify SHA256 (shasum -a 256 / sha256sum), extract stagecoach to $ASDF_INSTALL_PATH/bin/, chmod +x). Add plugins/asdf-stagecoach/README.md explaining: how to add (`asdf plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach` / `mise plugin add stagecoach ...`), and that this dir is the canonical source mirrored to the plugin repo. Verify the asdf/mise env-var contract at impl (record date).\n4. OUTPUT: plugins/asdf-stagecoach/{bin/list-all,bin/install,README.md} + a local smoke test of install against a fixture archive.\n5. DOCS: [Mode A] plugins/asdf-stagecoach/README.md; link from README install is Mode B/P3.",
@@ -557,28 +557,28 @@
       "type": "Phase",
       "id": "P3",
       "title": "Changeset-level documentation (Mode B) + spec reconciliation",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Cross-cutting, whole-feature documentation that only makes sense once the v3.0 change lands: the README install-section rewrite (all channels live), the `stagecoach upgrade` surface in README CLI reference + FAQ, scoping the §19 'no network calls' amendment, and reconciling FUTURE_SPEC.md's now-superseded self-update rejection. Per-file docs (docs/cli.md upgrade command, docs/configuration.md [upgrade] row, exitcode.go/upgrade.go comments) are Mode A and already landed with their implementing subtasks.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P3.M1",
           "title": "Sync changeset-level docs (README + FUTURE_SPEC + §19 amendment)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The whole-feature documentation pass that depends on all of Phase 1 and Phase 2 landing: README install rewrite + CLI/FAQ, the §19 network-call scoping amendment, and the FUTURE_SPEC self-update reconciliation.",
           "tasks": [
             {
               "type": "Task",
               "id": "P3.M1.T1",
               "title": "Sync README + FUTURE_SPEC + §19 amendment + .goreleaser notes",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Update the cross-cutting docs: rewrite the README Install section so all channels (Homebrew/Scoop/Winget/npm/Nix/mise/asdf/go-install/curl|sh) are live; add `stagecoach upgrade` to the README CLI reference + FAQ; scope the §19 'no network calls' claim to the commit path with upgrade as the named exception; reconcile FUTURE_SPEC.md's self-update rejection (now superseded); and annotate .goreleaser.yaml with the new-channel 'Beyond goreleaser' pointers.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M1.T1.S1",
                   "title": "README install rewrite + upgrade CLI/FAQ + §19 amendment + FUTURE_SPEC reconcile + goreleaser notes",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T3.S3",

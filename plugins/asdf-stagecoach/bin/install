@@ -1,0 +1,91 @@
+#!/usr/bin/env sh
+# install — download + SHA256-verify + extract a stagecoach release into $ASDF_INSTALL_PATH/bin.
+# (P2.M4.T1.S1; external_deps.md §6)
+#
+# Called by asdf/mise with ASDF_INSTALL_TYPE (version|ref), ASDF_INSTALL_VERSION, ASDF_INSTALL_PATH
+# in the env (mise sets the SAME ASDF_* vars → one script serves both managers). The plugin READS
+# env; it takes NO CLI args. It MUST create $ASDF_INSTALL_PATH/bin/ and place the executable there
+# (asdf shims resolve there) — THE load-bearing contract rule.
+#
+# Abort-before-write: on checksum/platform failure it exits non-zero with NO binary left behind
+# (mirrors internal/upgrade/download.go DownloadAndVerifyArchive + npm/install.cjs).
+#
+# STAGECOACH_DOWNLOAD_BASE overrides the releases/download prefix (TEST/MIRROR hook; not user-facing;
+# shared with the npm wrapper's install.cjs for cross-surface consistency).
+set -eu
+
+# (1) Require the asdf/mise env vars. `: "${VAR:?msg}"` works WITH set -u and emits the message.
+: "${ASDF_INSTALL_TYPE:?bin/install: ASDF_INSTALL_TYPE is required}"
+: "${ASDF_INSTALL_VERSION:?bin/install: ASDF_INSTALL_VERSION is required}"
+: "${ASDF_INSTALL_PATH:?bin/install: ASDF_INSTALL_PATH is required}"
+
+version="$ASDF_INSTALL_VERSION"
+owner="${STAGECOACH_REPO_OWNER:-dabstractor}"
+name="${STAGECOACH_REPO_NAME:-stagecoach}"
+base="${STAGECOACH_DOWNLOAD_BASE:-https://github.com/${owner}/${name}/releases/download}"
+
+# (2) uname -> goreleaser GOOS/GOARCH (asdf/mise are Unix-only → windows/zip is out of scope;
+# Windows users use Scoop/Winget per PRD §21.3). Reject anything else with a clear error.
+case "$(uname -s)" in
+  Darwin) os=darwin ;;
+  Linux)  os=linux ;;
+  *) printf 'stagecoach: unsupported OS: %s (plugin supports macOS + Linux)\n' "$(uname -s)" >&2; exit 1 ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
+  *) printf 'stagecoach: unsupported arch: %s (builds amd64/arm64 only)\n' "$(uname -m)" >&2; exit 1 ;;
+esac
+
+# (3) goreleaser asset + checksums names (version WITHOUT leading v in the FILENAME; URL tag WITH v).
+# Matches internal/upgrade/download.go assetName()/checksumsName() + .goreleaser.yaml name_template.
+asset="stagecoach_${version}_${os}_${arch}.tar.gz"
+sums="stagecoach_${version}_checksums.txt"
+asset_url="${base}/v${version}/${asset}"
+sums_url="${base}/v${version}/${sums}"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+printf 'stagecoach: installing %s (%s/%s)\n' "$version" "$os" "$arch" >&2
+
+# (4) Download archive + checksums from the DIRECT releases/download URL. curl -fL follows the 302
+# redirect to objects.githubusercontent.com. DIRECT url (not the API) avoids the 60 req/h limit
+# (external_deps.md §1; same decision as the npm wrapper install.cjs).
+curl -fsSL -o "${tmp}/${asset}" "$asset_url"
+curl -fsSL -o "${tmp}/${sums}"   "$sums_url"
+
+# (5) Portable SHA256: sha256sum on Linux/coreutils, shasum -a 256 on macOS/BSD. Function form avoids
+# word-splitting of a variable-stored command. Detect with command -v (POSIX), not which.
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  printf 'stagecoach: need sha256sum or shasum to verify the download\n' >&2
+  exit 1
+fi
+
+# (6) checksums.txt line is "<64hex>  <filename>" (TWO spaces). awk field-2 EXACT match avoids regex
+# pitfalls (`.` is a wildcard; `1.2.3` substring-matches `1.2.30`). awk's default whitespace split
+# collapses the gap; $2==f is a literal string compare. Matches download.go's strings.Fields parse.
+expected="$(awk -v f="$asset" '$2==f {print $1; exit}' "${tmp}/${sums}")"
+[ -n "$expected" ] || {
+  printf 'stagecoach: no checksum line for %s in %s\n' "$asset" "$sums" >&2
+  exit 1
+}
+got="$(sha256 "${tmp}/${asset}")"
+[ "$expected" = "$got" ] || {
+  printf 'stagecoach: SHA256 mismatch for %s\n  expected: %s\n  got:      %s\n' "$asset" "$expected" "$got" >&2
+  exit 1
+}
+
+# (7) Extract the single root-level binary INTO $ASDF_INSTALL_PATH/bin (goreleaser builds.binary=
+# 'stagecoach' → the archive's sole entry is ./stagecoach at the root). No member filter (the entry
+# is `./stagecoach` or `stagecoach` depending on the archiver; extracting the whole archive is
+# correct + matches npm/install.cjs which extracts into destDir without a filter). chmod +x.
+mkdir -p "${ASDF_INSTALL_PATH}/bin"
+tar -xzf "${tmp}/${asset}" -C "${ASDF_INSTALL_PATH}/bin"
+chmod +x "${ASDF_INSTALL_PATH}/bin/stagecoach"
+
+printf 'stagecoach: installed %s to %s/bin/stagecoach\n' "$version" "$ASDF_INSTALL_PATH" >&2

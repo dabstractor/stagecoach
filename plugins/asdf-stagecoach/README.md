@@ -1,0 +1,91 @@
+# stagecoach — asdf / mise plugin
+
+An [asdf](https://asdf-vm.com/) / [mise](https://mise.jdx.dev/) plugin for
+[stagecoach](https://github.com/dabstractor/stagecoach) — a snapshot-based AI
+commit message generator that uses YOUR local CLI agent.
+
+This plugin installs a SHA256-verified goreleaser release binary into
+`$ASDF_INSTALL_PATH/bin/stagecoach`. **One set of POSIX-sh scripts serves BOTH
+asdf and mise** — mise runs asdf plugins unchanged and sets the same `ASDF_*`
+environment variables (see [mise asdf-legacy-plugins](https://mise.jdx.dev/asdf-legacy-plugins.html)).
+
+## Prerequisites
+
+- [asdf](https://asdf-vm.com/) **or** [mise](https://mise.jdx.dev/)
+- `git`
+- `curl`
+- `tar`
+- `awk`
+- a SHA256 tool: **`sha256sum`** (Linux/coreutils) **or** `shasum -a 256` (macOS/BSD)
+
+## Install (asdf)
+
+```sh
+asdf plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach.git
+asdf install stagecoach latest
+asdf global  stagecoach latest
+stagecoach --version
+```
+
+Pin a project to a version with a `.tool-versions` file:
+
+```
+stagecoach 1.2.3
+```
+
+## Install (mise)
+
+mise runs the SAME asdf plugin scripts — the commands below work unchanged:
+
+```sh
+mise plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach.git
+mise install stagecoach@latest
+mise use -g stagecoach@latest
+stagecoach --version
+```
+
+Pin a project to a version in `mise.toml`:
+
+```toml
+[tools]
+stagecoach = "1.2.3"
+```
+
+## Supported platforms
+
+- **macOS** (darwin) — amd64, arm64
+- **Linux** — amd64, arm64
+
+Windows is **not** supported via this plugin (asdf/mise are Unix-only). Windows
+users should use [Scoop](https://scoop.sh/) or
+[Winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) —
+see the [stagecoach install guide](https://github.com/dabstractor/stagecoach#install).
+
+## How it works
+
+- **`bin/list-all`** enumerates installable versions using
+  `git ls-remote --refs --tags` (it does **not** use the GitHub Releases API,
+  which is rate-limited to 60 req/h/IP for unauthenticated callers and would
+  break `list-all` / tab-completion at scale). Tags are stripped of their
+  leading `v` and sorted ascending via `sort -V` (newest last).
+- **`bin/install`** reads the standard `ASDF_INSTALL_TYPE` / `ASDF_INSTALL_VERSION`
+  / `ASDF_INSTALL_PATH` environment variables (mise sets the **same** vars), maps
+  the host `uname` to a goreleaser `GOOS`/`GOARCH`, downloads the matching
+  `stagecoach_<v>_<os>_<arch>.tar.gz` + `stagecoach_<v>_checksums.txt` from the
+  project's GitHub Releases, SHA256-verifies the archive against its checksums
+  line, and extracts the single `stagecoach` binary into `$ASDF_INSTALL_PATH/bin/`.
+  On any failure (checksum mismatch, missing checksum line, unsupported platform)
+  it aborts **non-zero with no binary left behind** (abort-before-write).
+
+## Repository / canonical source
+
+The scripts under
+[`github.com/dabstractor/stagecoach` → `plugins/asdf-stagecoach/`](https://github.com/dabstractor/stagecoach/tree/main/plugins/asdf-stagecoach)
+are the **canonical source**. They are **mirrored** to the separate plugin repo
+[`github.com/dabstractor/asdf-stagecoach`](https://github.com/dabstractor/asdf-stagecoach)
+(the URL `asdf plugin add` / `mise plugin add` points at). Changes are made in
+the stagecoach repo first.
+
+## License
+
+Same as the stagecoach project — see the [main repository](https://github.com/dabstractor/stagecoach).

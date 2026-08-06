@@ -208,3 +208,24 @@ jobs:
         # Builds the x86_64-linux package (modern Nix defaults to the current system). On a
         # first run with the lib.fakeHash placeholder, this fails with the got-hash to paste.
         run: nix --print-build-logs flake check
+
+  # --- (7) asdf/mise plugin smoke (PRD §21.2/G27; external_deps.md §6) --------------------
+  # shellchecks the 3 POSIX-sh plugin scripts (catches bashisms) + runs the fixture-archive
+  # smoke test (build a fake stagecoach archive, serve locally, run bin/install, assert the
+  # happy path + the SHA256-mismatch abort-before-write). Keeps the plugin scripts from rotting
+  # on every PR (parity with npm-smoke above + nix-flake-check). ubuntu-latest ships shellcheck
+  # + python3 (FR-D5: re-confirmed in the runner pre-installed tool list).
+  asdf-plugin-smoke:
+    name: asdf/mise plugin smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (POSIX sh plugin scripts)
+        run: |
+          shellcheck -s sh plugins/asdf-stagecoach/bin/list-all
+          shellcheck -s sh plugins/asdf-stagecoach/bin/install
+          shellcheck -s sh plugins/asdf-stagecoach/test/smoke.sh
+      - name: smoke test (fixture archive install)
+        working-directory: plugins/asdf-stagecoach
+        run: sh test/smoke.sh
