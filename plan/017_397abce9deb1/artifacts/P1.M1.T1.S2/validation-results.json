@@ -1,0 +1,68 @@
+[
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "go vet ./internal/upgrade/",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 1,
+    "description": "Level 1 gate",
+    "success": true,
+    "command": "test -z \"$(gofmt -l internal/upgrade/ cmd/stagecoach/)\"",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 2,
+    "description": "Level 2 gate",
+    "success": true,
+    "command": "go test ./internal/upgrade/",
+    "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t0.002s\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "go test -race ./internal/upgrade/",
+    "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t(cached)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 3,
+    "description": "Level 3 gate",
+    "success": true,
+    "command": "go build ./...",
+    "stdout": "",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  },
+  {
+    "level": 4,
+    "description": "Level 4 gate",
+    "success": true,
+    "command": "go doc ./internal/upgrade/",
+    "stdout": "package upgrade // import \"github.com/dabstractor/stagecoach/internal/upgrade\"\n\nPackage upgrade provides a comparable (semver) representation of the running\nbinary's version, distinct from cmd/stagecoach/main.go's resolveVersion() which\nproduces a DISPLAY string such as \"dev (19f4df7-dirty)\" that feeds --version and\nis NOT comparable.\n\nThis package's primitives — ParseAndClean, Compare, CurrentSemver — are used\nby stagecoach upgrade --check (FR-U6) and the direct-swap path (FR-U5 step 1,\n§21.1) to compare the running binary's version against the latest release tag.\nA dev build (version == \"dev\") yields ok=false so --check stays informational\nand does not falsely claim an update is available.\n\nAll implementation is stdlib-only (errors, strconv, strings) — no external\nsemver dependency is added, matching the repo's minimal-deps posture.\n\nfunc Compare(a, b string) int\nfunc CurrentSemver() (string, bool)\nfunc ParseAndClean(raw string) (string, bool)\nfunc SetCurrentVersion(v string)\n",
+    "stderr": "",
+    "exitCode": 0,
+    "skipped": false,
+    "timedOut": false
+  }
+]

@@ -1,0 +1,245 @@
+{
+  "version": "1.0",
+  "checkpoints": [
+    {
+      "id": "P1.M1.T1.S2_1786000146779_pre-execution_939a8dd7",
+      "taskId": "P1.M1.T1.S2",
+      "label": "Before Coder Agent execution",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S2.md",
+        "stage": "pre-execution",
+        "validationResults": [],
+        "timestamp": "2026-08-06T07:09:06.779Z"
+      },
+      "createdAt": "2026-08-06T07:09:06.779Z"
+    },
+    {
+      "id": "P1.M1.T1.S2_1786000214957_coder-response_e831b920",
+      "taskId": "P1.M1.T1.S2",
+      "label": "After Coder Agent response",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S2.md",
+        "stage": "coder-response",
+        "coderResponse": "```json\n{\n  \"result\": \"success\",\n  \"message\": \"P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\\n\\n**Files created:**\\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\\n\\n**Files modified:**\\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\\n\\n**Validation results:**\\n- Level 1: `go vet ./internal/upgrade/` — pass\\n- Level 2: `gofmt -l` — GOFMT-OK\\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\\n- Level 4: `go test -race ./internal/upgrade/` — pass\\n- Level 5: `go build ./...` — pass\\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\\n- go.mod/go.sum — zero new entries (stdlib only)\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\n\n**Files created:**\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\n\n**Files modified:**\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\n\n**Validation results:**\n- Level 1: `go vet ./internal/upgrade/` — pass\n- Level 2: `gofmt -l` — GOFMT-OK\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\n- Level 4: `go test -race ./internal/upgrade/` — pass\n- Level 5: `go build ./...` — pass\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\n- go.mod/go.sum — zero new entries (stdlib only)"
+        },
+        "validationResults": [],
+        "timestamp": "2026-08-06T07:10:14.957Z"
+      },
+      "createdAt": "2026-08-06T07:10:14.957Z"
+    },
+    {
+      "id": "P1.M1.T1.S2_1786000215008_validation-gate-1_c911eed9",
+      "taskId": "P1.M1.T1.S2",
+      "label": "After validation gate 1",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S2.md",
+        "stage": "validation-gate-1",
+        "coderResponse": "```json\n{\n  \"result\": \"success\",\n  \"message\": \"P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\\n\\n**Files created:**\\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\\n\\n**Files modified:**\\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\\n\\n**Validation results:**\\n- Level 1: `go vet ./internal/upgrade/` — pass\\n- Level 2: `gofmt -l` — GOFMT-OK\\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\\n- Level 4: `go test -race ./internal/upgrade/` — pass\\n- Level 5: `go build ./...` — pass\\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\\n- go.mod/go.sum — zero new entries (stdlib only)\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\n\n**Files created:**\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\n\n**Files modified:**\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\n\n**Validation results:**\n- Level 1: `go vet ./internal/upgrade/` — pass\n- Level 2: `gofmt -l` — GOFMT-OK\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\n- Level 4: `go test -race ./internal/upgrade/` — pass\n- Level 5: `go build ./...` — pass\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\n- go.mod/go.sum — zero new entries (stdlib only)"
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/upgrade/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": false,
+            "command": "test -z \"$(gofmt -l internal/upgrade/ cmd/stagecoach/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 1,
+            "skipped": false,
+            "timedOut": false
+          }
+        ],
+        "timestamp": "2026-08-06T07:10:15.008Z"
+      },
+      "createdAt": "2026-08-06T07:10:15.008Z"
+    },
+    {
+      "id": "P1.M1.T1.S2_1786000255401_validation-gate-4_cf125ee7",
+      "taskId": "P1.M1.T1.S2",
+      "label": "After validation gate 4",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S2.md",
+        "stage": "validation-gate-4",
+        "coderResponse": "```json\n{\n  \"result\": \"success\",\n  \"message\": \"P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\\n\\n**Files created:**\\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\\n\\n**Files modified:**\\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\\n\\n**Validation results:**\\n- Level 1: `go vet ./internal/upgrade/` — pass\\n- Level 2: `gofmt -l` — GOFMT-OK\\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\\n- Level 4: `go test -race ./internal/upgrade/` — pass\\n- Level 5: `go build ./...` — pass\\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\\n- go.mod/go.sum — zero new entries (stdlib only)\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\n\n**Files created:**\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\n\n**Files modified:**\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\n\n**Validation results:**\n- Level 1: `go vet ./internal/upgrade/` — pass\n- Level 2: `gofmt -l` — GOFMT-OK\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\n- Level 4: `go test -race ./internal/upgrade/` — pass\n- Level 5: `go build ./...` — pass\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\n- go.mod/go.sum — zero new entries (stdlib only)"
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/upgrade/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/upgrade/ cmd/stagecoach/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/upgrade/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t0.002s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test -race ./internal/upgrade/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "go doc ./internal/upgrade/",
+            "stdout": "package upgrade // import \"github.com/dabstractor/stagecoach/internal/upgrade\"\n\nPackage upgrade provides a comparable (semver) representation of the running\nbinary's version, distinct from cmd/stagecoach/main.go's resolveVersion() which\nproduces a DISPLAY string such as \"dev (19f4df7-dirty)\" that feeds --version and\nis NOT comparable.\n\nThis package's primitives — ParseAndClean, Compare, CurrentSemver — are used\nby stagecoach upgrade --check (FR-U6) and the direct-swap path (FR-U5 step 1,\n§21.1) to compare the running binary's version against the latest release tag.\nA dev build (version == \"dev\") yields ok=false so --check stays informational\nand does not falsely claim an update is available.\n\nAll implementation is stdlib-only (errors, strconv, strings) — no external\nsemver dependency is added, matching the repo's minimal-deps posture.\n\nfunc Compare(a, b string) int\nfunc CurrentSemver() (string, bool)\nfunc ParseAndClean(raw string) (string, bool)\nfunc SetCurrentVersion(v string)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          }
+        ],
+        "fixAttempt": 1,
+        "timestamp": "2026-08-06T07:10:55.401Z"
+      },
+      "createdAt": "2026-08-06T07:10:55.401Z"
+    },
+    {
+      "id": "P1.M1.T1.S2_1786000255402_complete_b54d8a59",
+      "taskId": "P1.M1.T1.S2",
+      "label": "Task completed successfully",
+      "state": {
+        "prpPath": "/home/dustin/projects/stagecoach/plan/017_397abce9deb1/prps/P1_M1_T1_S2.md",
+        "stage": "complete",
+        "coderResponse": "```json\n{\n  \"result\": \"success\",\n  \"message\": \"P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\\n\\n**Files created:**\\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\\n\\n**Files modified:**\\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\\n\\n**Validation results:**\\n- Level 1: `go vet ./internal/upgrade/` — pass\\n- Level 2: `gofmt -l` — GOFMT-OK\\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\\n- Level 4: `go test -race ./internal/upgrade/` — pass\\n- Level 5: `go build ./...` — pass\\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\\n- go.mod/go.sum — zero new entries (stdlib only)\"\n}\n```",
+        "coderResult": {
+          "result": "success",
+          "message": "P1.M1.T1.S2 implemented successfully. All 6 validation gates pass:\n\n**Files created:**\n- `internal/upgrade/version.go` — Package doc (Mode A) + SetCurrentVersion, CurrentSemver, ParseAndClean, Compare. Stdlib-only (errors, strconv, strings).\n- `internal/upgrade/version_test.go` — Table-driven white-box tests (TestCompare: 15 rows, TestParseAndClean: 10 rows, TestCurrentSemver: 3 rows) mirroring exitcode_test.go style with arrow names and t.Cleanup restore.\n\n**Files modified:**\n- `cmd/stagecoach/main.go` — +1 import (`internal/upgrade`) + 1 line (`upgrade.SetCurrentVersion(version)` right after `cmd.Version = resolveVersion(version)`). `resolveVersion()` is byte-for-byte unchanged. Raw `version` var passed (NOT the display string).\n\n**Validation results:**\n- Level 1: `go vet ./internal/upgrade/` — pass\n- Level 2: `gofmt -l` — GOFMT-OK\n- Level 3: `go test ./internal/upgrade/ -v` — 28/28 PASS\n- Level 4: `go test -race ./internal/upgrade/` — pass\n- Level 5: `go build ./...` — pass\n- Level 6: `go doc ./internal/upgrade` — package doc displays display-vs-comparable note\n- go.mod/go.sum — zero new entries (stdlib only)"
+        },
+        "validationResults": [
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "go vet ./internal/upgrade/",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 1,
+            "description": "Level 1 gate",
+            "success": true,
+            "command": "test -z \"$(gofmt -l internal/upgrade/ cmd/stagecoach/)\"",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 2,
+            "description": "Level 2 gate",
+            "success": true,
+            "command": "go test ./internal/upgrade/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t0.002s\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go test -race ./internal/upgrade/",
+            "stdout": "ok  \tgithub.com/dabstractor/stagecoach/internal/upgrade\t(cached)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 3,
+            "description": "Level 3 gate",
+            "success": true,
+            "command": "go build ./...",
+            "stdout": "",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          },
+          {
+            "level": 4,
+            "description": "Level 4 gate",
+            "success": true,
+            "command": "go doc ./internal/upgrade/",
+            "stdout": "package upgrade // import \"github.com/dabstractor/stagecoach/internal/upgrade\"\n\nPackage upgrade provides a comparable (semver) representation of the running\nbinary's version, distinct from cmd/stagecoach/main.go's resolveVersion() which\nproduces a DISPLAY string such as \"dev (19f4df7-dirty)\" that feeds --version and\nis NOT comparable.\n\nThis package's primitives — ParseAndClean, Compare, CurrentSemver — are used\nby stagecoach upgrade --check (FR-U6) and the direct-swap path (FR-U5 step 1,\n§21.1) to compare the running binary's version against the latest release tag.\nA dev build (version == \"dev\") yields ok=false so --check stays informational\nand does not falsely claim an update is available.\n\nAll implementation is stdlib-only (errors, strconv, strings) — no external\nsemver dependency is added, matching the repo's minimal-deps posture.\n\nfunc Compare(a, b string) int\nfunc CurrentSemver() (string, bool)\nfunc ParseAndClean(raw string) (string, bool)\nfunc SetCurrentVersion(v string)\n",
+            "stderr": "",
+            "exitCode": 0,
+            "skipped": false,
+            "timedOut": false
+          }
+        ],
+        "fixAttempt": 1,
+        "timestamp": "2026-08-06T07:10:55.402Z"
+      },
+      "createdAt": "2026-08-06T07:10:55.402Z"
+    }
+  ],
+  "lastModified": "2026-08-06T07:10:55.402Z"
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/dabstractor/stagecoach/internal/generate"
 	"github.com/dabstractor/stagecoach/internal/lock" // exit-path lock-release seam (FR52 §18.5)
 	"github.com/dabstractor/stagecoach/internal/signal"
+	"github.com/dabstractor/stagecoach/internal/upgrade" // P1.M1.T1.S2: push raw version for comparable semver
 )
 
 // version is injected at build time via -ldflags "-X main.version=…" (Makefile VERSION, default "dev").
@@ -56,6 +57,7 @@ func resolveVersion(v string) string {
 
 func main() {
 	cmd.Version = resolveVersion(version) // cobra's --version prints this (short-circuits before config load)
+	upgrade.SetCurrentVersion(version)    // P1.M1.T1.S2: raw ldflags value for --check comparison (FR-U5 step 1)
 	ctx, _ := signal.Install(context.Background(), signal.Options{
 		RescueFormat: generate.FormatRescue,
 		OnRescueExit: lock.ReleaseCurrent, // FR52 §18.5: release the lock file before os.Exit orphans it
