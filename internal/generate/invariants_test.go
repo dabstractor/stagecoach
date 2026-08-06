@@ -239,7 +239,11 @@ func TestInvariants(t *testing.T) {
 				if testing.Short() {
 					t.Skip("skipping slow SigintContextCancel scenario in -short mode")
 				}
-				m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: hang", SleepMS: 3000})
+				// Set the marker BEFORE constructing/launching: CommitStaged reads the
+				// manifest's Env from another goroutine (Manifest.Render iterates the map), so
+				// assigning it after the goroutine starts is a data race under -race.
+				marker := filepath.Join(t.TempDir(), "marker")
+				m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: hang", SleepMS: 3000, Marker: marker})
 				cctx, cancel := context.WithCancel(ctx)
 				done := make(chan error, 1)
 				go func() {
@@ -252,8 +256,6 @@ func TestInvariants(t *testing.T) {
 				// DURING the snapshot (pre-rescue) and surface a bare context.Canceled instead
 				// of a *RescueError. Polling the marker makes the cancel deterministically hit
 				// the Execute/generation path on every platform.
-				marker := filepath.Join(t.TempDir(), "marker")
-				m.Env["STAGECOACH_STUB_MARKER"] = marker
 				waitForMarker(t, marker, 2*time.Second)
 				cancel() // simulate SIGINT: ctx cancelled → Execute returns context.Canceled
 				err := <-done

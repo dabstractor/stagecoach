@@ -67,7 +67,11 @@ func TestCommitStaged_GenerationFreeze_HoldsForLiveStagedSentinel(t *testing.T) 
 
 	bin := stubtest.Build(t)
 	// Slow stub: 800ms generation gives us a wide window to stage the sentinel mid-generation.
-	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: generation-window freeze repro", SleepMS: 800})
+	// Set the marker BEFORE constructing/launching: CommitStaged reads the manifest's Env from
+	// another goroutine (Manifest.Render iterates the map), so assigning it after the goroutine
+	// starts is a data race under -race.
+	markerPath := filepath.Join(t.TempDir(), "marker")
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: generation-window freeze repro", SleepMS: 800, Marker: markerPath})
 	cfg := config.Defaults()                              // NoVerify=false but NO hooks configured → deps.Hooks == nil
 	deps := generate.Deps{Git: git.New(dir), Manifest: m} // Hooks == nil
 
@@ -87,8 +91,6 @@ func TestCommitStaged_GenerationFreeze_HoldsForLiveStagedSentinel(t *testing.T) 
 	// is the deterministic "during generation" point. A blind time.Sleep collides with the
 	// snapshot's WriteTree on Windows under -race (mandatory .git/index.lock) — the marker
 	// removes that race on every platform.
-	markerPath := filepath.Join(t.TempDir(), "marker")
-	m.Env["STAGECOACH_STUB_MARKER"] = markerPath
 	waitForFile(t, markerPath, 5*time.Second)
 	if e := os.WriteFile(filepath.Join(dir, "sentinel.txt"), []byte("s\n"), 0o644); e != nil {
 		t.Fatalf("write sentinel: %v", e)
