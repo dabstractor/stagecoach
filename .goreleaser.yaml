@@ -69,11 +69,23 @@ release:
     name: stagecoach
   draft: false
   prerelease: auto                 # prerelease if the tag looks like a pre-release (e.g. -rc1).
+  # ── Distribution surface (PRD §21.2/§21.3) ─────────────────────────────────────────────────
+  # This GitHub Release is the SINGLE source every install channel fetches from. goreleaser publishes
+  # its NATIVE pipes here only — Homebrew (`brews:` below), Scoop (`scoops:` below), AUR (`aurs:`
+  # below, best-effort) — plus the 6 archives + checksums.txt. The REMAINING channels are
+  # "Beyond goreleaser" (PRD §21.2), implemented as separate CI/release artifacts, NOT goreleaser pipes:
+  #   • npm       — release.yml `npm-publish` job → @dabstractor/stagecoach (npm/ wrapper)
+  #   • WinGet    — release.yml `winget` job → vedantmgoyal9/winget-releaser → microsoft/winget-pkgs
+  #   • Nix       — flake.nix (nix profile install github:dabstractor/stagecoach)
+  #   • mise/asdf — plugins/asdf-stagecoach/ (one POSIX-sh plugin serves both; see docs/packaging.md)
+  # `go install` and the curl|sh direct download consume the archives published here directly.
 
 # Homebrew formula (brews:). stagecoach is a CLI binary, so it ships as a Homebrew formula
 # (installed to $HOMEBREW_PREFIX/bin, on $PATH), NOT a cask (casks are for macOS GUI .app bundles
 # installed to /Applications). `brews:` is the current, non-deprecated field in goreleaser v2.
 # Users install with: brew install dabstractor/tap/stagecoach
+# (Homebrew is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/WinGet/Nix/mise-asdf —
+#  are listed under `release:` above.)
 brews:
   - repository:
       owner: dabstractor
@@ -89,6 +101,8 @@ scoops:
   - name: stagecoach
     ids:
       - default
+    # Scoop is a goreleaser-native pipe; the "Beyond goreleaser" channels (npm/WinGet/Nix/mise-asdf)
+    # are listed under `release:` above.
     repository:
       owner: dabstractor
       name: scoop-bucket           # PRD §21.3: scoop install dabstractor/stagecoach -> bucket github.com/dabstractor/scoop-bucket
@@ -101,6 +115,8 @@ scoops:
 # AUR — BEST-EFFORT (PRD §21.2; contract LOGIC bullets don't list AUR, so this is nice-to-have).
 # Native pipe produces stagecoach-BIN only (prebuilt binary PKGBUILD), pushed over SSH (NOT a PAT).
 # From-source `stagecoach` AUR package is OUT of scope (manual/community PKGBUILD; PRD "possibly community").
+# (AUR is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/WinGet/Nix/mise-asdf —
+#  are listed under `release:` above.)
 # DECISION GATE: if `goreleaser check` rejects any field below, COMMENT OUT this whole `aurs:` block and
 # ship the rest (brew+scoop+checksum+changelog+archives). AUR does not block the core contract.
 aurs:

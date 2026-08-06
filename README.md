@@ -3,7 +3,7 @@
 > **Stagecoach writes your commit messages using the AI agent you already pay for.**
 > No API key. No per-token billing. It shells out to Claude Code, Codex, pi, opencode, agy, qwen-code, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
-A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery — see [Features](#features) below.
+A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Winget, npm, Nix, mise/asdf) — see [Features](#features) below.
 
 <!-- TODO: add LICENSE file and badge -->
 
@@ -84,9 +84,45 @@ Stagecoach does one thing — commit messages — and a few things around them.
 **Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, opencode, Codex, Cursor, agy, or qwen-code).
 
 > [!NOTE]
-> Stagecoach is pre-release and still being tested locally — **build from source** is the only working install method today. The package-managed channels below are coming with the first public release.
+> Stagecoach ships via the package-managed channels below, and `stagecoach upgrade` keeps any of them current — see [Updating](#updating) below.
 
-### Build from source (works today)
+### Package managers
+
+Pick whichever channel matches your platform or workflow (commands per [PRD §21.3](PRD.md)):
+
+```bash
+# Homebrew (macOS / Linuxbrew)
+brew install dabstractor/tap/stagecoach
+
+# Windows (Scoop)
+scoop install dabstractor/stagecoach
+
+# Windows (Winget — the Win11 default)
+winget install dabstractor.stagecoach
+
+# npm (zero-install trial: npx stagecoach; or global install)
+npm install -g @dabstractor/stagecoach
+
+# Nix (flake — no channel/registry needed)
+nix profile install github:dabstractor/stagecoach
+
+# mise / asdf (version-manager users)
+mise use stagecoach@latest   # or: asdf plugin add stagecoach && asdf install stagecoach latest
+
+# Go install (anywhere with Go)
+go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
+
+# Direct binary (curl|sh one-liner from GitHub Releases)
+curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
+```
+
+Verify:
+
+```bash
+stagecoach --version
+```
+
+### Build from source
 
 Requires [Go](https://go.dev) 1.22+:
 
@@ -105,14 +141,17 @@ stagecoach --version   # stagecoach version dev
 > [!TIP]
 > If you keep your user binaries elsewhere (e.g. `~/.local/bin`), symlink it instead of editing `$PATH`: `ln -s "$(go env GOPATH)/bin/stagecoach" ~/.local/bin/stagecoach`. `make install` overwrites the target in place, so the link stays valid across rebuilds.
 
-### Coming soon
+### Updating
 
-These will land with the first release, once the tap/bucket repos are published:
+Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, Winget, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
 
-- **Homebrew** (macOS / Linuxbrew) — `brew install dabstractor/tap/stagecoach`
-- **Scoop** (Windows) — `scoop install dabstractor/stagecoach`
-- **`go install`** — `go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest`
-- **Direct binary** (curl​|​sh one-liner) — `curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash`
+```bash
+stagecoach upgrade             # detect → delegate (or self-swap), confirm, apply
+stagecoach upgrade --check     # exit 6 if an update is available, 0 if up to date (CI / cron)
+stagecoach upgrade --rollback  # one-step restore of the prior binary
+```
+
+See [docs/cli.md#upgrade](docs/cli.md#upgrade) for the full flag reference.
 
 ## Quick start
 
@@ -346,7 +385,11 @@ And the commit-message call itself is **chrome-less** where the agent allows it 
 
 ### Does it send my code anywhere new?
 
-No. It shells out to *your* agent under *your* existing auth and billing. Stagecoach never opens an HTTP connection to any API — your agent does, exactly as it would if you ran it manually.
+No. It shells out to *your* agent under *your* existing auth and billing. On the commit path, stagecoach makes no network calls itself — it shells out to your agent, and your agent opens the connection exactly as it would if you ran it manually. The single exception is `stagecoach upgrade` (see below), which fetches only this project's own release artifacts and checksums.
+
+### Does stagecoach make network calls?
+
+On the commit path (writing commit messages), **no** — stagecoach makes no network calls itself; it shells out to your agent, and your agent makes the connection. The one named exception is `stagecoach upgrade` (see [Updating](#updating)), which fetches **only** this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never your repo data. (PRD §19, scoped to the commit path in v3.0; §9.29 is the exception.) See [docs/cli.md#upgrade](docs/cli.md#upgrade).
 
 ### Can it write multiple commits?
 
@@ -376,7 +419,7 @@ Yes. As of v2.4, the default `stagecoach` command runs your repository's standar
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, self-update, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md).
+Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md). (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
 
 ---
 

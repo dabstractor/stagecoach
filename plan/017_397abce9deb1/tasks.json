@@ -557,28 +557,28 @@
       "type": "Phase",
       "id": "P3",
       "title": "Changeset-level documentation (Mode B) + spec reconciliation",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Cross-cutting, whole-feature documentation that only makes sense once the v3.0 change lands: the README install-section rewrite (all channels live), the `stagecoach upgrade` surface in README CLI reference + FAQ, scoping the §19 'no network calls' amendment, and reconciling FUTURE_SPEC.md's now-superseded self-update rejection. Per-file docs (docs/cli.md upgrade command, docs/configuration.md [upgrade] row, exitcode.go/upgrade.go comments) are Mode A and already landed with their implementing subtasks.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P3.M1",
           "title": "Sync changeset-level docs (README + FUTURE_SPEC + §19 amendment)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "The whole-feature documentation pass that depends on all of Phase 1 and Phase 2 landing: README install rewrite + CLI/FAQ, the §19 network-call scoping amendment, and the FUTURE_SPEC self-update reconciliation.",
           "tasks": [
             {
               "type": "Task",
               "id": "P3.M1.T1",
               "title": "Sync README + FUTURE_SPEC + §19 amendment + .goreleaser notes",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Update the cross-cutting docs: rewrite the README Install section so all channels (Homebrew/Scoop/Winget/npm/Nix/mise/asdf/go-install/curl|sh) are live; add `stagecoach upgrade` to the README CLI reference + FAQ; scope the §19 'no network calls' claim to the commit path with upgrade as the named exception; reconcile FUTURE_SPEC.md's self-update rejection (now superseded); and annotate .goreleaser.yaml with the new-channel 'Beyond goreleaser' pointers.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P3.M1.T1.S1",
                   "title": "README install rewrite + upgrade CLI/FAQ + §19 amendment + FUTURE_SPEC reconcile + goreleaser notes",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T3.S3",
