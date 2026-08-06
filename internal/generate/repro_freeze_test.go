@@ -15,6 +15,23 @@ import (
 	"github.com/dabstractor/stagecoach/internal/stubtest"
 )
 
+// waitForFile blocks until path exists or the timeout elapses (the stub agent
+// writes its STAGECOACH_STUB_MARKER once it has drained stdin = generation is
+// in-flight). Makes "stage the sentinel during generation" deterministic across
+// platforms (Windows under -race is slower, so a blind time.Sleep can land during
+// the snapshot's WriteTree and collide on the mandatory .git/index.lock).
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("waitForFile: %s not written within %s (stub never reached generation)", path, timeout)
+}
+
 // TestCommitStaged_GenerationFreeze_HoldsForLiveStagedSentinel reproduces the user's exact report:
 // files staged to the LIVE index WHILE the message is being generated (no hooks involved) must NOT
 // be swept into the commit. Unlike hooks_freeze_test (which stages during a blocking pre-commit
@@ -64,9 +81,15 @@ func TestCommitStaged_GenerationFreeze_HoldsForLiveStagedSentinel(t *testing.T) 
 		close(done)
 	}()
 
-	// Wait ~300ms so we're solidly inside the 800ms generation window (after the snapshot at step 4,
-	// during the generate→parse→dedupe loop). Then stage a sentinel to the LIVE index.
-	time.Sleep(300 * time.Millisecond)
+	// Wait for generation to be in-flight (snapshot is DONE, provider call started) before
+	// staging the sentinel. The orchestrator does NOT touch .git/index during the generation
+	// window (only WriteTree before + ReadTree/Reconcile after), so staging the sentinel here
+	// is the deterministic "during generation" point. A blind time.Sleep collides with the
+	// snapshot's WriteTree on Windows under -race (mandatory .git/index.lock) — the marker
+	// removes that race on every platform.
+	markerPath := filepath.Join(t.TempDir(), "marker")
+	m.Env["STAGECOACH_STUB_MARKER"] = markerPath
+	waitForFile(t, markerPath, 5*time.Second)
 	if e := os.WriteFile(filepath.Join(dir, "sentinel.txt"), []byte("s\n"), 0o644); e != nil {
 		t.Fatalf("write sentinel: %v", e)
 	}
