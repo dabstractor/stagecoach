@@ -96,13 +96,13 @@ func setupScriptedRepo(t *testing.T, headSubject string, responses []string) str
 
 	var sb strings.Builder
 	sb.WriteString("[provider.stub]\n")
-	sb.WriteString("command = \"" + bin + "\"\n")
+	fmt.Fprintf(&sb, "command = %q\n", bin)
 	sb.WriteString("prompt_delivery = \"stdin\"\n")
 	sb.WriteString("output = \"raw\"\n")
 	sb.WriteString("strip_code_fence = true\n")
 	sb.WriteString("\n[provider.stub.env]\n")
-	sb.WriteString("STAGECOACH_STUB_SCRIPT = \"" + script + "\"\n")
-	sb.WriteString("STAGECOACH_STUB_COUNTER = \"" + counter + "\"\n")
+	fmt.Fprintf(&sb, "STAGECOACH_STUB_SCRIPT = %q\n", script)
+	fmt.Fprintf(&sb, "STAGECOACH_STUB_COUNTER = %q\n", counter)
 	if err := os.WriteFile(repo+"/.stagecoach.toml", []byte(sb.String()), 0o644); err != nil {
 		t.Fatalf("write .stagecoach.toml: %v", err)
 	}
@@ -132,7 +132,7 @@ func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 	// config.Load Layer 3 reads CWD/.stagecoach.toml; DecodeUserOverrides decodes [provider.stub].
 	var sb strings.Builder
 	sb.WriteString("[provider.stub]\n")
-	sb.WriteString("command = \"" + bin + "\"\n")
+	fmt.Fprintf(&sb, "command = %q\n", bin)
 	sb.WriteString("prompt_delivery = \"stdin\"\n")
 	sb.WriteString("output = \"raw\"\n")
 	sb.WriteString("strip_code_fence = true\n")
@@ -140,10 +140,10 @@ func setupTestRepo(t *testing.T, stubOpts stubtest.Options) string {
 	if stubOpts.Out != "" || stubOpts.SleepMS > 0 {
 		sb.WriteString("\n[provider.stub.env]\n")
 		if stubOpts.Out != "" {
-			sb.WriteString("STAGECOACH_STUB_OUT = \"" + stubOpts.Out + "\"\n")
+			fmt.Fprintf(&sb, "STAGECOACH_STUB_OUT = %q\n", stubOpts.Out)
 		}
 		if stubOpts.SleepMS > 0 {
-			sb.WriteString("STAGECOACH_STUB_SLEEP_MS = \"" + strconv.Itoa(stubOpts.SleepMS) + "\"\n")
+			fmt.Fprintf(&sb, "STAGECOACH_STUB_SLEEP_MS = %q\n", strconv.Itoa(stubOpts.SleepMS))
 		}
 	}
 
@@ -735,7 +735,7 @@ func TestGenerateCommit_GenerationConfigFile_OutputJSON_Issue4(t *testing.T) {
 
 	// TOML uses a literal string ('...') for STAGECOACH_STUB_OUT so the JSON quotes survive parsing.
 	toml := "[provider.stub]\n" +
-		"command = \"" + bin + "\"\n" +
+		"command = " + strconv.Quote(bin) + "\n" +
 		"prompt_delivery = \"stdin\"\n" +
 		"output = \"raw\"\n" + // manifest baseline — [generation] must override this
 		"json_field = \"subject\"\n" + // REQUIRED: parseJSON extracts obj["subject"]
@@ -787,7 +787,7 @@ func TestGenerateCommit_GitConfig_OutputJSON_Issue4(t *testing.T) {
 	jsonOut := `{"subject":"feat: from git-config json"}`
 
 	toml := "[provider.stub]\n" +
-		"command = \"" + bin + "\"\n" +
+		"command = " + strconv.Quote(bin) + "\n" +
 		"prompt_delivery = \"stdin\"\n" +
 		"output = \"raw\"\n" +
 		"json_field = \"subject\"\n" +
@@ -945,7 +945,7 @@ func TestGenerateCommit_ManifestOutputJSON_Honored_NoGeneration(t *testing.T) {
 
 	// Manifest sets output="json" + json_field. NO [generation] block — the manifest value must win.
 	toml := "[provider.stub]\n" +
-		"command = \"" + bin + "\"\n" +
+		"command = " + strconv.Quote(bin) + "\n" +
 		"prompt_delivery = \"stdin\"\n" +
 		"output = \"json\"\n" + // manifest-level — must be honored with no [generation]
 		"json_field = \"subject\"\n" + // REQUIRED: parseJSON extracts obj["subject"]
@@ -992,7 +992,7 @@ func TestGenerateCommit_ManifestStripCodeFenceFalse_Honored_NoGeneration(t *test
 	// a fenced block. In Go, \\n produces the two-char TOML escape \n; backticks are not special
 	// in TOML double-quoted strings.
 	toml := "[provider.stub]\n" +
-		"command = \"" + bin + "\"\n" +
+		"command = " + strconv.Quote(bin) + "\n" +
 		"prompt_delivery = \"stdin\"\n" +
 		"output = \"raw\"\n" +
 		"strip_code_fence = false\n" + // manifest-level false — must be honored with no [generation]
