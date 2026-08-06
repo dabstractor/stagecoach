@@ -18,7 +18,7 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.
 
 ## Why not opencommit/aicommits?
 
-The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones gate their quota to the official harness (Anthropic, Google Antigravity, Cursor), and Z.ai even subsidizes harness use with free tokens. The quota lives behind your agent's CLI either way, which is exactly why stagecoach shells out to that CLI instead of opening its own connection.
+The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones like Anthropic, Antigravity and Cursor gate their quota to the official harness. The quota lives behind your agent's CLI either way, which is exactly why stagecoach shells out to that CLI instead of opening its own connection.
 
 Stagecoach inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse — the agent brings its own auth and billing. That trade-off — give up control of the model call in exchange for access to the user's existing quota — is the entire product.
 
@@ -40,7 +40,7 @@ out to your agent rather than calling an API.
 
 - **Anthropic (Claude Code)** — strict. Plan quota is gated to the Claude Code harness and isn't
   reachable over the public API.
-- **Google Antigravity** — strict (and newly arriving). Quota is reserved for the harness.
+- **Antigravity** — strict (and newly arriving). Quota is reserved for the harness.
 - **Cursor** — has explicit policies against use outside its own harness.
 - **Z.ai** — permissive in principle, but actively pro-harness: it hands subscribers free tokens
   for using the Z.ai harness, steering (rewarding) harness use rather than locking it.
@@ -401,7 +401,7 @@ It learns from the last 20 commits in your repo, with a prohibition on reusing t
 
 ### Which agents are supported?
 
-Seven built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **qwen-code** *(experimental)*, **codex**, **claude**. (Google's `gemini` / Gemini CLI is **no longer shipped** — it was superseded by **agy**, the Antigravity CLI, on 2026-06-18.) Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
+Seven built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **qwen-code** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
 
 **End-to-end verification status** (this build): **pi**, **agy**, **codex**, **opencode**, and **claude** have each been driven through a real commit-generation run. **cursor is NOT yet verified end-to-end** — its manifest is assembled from `agent --help` and ships untested here. If you're a paying **Cursor** subscriber and would be willing to spend a few `agent` runs helping confirm the cursor path (the `--mode ask --trust -p` read-only combo), please open an issue — cursor is the one provider the maintainer can't validate without an account.
 
