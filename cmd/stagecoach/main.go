@@ -58,6 +58,7 @@ func resolveVersion(v string) string {
 func main() {
 	cmd.Version = resolveVersion(version) // cobra's --version prints this (short-circuits before config load)
 	upgrade.SetCurrentVersion(version)    // P1.M1.T1.S2: raw ldflags value for --check comparison (FR-U5 step 1)
+	upgrade.CleanupOldBinary()            // FR-U7 Windows: delete a prior-launch .exe.old (no-op on Unix)
 	ctx, _ := signal.Install(context.Background(), signal.Options{
 		RescueFormat: generate.FormatRescue,
 		OnRescueExit: lock.ReleaseCurrent, // FR52 §18.5: release the lock file before os.Exit orphans it

@@ -168,7 +168,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Direct-binary swap (FR-U5, FR-U7, FR-U8, FR-U11) + --rollback",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The ONLY self-swap path, used for the direct (curl|sh / manual-download) channel (or --force). Download the target archive, SHA256-verify against checksums.txt, sanity-run the new binary, back up the prior, atomically rename it into place (Unix) / two-step rename (Windows). Rollback restores the prior backup. Failure at any pre-swap step leaves the on-disk binary byte-for-byte unchanged.",
           "tasks": [
             {
@@ -214,14 +214,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Backup + atomic swap (per-platform) — the on-disk change",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The ONLY subtask that changes the on-disk binary: back up the current binary one-deep (.stagecoach-backup / .exe.old) and atomically swap the verified+sanity-run new binary into place. Unix = single os.Rename; Windows = the deferred-delete rename-old/move-new dance. Non-writable target → print the exact sudo command, never auto-elevate.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Backup + atomic swap (Unix os.Rename / Windows .old dance) + non-writable→print sudo",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S2"
@@ -237,14 +237,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "--rollback (FR-U8)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "One-step restore of the immediately-prior backup over the current binary, using the same atomic-swap + sanity-run discipline. No backup → no-op reported as such.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Rollback: restore prior backup via swap+sanity-run; no-op when none",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T2.S1"
