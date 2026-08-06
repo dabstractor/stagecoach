@@ -269,14 +269,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "stagecoach upgrade command + local flags + wiring (walled off)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The cobra command, its LOCAL (non-persistent) flags, the no-op PersistentPreRunE that runs outside a git repo and skips config.Load, and registration via init() (zero edits to root.go). Help text disambiguates from the unrelated `config upgrade`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "cobra upgrade command + local flags + no-op PersistentPreRunE + registration",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -295,7 +295,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T1.S2",
                   "title": "Confirmation prompt (current→target + action) + --yes skip + run-vs-print output",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1"

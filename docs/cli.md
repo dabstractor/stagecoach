@@ -397,6 +397,40 @@ stagecoach lock status          # → the block above when a holder exists
 stagecoach lock --help          # the `lock` command group (bare `lock` prints help)
 ```
 
+### `upgrade`
+
+Update the stagecoach **binary** to the latest release (PRD §9.29 FR-U1). stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, winget, npm, mise, asdf, Nix, AUR, go install), self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.
+
+**Distinct from `config upgrade`** (run as `stagecoach config upgrade`): `config upgrade` is a config-schema migration that rewrites an existing config file to the current schema version in place. `stagecoach upgrade` updates the **binary**. Two different commands — do not confuse them.
+
+Flags (all LOCAL to `upgrade`; they do **not** appear on the commit path):
+
+| Flag | Description |
+|------|-------------|
+| `--check`, `-c` | Check for an update without applying it (exit 6 if behind, 0 if up to date) (FR-U6) |
+| `--version <v>` | Pin a target version to install (default: latest in the channel) (FR-U5) |
+| `--prerelease` | Admit pre-release tags (shorthand for `--channel prerelease`) (FR-U10) |
+| `--force` | Override a detected package-manager install and self-swap (FR-U1) |
+| `--rollback` | Restore the most recent backup (one-step undo) (FR-U8) |
+| `--install-method <m>` | Override install-method detection (env `STAGECOACH_INSTALL_METHOD`) (FR-U2) |
+| `--yes`, `-y` | Skip the confirmation prompt (for scripting) (FR-U9) |
+| `--channel <stable\|prerelease>` | Release channel (default `stable`; also `[upgrade].channel`; FR-U10) |
+| `--source-repo <owner/repo>` | `owner/repo` to fetch releases from (default `dabstractor/stagecoach`; also `[upgrade].source_repo`; for forks) (FR-U10) |
+
+Flag-contract rules: `--version` and `--prerelease` are mutually exclusive; `--rollback` cannot be combined with `--check` or `--version`; `--channel` rejects unknown values.
+
+**Repo-independent (FR-U12).** `upgrade` acquires no run lock, reads no repo, invokes no provider, and runs outside a git repo. Its no-op pre-run hook overrides the default config load, so it never bootstraps a config file on first run. **Network:** `upgrade` is the one named exception to the no-network-calls commit path — it fetches **only** this project's own GitHub release artifacts and checksums (never an arbitrary URL, never the agent APIs).
+
+```bash
+stagecoach upgrade                     # detect→delegate (or self-swap), confirm, swap in the new binary
+stagecoach upgrade --check             # exit 6 if a newer release exists, 0 if up to date (CI/cron gate)
+stagecoach upgrade --rollback          # restore the most recent backup (one-step undo)
+stagecoach upgrade --channel prerelease
+stagecoach upgrade --version 1.2.3
+```
+
+Exit codes: `0` (up to date, upgraded, or `--check` found nothing newer), `1` (failure: detection failed, the delegated updater errored, the self-swap was refused, a flag violated the contract), `6` (update available via `--check`).
+
 ## Exit codes
 
 | Code | Meaning |
@@ -406,9 +440,10 @@ stagecoach lock --help          # the `lock` command group (bare `lock` prints h
 | `2` | Nothing to commit (clean tree after auto-stage, or nothing staged with `--no-auto-stage`). |
 | `3` | Rescue condition (snapshot taken, commit not created — manual recovery printed). |
 | `5` | Busy — another stagecoach run holds the per-repo lock; retry after it finishes. |
+| `6` | Update available (`stagecoach upgrade --check` found a newer release); upgrade-path only — never returned by the commit path. |
 | `124` | Timeout (generation exceeded `--timeout`). |
 
-Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics.
+Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code `6` is upgrade-path only (FR-U12): it is produced solely by `stagecoach upgrade --check` and is walled off from the commit path, so a commit run never exits 6.
 
 Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock (FR52) has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.
 
