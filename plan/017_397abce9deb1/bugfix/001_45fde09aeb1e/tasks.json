@@ -4,14 +4,14 @@
       "type": "Phase",
       "id": "P1",
       "title": "v3.0 Self-Update Reliability Bugfixes",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Fix three validated logic gaps in the internal/upgrade/ self-update subsystem that break or degrade `stagecoach upgrade`. BUG-001 (CRITICAL): the direct-binary sanity-run compares the new binary's --version output (goreleaser injects the version WITHOUT the leading 'v') against release.Tag (which HAS the 'v') via a raw substring check, so the check always fails for real releases and aborts the only self-swap-eligible channel. BUG-002 (MAJOR): go install is misdetected as direct when GOPATH is unset (the common case), because detect.go skips the go-install heuristic entirely instead of falling back to ~/go. BUG-003 (MINOR): --prerelease tag selection lets a leading non-semver tag (e.g. 'nightly') win over a valid semver release because Compare returns 0 for unparseable operands. All three are confirmed against the current source; none require new go.mod deps or code outside internal/upgrade/ (regression tests touch internal/cmd/ test files only).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Upgrade Logic Fixes (BUG-001 / BUG-002 / BUG-003)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Three independent, severity-ordered logic fixes plus a final changeset-level documentation sweep. Each fix is scoped to a single function in internal/upgrade/ and carries an implied TDD regression test (write failing test -> implement -> pass). The fixes are independent of each other but the documentation sweep task depends on all three.",
           "tasks": [
             {
@@ -66,14 +66,14 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Fix prerelease tag selection over non-semver tags (BUG-003, Minor)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "LatestAdmittingPrereleases (the --prerelease channel resolver, internal/upgrade/releases.go) selects the highest release via `Compare(r.TagName, rs[best].TagName) > 0`. Compare deliberately returns 0 for an UNPARSEABLE operand (dev-build defense for --check). In the prerelease-selection loop this is a logic bug: if a non-semver tag (e.g. 'nightly') precedes a valid semver tag, the garbage tag sets best and every later valid tag fails the > 0 check, so best stays stuck on garbage. Downstream SelectAsset then fails safely with ErrNoMatchingAsset (contained impact), but the selection logic is incorrect.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "Make LatestAdmittingPrereleases selection semver-safe and add a regression test",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/architecture/bug_analysis.md BUG-003. The selection loop is internal/upgrade/releases.go LatestAdmittingPrereleases (~line 228-232): `best := -1; for i, r := range rs { if r.Draft { continue }; if best < 0 || Compare(r.TagName, rs[best].TagName) > 0 { best = i } }`. Compare (internal/upgrade/version.go ~line 112) returns 0 when either operand is unparseable (ParseAndClean ok=false). ParseAndClean is the same-package normalizer. The existing test TestClient_Prerelease_PicksHighest uses all-parseable tags (v3.0.0-draft, v1.9.0, v2.0.0-rc1) and asserts v2.0.0-rc1 wins — it must still pass. There is NO test for a non-semver tag mixed with semver tags.\n2. INPUT: rs []ghRelease (the decoded GitHub /releases array, internal type). ParseAndClean(raw string) (string, bool) and Compare(a, b string) int — both same-package (version.go). No new inputs.\n3. LOGIC: In LatestAdmittingPrereleases (internal/upgrade/releases.go), modify the selection loop so a non-semver tag can NEVER win over a parseable one while preserving Compare's 0-for-unparseable contract (do NOT change version.go — Compare's dev-build defense for --check must remain). For each non-draft candidate compute `_, okCandidate := ParseAndClean(r.TagName)`. Advance best when: (a) best < 0; OR (b) okCandidate && !okBest (a parseable candidate beats an unparseable best); OR (c) okCandidate && okBest && Compare(r.TagName, rs[best].TagName) > 0 (both parseable, strict precedence). This deprioritizes non-semver tags without erroring. When ALL non-draft tags are unparseable, best remains the first non-draft (graceful — no ErrNoReleases since entries exist; consistent with current behavior for all-garbage input). Do NOT change the ErrNoReleases contract (empty array or all-drafts still yields ErrNoReleases). Mock nothing — use the existing httptest newFakeClient/statusServer test pattern.\n4. OUTPUT: LatestAdmittingPrereleases returns the highest-precedence PARSEABLE non-draft release; falls back to the first non-draft only if all are unparseable; ErrNoReleases for empty/all-drafts (unchanged). Add a NEW regression test in internal/upgrade/releases_test.go (e.g. TestClient_Prerelease_NonSemverDoesNotWin) with an httptest server serving a /releases array body of [{\"tag_name\":\"nightly\",\"prerelease\":true,\"draft\":false,\"assets\":[]},{\"tag_name\":\"v1.5.0\",\"prerelease\":true,\"draft\":false,\"assets\":[{\"name\":\"x\"}]}] and assert LatestAdmittingPrereleases returns Release{Tag:\"v1.5.0\"}. Add a second case where the valid tag PRECEDES the non-semver tag (order-independence). Verify TestClient_Prerelease_PicksHighest still passes.\n5. DOCS: [Mode A] Update the LatestAdmittingPrereleases doc comment (~line 210) to note that non-semver tags are deprioritized (a parseable tag always wins over an unparseable one). No user-facing CLI/config/API surface change.",
@@ -90,14 +90,14 @@
               "type": "Task",
               "id": "P1.M1.T4",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Final changeset-level documentation sweep (Mode B). The three fixes restore intended behavior already described in the README and docs; they do NOT add new CLI flags, config keys, env vars, or public API surfaces. This task verifies the overview/feature docs are still accurate post-fix and updates them only if drift exists or a clarifying note is warranted. Per-doc touch updates (source doc comments) ride WITH each implementing subtask (Mode A); this task covers the cross-cutting overview docs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T4.S1",
                   "title": "Sweep README.md, docs/cli.md, and docs/configuration.md for accuracy against the three fixes",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

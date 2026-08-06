@@ -212,8 +212,13 @@ func (c *Client) ReleaseByTag(ctx context.Context, tag string) (Release, error) 
 // auth and are not real releases). Prereleases are admitted and ordered by the same-package
 // upgrade.Compare (version.go:105) — which is full semver precedence, prerelease-aware (§11.4), so a
 // v2.0.0-rc1 correctly outranks a stable v1.9.0. An empty array or an all-drafts array yields
-// ErrNoReleases. Compare returns 0 for unparseable operands (dev-build defense), so garbage tags
-// simply tie and never cause an error here.
+// ErrNoReleases.
+// Non-semver tags (e.g. "nightly", "latest", a moving tag) are DEPRIORITIZED: a parseable tag
+// always wins over an unparseable one, regardless of array order. upgrade.Compare returns 0 for
+// unparseable operands (a deliberate dev-build defense for --check), so the selection loop gates
+// each candidate through ParseAndClean rather than relying on Compare alone — this keeps a leading
+// garbage tag from winning over a valid release (BUG-003). When every non-draft tag is unparseable,
+// the first non-draft is returned (graceful — no ErrNoReleases since entries exist).
 func (c *Client) LatestAdmittingPrereleases(ctx context.Context) (Release, error) {
 	body, err := c.do(ctx, "/repos/"+c.Repo+"/releases")
 	if err != nil {
@@ -224,12 +229,20 @@ func (c *Client) LatestAdmittingPrereleases(ctx context.Context) (Release, error
 		return Release{}, fmt.Errorf("decode releases: %v: %w", err, ErrHTTP)
 	}
 	best := -1
+	okBest := false // parseability of rs[best]; advanced in lockstep with best.
 	for i, r := range rs {
 		if r.Draft {
 			continue // drafts always excluded (require auth; not real releases).
 		}
-		if best < 0 || Compare(r.TagName, rs[best].TagName) > 0 {
+		_, okCandidate := ParseAndClean(r.TagName) // same-package (version.go); ok=false for "nightly"/"latest"/"dev".
+		// Advance best when: (a) first non-draft; OR (b) a parseable candidate beats an unparseable best;
+		// OR (c) both parseable and the candidate has strict semver precedence. This deprioritizes
+		// non-semver tags so a moving tag can never win over a valid release regardless of array order
+		// (BUG-003). The `best < 0` disjunct MUST stay first — Go's || short-circuits, so rs[best] and
+		// Compare are only evaluated when best >= 0 (no rs[-1] out-of-bounds panic).
+		if best < 0 || (okCandidate && !okBest) || (okCandidate && okBest && Compare(r.TagName, rs[best].TagName) > 0) {
 			best = i
+			okBest = okCandidate
 		}
 	}
 	if best < 0 {

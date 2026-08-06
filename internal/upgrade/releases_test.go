@@ -148,6 +148,44 @@ func TestClient_Prerelease_AllDrafts_NoReleases(t *testing.T) {
 	}
 }
 
+func TestClient_Prerelease_NonSemverDoesNotWin(t *testing.T) {
+	// BUG-003 regression: a non-semver tag must NOT win over a valid semver tag. Compare returns 0
+	// for unparseable operands, so the loop gates each candidate through ParseAndClean — a parseable
+	// tag always beats an unparseable one.
+	// Case A: non-semver PRECEDES the valid tag (the original bug — garbage was selected first).
+	t.Run("nonsemver_first", func(t *testing.T) {
+		body := `[
+			{"tag_name": "nightly", "prerelease": true, "draft": false, "assets": []},
+			{"tag_name": "v1.5.0", "prerelease": true, "draft": false,
+			 "assets": [{"name": "x", "browser_download_url": "u", "size": 1}]}
+		]`
+		c := newFakeClient(t, statusServer(http.StatusOK, body))
+		rel, err := c.LatestAdmittingPrereleases(context.Background())
+		if err != nil {
+			t.Fatalf("LatestAdmittingPrereleases: unexpected error: %v", err)
+		}
+		if rel.Tag != "v1.5.0" {
+			t.Errorf("Tag = %q, want v1.5.0 (parseable beats unparseable — BUG-003)", rel.Tag)
+		}
+	})
+	// Case B: valid tag PRECEDES the non-semver tag (order-independence — the fix holds both ways).
+	t.Run("nonsemver_last", func(t *testing.T) {
+		body := `[
+			{"tag_name": "v1.5.0", "prerelease": true, "draft": false,
+			 "assets": [{"name": "x", "browser_download_url": "u", "size": 1}]},
+			{"tag_name": "nightly", "prerelease": true, "draft": false, "assets": []}
+		]`
+		c := newFakeClient(t, statusServer(http.StatusOK, body))
+		rel, err := c.LatestAdmittingPrereleases(context.Background())
+		if err != nil {
+			t.Fatalf("LatestAdmittingPrereleases: unexpected error: %v", err)
+		}
+		if rel.Tag != "v1.5.0" {
+			t.Errorf("Tag = %q, want v1.5.0 (order-independence)", rel.Tag)
+		}
+	})
+}
+
 func TestClient_ReleaseByTag_OK(t *testing.T) {
 	c := newFakeClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/releases/tags/v1.2.3") {
