@@ -4,14 +4,14 @@
       "type": "Phase",
       "id": "P1",
       "title": "v3.0 Self-Update Reliability Bugfixes",
-      "status": "Researching",
+      "status": "Ready",
       "description": "Fix three validated logic gaps in the internal/upgrade/ self-update subsystem that break or degrade `stagecoach upgrade`. BUG-001 (CRITICAL): the direct-binary sanity-run compares the new binary's --version output (goreleaser injects the version WITHOUT the leading 'v') against release.Tag (which HAS the 'v') via a raw substring check, so the check always fails for real releases and aborts the only self-swap-eligible channel. BUG-002 (MAJOR): go install is misdetected as direct when GOPATH is unset (the common case), because detect.go skips the go-install heuristic entirely instead of falling back to ~/go. BUG-003 (MINOR): --prerelease tag selection lets a leading non-semver tag (e.g. 'nightly') win over a valid semver release because Compare returns 0 for unparseable operands. All three are confirmed against the current source; none require new go.mod deps or code outside internal/upgrade/ (regression tests touch internal/cmd/ test files only).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Upgrade Logic Fixes (BUG-001 / BUG-002 / BUG-003)",
-          "status": "Researching",
+          "status": "Ready",
           "description": "Three independent, severity-ordered logic fixes plus a final changeset-level documentation sweep. Each fix is scoped to a single function in internal/upgrade/ and carries an implied TDD regression test (write failing test -> implement -> pass). The fixes are independent of each other but the documentation sweep task depends on all three.",
           "tasks": [
             {
@@ -90,14 +90,14 @@
               "type": "Task",
               "id": "P1.M1.T4",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Final changeset-level documentation sweep (Mode B). The three fixes restore intended behavior already described in the README and docs; they do NOT add new CLI flags, config keys, env vars, or public API surfaces. This task verifies the overview/feature docs are still accurate post-fix and updates them only if drift exists or a clarifying note is warranted. Per-doc touch updates (source doc comments) ride WITH each implementing subtask (Mode A); this task covers the cross-cutting overview docs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T4.S1",
                   "title": "Sweep README.md, docs/cli.md, and docs/configuration.md for accuracy against the three fixes",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
