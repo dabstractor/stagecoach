@@ -57,12 +57,20 @@ var execVersion = func(ctx context.Context, path string) ([]byte, error) {
 // output contains wantTag (a plain substring check — NOT a semver compare; that is the command
 // layer's job) and that it exits 0. An exec error or non-zero exit ⇒ ErrSanityRunFailed; a missing
 // tag ⇒ ErrSanityVersionMismatch. FR-U5 step 6 + FR-U11 abort-before-swap.
+//
+// It accepts wantTag OR its v-stripped form (strings.TrimPrefix(wantTag, "v")) because goreleaser
+// injects the version WITHOUT the leading 'v' (-X main.version={{.Version}}, PRD §21.1) while
+// release.Tag carries it (release.Tag is the git tag, WITH v). Distinct semver tags do not
+// substring-collide ("1.2.0" is not a substring of "1.20.0"). If wantTag lacks the 'v', TrimPrefix
+// is a no-op and the check reduces to the original substring form.
 func sanityCheck(ctx context.Context, path, wantTag string) error {
 	out, err := execVersion(ctx, path)
 	if err != nil {
 		return fmt.Errorf("sanity-run %s: %w", path, ErrSanityRunFailed)
 	}
-	if !bytes.Contains(out, []byte(wantTag)) {
+	// Accept the tag OR its v-stripped form: goreleaser injects the version via -X main.version={{.Version}}
+	// WITHOUT the leading 'v', while release.Tag carries it. FR-U5 step 6 / FR-U11.
+	if !bytes.Contains(out, []byte(wantTag)) && !bytes.Contains(out, []byte(strings.TrimPrefix(wantTag, "v"))) {
 		return fmt.Errorf("sanity-run %s: output %q lacks tag %q: %w", path, out, wantTag, ErrSanityVersionMismatch)
 	}
 	return nil
@@ -190,8 +198,9 @@ func extractBinary(archivePath, destDir, assetName string) (string, error) {
 // Extraction is FORMAT-FROM-ASSET-SUFFIX (.zip ⇒ archive/zip; else .tar.gz ⇒ archive/tar+gzip) and
 // pulls ONLY the single stagecoach entry to tempDir/new-stagecoach(.exe). The sanity-run execs the
 // staged binary with "--version" through the package-level execVersion seam and asserts exit 0 AND
-// the output contains release.Tag (a substring check, not a semver compare — that is the command
-// layer's job).
+// the output contains release.Tag (a substring check that accepts the tag OR its v-stripped form —
+// goreleaser injects the version WITHOUT the leading 'v' while release.Tag carries it; not a
+// semver compare, which is the command layer's job).
 //
 // On ANY failure (download/verify/extract/sanity) StageNewBinary returns a typed error — the
 // download.go sentinels (ErrNoChecksumsFile/ErrChecksumParse/ErrHTTP/ErrChecksumMissing/

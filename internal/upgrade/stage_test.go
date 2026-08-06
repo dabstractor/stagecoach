@@ -238,6 +238,40 @@ func TestStageNewBinary_HappyPath(t *testing.T) {
 	}
 }
 
+// TestStageNewBinary_RealGoreleaserNoVPrefix is the BUG-001 regression: it replicates how a REAL
+// goreleaser-built binary reports its version. .goreleaser.yaml injects -X main.version={{.Version}}
+// where {{.Version}} is the tag WITHOUT the leading 'v', so the binary's --version output is
+// "1.2.3" while release.Tag is "v1.2.3". The raw substring guard (pre-fix) compared those two
+// literally and aborted with ErrSanityVersionMismatch BEFORE any swap; the fix accepts the tag OR
+// its v-stripped form, so this now succeeds. This test FAILS before the fix and PASSES after.
+func TestStageNewBinary_RealGoreleaserNoVPrefix(t *testing.T) {
+	// Not run in parallel — the file comment explains the execVersion seam is shared state.
+	stub := buildStubCLI(t)
+	tag := "v1.2.3" // release tag WITH v (real git tag) — wantTag
+	assetNm := hostAssetName(tag)
+	archive, sha := packArchive(t, stub, hostEntryName(), assetNm)
+	checksumsBody := fmt.Sprintf("%s  %s\n", sha, assetNm)
+	ts := archiveServer(t, archive, checksumsBody)
+	defer ts.Close()
+
+	rel, c := fakeRelease(tag, assetNm, ts.URL)
+	tempDir := t.TempDir()
+
+	// Replicate the REAL goreleaser-built binary: -X main.version={{.Version}} injects the
+	// version WITHOUT the leading 'v', so --version reports "1.2.3" while release.Tag is "v1.2.3".
+	t.Setenv("STAGECOACH_STUBCLI_OUT", "1.2.3")
+
+	newBinPath, err := StageNewBinary(context.Background(), c, rel, rel.Assets[0], tempDir)
+	if err != nil {
+		t.Fatalf("StageNewBinary no-v goreleaser output (BUG-001 regression): unexpected error: %v", err)
+	}
+
+	want := filepath.Join(tempDir, "new-stagecoach"+exeSuffix())
+	if newBinPath != want {
+		t.Errorf("newBinPath = %q; want %q", newBinPath, want)
+	}
+}
+
 // TestStageNewBinary_TamperedArchive proves a checksum mismatch aborts BEFORE extraction: the
 // checksums body advertises a bogus sha so VerifySHA256 fails (ErrChecksumMismatch) and NO
 // new-stagecoach file appears in tempDir. tempDir (with the downloaded archive) is left for inspection.
