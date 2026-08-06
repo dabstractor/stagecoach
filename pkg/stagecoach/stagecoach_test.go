@@ -688,7 +688,11 @@ func TestResolveConfig_InjectedConfig(t *testing.T) {
 		if cfg.Providers == nil || cfg.Providers["stub"] == nil {
 			t.Error("cfg.Providers[\"stub\"] is nil — injected providers map was lost")
 		}
-		if repoDir != repo {
+		// Compare canonical paths: resolveConfig returns os.Getwd(), which on macOS is the
+		// physically-resolved path (e.g. /private/var/...) whereas t.TempDir() returns the
+		// symlink form (/var/...). Canonicalize both sides so the comparison is stable.
+		canon := func(p string) string { r, err := filepath.EvalSymlinks(p); if err != nil { return p }; return r }
+		if canon(repoDir) != canon(repo) {
 			t.Errorf("repoDir = %q, want %q", repoDir, repo)
 		}
 	})

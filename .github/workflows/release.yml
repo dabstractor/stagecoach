@@ -28,7 +28,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod   # uses the `go` directive in go.mod (1.22); keeps CI == module.
+          # Pinned to Go 1.24+, NOT go-version-file: go.mod (which resolves to the 1.22 directive).
+          # macOS 26 (Tahoe) rejects Go <1.24 release binaries missing the LC_UUID load command
+          # (golang/go#78012, fixed in Go 1.24) — they crash on launch for Homebrew users. The
+          # release toolchain MUST therefore be >=1.24 even though the module's minimum is 1.22.
+          go-version: '1.24'
           cache: true
 
       - name: Run GoReleaser
