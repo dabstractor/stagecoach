@@ -1,12 +1,15 @@
 # .github/workflows/ci.yml — Stagecoach CI (PRD §20.4 build/test matrix + §20.3 coverage gate).
 # Scope NOTE: release-on-tag via goreleaser lives in a SEPARATE workflow owned by P1.M5.T3.S2.
-# This file triggers ONLY on push(main) + pull_request.
+# Triggers: push(main) + pull_request + manual workflow_dispatch. The workflow_dispatch
+# trigger is for the validation agent to run CI against a non-main branch via
+# `gh workflow run ci.yml --ref <branch>` (see docs/ci-validation.md).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
