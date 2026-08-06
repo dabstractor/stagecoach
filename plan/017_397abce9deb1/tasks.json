@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Self-update core — stagecoach upgrade (FR-U1–U12, → G26)",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Implement the install-method-aware, delegate-first self-updater: detect how the binary was installed and delegate to that channel's native updater wherever one exists, falling back to a SHA256-verified, atomic, rollback-able direct-binary swap ONLY for the direct-binary channel. Walled off from the commit-generation core (no repo/lock/index/provider interaction). Supersedes the v2.1 self-update rejection. See plan/017_397abce9deb1/architecture/{system_context,external_deps,v3_scope_boundary}.md.",
       "milestones": [
         {
@@ -262,7 +262,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "CLI surface, run orchestration, and the e2e test harness",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Wire everything into the `stagecoach upgrade` cobra command (walled off — no-op PersistentPreRunE, no repo/lock/provider), implement the three run paths (--check, normal detect→delegate-or-direct-swap, --rollback), the confirmation prompt, and the §20.5 e2e self-update scenarios. This milestone makes the feature runnable and regression-safe.",
           "tasks": [
             {
@@ -343,7 +343,7 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "Integration tests + the §20.5 e2e self-update harness",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The regression net for behaviors that only manifest against a real (httptest) release source and a real on-disk swap: --check exit 6/0, the direct-swap happy path, failure-safety (bad SHA256 / bad sanity-run abort before swap, on-disk unchanged), --rollback, and delegation refusing a manager-owned binary unless --force. Mirrors the §20.5 'self-update (v3.0)' scenario block.",
               "subtasks": [
                 {
@@ -364,7 +364,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T3.S2",
                   "title": "Direct-swap happy path in a temp dir (download→verify→sanity→backup→rename)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T3.S1"
@@ -378,7 +378,7 @@
                   "type": "Subtask",
                   "id": "P1.M4.T3.S3",
                   "title": "Failure-safety + delegation-refuses-manager-owned + rollback (FR-U1/U8/U11)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M4.T3.S2"
