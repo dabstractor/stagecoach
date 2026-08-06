@@ -39,7 +39,13 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest           # the goreleaser BINARY version (pin e.g. ~> v2 for reproducibility).
-          args: release --clean     # --clean removes dist/ first (replaces removed --rm-dist).
+          # FIRST-RELEASE (v0.1.0): skip the Homebrew/Scoop/AUR distribution pipes. They require the
+          # target repos (dabstractor/homebrew-tap, dabstractor/scoop-bucket) + their PAT secrets
+          # (HOMEBREW_TAP_GITHUB_TOKEN, SCOOP_BUCKET_GITHUB_TOKEN) and AUR_SSH_PRIVATE_KEY, none of
+          # which exist yet (README §install: "These will land ... once the tap/bucket repos are
+          # published"). This release ships the GitHub Release with all 6 platform archives +
+          # checksums + changelog. REMOVE `--skip=homebrew,scoop,aur` once that infrastructure exists.
+          args: release --clean --skip=homebrew,scoop,aur
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
