@@ -114,7 +114,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Install-method detection + delegation (FR-U2, FR-U3, FR-U4)",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Resolve HOW the running binary was installed (the 9-channel detection cascade) and, for non-direct channels, delegate to that channel's own native updater — running it where it is per-user/non-destructive, printing it where it needs privileges (AUR) or is declarative (Nix). Never auto-elevate. Never overwrite a manager-owned binary except via --force.",
           "tasks": [
             {
@@ -142,14 +142,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Delegation dispatcher (FR-U3 table + FR-U4 run-vs-print)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "For a detected non-direct channel, map it to the channel's own updater command and either RUN it (per-user, non-destructive channels) or PRINT it (needs privileges / declarative). Direct channel is NOT handled here — it routes to the direct-swap milestone (P1.M3). Never auto-elevate.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "delegate() — channel→updater table + run-vs-print policy",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -175,14 +175,14 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Resolve target + download + verify + extract + sanity-run",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The pre-swap half of the direct path: resolve the target release, select+download+verify the platform archive, extract the single binary, and sanity-run it (--version matches target, exit 0) before any swap. Abort on any failure, leaving only a temp file.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Resolve target release + select GOOS_GOARCH asset",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2",
@@ -197,7 +197,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Download+verify+extract+sanity-run (abort-before-swap on any failure)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1",
