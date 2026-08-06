@@ -405,8 +405,11 @@ func TestRunDefault_LockReleasedAfterRun(t *testing.T) {
 	}
 
 	// The lock must have been released — a subsequent Acquire must succeed.
-	_, lockErr := lock.Acquire(repo)
+	l, lockErr := lock.Acquire(repo)
 	if lockErr != nil {
 		t.Errorf("lock.Acquire after run failed: %v (lock was not released)", lockErr)
+	}
+	if l != nil {
+		l.Release() // release the probe lock so t.TempDir() cleanup can RemoveAll it on Windows
 	}
 }

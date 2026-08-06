@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -131,13 +133,20 @@ func TestHookInstallStatusUninstall_RoundTrip(t *testing.T) {
 		t.Errorf("install output = %q, want 'Installed'", out.String())
 	}
 
-	// verify file exists and is executable
-	hooksDir := repo + "/.git/hooks"
-	info, err := os.Stat(hooksDir + "/prepare-commit-msg")
+	// verify file exists and is executable.
+	// On Windows there is no executable bit (os.Stat reports 0666 for regular
+	// files), so the 0o755 assertion is Unix-only; Windows verifies presence +
+	// non-directory instead (matching git's own hook-runnable behavior).
+	hooksDir := filepath.Join(repo, ".git", "hooks")
+	info, err := os.Stat(filepath.Join(hooksDir, "prepare-commit-msg"))
 	if err != nil {
 		t.Fatalf("stat hook: %v", err)
 	}
-	if info.Mode().Perm() != 0o755 {
+	if runtime.GOOS == "windows" {
+		if info.IsDir() {
+			t.Errorf("hook is a directory, want a regular file")
+		}
+	} else if info.Mode().Perm() != 0o755 {
 		t.Errorf("hook perm = %o, want 0o755", info.Mode().Perm())
 	}
 

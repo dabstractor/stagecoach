@@ -378,25 +378,27 @@ func TestGitAlias_Detect(t *testing.T) {
 func TestGitAlias_ConfigPath(t *testing.T) {
 	// GIT_CONFIG_GLOBAL set → returns it absolute.
 	e := &gitAliasEntry{git: git.New(t.TempDir()), aliasName: "test"}
-	cfgFile := "/tmp/my-custom-gitconfig"
+	cfgFile := filepath.Join(t.TempDir(), "my-custom-gitconfig")
 	t.Setenv("GIT_CONFIG_GLOBAL", cfgFile)
 	p, err := e.ConfigPath(context.Background())
 	if err != nil {
 		t.Fatalf("ConfigPath (env): %v", err)
 	}
-	if p != cfgFile {
-		t.Errorf("ConfigPath = %q, want %q", p, cfgFile)
+	if want, err := filepath.Abs(cfgFile); err == nil && p != want {
+		t.Errorf("ConfigPath = %q, want %q", p, want)
 	}
 
-	// HOME set, GIT_CONFIG_GLOBAL unset → $HOME/.gitconfig
+	// HOME/USERPROFILE set, GIT_CONFIG_GLOBAL unset → <home>/.gitconfig
 	t.Setenv("GIT_CONFIG_GLOBAL", "")
-	t.Setenv("HOME", "/home/testuser")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows os.UserHomeDir reads %USERPROFILE%
 	p, err = e.ConfigPath(context.Background())
 	if err != nil {
 		t.Fatalf("ConfigPath (home): %v", err)
 	}
-	if p != "/home/testuser/.gitconfig" {
-		t.Errorf("ConfigPath = %q, want /home/testuser/.gitconfig", p)
+	if want := filepath.Join(home, ".gitconfig"); p != want {
+		t.Errorf("ConfigPath = %q, want %q", p, want)
 	}
 }
 

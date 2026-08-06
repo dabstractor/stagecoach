@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func writeTestStubConfig(t *testing.T, stubBin string) string {
 	body := `config_version = 3
 
 [provider.stub]
-command = "` + stubBin + `"
+command = ` + strconv.Quote(stubBin) + `
 prompt_delivery = "stdin"
 output = "raw"
 strip_code_fence = true
