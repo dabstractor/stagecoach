@@ -175,7 +175,7 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Resolve target + download + verify + extract + sanity-run",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The pre-swap half of the direct path: resolve the target release, select+download+verify the platform archive, extract the single binary, and sanity-run it (--version matches target, exit 0) before any swap. Abort on any failure, leaving only a temp file.",
               "subtasks": [
                 {
@@ -197,7 +197,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "Download+verify+extract+sanity-run (abort-before-swap on any failure)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S1",
@@ -214,14 +214,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Backup + atomic swap (per-platform) — the on-disk change",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The ONLY subtask that changes the on-disk binary: back up the current binary one-deep (.stagecoach-backup / .exe.old) and atomically swap the verified+sanity-run new binary into place. Unix = single os.Rename; Windows = the deferred-delete rename-old/move-new dance. Non-writable target → print the exact sudo command, never auto-elevate.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Backup + atomic swap (Unix os.Rename / Windows .old dance) + non-writable→print sudo",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M3.T1.S2"
