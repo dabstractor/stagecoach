@@ -437,6 +437,33 @@ func leadingHeaderEnd(lines []string) int {
 	return len(lines)
 }
 
+// preservedDefaultProvider reads the existing config at path and returns the active
+// [defaults] provider if it is a known BUILT-IN, else "". BUG-001 (FR-B2/FR-B8): `config init --force`
+// must re-target the regenerated template to the PRESERVED provider instead of always auto-detecting
+// pi, which would inject an inconsistent [role.stager] that breaks decompose under FR-R5b. Unknown or
+// custom providers return "" (fall back to auto-detection — do not break custom providers or pass an
+// unknown name to GenerateBootstrapConfig, which builds role models from the built-in FR-D4 table).
+// ActiveSettings stores values VERBATIM (with surrounding TOML quotes, FR-B8/B9), so the value is
+// unquoted before validation. Best-effort: an absent, unreadable, inert, or provider-less file returns
+// "" so the caller falls back to auto-detection (mirrors mergeExistingActiveSettings's read-error policy).
+func preservedDefaultProvider(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "" // absent/unreadable → auto-detect
+	}
+	sections := config.ActiveSettings(string(data))
+	v, ok := sections["defaults"]["provider"]
+	if !ok || v == "" {
+		return "" // no active default provider (absent or inert) → auto-detect
+	}
+	name := strings.Trim(v, "\"") // ActiveSettings stores values verbatim (with quotes)
+	reg := provider.NewRegistry(nil)
+	if _, known := reg.Get(name); !known {
+		return "" // custom/unknown → auto-detect (don't break custom providers)
+	}
+	return name
+}
+
 // mergeExistingActiveSettings reads the existing file at path (if any) and merges its active
 // (uncommented) settings into freshContent via config.MergeActiveSettings (FR-B8). Returns freshContent
 // unchanged when the file is absent or inert (nothing to preserve). Used by `config init --force` so a
@@ -456,6 +483,12 @@ func mergeExistingActiveSettings(path, freshContent string) string {
 // the inert exampleConfigTemplate when --template is passed. Refuses to overwrite unless --force.
 // Parent dirs are created; the written path is always printed. Never calls os.Exit.
 // The populated-config generation is delegated to config.GenerateBootstrapConfig (P1.M4.T4.S1).
+//
+// BUG-001 (FR-B2/FR-B8): with --force and no --provider, the template is re-targeted to the PRESERVED
+// [defaults] provider (read from the existing file) instead of auto-detecting pi, so the generated
+// [role.*] blocks are structurally consistent with the preserved default (otherwise an injected
+// [role.stager]=pi breaks decompose under FR-R5b). --provider still wins; no --force → auto-detect
+// unchanged. See preservedDefaultProvider.
 func runConfigInit(cmd *cobra.Command, args []string) error {
 	// Route to interactive wizard at the TOP (before template/force checks).
 	if interactive, _ := cmd.Flags().GetBool("interactive"); interactive {
@@ -464,11 +497,22 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 
 	path := config.ResolveConfigPath(flagConfig)
 	tmpl, _ := cmd.Flags().GetBool("template")
+	force, _ := cmd.Flags().GetBool("force")
 	var content string
 	if tmpl {
 		content = exampleConfigTemplate
 	} else {
 		providerName, _ := cmd.Flags().GetString("provider")
+		// BUG-001 (FR-B2/FR-B8): --force re-targets the regenerated template to the PRESERVED [defaults]
+		// provider instead of auto-detecting pi, so the [role.*] blocks are structurally consistent with
+		// the preserved default. (Otherwise an inconsistent [role.stager]=pi + preserved default=claude
+		// hard-fails decompose under FR-R5b: the stager resolves pi + the global model = a bare model on a
+		// provider_flag provider.) --provider still wins (the && providerName == "" guard). Unknown/custom
+		// preserved providers fall back to "" (auto-detect) via preservedDefaultProvider — never passed to
+		// GenerateBootstrapConfig, so custom providers are not broken.
+		if force && providerName == "" {
+			providerName = preservedDefaultProvider(path)
+		}
 		if providerName != "" {
 			reg := provider.NewRegistry(nil)
 			if _, ok := reg.Get(providerName); !ok {
@@ -479,7 +523,6 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 		content = config.GenerateBootstrapConfig(providerName)
 	}
 
-	force, _ := cmd.Flags().GetBool("force")
 	// FR-B8 (Issue 3): `config init --force` must preserve every active (uncommented) setting the user
 	// already had — it regenerates the template STRUCTURE but carries the user's values verbatim into the
 	// new file under their [table] headings, exactly like `config upgrade`. Without this, a user who

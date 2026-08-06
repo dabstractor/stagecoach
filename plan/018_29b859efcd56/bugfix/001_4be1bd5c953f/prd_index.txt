@@ -1,0 +1,11 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: config init --force injects an inconsistent [role.stager] provider that breaks multi-commit decomposition
+ h2.3 Minor Issues (Nice to Fix)
+  h3.1 Issue 1: Newer-than-binary config version notice suggests destructive config init --force
+ h2.4 Testing Summary
+ h2.5 Recommendations
+---
+code:5 para:11 list:9

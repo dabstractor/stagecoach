@@ -198,6 +198,8 @@ stagecoach config init --interactive --provider pi
 | `--template` | Write the inert all-commented reference config (v1 behavior) |
 | `--interactive` | Guided TTY wizard: pick a detected provider, accept or edit per-role models; prompts for the inference/ prefix on multi-backend providers (pi, opencode). Writes the same file as plain `config init`. Non-TTY → exit 1 (use plain `config init`). |
 
+With `--force` and no `--provider`, the regenerated template is **re-targeted to the preserved `[defaults] provider`** rather than auto-detecting pi — so the generated `[role.*]` blocks stay consistent with the default you kept (e.g. preserving `provider = "claude"` regenerates claude's role models, not pi's). An explicit `--provider <name>` always overrides this; a preserved custom/unknown provider falls back to auto-detection.
+
 `--interactive` runs a three-step wizard: (1) pick a provider from the detected set (default highlighted), (2) accept or edit each per-role model default, (3) for multi-backend providers (pi, opencode), prompts for the `inference/model` prefix on any edited model. Writes the **same** file as plain `config init` — the wizard is a TTY front-end. Composes with `--force` (overwrites) and `--provider <name>` (pre-selects, skipping the provider prompt). Mutually exclusive with `--template` (exit 1). Non-TTY stdin exits 1 pointing at plain `config init`.
 
 ### `config upgrade`
@@ -211,7 +213,7 @@ stagecoach config upgrade
 # No file          →  "no config file at <path> (run 'stagecoach config init' first)"  (exit 1)
 ```
 
-At load time, a missing or outdated `config_version` triggers an advisory pointing at `config upgrade` or `config init --force`.
+At load time, a missing or outdated `config_version` triggers an advisory pointing at `config upgrade`; a **newer-than-binary** `config_version` triggers an advisory to **upgrade stagecoach**. The advisory never suggests `config init --force` — that would regenerate at the older binary's schema and destroy a config the binary cannot read (FR-B4).
 
 ### `config path`
 

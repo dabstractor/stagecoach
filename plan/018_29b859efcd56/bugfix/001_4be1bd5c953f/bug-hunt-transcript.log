@@ -1,0 +1,46 @@
+The bug hunt is complete. Let me provide a final summary of my findings.
+
+## Summary
+
+I performed comprehensive end-to-end PRD validation of the stagecoach implementation, building the binary and driving the real CLI against isolated temp git repos with stub providers (single-commit and multi-role decompose) plus real git plumbing. I verified ~45 feature areas across the core commit flow, decompose pipeline, hooks, config, upgrade, locking, and the freeze boundary invariants.
+
+**The implementation is high quality** — `go vet`, `go build`, and `go test -race` are all clean, and the vast majority of the spec (snapshot atomicity, FR-39a identity transparency, FR-M1b/M1d freeze boundary, FR-R5b model-prefix enforcement, token water-fill, hook integration, lock contention, etc.) works correctly.
+
+**Two real bugs found, both in the config layer:**
+
+1. **BUG-001 (major)** — `config init --force` always regenerates role blocks for the auto-*detected* provider (pi), so when a user whose default is a single-backend provider (claude/codex/cursor/agy/qwen-code) refreshes their template, they get an inconsistent `[role.stager] provider = "pi"` that makes decomposition hard-fail with a confusing FR-R5b error (`model "sonnet" on pi must be inference/model`). Single-commit is unaffected; only decompose (the stager role) breaks.
+
+2. **BUG-002 (minor)** — The newer-than-binary config-version notice suggests `config init --force to regenerate`, contradicting FR-B4 (the remedy for a too-new file is to upgrade stagecoach; regenerating would downgrade/destroy the newer schema).
+
+No data-corruption, repo-integrity, security, or concurrency bugs were found.
+
+```json
+{
+  "hasBugs": true,
+  "bugs": [
+    {
+      "id": "BUG-001",
+      "severity": "major",
+      "title": "`config init --force` injects an inconsistent [role.stager] provider that breaks multi-commit decomposition",
+      "description": "When the existing config has `[defaults] provider = \"claude\"` (or any single-backend provider) and the user runs `config init --force`, the bootstrap calls GenerateBootstrapConfig(\"\") which auto-detects pi and regenerates role blocks for pi. The resulting file preserves the user's [defaults] provider but writes an ACTIVE [role.stager] provider = \"pi\". This creates an inconsistent config: the global default is claude but the stager is routed to pi. When the user runs stagecoach on a dirty un-staged tree (decomposition), the stager resolves provider=pi and, because [role.stager] model=\"\" falls back to the global model (e.g. \"sonnet\"), Render hits the FR-R5b hard error: `decompose: role \"stager\": model \"sonnet\" on pi must be inference/model`. Decomposition aborts exit 1. The single-commit path is unaffected, so this manifests specifically as decompose failing with a confusing error naming a provider the user never configured. Root cause: config init --force regenerates the template for the DETECTED provider rather than re-targeting role blocks to the PRESERVED [defaults] provider.",
+      "reproduction": "1. Create a config with a single-backend provider as default (config_version=3, [defaults] provider=\"claude\", model=\"sonnet\").\n2. Run `stagecoach config init --force`.\n3. Observe [role.stager] provider = \"pi\" (not claude).\n4. Create a dirty un-staged tree (git init; echo 1>f1.txt; echo 2>f2.txt) and run `stagecoach`.\n5. Observe: `decompose: role \"stager\": model \"sonnet\" on pi must be inference/model, e.g. \"zai/glm-5.2\"` (exit 1).",
+      "location": "internal/cmd/config.go:479 (GenerateBootstrapConfig(\"\")) + internal/config/bootstrap.go:163-200 (StagerFallback writes provider=pi) + internal/config/merge.go:32 (MergeActiveSettings does not reconcile role-block provider with preserved default)"
+    },
+    {
+      "id": "BUG-002",
+      "severity": "minor",
+      "title": "Newer-than-binary config version notice suggests destructive `config init --force`",
+      "description": "When stagecoach loads a config whose config_version is NEWER than CurrentConfigVersion, the advisory prints: `config file uses schema version 99; this binary supports up to 3. Upgrade stagecoach, or run 'stagecoach config init --force' to regenerate.` The config init --force suggestion contradicts FR-B4, which states the remedy for a newer-than-binary file is 'to upgrade stagecoach'. Recommending config init --force is harmful: it regenerates the config at the OLD binary's schema version, downgrading/destroying the newer config. FR-B4 explicitly forbids this suggestion for the older-version case; the same reasoning applies to the newer case.",
+      "reproduction": "1. Create a config with config_version = 99 and a [defaults] provider.\n2. Run `stagecoach --config <file> --dry-run`.\n3. Observe the advisory includes 'or run stagecoach config init --force to regenerate' which should not be present per FR-B4.",
+      "location": "internal/config/load.go:643-645 (configVersionNotice default/newer branch)"
+    }
+  ],
+  "summary": "Comprehensive end-to-end PRD validation. ~45 feature areas verified correct and spec-compliant (snapshot/atomic-commit core, stage-while-generating freeze, full decompose pipeline incl. FR-M1b/M1d freeze boundary, FR-39a identity transparency, duplicate rejection + rescue, FR-R5b model-prefix splitting, token-limit water-fill truncation, binary/excluded payload placeholders, rename detection, message shaping, --edit, --push, commit-path hooks with --no-verify, FR-V3 freeze backstop, per-repo lock contention + status, config v2→v3 migration, FR-B9 inert-file no-alarm, field-merge, output parsing, upgrade rollback, full exit-code table). go vet/build/-race all clean. Two real issues found, both in the config layer: BUG-001 (major) config init --force injects an inconsistent stager provider that hard-fails decomposition for single-backend default providers, and BUG-002 (minor) the newer-than-binary version notice recommends destructive config init --force. No data-corruption, repo-integrity, security, or concurrency bugs found.",
+  "recommendations": [
+    "For BUG-001: have config init --force re-target the generated [role.*] blocks to the PRESERVED [defaults] provider (read it from the existing file before GenerateBootstrapConfig) instead of always auto-detecting pi; or omit the [role.stager] provider line when the preserved default is itself stager-capable so it inherits the default.",
+    "For BUG-002: change the newer-than-binary branch of configVersionNotice to advise only 'Upgrade stagecoach' (drop the config init --force clause), and remove the stale config init --force suggestion from the dead older/missing branches for defense-in-depth."
+  ]
+}
+```
+
+The result file has been written to `plan/018_29b859efcd56/bugfix/001_4be1bd5c953f/bug_hunt_result.json`.

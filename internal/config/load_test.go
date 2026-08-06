@@ -1964,18 +1964,19 @@ func TestLoad_TimeoutViaEnvInteger(t *testing.T) {
 
 func TestConfigVersionNotice(t *testing.T) {
 	tests := []struct {
-		name       string
-		fileLoaded bool
-		version    int
-		wantEmpty  bool
-		contains   []string // if wantEmpty==false, these substrings must appear
+		name        string
+		fileLoaded  bool
+		version     int
+		wantEmpty   bool
+		contains    []string // if wantEmpty==false, these substrings must appear
+		notContains []string // if wantEmpty==false, these substrings must NOT appear (FR-B4: never "config init --force")
 	}{
-		{"no file, version 0", false, 0, true, nil},
-		{"no file, version current", false, CurrentConfigVersion, true, nil},
-		{"file loaded, current version", true, CurrentConfigVersion, true, nil},
-		{"file loaded, missing (0)", true, 0, false, []string{"has no config_version", "config upgrade", "config init --force"}},
-		{"file loaded, older (1)", true, 1, false, []string{"schema version 1", "current is 3", "config upgrade", "config init --force"}},
-		{"file loaded, ahead (4)", true, 4, false, []string{"schema version 4", "supports up to 3", "config init --force"}},
+		{"no file, version 0", false, 0, true, nil, nil},
+		{"no file, version current", false, CurrentConfigVersion, true, nil, nil},
+		{"file loaded, current version", true, CurrentConfigVersion, true, nil, nil},
+		{"file loaded, missing (0)", true, 0, false, []string{"has no config_version", "config upgrade"}, []string{"config init --force"}},
+		{"file loaded, older (1)", true, 1, false, []string{"schema version 1", "current is 3", "config upgrade"}, []string{"config init --force"}},
+		{"file loaded, ahead (4)", true, 4, false, []string{"schema version 4", "supports up to 3", "Upgrade stagecoach"}, []string{"config init --force"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1992,6 +1993,11 @@ func TestConfigVersionNotice(t *testing.T) {
 			for _, sub := range tc.contains {
 				if !strings.Contains(got, sub) {
 					t.Errorf("configVersionNotice(%v, %d) = %q, want to contain %q", tc.fileLoaded, tc.version, got, sub)
+				}
+			}
+			for _, sub := range tc.notContains {
+				if strings.Contains(got, sub) {
+					t.Errorf("configVersionNotice(%v, %d) = %q, must NOT contain %q", tc.fileLoaded, tc.version, got, sub)
 				}
 			}
 			// All non-empty notices must end with \n

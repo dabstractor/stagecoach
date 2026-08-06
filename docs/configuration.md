@@ -51,6 +51,8 @@ The written path is always printed on success.
 
 If a config file already exists, it is NOT overwritten unless `--force` is passed (exit code 1). Parent directories are created as needed.
 
+With `--force` and no `--provider`, the regenerated template is re-targeted to the preserved `[defaults] provider` (rather than auto-detecting pi), keeping the generated `[role.*]` blocks consistent with the preserved default. An explicit `--provider <name>` always overrides this.
+
 `config init --interactive` runs a TTY-gated wizard: it lists detected providers (FR-D1 default highlighted), shows each role's curated default (FR-D4) for accept-or-edit, and — for multi-backend providers (pi, opencode) — prompts for the `inference/model` prefix on edited models (FR-D2/FR-R5b) rather than guessing. It writes the **same file** as plain `config init`. Non-TTY stdin exits 1 pointing at plain `config init` (which stays non-interactive for post-install/first-run use, FR-B3). Composes with `--force` (overwrites) and `--provider <name>` (pre-selects); mutually exclusive with `--template`.
 
 ### Schema versioning (`config upgrade`)
@@ -65,7 +67,7 @@ $ stagecoach config upgrade
 # Not valid TOML   →  "config <path> is not valid TOML: <err>"  (exit 1, file untouched)
 ```
 
-At load time, if `config_version` is missing or older, stagecoach prints an advisory to stderr pointing at `config upgrade` (or `config init --force` to regenerate). The current schema (version 3) includes per-role models, reasoning levels (FR-R6), the inference-provider model-prefix (FR-R5b), multi-commit decomposition, and binary filtering.
+At load time, if `config_version` is missing or older, stagecoach prints an advisory to stderr pointing at `config upgrade` (never `config init --force` — that is a re-bootstrap, not an upgrade, per FR-B4). If `config_version` is **newer than the binary supports**, the advisory says only to **upgrade stagecoach** (regenerating would discard a schema the binary cannot read). The current schema (version 3) includes per-role models, reasoning levels (FR-R6), the inference-provider model-prefix (FR-R5b), multi-commit decomposition, and binary filtering.
 
 > [!NOTE]
 > Point discovery at a specific file with `--config <path>` (or the `STAGECOACH_CONFIG` env var). It overrides global and repo-local file discovery and is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`; `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` directly. A missing explicit path (typo'd `--config` or `STAGECOACH_CONFIG`) fails fast with exit 1; only the discovery default tolerates a missing global file.

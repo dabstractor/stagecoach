@@ -639,6 +639,49 @@ model = "gemini-3.1-pro"
 	}
 }
 
+func TestConfigInit_Force_ReTargetsToPreservedProvider(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	_, _, globalDir := setupNoRepo(t)
+	// Single-backend, stager-capable default — the BUG-001 repro (providerName="" + --force).
+	preExisting := `config_version = 3
+[defaults]
+provider = "claude"
+model = "sonnet"
+`
+	writeConfigFile(t, globalDir, "config.toml", preExisting)
+
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--force"}) // NO --provider ⇒ providerName==""
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	data, err := os.ReadFile(config.GlobalConfigPath())
+	if err != nil {
+		t.Fatalf("cannot read config: %v", err)
+	}
+	content := string(data)
+
+	// BUG-001 core: the stager must NOT be routed to pi (the auto-detected default). Pre-fix,
+	// GenerateBootstrapConfig("") wrote an ACTIVE [role.stager] provider = "pi" and
+	// MergeActiveSettings could not reconcile it → decompose failed under FR-R5b. The bootstrap
+	// template DOES contain commented documentation lines listing pi among providers
+	// ("# provider = \"pi\""), so we assert against ACTIVE (uncommented) lines only — the exact
+	// BUG-001 symptom is an injected active stager=pi block.
+	activePi := regexp.MustCompile(`(?m)^provider = "pi"`)
+	if loc := activePi.FindStringIndex(content); loc != nil {
+		t.Errorf("BUG-001 regression: an ACTIVE role routes to pi despite preserved default=claude;\nthe [role.stager] block must target claude (or inherit it), never pi.\n%s", content)
+	}
+	// FR-B8 still holds: the preserved default is carried verbatim.
+	if !strings.Contains(content, `provider = "claude"`) {
+		t.Errorf("[defaults] provider=claude was not preserved (FR-B8 violation)\n%s", content)
+	}
+}
+
 func TestConfigInit_Force_Template_PreservesActiveSettings(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
@@ -1515,5 +1558,45 @@ func TestConfigUpgrade_V2ToV3Rewrite(t *testing.T) {
 	matches2, _ := filepath.Glob(filepath.Join(globalDir, "config.toml.bak.*"))
 	if len(matches2) != 1 {
 		t.Errorf("expected exactly 1 backup after idempotent re-run, got %d (FR-B8 no-op gate)", len(matches2))
+	}
+}
+
+// TestPreservedDefaultProvider covers preservedDefaultProvider — the BUG-001 (FR-B2/FR-B8) helper that
+// extracts the active [defaults] provider from an existing config and validates it against the built-in
+// registry, returning "" (auto-detect) for absent/unreadable/inert/no-provider/wrong-section/custom
+// files and the built-in name for a known built-in. S1 delivers the helper + this test; S2 wires it into
+// runConfigInit. ActiveSettings stores values verbatim (with quotes), so the helper unquotes before
+// validating — the "known built-in" rows prove that unquoting works (a quoted value validated directly
+// would be reported as unknown).
+func TestPreservedDefaultProvider(t *testing.T) {
+	cases := []struct {
+		name   string
+		body   string // empty + absent=true ⇒ the file is not written (read-error path)
+		absent bool
+		want   string
+	}{
+		{name: "absent file", absent: true, want: ""},                              // read error → ""
+		{name: "inert all-commented", body: "# provider = \"claude\"\n", want: ""}, // no active setting → ""
+		{name: "known built-in claude", body: "[defaults]\nprovider = \"claude\"\n", want: "claude"},
+		{name: "known built-in codex", body: "[defaults]\nprovider = \"codex\"\n", want: "codex"},
+		{name: "known built-in pi", body: "[defaults]\nprovider = \"pi\"\n", want: "pi"},
+		{name: "custom unknown provider", body: "[defaults]\nprovider = \"myagent\"\n", want: ""},       // don't break custom
+		{name: "provider under wrong section", body: "[generation]\nprovider = \"claude\"\n", want: ""}, // only [defaults] counts
+		{name: "no provider key", body: "[defaults]\nmodel = \"sonnet\"\n", want: ""},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "c.toml")
+			if !tc.absent {
+				if err := os.WriteFile(path, []byte(tc.body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := preservedDefaultProvider(path); got != tc.want {
+				t.Errorf("preservedDefaultProvider(%q) = %q; want %q", tc.body, got, tc.want)
+			}
+		})
 	}
 }

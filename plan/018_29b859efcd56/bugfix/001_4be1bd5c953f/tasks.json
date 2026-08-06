@@ -1,0 +1,112 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Config Layer Bug Fixes",
+      "status": "Complete",
+      "description": "Fix the two bugs found during end-to-end PRD validation: BUG-001 (major) where config init --force injects an inconsistent [role.stager] provider that breaks multi-commit decomposition, and BUG-002 (minor) where the newer-than-binary config version notice suggests the destructive config init --force. Both fixes are surgical edits to the config layer (internal/cmd/config.go, internal/config/load.go) with no structural architecture changes.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Fix config init --force and version-notice bugs",
+          "status": "Complete",
+          "description": "Two independent bug fixes in the config layer: (1) re-target the config init --force template to the preserved [defaults] provider instead of auto-detecting pi, and (2) drop the destructive config init --force suggestion from the newer-than-binary version advisory. Both are low-risk surgical changes with regression tests.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Fix BUG-001: config init --force re-targets template to preserved provider",
+              "status": "Complete",
+              "description": "When config init --force runs without --provider, GenerateBootstrapConfig(\"\") auto-detects pi and writes an ACTIVE [role.stager] provider = \"pi\" block. MergeActiveSettings then preserves the user's [defaults] provider = \"claude\" but cannot reconcile the stager block (which exists only in the fresh template). The result is internally inconsistent: stager routes to pi but model falls back to the global \"sonnet\" — hitting the FR-R5b hard error on decompose. Fix: read the existing file's active [defaults] provider BEFORE calling GenerateBootstrapConfig, validate it against the built-in registry, and pass it through so the template is generated for the correct provider.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Add preservedDefaultProvider helper to extract validated provider from existing config",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/018_29b859efcd56/bugfix/001_4be1bd5c953f/architecture/bug001_analysis.md for the full root-cause trace. ActiveSettings (internal/config/inert.go:38) returns section→key→raw value maps where values are stored VERBATIM (not unquoted): `provider = \"claude\"` → key \"provider\", value `\"claude\"` (WITH surrounding quotes). The built-in registry is `provider.NewRegistry(nil)` (built-ins only); `reg.Get(name)` returns `(*Manifest, bool)`.\n2. INPUT: A file path `string` pointing at an existing config file on disk. No other inputs.\n3. LOGIC: Implement a function `preservedDefaultProvider(path string) string` in internal/cmd/config.go that: (a) reads the file at path via os.ReadFile; on error returns \"\". (b) Calls `config.ActiveSettings(string(data))` and looks up section \"defaults\" → key \"provider\". If absent returns \"\". (c) Strips surrounding TOML double-quotes from the value via `strings.Trim(v, \"\\\"\")` — ActiveSettings stores values verbatim. (d) Validates the unquoted provider name against the built-in registry: `reg := provider.NewRegistry(nil); _, ok := reg.Get(v)`. If NOT a known built-in, returns \"\" (fall back to auto-detection — do not break custom/unknown providers). (e) Returns the validated provider name. Mock: none — this function only does file I/O and registry lookup; no external services to mock. The registry is always built-ins-only (nil arg).\n4. OUTPUT: Returns a Go `string` — a validated built-in provider name (e.g. \"claude\"), or \"\" to signal fall-back to auto-detection. Consumed by Subtask P1.M1.T1.S2 which passes it to config.GenerateBootstrapConfig.\n5. DOCS: [Mode A] Add a Go doc comment on the function explaining the BUG-001 rationale (re-target template to preserved provider instead of auto-detecting pi), referencing FR-B2/FR-B8. No external doc file changes in this subtask.",
+                  "prd_selectors": [
+                    "h2.2",
+                    "h2.2/h3.0",
+                    "h2.5"
+                  ]
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "Wire preservedDefaultProvider into runConfigInit so --force re-targets the template",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/018_29b859efcd56/bugfix/001_4be1bd5c953f/architecture/bug001_analysis.md. The current runConfigInit (internal/cmd/config.go:459) reads the --force flag AFTER calling GenerateBootstrapConfig. The fix requires moving the --force flag read UP before the provider generation block. The existing --provider validation block (config.go:472-479) validates non-empty providerName against the registry — this still works correctly when providerName is populated by preservedDefaultProvider because it only returns known built-ins. The --template and --interactive paths are NOT affected (they branch before the provider logic).\n2. INPUT: Function `preservedDefaultProvider(path string) string` from Subtask P1.M1.T1.S1. The `path` variable is `config.ResolveConfigPath(flagConfig)` (already computed in runConfigInit). The `force` bool from `cmd.Flags().GetBool(\"force\")`.\n3. LOGIC: In runConfigInit (internal/cmd/config.go): (a) Move the `force, _ := cmd.Flags().GetBool(\"force\")` line from its current position (after GenerateBootstrapConfig) to just BEFORE the `if tmpl { ... } else { ... }` block. (b) Inside the `else` branch (populated config path), after reading `providerName` from the --provider flag but BEFORE the validation block, add: `if force && providerName == \"\" { providerName = preservedDefaultProvider(path) }`. This ensures: --force without --provider → use preserved provider; --force with --provider → --provider wins; no --force → auto-detect unchanged. (c) The existing validation block `if providerName != \"\" { reg.Get(providerName) ... }` then validates the preserved provider (always a known built-in by construction) — no change needed. (d) The MergeActiveSettings call later in the function now receives a fresh template generated for the CORRECT provider, so [role.stager] is already consistent and the merge is clean. Mock: none — this is an integration edit in the command handler. Test by running the real command via Execute(context.Background()).\n4. OUTPUT: Modified runConfigInit that produces an internally-consistent config on `config init --force` without `--provider`. The [role.stager] block either inherits the preserved provider (for stager-capable providers like claude) or is explicitly routed correctly — never to an inconsistent pi when the default is claude.\n5. DOCS: [Mode A] Update the Go comment block on runConfigInit (config.go:456-458) to document the BUG-001 re-targeting behavior: '--force re-targets the template to the preserved [defaults] provider instead of auto-detecting pi (BUG-001), so the generated [role.*] blocks are structurally consistent with the preserved default.' No external doc file changes here — changeset-level docs are in P1.M1.T3.",
+                  "prd_selectors": [
+                    "h2.2",
+                    "h2.2/h3.0",
+                    "h2.5"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Fix BUG-002: newer-than-binary version notice drops destructive config init --force",
+              "status": "Complete",
+              "description": "The default (version > CurrentConfigVersion) branch of configVersionNotice in load.go:642-644 suggests 'run config init --force to regenerate', which contradicts FR-B4 and would regenerate the user's newer config at the old binary's schema version — effectively destroying it. Fix: drop the 'config init --force' clause from the newer branch so it advises only 'Upgrade stagecoach'. Also harden the dead older/missing branches for defense-in-depth.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Fix configVersionNotice newer branch + harden dead branches + update tests",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/018_29b859efcd56/bugfix/001_4be1bd5c953f/architecture/bug002_analysis.md. The function `configVersionNotice(fileLoaded bool, version int) string` is at internal/config/load.go:629. It has 4 switch cases: version==current (returns \"\"), version==0, version<current, default (>current). In Load() (load.go:192-201), the migration branch handles version<current and version==0 BEFORE configVersionNotice is called — so only the default (>current) branch is LIVE. The test is at load_test.go:1962 (TestConfigVersionNotice, table-driven).\n2. INPUT: No external inputs — this subtask edits the existing pure function and its table-driven test.\n3. LOGIC: (a) FIX THE LIVE BRANCH (load.go:642-644): Change the default branch format string from `\"Upgrade stagecoach, or run 'stagecoach config init --force' to regenerate.\\n\"` to `\"Upgrade stagecoach.\\n\"` — matching FR-B4 ('the remedy is to upgrade stagecoach'). (b) DEFENSE-IN-DEPTH ON DEAD BRANCHES (load.go:636-641): In the version==0 branch, change the suggestion from `\"Run 'stagecoach config upgrade' or 'stagecoach config init --force'.\\n\"` to `\"Run 'stagecoach config upgrade'.\\n\"`. In the version<current branch, make the same change. These branches are dead code today (migration handles them) but could become live if the migration branch is refactored. (c) UPDATE TESTS (load_test.go:1962-2004): Change the 'ahead (4)' test case contains list from `[\"schema version 4\", \"supports up to 3\", \"config init --force\"]` to `[\"schema version 4\", \"supports up to 3\", \"Upgrade stagecoach\"]` and add a NOT-contains assertion that the result does NOT contain \"config init --force\". For the 'missing (0)' and 'older (1)' test cases, remove \"config init --force\" from the contains lists (replace with just \"config upgrade\"). (d) Update the Go doc comment on configVersionNotice (load.go:625-628) to note that per FR-B4 the newer-than-binary remedy is upgrade-only and the older/missing branches advise config upgrade (not config init --force). Mock: none — configVersionNotice is a pure function with no I/O.\n4. OUTPUT: configVersionNotice returns advisory text that NEVER suggests config init --force for any version-mismatch case. The newer-than-binary case advises only 'Upgrade stagecoach'. Tests assert the absence of 'config init --force' in all non-empty branches.\n5. DOCS: [Mode A] Update the Go doc comment on configVersionNotice to reference FR-B4 rationale. No external doc file changes here — changeset-level docs are in P1.M1.T3.",
+                  "prd_selectors": [
+                    "h2.3",
+                    "h2.3/h3.1",
+                    "h2.5"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Sync changeset-level documentation",
+              "status": "Complete",
+              "description": "Update the user-facing documentation files (docs/cli.md and docs/configuration.md) to reflect the two bugfixes: (1) config init --force re-targets the template to the preserved provider, and (2) the newer-than-binary advisory no longer suggests config init --force. Also verify docs/cli.md line 214 advisory description is accurate post-fix.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Update docs/cli.md for config init --force re-targeting and version advisory accuracy",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S2",
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/018_29b859efcd56/bugfix/001_4be1bd5c953f/architecture/system_context.md for documentation surface inventory. docs/cli.md has a `config init` section at line ~170 and a `config upgrade` section at line ~203 with an advisory description at line 214. docs/configuration.md has a Bootstrap section at line ~35 and a Schema versioning section at line ~56.\n2. INPUT: The completed code changes from P1.M1.T1.S2 (config init --force re-targets to preserved provider) and P1.M1.T2.S1 (version advisory no longer suggests config init --force).\n3. LOGIC: (a) In docs/cli.md §config init (around line 172-201): Add a sentence clarifying that `--force` re-targets the template to the preserved [defaults] provider instead of auto-detecting pi, ensuring generated [role.*] blocks are consistent with the preserved default. (b) In docs/cli.md line ~214 ('At load time, a missing or outdated config_version triggers an advisory pointing at config upgrade or config init --force.'): Update to note that for a NEWER-than-binary config_version, the advisory says only 'Upgrade stagecoach' (it must NOT suggest config init --force, which would destroy a newer config). (c) In docs/configuration.md §Bootstrap (around line 35-54): Add the same --force re-targeting clarification. (d) In docs/configuration.md §Schema versioning (around line 56-65): Add a note about the newer-than-binary advisory being upgrade-only. (e) Verify no other doc files reference the old behavior. Mock: none — this is a documentation-only subtask.\n4. OUTPUT: Updated docs/cli.md and docs/configuration.md with accurate descriptions of the fixed behavior.\n5. DOCS: This IS the documentation subtask (Mode B changeset-level sweep). All prior subtasks' DOCS lines handle code comments inline (Mode A).",
+                  "prd_selectors": [
+                    "h2.2",
+                    "h2.2/h3.0",
+                    "h2.3",
+                    "h2.3/h3.1",
+                    "h2.5"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

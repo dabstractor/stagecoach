@@ -1,0 +1,82 @@
+# Bug Fix Requirements
+
+## Overview
+Performed comprehensive end-to-end PRD validation of the stagecoach implementation, building the binary and driving the real CLI against isolated temp git repos with a stub provider (single-commit), a multi-role stub (decompose), and real git plumbing. Areas verified as correct and spec-compliant: the snapshot/atomic-commit core (write-tree→commit-tree→update-ref CAS); stage-while-generating freeze; the full decompose pipeline (planner→stager→message→arbiter) including the FR-M1b/M1d freeze boundary (a concurrent working-tree file created mid-run correctly stays out of every commit and remains in the working tree); FR-39a commit-identity transparency (no stagecoach author/committer/branding, and git's 'identity unknown' error is surfaced verbatim when no identity is set, in both single and decompose paths); duplicate rejection + rescue; FR-R5b bare-model-on-pi hard error and correct zai/ prefix splitting; token-limit water-fill + closed-loop truncation with [truncated] sentinels; binary/[excluded] payload placeholders that are still committed faithfully; rename detection (-M), index-line stripping (FR3h), reduced context (-U1), markdown line cap; message shaping (--format conventional/gitmoji/plain, --locale, --template $msg, --context); --edit editor gate (incl. empty-message abort exit 1); --push (commit-stands-on-push-failure, no-push-on-dry-run); commit-path hooks (pre/prepare/commit-msg/post with --no-verify skipping only pre+commit-msg); FR-V3 pre-commit-stages-outside-snapshot hard abort; per-repo run lock (no-op fast path exit 0 on identical snapshot, Busy exit 5 on differing snapshot, lock status diagnostic); config v2→v3 in-memory migration + on-disk upgrade preserving active settings; FR-B9 no-false-alarm on inert files; first-run bootstrap; provider field-merge (FR37a); output parsing (raw, json, fence-strip); install-method detection + rollback; the full exit-code table (0/1/2/3/5/6/124). `go vet` clean, `go build` clean, and `go test -race` passes on lock/watchdog/signal/generate/decompose. The implementation is high quality. Two real issues were found, both in the config layer: BUG-001 (major) where `config init --force` produces a structurally inconsistent [role.stager] block that turns into a hard FR-R5b failure during decomposition for any single-backend default provider, and BUG-002 (minor) where the newer-than-binary version notice recommends the destructive `config init --force`. No data-corruption, repo-integrity, security, or concurrency bugs were found.
+
+
+## Critical Issues (Must Fix)
+Issues that prevent core functionality from working.
+
+None.
+
+
+## Major Issues (Should Fix)
+Issues that significantly impact user experience or functionality.
+
+### Issue 1: `config init --force` injects an inconsistent [role.stager] provider that breaks multi-commit decomposition
+**Severity**: Major
+**ID**: BUG-001
+**Location**: internal/cmd/config.go:479 (GenerateBootstrapConfig("")) + internal/config/bootstrap.go:163-200 (StagerFallback writes provider=pi) + internal/config/merge.go:32 (MergeActiveSettings does not reconcile role-block provider with preserved default)
+
+**Description**:
+When the existing config has `[defaults] provider = "claude"` (or any single-backend provider: codex, cursor, agy, qwen-code) and the user runs `config init --force`, the bootstrap calls `GenerateBootstrapConfig("")` which auto-detects `pi` (the highest-priority installed built-in per FR-D1) and regenerates the role blocks for pi. The resulting file preserves the user's `[defaults] provider = "claude"` (FR-B8) but writes an ACTIVE `[role.stager]\nprovider = "pi"` (and `model = ""`). This creates an internally inconsistent config: the global default is claude, but the stager role is explicitly routed to pi. When the user then runs `stagecoach` on a dirty, un-staged tree (triggering decomposition, §13.6), the stager role resolves provider="pi" (from the injected block) and, because `[role.stager] model = ""` falls back to the global `[defaults] model` (e.g. "sonnet"), Render hits the FR-R5b hard error: `decompose: role "stager": model "sonnet" on pi must be inference/model, e.g. "zai/glm-5.2"`. Decomposition aborts with exit 1. The single-commit path is unaffected (it only uses the message role), so this manifests specifically as decompose failing with a confusing error that names a provider (pi) the user never configured. The root cause is that `config init --force` regenerates the template for the DETECTED provider rather than re-targeting role blocks to the PRESERVED `[defaults] provider`. FR-B2 describes --force as 'regenerates the template structure over an existing file but ... preserves every active setting', but the resulting stager block is structurally inconsistent with the preserved default, and FR-R5b then turns that inconsistency into a hard failure. Plausible trigger sequence: (1) user sets `provider = "claude"`, `model = "sonnet"`; (2) user runs `config init --force` to refresh the template; (3) user runs `stagecoach` on a dirty tree → decompose fails.
+
+**Steps to Reproduce**:
+1. Create a config with a single-backend provider as default:
+```
+cat > /tmp/cfgtest/repro.toml <<'EOF'
+config_version = 3
+[defaults]
+provider = "claude"
+model = "sonnet"
+EOF
+```
+2. Run `config init --force`:
+```
+HOME=/tmp/cfgtest XDG_CONFIG_HOME=/tmp/cfgtest stagecoach config init --force --config /tmp/cfgtest/repro.toml
+```
+3. Observe the generated `[role.stager]` block: `provider = "pi"` (not claude).
+4. Create a dirty un-staged tree and run stagecoach (decompose path):
+```
+git init -q && git commit -q --allow-empty -m init
+echo 1 > f1.txt && echo 2 > f2.txt
+stagecoach --config /tmp/cfgtest/repro.toml
+```
+5. Observe: `stagecoach: decompose: role "stager": model "sonnet" on pi must be inference/model, e.g. "zai/glm-5.2"` (exit 1). Decompose fails.
+
+
+## Minor Issues (Nice to Fix)
+Small improvements or polish items.
+
+### Issue 1: Newer-than-binary config version notice suggests destructive `config init --force`
+**Severity**: Minor
+**ID**: BUG-002
+**Location**: internal/config/load.go:643-645 (configVersionNotice default/newer branch)
+
+**Description**:
+When stagecoach loads a config file whose `config_version` is NEWER than the binary's `CurrentConfigVersion` (e.g. a user downgraded stagecoach after a newer version rewrote their config), the load-time advisory prints: `config file uses schema version 99; this binary supports up to 3. Upgrade stagecoach, or run 'stagecoach config init --force' to regenerate.` The suggestion to run `config init --force` contradicts FR-B4, which states that for a newer-than-binary file 'the remedy is to upgrade stagecoach' — full stop. Recommending `config init --force` is actively harmful here: it would regenerate the user's config at the OLD binary's schema version (3), effectively downgrading/destroying the newer config, which is the opposite of what the user needs (they should upgrade stagecoach to understand the new schema). FR-B4 elsewhere explicitly forbids suggesting `config init --force` for the OLDER-version case ('it must not suggest config init --force (that regenerates from a template and is a re-bootstrap, not an upgrade)'); the same reasoning applies a fortiori to the NEWER case, where regenerating would discard a schema the binary cannot read. (Note: the older/missing-version branches of the same configVersionNotice function ALSO suggest `config init --force`, but those branches are dead code — the migration branch in Load handles those cases first with the correct migrationNotice — so only the newer-version case is live.)
+
+**Steps to Reproduce**:
+1. Create a config declaring a future schema version:
+```
+cat > /tmp/ahead.toml <<'EOF'
+config_version = 99
+[defaults]
+provider = "stub"
+EOF
+```
+2. Run stagecoach loading it:
+```
+stagecoach --config /tmp/ahead.toml --dry-run
+```
+3. Observe the advisory on stderr: `stagecoach: config file uses schema version 99; this binary supports up to 3. Upgrade stagecoach, or run 'stagecoach config init --force' to regenerate.` — the `config init --force` suggestion should not be present per FR-B4.
+
+## Testing Summary
+- Total bugs found: 2
+- Critical: 0
+- Major: 1
+- Minor: 1
+
+## Recommendations
+- For BUG-001: have `config init --force` re-target the generated [role.*] blocks to the PRESERVED [defaults] provider (read it from the existing file before calling GenerateBootstrapConfig, and pass it through) instead of always auto-detecting pi. Alternatively, when the preserved default is itself stager-capable, omit the [role.stager] provider line entirely so it inherits the default. This keeps the template refresh non-destructive AND internally consistent.
+- For BUG-002: change the newer-than-binary branch of configVersionNotice to advise only 'Upgrade stagecoach' (drop the 'or run config init --force to regenerate' clause), matching FR-B4. Consider also removing the stale config init --force suggestion from the (currently dead) older/missing branches for defense-in-depth.

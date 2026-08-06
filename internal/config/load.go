@@ -626,6 +626,9 @@ func validateCommits(n int) error {
 // is missing (0), older, or newer than CurrentConfigVersion; "" when no file was loaded (fileLoaded=false)
 // or the version is current. PURE (no I/O) so it is unit-testable; the caller (Load) writes the result to
 // noticeOut. config_version is metadata, not a precedence layer (PRD §16.1) — this is its only consumer.
+// Per FR-B4, the newer-than-binary remedy is upgrade-only (never `config init --force`, which would
+// regenerate at this binary's older schema and discard the unreadable newer config); the older/missing
+// branches advise `config upgrade` (also never `config init --force`).
 func configVersionNotice(fileLoaded bool, version int) string {
 	if !fileLoaded {
 		return "" // no file → nothing to be stale
@@ -635,13 +638,13 @@ func configVersionNotice(fileLoaded bool, version int) string {
 		return ""
 	case version == 0:
 		return fmt.Sprintf("stagecoach: config file has no config_version; current is %d. "+
-			"Run 'stagecoach config upgrade' or 'stagecoach config init --force'.\n", CurrentConfigVersion)
+			"Run 'stagecoach config upgrade'.\n", CurrentConfigVersion)
 	case version < CurrentConfigVersion:
 		return fmt.Sprintf("stagecoach: config file uses schema version %d; current is %d. "+
-			"Run 'stagecoach config upgrade' or 'stagecoach config init --force'.\n", version, CurrentConfigVersion)
+			"Run 'stagecoach config upgrade'.\n", version, CurrentConfigVersion)
 	default: // version > CurrentConfigVersion
 		return fmt.Sprintf("stagecoach: config file uses schema version %d; this binary supports up to %d. "+
-			"Upgrade stagecoach, or run 'stagecoach config init --force' to regenerate.\n", version, CurrentConfigVersion)
+			"Upgrade stagecoach.\n", version, CurrentConfigVersion)
 	}
 }
 
