@@ -1,0 +1,30 @@
+{
+  "name": "@dabstractor/stagecoach",
+  "version": "0.0.0",
+  "description": "Thin npm wrapper that downloads and runs the stagecoach native binary — a snapshot-based AI commit-message generator that uses YOUR local CLI agent.",
+  "bin": {
+    "stagecoach": "./bin/stagecoach.js"
+  },
+  "scripts": {
+    "postinstall": "node install.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dabstractor/stagecoach.git"
+  },
+  "homepage": "https://github.com/dabstractor/stagecoach#readme",
+  "bugs": {
+    "url": "https://github.com/dabstractor/stagecoach/issues"
+  },
+  "keywords": [
+    "commit",
+    "git",
+    "ai",
+    "commit-message",
+    "cli"
+  ]
+}
