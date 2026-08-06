@@ -7,7 +7,22 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strings"
 )
+
+// parseEditorArgv splits an editor command string into an argv suitable for exec.Command. It
+// performs a simple whitespace split (the common case: a path or "prog --flag"); shell
+// quoting/escapes are intentionally NOT supported — a caller needing those should set a bare
+// program path. Empty editor returns nil. Lives in this windows-only file because the Unix twin
+// (editor_run.go) shell-interprets via `sh -c` and never needs an argv; defining it here keeps it
+// from appearing unused when the non-windows build excludes this file.
+func parseEditorArgv(editor string) []string {
+	editor = strings.TrimSpace(editor)
+	if editor == "" {
+		return nil
+	}
+	return strings.Fields(editor)
+}
 
 // runEditorCommand invokes the resolved editor on Windows. There is no `sh` on
 // PATH (Git for Windows keeps its MSYS `sh` inside its install root, not on the

@@ -32,8 +32,10 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude-rules:
-    # Pre-existing errcheck findings in non-config packages (out of S1 scope).
-    - path: cmd/stubagent/
+    # Compiled test-stub binaries (cmd/stub*) intentionally ignore some error returns — they are
+    # throwaway fixtures, not shipped product code. Covers stubagent + the cross-platform stubs
+    # added for Windows test support (stubarbiter, stubcapture, stubcli, stubeditor, stubtee).
+    - path: cmd/stub
       linters: [errcheck]
     - path: internal/git/stagediff_test.go
       linters: [errcheck]
