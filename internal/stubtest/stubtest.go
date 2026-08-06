@@ -64,7 +64,7 @@ func Build(t testing.TB) string {
 		stubPath = filepath.Join(dir, name)
 		// Import-path form resolves the package, but `go build` STILL needs go.mod reachable from the
 		// working directory — so set Dir to the module root (independent of the test's chdir).
-		build := exec.Command(goPath, "build", "-o", stubPath, "github.com/dabstractor/stagecoach/cmd/stubagent")
+		build := exec.Command(goPath, "build", "-buildvcs=false", "-o", stubPath, "github.com/dabstractor/stagecoach/cmd/stubagent")
 		if root := moduleRoot(); root != "" {
 			build.Dir = root
 		}

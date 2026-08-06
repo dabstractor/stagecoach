@@ -1,6 +1,7 @@
 package stubtest
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,7 +50,7 @@ func BuildEditor(t testing.TB) string {
 			name = "stubeditor.exe"
 		}
 		editorPath = filepath.Join(dir, name)
-		build := exec.Command(goPath, "build", "-o", editorPath, "github.com/dabstractor/stagecoach/cmd/stubeditor")
+		build := exec.Command(goPath, "build", "-buildvcs=false", "-o", editorPath, "github.com/dabstractor/stagecoach/cmd/stubeditor")
 		if root := moduleRoot(); root != "" {
 			build.Dir = root
 		}
@@ -135,7 +136,7 @@ func BuildTee(t testing.TB) string {
 			name = "stubtee.exe"
 		}
 		teePath = filepath.Join(dir, name)
-		build := exec.Command(goPath, "build", "-o", teePath, "github.com/dabstractor/stagecoach/cmd/stubtee")
+		build := exec.Command(goPath, "build", "-buildvcs=false", "-o", teePath, "github.com/dabstractor/stagecoach/cmd/stubtee")
 		if root := moduleRoot(); root != "" {
 			build.Dir = root
 		}
@@ -144,4 +145,94 @@ func BuildTee(t testing.TB) string {
 		}
 	})
 	return teePath
+}
+
+var (
+	cliOnce sync.Once
+	cliPath string
+)
+
+// BuildCLI compiles ./cmd/stubcli ONCE per test process (cached) and returns its
+// path. stubcli is the cross-platform compiled twin of the historical #!/bin/sh
+// provider stubs used by the `models` live-list tests (echo model lines / exit N /
+// sleep), driven by STAGECOACH_STUBCLI_* env vars. Skips t if the go toolchain
+// isn't on PATH.
+func BuildCLI(t testing.TB) string {
+	t.Helper()
+	cliOnce.Do(func() {
+		goPath, err := exec.LookPath("go")
+		if err != nil {
+			t.Skipf("go toolchain not on PATH; cannot build stubcli: %v", err)
+			return
+		}
+		dir, err := os.MkdirTemp("", "stagecoach-stubcli-*")
+		if err != nil {
+			t.Fatalf("mkdtemp: %v", err)
+		}
+		name := "stubcli"
+		if runtime.GOOS == "windows" {
+			name = "stubcli.exe"
+		}
+		cliPath = filepath.Join(dir, name)
+		build := exec.Command(goPath, "build", "-buildvcs=false", "-o", cliPath, "github.com/dabstractor/stagecoach/cmd/stubcli")
+		if root := moduleRoot(); root != "" {
+			build.Dir = root
+		}
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("go build stubcli: %v\n%s", err, out)
+		}
+	})
+	return cliPath
+}
+
+// CLIOptions configures the stub provider CLI via STAGECOACH_STUBCLI_* env vars.
+type CLIOptions struct {
+	Out     string // STAGECOACH_STUBCLI_OUT (stdout model lines; "" prints nothing)
+	Exit    int    // STAGECOACH_STUBCLI_EXIT (default 0)
+	SleepMS int    // STAGECOACH_STUBCLI_SLEEP_MS (default 0; >0 simulates a slow/hanging provider)
+}
+
+// PlaceCLI builds stubcli and installs it into dir under the given provider name
+// (e.g. "opencode"), returning the env assignments for o. The caller prepends dir
+// to PATH (e.g. t.Setenv("PATH", dir+...)). On Windows the name gets a .exe suffix
+// and a symlink-or-copy fallback (symlink needs a privilege). Mirrors the old
+// #!/bin/sh stubs that wrote a script named after the provider into a tmp dir.
+func PlaceCLI(t *testing.T, dir, name string, o CLIOptions) []string {
+	t.Helper()
+	bin := BuildCLI(t)
+	linkName := name
+	if runtime.GOOS == "windows" {
+		linkName = name + ".exe"
+	}
+	dst := filepath.Join(dir, linkName)
+	if err := os.Symlink(bin, dst); err != nil {
+		if cerr := copyFile(bin, dst); cerr != nil {
+			t.Fatalf("symlink stubcli %s: %v; copy fallback: %v", name, err, cerr)
+		}
+	}
+	var env []string
+	env = append(env, "STAGECOACH_STUBCLI_OUT="+o.Out)
+	if o.Exit != 0 {
+		env = append(env, "STAGECOACH_STUBCLI_EXIT="+itoa(o.Exit))
+	}
+	if o.SleepMS > 0 {
+		env = append(env, "STAGECOACH_STUBCLI_SLEEP_MS="+itoa(o.SleepMS))
+	}
+	return env
+}
+
+// copyFile copies src to dst (symlink-fallback for privilege-less Windows).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }

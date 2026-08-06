@@ -5,14 +5,13 @@ import (
 	"context"
 	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dabstractor/stagecoach/internal/config"
 	"github.com/dabstractor/stagecoach/internal/exitcode"
 	"github.com/dabstractor/stagecoach/internal/provider"
+	"github.com/dabstractor/stagecoach/internal/stubtest"
 )
 
 // ---------------------------------------------------------------------------
@@ -133,20 +132,35 @@ func TestModels_PrintLiveList_NoTrailingNewline(t *testing.T) {
 // Stub-binary live-list test
 // ---------------------------------------------------------------------------
 
+// placeStubProvider builds the cross-platform stub CLI (cmd/stubcli), installs it
+// into a fresh temp dir under the given provider name (opencode/pi/myagent-bin/...),
+// and prepends that dir to PATH, applying o via STAGECOACH_STUBCLI_* env vars. It
+// replaces the historical #!/bin/sh stub scripts that cannot run on Windows
+// (CreateProcess ignores the shebang). Returns the temp dir (mostly for symmetry).
+func placeStubProvider(t *testing.T, name string, o stubtest.CLIOptions) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, kv := range stubtest.PlaceCLI(t, dir, name, o) {
+		for i := 0; i < len(kv); i++ {
+			if kv[i] == '=' {
+				t.Setenv(kv[:i], kv[i+1:])
+				break
+			}
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return dir
+}
+
 func TestModels_LiveList_StubBinary(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
 	setupRepo(t)
 
-	// Create a temp dir with a fake "opencode" that prints a model list
-	tmpDir := t.TempDir()
-	stubPath := filepath.Join(tmpDir, "opencode")
-	stubBody := "#!/bin/sh\necho 'openai/gpt-5.4'\necho 'openai/gpt-5.4-mini'\n"
-	if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-		t.Skipf("cannot create stub binary: %v", err)
-	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Install a fake "opencode" provider that prints a model list (compiled stub;
+	// the old #!/bin/sh script cannot run on Windows).
+	placeStubProvider(t, "opencode", stubtest.CLIOptions{Out: "openai/gpt-5.4\nopenai/gpt-5.4-mini"})
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
@@ -177,14 +191,8 @@ func TestModels_CommandFailure_Fallback(t *testing.T) {
 
 	setupRepo(t)
 
-	// Create a fake "opencode" that exits 1
-	tmpDir := t.TempDir()
-	stubPath := filepath.Join(tmpDir, "opencode")
-	stubBody := "#!/bin/sh\nexit 1\n"
-	if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-		t.Skipf("cannot create stub binary: %v", err)
-	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Install a fake "opencode" provider that exits 1 (compiled stub).
+	placeStubProvider(t, "opencode", stubtest.CLIOptions{Exit: 1})
 
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -222,14 +230,8 @@ func TestModels_Timeout_Fallback(t *testing.T) {
 
 	setupRepo(t)
 
-	// Create a fake "opencode" that sleeps 10s
-	tmpDir := t.TempDir()
-	stubPath := filepath.Join(tmpDir, "opencode")
-	stubBody := "#!/bin/sh\nsleep 10\n"
-	if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-		t.Skipf("cannot create stub binary: %v", err)
-	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Install a fake "opencode" provider that sleeps 10s (compiled stub).
+	placeStubProvider(t, "opencode", stubtest.CLIOptions{SleepMS: 10000})
 
 	// Set a very short timeout
 	t.Setenv("STAGECOACH_TIMEOUT", "1s")
@@ -314,16 +316,9 @@ func TestModels_NoDefault_NothingDetected(t *testing.T) {
 
 	_, repo, globalDir := loadEnvSetup(t)
 	chdir(t, repo)
-	// Use a clean PATH with only git (symlinked) so no providers are detected.
+	// Use a clean PATH with only git so no providers are detected.
 	tmpDir := t.TempDir()
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("git not found on PATH")
-	}
-	if err := os.Symlink(gitPath, filepath.Join(tmpDir, "git")); err != nil {
-		t.Fatalf("symlink git: %v", err)
-	}
-	t.Setenv("PATH", tmpDir)
+	t.Setenv("PATH", putGitOnPath(t, tmpDir))
 	// Override all built-in commands to nonexistent paths AND pre-write a global config
 	// with empty provider so the bootstrap doesn't set a default.
 	writeConfigFile(t, repo, ".stagecoach.toml", `
@@ -356,7 +351,7 @@ provider = ""
 	rootCmd.SetErr(io.Discard)
 	rootCmd.SetArgs([]string{"models"})
 
-	err = Execute(context.Background())
+	err := Execute(context.Background())
 	if err == nil {
 		t.Fatal("Execute err=nil, want error (nothing detected)")
 	}
@@ -413,15 +408,8 @@ func TestModels_AllEmpty_Detection(t *testing.T) {
 	// This doesn't remove the built-ins but makes their detect commands unfindable.
 	// We do this by setting PATH to a tmpDir with only git (symlinked).
 	tmpDir := t.TempDir()
-	// Find real git and symlink it
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("git not found on PATH")
-	}
-	if err := os.Symlink(gitPath, filepath.Join(tmpDir, "git")); err != nil {
-		t.Fatalf("symlink git: %v", err)
-	}
-	t.Setenv("PATH", tmpDir)
+	// Find real git and place it on the isolated PATH (git.exe on Windows).
+	t.Setenv("PATH", putGitOnPath(t, tmpDir))
 
 	// Write a config that overrides all built-in commands to nonexistent paths
 	writeConfigFile(t, repo, ".stagecoach.toml", `
@@ -445,7 +433,7 @@ command = "/nonexistent/qwen-code"
 	rootCmd.SetErr(io.Discard)
 	rootCmd.SetArgs([]string{"models", "--all"})
 
-	err = Execute(context.Background())
+	err := Execute(context.Background())
 	if err == nil {
 		t.Fatal("Execute err=nil, want error (--all, nothing detected)")
 	}
@@ -491,14 +479,8 @@ func TestModels_DefaultResolved(t *testing.T) {
 
 	setupRepo(t)
 
-	// Put a fake "pi" (highest priority) on PATH
-	tmpDir := t.TempDir()
-	stubPath := filepath.Join(tmpDir, "pi")
-	stubBody := "#!/bin/sh\necho 'gpt-5.4'\n"
-	if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-		t.Skipf("cannot create stub binary: %v", err)
-	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Put a fake "pi" (highest priority) on PATH (compiled stub).
+	placeStubProvider(t, "pi", stubtest.CLIOptions{Out: "gpt-5.4"})
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
@@ -527,13 +509,8 @@ func TestModels_DefaultResolved_ExplicitProvider(t *testing.T) {
 	// Create a user-defined provider "myagent" with a fake binary, and set it as default.
 	// CI has no agents on $PATH; place a stub `claude` so the explicit `models claude` arg is detected.
 	stubBinOnPath(t, "claude")
-	tmpDir := t.TempDir()
-	stubPath := filepath.Join(tmpDir, "myagent-bin")
-	stubBody := "#!/bin/sh\nexit 0\n"
-	if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-		t.Skipf("cannot create stub binary: %v", err)
-	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Install a fake "myagent-bin" provider that exits 0 (compiled stub).
+	placeStubProvider(t, "myagent-bin", stubtest.CLIOptions{Exit: 0})
 	t.Setenv("STAGECOACH_PROVIDER", "claude")
 
 	var out bytes.Buffer
@@ -564,15 +541,10 @@ func TestModels_AllDetected(t *testing.T) {
 	setupRepo(t)
 
 	// Put fake claude and opencode on PATH
-	tmpDir := t.TempDir()
+	// Install fake "claude" and "opencode" providers that exit 0 (compiled stubs).
 	for _, name := range []string{"claude", "opencode"} {
-		stubPath := filepath.Join(tmpDir, name)
-		stubBody := "#!/bin/sh\nexit 0\n"
-		if err := os.WriteFile(stubPath, []byte(stubBody), 0755); err != nil {
-			t.Skipf("cannot create stub binary: %v", err)
-		}
+		placeStubProvider(t, name, stubtest.CLIOptions{Exit: 0})
 	}
-	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)

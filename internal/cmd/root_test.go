@@ -120,6 +120,50 @@ func chdir(t *testing.T, dir string) {
 	})
 }
 
+// putGitOnPath ensures git is resolvable on an isolated PATH for tests that need
+// to control which binaries are visible. On Unix it symlinks the real git into
+// dir as "git"; on Windows it prepends git's OWN install directory to PATH
+// (copying/symlinking git.exe alone fails -- git.exe depends on companion DLLs in
+// its install dir, which STATUS_DLL_NOT_FOUND (0xC0000135) reflects). The test
+// gets a PATH containing git (and whatever ships alongside it) but NOT the user's
+// full PATH. Returns the PATH value to set.
+func putGitOnPath(t *testing.T, dir string) string {
+	t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not found on PATH")
+	}
+	if runtime.GOOS == "windows" {
+		// git.exe needs its sibling DLLs; expose its install dir on PATH rather
+		// than copying the bare .exe. Use the dir containing the resolved git.
+		return filepath.Dir(gitPath)
+	}
+	dst := filepath.Join(dir, "git")
+	if err := os.Symlink(gitPath, dst); err != nil {
+		// Symlink privilege unavailable -- fall back to copying the binary.
+		if cerr := copyFile(gitPath, dst); cerr != nil {
+			t.Fatalf("symlink git: %v; copy fallback: %v", err, cerr)
+		}
+	}
+	return dir
+}
+
+// copyFile copies src to dst (best-effort; used as a symlink fallback).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
+
 // loadEnvSetup creates isolated temp dirs for global config + repo, and returns paths.
 // Caller should use chdir(t, repo) to exercise the repo-local layer.
 // Returns: home (for XDG/HOME isolation), repo (for git config), globalDir (for global TOML).
