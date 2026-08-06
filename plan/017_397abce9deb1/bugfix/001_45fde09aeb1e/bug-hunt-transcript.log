@@ -1,0 +1,17 @@
+The bug hunt is complete. All temporary probe files were removed, no source code or forbidden files were modified, and only the required output file was written.
+
+## Summary
+
+I rigorously tested the v3.0 self-update feature (`stagecoach upgrade`, FR-U1–U12) against the PRD scope. The implementation is well-structured with a comprehensive passing test suite, but **creative end-to-end testing that replicates a REAL goreleaser release** (rather than the test stubs) surfaced three gaps the existing tests mask:
+
+**BUG-001 (CRITICAL)** — The direct-binary self-swap's sanity-run does a raw substring check `bytes.Contains(stdout, release.Tag)`, but goreleaser injects the version **without** the leading `v` (`-X main.version={{.Version}}`) while the git tag **has** it. So for every real `v`-prefixed release the new binary reports `1.2.0` but the check looks for `v1.2.0` → the upgrade **always aborts** with `ErrSanityVersionMismatch`. This breaks the headline feature for the *only* self-swap-eligible channel. Proven by building the actual `cmd/stagecoach` binary with a goreleaser-style version and running the real `StageNewBinary` flow.
+
+**BUG-002 (MAJOR)** — `go install` (a documented install method) is misdetected as `direct` when GOPATH is unset (the common case). The code comment even claims a `~/go/bin` fallback that the implementation never performs, contradicting FR-U1/FR-U2/FR-U3.
+
+**BUG-003 (MINOR)** — `--prerelease` tag selection can pick a leading non-semver tag (e.g. `nightly`) over a valid semver release, because `Compare` returns 0 for unparseable operands. Fails safe downstream (ErrNoMatchingAsset) but is a real selection-logic bug.
+
+The verdict JSON is written to `plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/bug_hunt_result.json` with `hasBugs: true` and 3 bugs (1 critical, 1 major, 1 minor), validated as well-formed JSON with consistent flags.
+
+```json
+{ "hasBugs": true, "bugs": [ { "id": "BUG-001", "severity": "critical", "title": "Direct-binary upgrade ALWAYS fails the sanity-run against real goreleaser releases (v/no-v version mismatch)" }, { "id": "BUG-002", "severity": "major", "title": "`go install` is misdetected as `direct` when GOPATH is unset (the common case)" }, { "id": "BUG-003", "severity": "minor", "title": "--prerelease tag selection picks a leading non-semver tag over a valid semver release" } ], "summary": "Validated v3.0 self-update end-to-end against a real goreleaser release. Found 3 logic gaps the existing tests mask: a critical v/no-v sanity-run mismatch that breaks the only self-swap channel, a major go-install misdetection when GOPATH is unset, and a minor prerelease tag-selection bug.", "recommendations": ["Normalize the tag (strip leading 'v') before the sanity substring check and add a regression test that builds the real binary goreleaser-style", "Resolve the default ~/go GOPATH fallback in detectPath", "Treat unparseable tags as non-winning in LatestAdmittingPrereleases selection"] }
+```

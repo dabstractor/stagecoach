@@ -1,0 +1,98 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "v3.0 Self-Update Reliability Bugfixes",
+      "status": "Ready",
+      "description": "Fix three validated logic gaps in the internal/upgrade/ self-update subsystem that break or degrade `stagecoach upgrade`. BUG-001 (CRITICAL): the direct-binary sanity-run compares the new binary's --version output (goreleaser injects the version WITHOUT the leading 'v') against release.Tag (which HAS the 'v') via a raw substring check, so the check always fails for real releases and aborts the only self-swap-eligible channel. BUG-002 (MAJOR): go install is misdetected as direct when GOPATH is unset (the common case), because detect.go skips the go-install heuristic entirely instead of falling back to ~/go. BUG-003 (MINOR): --prerelease tag selection lets a leading non-semver tag (e.g. 'nightly') win over a valid semver release because Compare returns 0 for unparseable operands. All three are confirmed against the current source; none require new go.mod deps or code outside internal/upgrade/ (regression tests touch internal/cmd/ test files only).",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Upgrade Logic Fixes (BUG-001 / BUG-002 / BUG-003)",
+          "status": "Planned",
+          "description": "Three independent, severity-ordered logic fixes plus a final changeset-level documentation sweep. Each fix is scoped to a single function in internal/upgrade/ and carries an implied TDD regression test (write failing test -> implement -> pass). The fixes are independent of each other but the documentation sweep task depends on all three.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Fix sanity-run v/no-v version mismatch (BUG-001, Critical)",
+              "status": "Planned",
+              "description": "The headline v3.0 self-update feature is non-functional for the only self-swap-eligible channel. sanityCheck (internal/upgrade/stage.go) compares the new binary's --version output against release.Tag with a raw bytes.Contains, but goreleaser injects the version WITHOUT the leading 'v' (.goreleaser.yaml -X main.version={{.Version}}) while release.Tag HAS it. So the substring check is always FALSE for real v-prefixed releases and StageNewBinary returns ErrSanityVersionMismatch, aborting before any swap. The existing tests mask this because they drive the stub binaries WITH the v prefix.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Normalize the tag comparison in sanityCheck and add a goreleaser-style regression test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.1", "h3.0", "h2.5", "h1.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/architecture/bug_analysis.md BUG-001. The check is internal/upgrade/stage.go sanityCheck (line ~65): `if !bytes.Contains(out, []byte(wantTag))` where wantTag is release.Tag passed from StageNewBinary (line ~239 `sanityCheck(ctx, newBinPath, release.Tag)`). goreleaser ldflags `-X main.version={{.Version}}` injects the version WITHOUT the leading 'v' (.goreleaser.yaml); cobra's --version prints `stagecoach version 1.2.0` (no v) but release.Tag = `v1.2.0` (with v). The existing happy-path test masks this: internal/upgrade/stage_test.go TestStageNewBinary_HappyPath sets `t.Setenv(\"STAGECOACH_STUBCLI_OUT\", \"v1.2.3\")` (WITH v), and internal/cmd/upgrade_swap_test.go buildStubVersion bakes `-X main.version=v0.2.0` (WITH v) — neither matches real goreleaser output.\n2. INPUT: wantTag string (release.Tag, e.g. \"v1.2.0\") and out []byte (the staged binary's --version stdout, e.g. \"stagecoach version 1.2.0\\n\"). Both arrive via the existing sanityCheck(ctx, path, wantTag) signature — do NOT change the signature.\n3. LOGIC: In sanityCheck (internal/upgrade/stage.go), keep the exit-0 check and the raw substring philosophy (do NOT convert to a semver Compare — per the existing comment the semver compare is the command layer's job, and runCheck already uses Compare which normalizes). Normalize the v-prefix: accept the output if `bytes.Contains(out, []byte(wantTag)) || bytes.Contains(out, []byte(strings.TrimPrefix(wantTag, \"v\")))`. This is safe because distinct semver tags do not substring-collide (v-stripped \"1.2.0\" is NOT a substring of \"1.20.0\"). Keep ErrSanityVersionMismatch as the error sentinel for a genuinely-wrong tag (the existing TestStageNewBinary_WrongTag test must still pass). Update the sanityCheck doc comment to document the v/no-v normalization. Mock nothing — sanityCheck already runs through the injectable execVersion seam; tests override execVersion or set STAGECOACH_STUBCLI_OUT.\n4. OUTPUT: sanityCheck returns nil on success, ErrSanityRunFailed on exec/non-zero-exit, ErrSanityVersionMismatch on a genuinely-wrong tag — same sentinel contract, just a correct (v-normalized) tag match. Add a NEW regression test in internal/upgrade/stage_test.go (e.g. TestStageNewBinary_RealGoreleaserNoVPrefix) that replicates the real binary: drive stubcli with the NO-V version (`t.Setenv(\"STAGECOACH_STUBCLI_OUT\", \"1.2.3\")`) against release.Tag=\"v1.2.3\" and assert StageNewBinary SUCCEEDS (returns newBinPath, nil). Also add the same no-v case to internal/cmd/upgrade_swap_test.go (build stubversion with `-X main.version=0.2.0` i.e. NO v, against release tag v0.2.0) if the existing happy-path there would otherwise still mask the bug — at minimum verify the existing cmd-level happy path still passes post-fix.\n5. DOCS: [Mode A] Update the sanityCheck doc comment in internal/upgrade/stage.go (and the StageNewBinary doc comment that says 'output contains release.Tag') to reflect the v-normalization. No user-facing CLI/config/API surface change — the fix restores intended FR-U5 step 6 / FR-U11 behavior."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Fix go-install misdetection as direct when GOPATH unset (BUG-002, Major)",
+              "status": "Planned",
+              "description": "FR-U2 lists $GOPATH/bin (go install) as a tier-(c) path heuristic, but detect.go's GOPATH check only runs when GOPATH is EXPLICITLY set. When GOPATH is unset (the overwhelmingly common case — modern Go defaults GOPATH to ~/go), envOr returns \"\" and the entire go-install heuristic is skipped, so a binary at ~/go/bin/stagecoach falls through to direct. The code comment claims a 'default ~/go/bin when GOPATH is unset' fallback but the implementation does NOT implement it. A go-install user's upgrade is misrouted to the self-swap path instead of go install @latest delegation.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Implement the ~/go (default GOPATH) fallback in detectPath and add a regression test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.2", "h3.1", "h2.5", "h1.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/architecture/bug_analysis.md BUG-002. The bug is in internal/upgrade/detect.go detectPath (line ~373): `if gopath := d.envOr(\"GOPATH\", \"\"); gopath != \"\" { … }`. When GOPATH is unset, envOr returns \"\" (the fallback), the guard is FALSE, and the whole go-install prefix check is skipped. envOr is defined at detect.go ~line 390: it returns d.Env(key) when configured and non-empty, else fallback. The existing test TestDetect_Path_GoInstallViaGOPATH (internal/upgrade/detect_test.go) sets GOPATH explicitly and passes; there is NO test for the unset-GOPATH ~/go default. The `go env GOPATH` default when GOPATH is unset is $HOME/go (runtime.BuildCtx / cmd/go default).\n2. INPUT: d.Env (injectable func(string) string — reads GOPATH and HOME from the environment; nil => skip env reads), d.ExePath (the realpath of the running binary, already EvalSymlinks'd + Clean'd into `real` in detectPath). The same filepath prefix check machinery already in place.\n3. LOGIC: In detectPath's go-install block (internal/upgrade/detect.go ~line 373), when `gopath := d.envOr(\"GOPATH\", \"\")` is empty, resolve the default gopath as `filepath.Join(d.envOr(\"HOME\", \"\"), \"go\")` (matching `go env GOPATH`). If that resolved default is non-empty, use it as the gopath for the EXISTING `filepath.Join(gopath, \"bin\")` prefix check. Honor the HOME-based fallback ONLY when GOPATH is empty (an explicit GOPATH always wins, preserving existing behavior). Suggested evidence string for the default case: `\"path: ~/go/bin (default GOPATH)\"` while keeping `\"path: $GOPATH/bin\"` for the explicit case. Do NOT add a hard os.Getenv call — use the existing d.Env seam (envOr). Mock nothing — the existing Detector{Env: func(k){…}} test pattern covers this.\n4. OUTPUT: detectPath returns (ChannelGoInstall, evidence, true) for a binary under $HOME/go/bin when GOPATH is unset but HOME is set; returns (\"\", \"\", false) when BOTH GOPATH and HOME are unset (no false positive — falls through to direct). Add a NEW regression test in internal/upgrade/detect_test.go (e.g. TestDetect_Path_GoInstallDefaultGOPATH) with Detector{ExePath: filepath.Join(home, \"go\", \"bin\", \"stagecoach\"), GOOS: \"linux\", Env: func(k){ if k==\"HOME\" { return home }; return \"\" }} and assert detectPath returns ChannelGoInstall. Add a guard test: both GOPATH and HOME unset with ExePath under a literal ~/go/bin-style path => still direct (no false positive when HOME is unknown). Verify the existing TestDetect_Path_GoInstallViaGOPATH still passes.\n5. DOCS: [Mode A] Update the detectPath doc comment at internal/upgrade/detect.go ~line 355 (the comment that says 'default ~/go/bin when GOPATH is unset') to reflect that the fallback is now IMPLEMENTED (not just claimed). No user-facing CLI/config/API surface change."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Fix prerelease tag selection over non-semver tags (BUG-003, Minor)",
+              "status": "Planned",
+              "description": "LatestAdmittingPrereleases (the --prerelease channel resolver, internal/upgrade/releases.go) selects the highest release via `Compare(r.TagName, rs[best].TagName) > 0`. Compare deliberately returns 0 for an UNPARSEABLE operand (dev-build defense for --check). In the prerelease-selection loop this is a logic bug: if a non-semver tag (e.g. 'nightly') precedes a valid semver tag, the garbage tag sets best and every later valid tag fails the > 0 check, so best stays stuck on garbage. Downstream SelectAsset then fails safely with ErrNoMatchingAsset (contained impact), but the selection logic is incorrect.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Make LatestAdmittingPrereleases selection semver-safe and add a regression test",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.3", "h3.2", "h2.5", "h1.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/architecture/bug_analysis.md BUG-003. The selection loop is internal/upgrade/releases.go LatestAdmittingPrereleases (~line 228-232): `best := -1; for i, r := range rs { if r.Draft { continue }; if best < 0 || Compare(r.TagName, rs[best].TagName) > 0 { best = i } }`. Compare (internal/upgrade/version.go ~line 112) returns 0 when either operand is unparseable (ParseAndClean ok=false). ParseAndClean is the same-package normalizer. The existing test TestClient_Prerelease_PicksHighest uses all-parseable tags (v3.0.0-draft, v1.9.0, v2.0.0-rc1) and asserts v2.0.0-rc1 wins — it must still pass. There is NO test for a non-semver tag mixed with semver tags.\n2. INPUT: rs []ghRelease (the decoded GitHub /releases array, internal type). ParseAndClean(raw string) (string, bool) and Compare(a, b string) int — both same-package (version.go). No new inputs.\n3. LOGIC: In LatestAdmittingPrereleases (internal/upgrade/releases.go), modify the selection loop so a non-semver tag can NEVER win over a parseable one while preserving Compare's 0-for-unparseable contract (do NOT change version.go — Compare's dev-build defense for --check must remain). For each non-draft candidate compute `_, okCandidate := ParseAndClean(r.TagName)`. Advance best when: (a) best < 0; OR (b) okCandidate && !okBest (a parseable candidate beats an unparseable best); OR (c) okCandidate && okBest && Compare(r.TagName, rs[best].TagName) > 0 (both parseable, strict precedence). This deprioritizes non-semver tags without erroring. When ALL non-draft tags are unparseable, best remains the first non-draft (graceful — no ErrNoReleases since entries exist; consistent with current behavior for all-garbage input). Do NOT change the ErrNoReleases contract (empty array or all-drafts still yields ErrNoReleases). Mock nothing — use the existing httptest newFakeClient/statusServer test pattern.\n4. OUTPUT: LatestAdmittingPrereleases returns the highest-precedence PARSEABLE non-draft release; falls back to the first non-draft only if all are unparseable; ErrNoReleases for empty/all-drafts (unchanged). Add a NEW regression test in internal/upgrade/releases_test.go (e.g. TestClient_Prerelease_NonSemverDoesNotWin) with an httptest server serving a /releases array body of [{\"tag_name\":\"nightly\",\"prerelease\":true,\"draft\":false,\"assets\":[]},{\"tag_name\":\"v1.5.0\",\"prerelease\":true,\"draft\":false,\"assets\":[{\"name\":\"x\"}]}] and assert LatestAdmittingPrereleases returns Release{Tag:\"v1.5.0\"}. Add a second case where the valid tag PRECEDES the non-semver tag (order-independence). Verify TestClient_Prerelease_PicksHighest still passes.\n5. DOCS: [Mode A] Update the LatestAdmittingPrereleases doc comment (~line 210) to note that non-semver tags are deprioritized (a parseable tag always wins over an unparseable one). No user-facing CLI/config/API surface change."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T4",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Final changeset-level documentation sweep (Mode B). The three fixes restore intended behavior already described in the README and docs; they do NOT add new CLI flags, config keys, env vars, or public API surfaces. This task verifies the overview/feature docs are still accurate post-fix and updates them only if drift exists or a clarifying note is warranted. Per-doc touch updates (source doc comments) ride WITH each implementing subtask (Mode A); this task covers the cross-cutting overview docs.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T4.S1",
+                  "title": "Sweep README.md, docs/cli.md, and docs/configuration.md for accuracy against the three fixes",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T2.S1", "P1.M1.T3.S1"],
+                  "prd_selectors": ["h2.0", "h2.4", "h2.5", "h1.0"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/017_397abce9deb1/bugfix/001_45fde09aeb1e/architecture/system_context.md and bug_analysis.md. The three fixes (P1.M1.T1.S1 sanityCheck v-normalization, P1.M1.T2.S1 ~/go default GOPATH fallback, P1.M1.T3.S1 non-semver tag deprioritization) restore intended behavior. Relevant docs: README.md Updating section (~L146-154) describes `stagecoach upgrade` detecting the install method and delegating/self-swapping; docs/cli.md upgrade command section (~L402+) describes the command + flags; docs/configuration.md `[upgrade]` section (~L121+) describes `[upgrade].channel`. None of these change their CLI/config surface from the fixes. The per-function source doc comments are already updated by Mode A in each implementing subtask.\n2. INPUT: The completed fixes from P1.M1.T1.S1, P1.M1.T2.S1, P1.M1.T3.S1 (all three must be merged before this sweep).\n3. LOGIC: Review README.md (the Updating section and the FAQ that mentions go install as an install method ~L113), docs/cli.md (the upgrade command section), and docs/configuration.md (`[upgrade]` section) for any statement that became inaccurate or could be strengthened given the fixes. Specifically verify: (a) the README go-install install instructions (~L113 `go install …@latest`) and the make-install note (~L132 `$GOPATH/bin`) are consistent with the fixed ~/go detection; (b) the --prerelease flag description (docs/cli.md ~L412) is accurate; (c) no doc claims the sanity-run or detection behaves the buggy way. Update ONLY where drift exists or a one-line clarifying note materially helps users (e.g. noting that go install installs are auto-detected via ~/go/bin). If all docs are already accurate, record that finding and make no edits (the commit message documents the verification). Do NOT modify PRD.md or .gitignore.\n4. OUTPUT: Documentation that accurately reflects the fixed behavior, with a note (in the task result) of which files were touched or confirmed accurate.\n5. DOCS: [Mode B] This IS the changeset-level documentation sweep task (README + overview docs). Per-function source doc comments were already handled via Mode A in each implementing subtask."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
