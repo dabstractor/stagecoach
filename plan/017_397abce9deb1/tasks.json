@@ -465,21 +465,21 @@
           "type": "Milestone",
           "id": "P2.M2",
           "title": "Winget (Windows default package manager)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Automated Winget manifest submission per release tag via a winget-releaser GitHub Action, complementing Scoop (power users) to reach the broad Windows 11 audience.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M2.T1",
               "title": "Winget release automation (winget-releaser Action + PackageIdentifier)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Wire the winget-releaser Action into release.yml so each tag opens a PR to microsoft/winget-pkgs with the version's installer manifest, and decide the canonical PackageIdentifier.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M2.T1.S1",
                   "title": "winget-releaser Action step + PackageIdentifier + release-asset URL wiring",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §4. The winget-releaser Action (vedantmgoyal9/winget-releaser or russellbanks/winget-releaser — VERIFY the maintained fork at impl, record date) auto-generates the manifest YAML from the GitHub Release and opens a PR to microsoft/winget-pkgs. Inputs typically: identifier, version (from release), installers-URL (the windows_amd64.zip), token. PackageIdentifier convention: '<Publisher>.<Product>' → 'dabstractor.Stagecoach'. InstallerType: the goreleaser windows zip — winget extracts; or 'portable' for a bare exe. FR-D5: verify the Action's current input schema + the correct InstallerType at impl.\n2. INPUT: the goreleaser windows_amd64.zip download URL + its SHA256 (from checksums.txt) for the released tag; a GITHUB_TOKEN with winget-pkgs PR perms (or the Action uses the default GITHUB_TOKEN + the winget-pkgs bot accepts the PR).\n3. LOGIC: Add a winget job to .github/workflows/release.yml (runs after the GitHub Release exists): uses the winget-releaser Action with identifier 'dabstractor.Stagecoach', the release version, the installer URL (templated from the tag), release-id. Add the PackageIdentifier decision to a docs note. Gate it so a first-release without the identifier registered still passes (the Action may need an initial manual manifest submission to microsoft/winget-pkgs to establish the PackageIdentifier — document this one-time bootstrap as a release-day checklist item, not a code step).\n4. OUTPUT: release.yml winget job + inline docs. Document the one-time PackageIdentifier bootstrap.\n5. DOCS: [Mode A] release.yml comments; a docs note (README install section is Mode B / P3) — here add the winget specifics to a docs/packaging.md or release.yml comment.",
@@ -495,21 +495,21 @@
           "type": "Milestone",
           "id": "P2.M3",
           "title": "Nix flake (flake.nix, in-repo)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "An in-repo flake.nix (no external repo, no secret, no registry gatekeeping) powering nix run / nix profile install / devbox / nix-shell, plus a vendorHash maintenance workflow.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M3.T1",
               "title": "flake.nix + vendorHash workflow + nix flake check CI",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Author flake.nix using buildGoModule over the supported systems, keep vendorHash current, and add a nix flake check CI step so a stale vendorHash fails the build before release.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M3.T1.S1",
                   "title": "flake.nix (buildGoModule, default package, devShell) + nix flake check CI step",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: external_deps.md §5. flake.nix at repo root. buildGoModule { pname='stagecoach'; version (from the tag or 'unstable'); src=.{outPath=self;}; vendorHash; subPackages=['cmd/stagecoach']; CGO_ENABLED=0; }. Outputs over eachSystem [x86_64-linux aarch64-linux x86_64-darwin aarch64-darwin]. packages.default = the built binary; devShells.default = mkShell with go + gopls. vendorHash: set to lib.fakeHash initially, then run `nix build` to get the real hash; CI must keep it current (a stale hash after go.sum changes fails `nix flake check`).\n2. INPUT: go.mod (module path github.com/dabstractor/stagecoach, go 1.22), the cmd/stagecoach main package.\n3. LOGIC: New flake.nix + .gitignore entry (result, .direnv). Add a `nix-flake-check` job to .github/workflows/ci.yml: install Nix (cachix/install-nix-action), run `nix flake check` (this builds on linux; guard with continue-on-error:false but allow the vendorHash-mismatch to surface a clear message). Optionally add cachix for faster CI (DECISION: skip cachix for v3.0 — add later). Document the vendorHash update workflow (run `nix build`, copy the got-hash into flake.nix) in a comment + docs.\n4. OUTPUT: flake.nix + ci.yml nix job + .gitignore entries. Verify `nix flake check` passes locally (record in the subtask completion).\n5. DOCS: [Mode A] flake.nix header comment + a docs/packaging.md (or README install — README is Mode B/P3) Nix section.",
