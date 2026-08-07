@@ -1,14 +1,9 @@
 # Stagecoach — Future Spec (deferred & rejected ideas)
 
 Companion to `PRD.md` (v3.0). The PRD carries **no stubs or placeholders**: if a capability is
-described there, it is in scope. Everything else — ideas we like but haven't specified, ideas
-blocked on external factors, and ideas we have deliberately rejected — lives here, each with its
-reasoning, so future revisions don't re-litigate them from scratch.
-
-Dispositions were made against the source-level competitor review in `COMPETITOR-ANALYSIS.md`
-under three rules: features both incumbents (aicommits, opencommit) share are accepted as far as
-they agree with each other; anything contradicting the core feature set is disqualified even if
-both have it; the rest judged on simplicity and value.
+described there, it is in scope. Everything else — ideas we like but haven't specified, and ideas
+we have deliberately rejected — lives here, each with its reasoning, so future revisions don't
+re-litigate them from scratch.
 
 ---
 
@@ -68,28 +63,11 @@ All future targets inherit the FR-I3 no-mangle write protocol unchanged.
 
 ---
 
-## 2. Blocked — rejected until the world changes
-
-### 2.1 GitHub Action (CI message rewriting)
-
-opencommit's Action rewrites lazy commit messages on push, on a GitHub-hosted runner. It works
-**only because opencommit is an API-key tool**: the key sits in a repo secret and the runner
-bills per token. Stagecoach's entire thesis is spending a coding-plan quota through a locally
-authenticated agent CLI, and an ephemeral headless runner cannot do that without exporting OAuth
-credentials into repo-level secrets — per-provider, refresh-fragile, ToS-hostile, and it makes
-one person's personal plan pay for every contributor's pushes.
-
-One partial exception exists: Anthropic sanctions `claude setup-token` for CI use by Pro/Max
-subscribers. That is one provider's bespoke blessing, not a generalizable architecture across
-pi/opencode/codex. **Revisit only if providers standardize sanctioned headless
-plan-tokens.** Until then: rejected, not deferred-by-laziness.
-
----
-
-## 3. Rejected — deliberate, with reasons
+## 2. Rejected — deliberate, with reasons
 
 | Feature (competitor) | Why rejected |
 |---|---|
+| **GitHub Action / CI message rewriting** (opencommit) | Architecturally blocked, not a choice: a headless runner can only spend a coding-plan quota by exporting OAuth credentials into repo-level secrets — per-provider, refresh-fragile, ToS-hostile, and one person's plan pays for every contributor's push. opencommit's Action works *only* because it's an API-key tool, which is the architecture stagecoach exists to refuse. One carve-out: Anthropic's `claude setup-token` sanctions CI spend for Pro/Max subscribers — one provider's bespoke blessing, not generalizable across pi/opencode/codex. Revisit only if providers standardize sanctioned headless plan-tokens. |
 | **API-key HTTP providers, token limits, proxy/custom headers** (both) | PRD N2 is a permanent boundary: stagecoach never owns the model call. Both competitors have these; contradiction beats parity. |
 | **PR title/body generation** (aicommits, beta) | PRD §6.3, permanent: stagecoach writes commit messages, nothing else. Ranked #2 in the analysis; scope discipline wins anyway. |
 | **Interactive confirm loop as the default** (both) | Contradicts the non-interactive atomic design (lazygit `output: none` flows). The opt-in `--edit` (PRD §9.22) is the accepted form. |
