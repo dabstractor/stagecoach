@@ -23,11 +23,33 @@ environment variables (see [mise asdf-legacy-plugins](https://mise.jdx.dev/asdf-
 ```sh
 asdf plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach.git
 asdf install stagecoach latest
-asdf global  stagecoach latest
-stagecoach --version
 ```
 
-Pin a project to a version with a `.tool-versions` file:
+`asdf install` only downloads the binary — you also have to **select** a version for
+the `stagecoach` shim to resolve. The command depends on your asdf: **asdf 0.16**
+(the Go rewrite) replaced `global`/`local` with `set`.
+
+| Scope | asdf < 0.16 (classic) | asdf ≥ 0.16 (Go rewrite) |
+| --- | --- | --- |
+| Every shell (`~/.tool-versions`) | `asdf global stagecoach latest` | `asdf set --home stagecoach latest` |
+| Current project (`./.tool-versions`) | `asdf local stagecoach latest` | `asdf set stagecoach latest` |
+
+`latest` is resolved via `bin/latest-stable`, so the pinned value is concrete
+(e.g. `0.1.10`), not the literal string `latest`.
+
+> **PATH prerequisite.** For *any* asdf-managed tool to run, asdf's shims directory
+> (`~/.asdf/shims`, i.e. `$ASDF_DATA_DIR/shims`) must be on `PATH` — that's part of
+> asdf's own setup, not the plugin's. If `asdf install` succeeds but `stagecoach`
+> reports `command not found`, add this to your shell rc:
+> `export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"`.
+
+```sh
+stagecoach --version      # → stagecoach version 0.1.10
+asdf current stagecoach   # confirm which version is active
+```
+
+Pin a project to an exact version with a `.tool-versions` file (read by both asdf
+variants and by mise):
 
 ```
 stagecoach 1.2.3
@@ -35,14 +57,21 @@ stagecoach 1.2.3
 
 ## Install (mise)
 
-mise runs the SAME asdf plugin scripts — the commands below work unchanged:
+mise runs the SAME asdf plugin scripts, so `latest` is resolved by mise with no
+extra setup:
 
 ```sh
 mise plugin add stagecoach https://github.com/dabstractor/asdf-stagecoach.git
 mise install stagecoach@latest
-mise use -g stagecoach@latest
+mise use -g stagecoach@latest      # global; drop -g to pin just this project
 stagecoach --version
 ```
+
+> **Activation prerequisite.** For mise-managed tools to be found as bare commands,
+> mise must be activated in your shell — add this ONE line to your shell rc:
+> `eval "$(mise activate zsh)"` (use `bash` or `fish` as appropriate). Without it
+> the install still works (`mise exec stagecoach -- stagecoach …` always runs) but a
+> plain `stagecoach` won't resolve.
 
 Pin a project to a version in `mise.toml`:
 
