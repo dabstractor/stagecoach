@@ -47,13 +47,11 @@ jobs:
         with:
           version: latest           # the goreleaser BINARY version (pin e.g. ~> v2 for reproducibility).
           # Homebrew + Scoop pipes are now ENABLED: the tap repo (dabstractor/homebrew-stagecoach) and
-          # bucket repo (dabstractor/stagecoach-bucket) + their PAT secrets (HOMEBREW_TAP_GITHUB_TOKEN,
-          # SCOOP_BUCKET_GITHUB_TOKEN) are stood up per docs/packaging.md. AUR stays SKIPPED
-          # (best-effort, PRD §21.2) until an AUR account + AUR_SSH_PRIVATE_KEY exist AND the
-          # .goreleaser.yaml `aurs:` maintainers: line carries the real identity — then drop
-          # `--skip=aur` here. GATING: tag only AFTER the tap/bucket repos + their secrets exist,
-          # or this job fails cloning a nonexistent repo.
-          args: release --clean --skip=aur
+          # Homebrew + Scoop + AUR pipes are all ENABLED: the tap (dabstractor/homebrew-stagecoach),
+          # bucket (dabstractor/stagecoach-bucket), and AUR (`stagecoach` via AUR_SSH_PRIVATE_KEY) +
+          # their secrets are stood up per docs/packaging.md. No `--skip` flags remain. GATING: tag
+          # only AFTER the tap/bucket/AUR targets + their secrets exist, or this job fails cloning.
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
