@@ -162,7 +162,7 @@ type DelegateResult struct {
 
 	// Command is the executed/printed command as a single string. For RUN channels it is the argv
 	// space-joined (and " && "-joined for asdf's install+global 2-step). For PRINT channels it is the
-	// PRIMARY command (the first line of the printed text — e.g. "sudo pacman -Syu stagecoach-bin"),
+	// PRIMARY command (the first line of the printed text — e.g. "sudo pacman -Syu stagecoach"),
 	// so the command layer can surface "to update, run: <Command>" without re-parsing the print body.
 	Command string
 
@@ -344,8 +344,8 @@ func printCommand(ch Channel) (primary, full string) {
 	case ChannelAUR:
 		// AUR/pacman needs root — print the exact command for the user (FR-U4: never auto-sudo). The
 		// alternative (yay) covers AUR-helper users. sudo appears ONLY here (never in a RUN argv).
-		primary = "sudo pacman -Syu stagecoach-bin"
-		full = "sudo pacman -Syu stagecoach-bin\n# (or, with an AUR helper: yay -Syu stagecoach-bin)"
+		primary = "sudo pacman -Syu stagecoach"
+		full = "sudo pacman -Syu stagecoach\n# (or, with an AUR helper: yay -Syu stagecoach)"
 		return primary, full
 	case ChannelNix:
 		// Nix is immutable/declarative — no in-place swap. Print the imperative-profile command as the

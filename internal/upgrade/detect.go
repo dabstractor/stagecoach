@@ -265,7 +265,7 @@ type pmProbe struct {
 // winget/npm/mise/asdf list everything and we grep the listing for "stagecoach" (grepConfirm).
 var pmProbes = []pmProbe{
 	{channel: ChannelBrew, goos: []string{"darwin", "linux"}, name: "brew", args: []string{"list", "stagecoach"}, confirm: exit0Confirm},
-	{channel: ChannelAUR, goos: []string{"linux"}, name: "pacman", args: []string{"-Q", "stagecoach-bin"}, confirm: exit0Confirm},
+	{channel: ChannelAUR, goos: []string{"linux"}, name: "pacman", args: []string{"-Q", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelDeb, goos: []string{"linux"}, name: "dpkg", args: []string{"-s", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelRpm, goos: []string{"linux"}, name: "rpm", args: []string{"-q", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelScoop, goos: []string{"windows"}, name: "scoop", args: []string{"prefix", "stagecoach"}, confirm: exit0Confirm},

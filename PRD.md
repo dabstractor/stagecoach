@@ -603,7 +603,7 @@ The command is walled off from the commit-generation core: it acquires no run lo
   - **npm** → `npm install -g stagecoach-ai@latest` (detect pnpm/yarn/bun globals and emit the matching syntax)
   - **mise** → `mise upgrade stagecoach`
   - **asdf** → `asdf install stagecoach latest` (+ `asdf global stagecoach latest` if it was global)
-  - **AUR** → print `sudo pacman -Syu stagecoach-bin` (or the AUR-helper form, e.g. `yay -Syu stagecoach-bin`); do NOT run it (system-wide, needs root — FR-U4)
+  - **AUR** → print `sudo pacman -Syu stagecoach` (or the AUR-helper form, e.g. `yay -Syu stagecoach`); do NOT run it (system-wide, needs root — FR-U4)
   - **Nix** → print the flake-input/profile update (`nix flake update` on the user's config, or `nix profile upgrade`) and refuse — Nix installs are immutable; there is no in-place binary to swap
   - **.deb (Debian/Ubuntu/Mint)** → print `sudo apt install --only-upgrade stagecoach` (with the no-repo fallback: download the new `stagecoach_<v>_linux_<arch>.deb` from Releases and `sudo apt install ./…deb`); do NOT run it (system-wide, needs root — FR-U4) and do NOT self-swap (FR-U1: `/usr/bin/stagecoach` is dpkg-owned)
   - **.rpm (Fedora/RHEL/Rocky/Alma/SUSE)** → print `sudo dnf upgrade stagecoach` (no-repo fallback: download the new `.rpm` and `sudo dnf install ./…rpm`); do NOT run / self-swap (FR-U1/FR-U4)
@@ -2194,7 +2194,7 @@ Go modules. `make build` → `./bin/stagecoach`. `make test`, `make lint`, `make
 
 - Archives + standalone binaries for `linux/darwin/windows × amd64/arm64`.
 - Homebrew formula to a tap repo (`dabstractor/homebrew-stagecoach`; tap namespace = `dabstractor/stagecoach`).
-- AUR `stagecoach` + `stagecoach-bin` (via a maintained PKGBUILD; possibly community).
+- AUR `stagecoach` (prebuilt-binary package via goreleaser; a future `stagecoach-git` from-source variant is community/out-of-scope).
 - Scoop manifest (Windows) to a bucket (`dabstractor/stagecoach-bucket`).
 - `.deb` (Debian/Ubuntu/Mint) + `.rpm` (Fedora/RHEL/Rocky/Alma/openSUSE) packages via goreleaser's native `nfpms:` pipe — `stagecoach_<v>_linux_{amd64,arm64}.{deb,rpm}` in every Release; install to `/usr/bin`. There is no apt/dnf **repo** (the PM updaters cannot fetch a new version), so `stagecoach upgrade` detects the `deb`/`rpm` channels (FR-U2) and prints the manual reinstall recipe (FR-U3) instead of self-swapping a PM-owned file (FR-U1).
 - Checksums + a changelog.

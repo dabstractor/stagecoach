@@ -150,8 +150,8 @@ func TestDelegate_PrintChannels(t *testing.T) {
 		{
 			name:        "aur",
 			ch:          ChannelAUR,
-			primary:     "sudo pacman -Syu stagecoach-bin",
-			containsAll: []string{"sudo pacman -Syu stagecoach-bin", "yay -Syu stagecoach-bin"},
+			primary:     "sudo pacman -Syu stagecoach",
+			containsAll: []string{"sudo pacman -Syu stagecoach", "yay -Syu stagecoach"},
 		},
 		{
 			name:        "nix",
