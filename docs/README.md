@@ -23,9 +23,6 @@ curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 scoop install dabstractor/stagecoach
 ```
 
-> [!NOTE]
-> The `install.sh` script is published with the first release. Until then, use Homebrew, `go install`, or Scoop. See the README for details.
-
 ## Documentation index
 
 | Page | Description |
