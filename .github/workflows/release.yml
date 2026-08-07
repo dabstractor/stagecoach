@@ -179,3 +179,54 @@ jobs:
           git commit -m "mirror stagecoach plugin ${VERSION} from dabstractor/stagecoach"
           git branch -M main     # normalize branch name (first-push-into-empty-repo safe)
           git push -u origin main
+
+  # --- apt + dnf repo on GitHub Pages (PRD §21.2/§21.3) ------------------------
+  # Hosts signed apt (Debian/Ubuntu) + dnf (Fedora/RHEL) repos as a static site on the `gh-pages`
+  # branch, served at https://dabstractor.github.io/stagecoach/{apt,rpm}/. No external service.
+  # apt: dists/stable/{InRelease,Release.gpg} signed by the stagecoach apt GPG key
+  # (APT_GPG_PRIVATE_KEY; public half committed at apt-archive-keyring.asc). dnf: repodata via
+  # createrepo_c (nfpm RPMs are not GPG-signed, so the repo ships gpgcheck=0). Accumulates versions:
+  # the existing gh-pages is cloned, the new .deb/.rpm are added to the pool, and ALL metadata is
+  # rebuilt + resigned every release (so Packages/Release always cover every published version).
+  # ONE-TIME manual step: enable GitHub Pages (repo Settings → Pages → source: branch `gh-pages` / root).
+  apt-dnf-repo:
+    name: Publish apt + dnf repo → gh-pages
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install repo tools (apt-utils, createrepo-c)
+        run: sudo apt-get update && sudo apt-get install -y apt-utils createrepo-c
+
+      - name: Download .deb + .rpm from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/newpkgs
+          gh release download "${{ github.ref_name }}" -R dabstractor/stagecoach -D /tmp/newpkgs -p '*.deb' -p '*.rpm'
+
+      - name: Fetch existing gh-pages (so old versions accumulate)
+        run: |
+          if git clone --branch gh-pages --depth 1 "https://github.com/dabstractor/stagecoach.git" /tmp/repo 2>/dev/null; then
+            rm -rf /tmp/repo/.git
+          else
+            mkdir -p /tmp/repo
+          fi
+
+      - name: Build + sign the apt + dnf repo
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          KEY_ID: F8E3C83C0071B25F69A6960E58549A92EB342930
+        run: bash .github/scripts/build-apt-dnf-repo.sh /tmp/newpkgs /tmp/repo
+
+      - name: Publish to gh-pages
+        run: |
+          cd /tmp/repo
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "apt + dnf repo update for ${{ github.ref_name }}" || echo "nothing to commit"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/dabstractor/stagecoach.git" gh-pages

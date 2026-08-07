@@ -22,6 +22,15 @@ curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 # Windows (Scoop)
 scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
 scoop install stagecoach/stagecoach
+
+# Debian/Ubuntu (apt repo)
+curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/apt-archive-keyring.asc | sudo gpg --dearmor -o /etc/apt/keyrings/stagecoach.gpg
+echo "deb [signed-by=/etc/apt/keyrings/stagecoach.gpg] https://dabstractor.github.io/stagecoach/apt stable main" | sudo tee /etc/apt/sources.list.d/stagecoach.list >/dev/null
+sudo apt update && sudo apt install stagecoach
+
+# Fedora/RHEL (dnf repo)
+sudo curl -fsSL https://dabstractor.github.io/stagecoach/rpm/stagecoach.repo -o /etc/yum.repos.d/stagecoach.repo
+sudo dnf install stagecoach
 ```
 
 ## Documentation index

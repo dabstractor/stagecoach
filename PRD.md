@@ -2236,11 +2236,20 @@ nix profile install github:dabstractor/stagecoach
 # mise / asdf (version-manager users)
 mise use stagecoach@latest   # or: asdf plugin add stagecoach && asdf install stagecoach latest
 
-# Linux — native packages from GitHub Releases (Debian/Ubuntu & Fedora/RHEL families)
-#   .deb:  download stagecoach_<version>_linux_amd64.deb  (or _arm64), then:
-sudo apt install ./stagecoach_<version>_linux_amd64.deb
-#   .rpm:  download stagecoach_<version>_linux_amd64.rpm  (or _arm64), then:
-sudo dnf install ./stagecoach_<version>_linux_amd64.rpm
+# Debian/Ubuntu (apt repo — updates flow through apt)
+curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/apt-archive-keyring.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/stagecoach.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/stagecoach.gpg] https://dabstractor.github.io/stagecoach/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/stagecoach.list
+sudo apt update && sudo apt install stagecoach
+
+# Fedora/RHEL (dnf repo — updates flow through dnf)
+sudo curl -fsSL https://dabstractor.github.io/stagecoach/rpm/stagecoach.repo -o /etc/yum.repos.d/stagecoach.repo
+sudo dnf install stagecoach
+
+# No repo? Grab the raw .deb/.rpm from the latest GitHub Release and install directly:
+#   sudo apt install ./stagecoach_<version>_linux_amd64.deb
+#   sudo dnf install ./stagecoach_<version>_linux_amd64.rpm
 ```
 
 ### 21.4 Versioning
