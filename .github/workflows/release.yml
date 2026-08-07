@@ -2,8 +2,9 @@
 # Triggered ONLY on `v*` tags. CI (build/test/lint/coverage) lives in ci.yml (P1.M5.T3.S1).
 # Required repo SECRETS (Settings → Secrets → Actions), needed ONLY for a REAL release (not for config
 # validation; `goreleaser release --snapshot` publishes nothing):
-#   HOMEBREW_TAP_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/homebrew-tap
-#   SCOOP_BUCKET_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/scoop-bucket
+#   HOMEBREW_TAP_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/homebrew-stagecoach
+#   SCOOP_BUCKET_GITHUB_TOKEN  fine-grained PAT, contents:write on dabstractor/stagecoach-bucket
+#   ASDF_TOKEN                 fine-grained PAT, contents:write on dabstractor/asdf-stagecoach (mirrors the plugin)
 #   AUR_SSH_PRIVATE_KEY        SSH private key for the AUR account (only if the `aurs:` block is kept)
 #   NPM_TOKEN                  npm AUTOMATION token (npmjs.com → Access Tokens → "Automation";
 #                              bypasses publish 2FA for non-interactive CI). Settings → Secrets → Actions.
@@ -45,8 +46,8 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest           # the goreleaser BINARY version (pin e.g. ~> v2 for reproducibility).
-          # Homebrew + Scoop pipes are now ENABLED: the tap repo (dabstractor/homebrew-tap) and
-          # bucket repo (dabstractor/scoop-bucket) + their PAT secrets (HOMEBREW_TAP_GITHUB_TOKEN,
+          # Homebrew + Scoop pipes are now ENABLED: the tap repo (dabstractor/homebrew-stagecoach) and
+          # bucket repo (dabstractor/stagecoach-bucket) + their PAT secrets (HOMEBREW_TAP_GITHUB_TOKEN,
           # SCOOP_BUCKET_GITHUB_TOKEN) are stood up per docs/packaging.md. AUR stays SKIPPED
           # (best-effort, PRD §21.2) until an AUR account + AUR_SSH_PRIVATE_KEY exist AND the
           # .goreleaser.yaml `aurs:` maintainers: line carries the real identity — then drop
@@ -136,3 +137,47 @@ jobs:
           fork-user: dabstractor               # Komac forks microsoft/winget-pkgs → dabstractor/winget-pkgs
           max-versions-to-keep: '0'            # keep all versions (0 = keep all; the default)
           token: ${{ secrets.WINGET_TOKEN }}   # classic PAT, public_repo scope (NOT the default GITHUB_TOKEN)
+
+  # --- asdf / mise plugin mirror (PRD §21.2/§21.3; G27) ----------------------------------------
+  # The asdf plugin's single source of truth is plugins/asdf-stagecoach/ in THIS repo. asdf/mise
+  # require bin/install + bin/list-all at the ROOT of the plugin's own git repo (they clone it
+  # whole), so a separate repo (dabstractor/asdf-stagecoach) is unavoidable. Rather than a fragile
+  # git submodule (forces --recurse-submodules on every CI/contributor clone; couples the main repo
+  # to a pinned aux-repo commit; and is inconsistent with how Homebrew/Scoop are handled), this job
+  # MIRRORS plugins/asdf-stagecoach/* to the root of dabstractor/asdf-stagecoach on every release.
+  # The aux repo is a read-only, never-hand-edited mirror → exactly ONE source of truth. This is the
+  # same "source here, generated there" architecture as the goreleaser-native Homebrew/Scoop pipes.
+  asdf-mirror:
+    name: Mirror asdf plugin → dabstractor/asdf-stagecoach
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mirror plugins/asdf-stagecoach to the plugin repo root
+        env:
+          ASDF_TOKEN: ${{ secrets.ASDF_TOKEN }}   # fine-grained PAT, contents:write on dabstractor/asdf-stagecoach
+          VERSION: ${{ github.ref_name }}          # vX.Y.Z — recorded in the mirror commit message
+        run: |
+          set -eu
+          # Commit identity: github-actions[bot] on the MIRROR repo only (standard release-automation
+          # identity — same kind of bot commit goreleaser makes to the Homebrew tap / Scoop bucket /
+          # AUR; it does not touch the stagecoach source repo's commit metadata). AGENTS.md rule 3
+          # (FR-39a) governs the source repo; this mirror commit is release plumbing.
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CLONE_DIR="$(mktemp -d)"
+          git clone "https://x-access-token:${ASDF_TOKEN}@github.com/dabstractor/asdf-stagecoach.git" "$CLONE_DIR"
+          # Replace the whole tree (catches deletions; leaves no stale files) except .git.
+          find "$CLONE_DIR" -mindepth 1 -not -path '*.git*' -delete
+          cp -a plugins/asdf-stagecoach/. "$CLONE_DIR/"
+          cd "$CLONE_DIR"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no plugin changes to mirror; skipping push"
+            exit 0
+          fi
+          git commit -m "mirror stagecoach plugin ${VERSION} from dabstractor/stagecoach"
+          git branch -M main     # normalize branch name (first-push-into-empty-repo safe)
+          git push -u origin main

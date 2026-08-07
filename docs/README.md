@@ -11,7 +11,7 @@ See the [README](../README.md) for the quick start, feature overview, and FAQ.
 
 ```bash
 # Homebrew (macOS / Linuxbrew)
-brew install dabstractor/tap/stagecoach
+brew install dabstractor/stagecoach/stagecoach
 
 # Go install (anywhere with Go)
 go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
@@ -20,7 +20,8 @@ go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
 curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 
 # Windows (Scoop)
-scoop install dabstractor/stagecoach
+scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
+scoop install stagecoach/stagecoach
 ```
 
 ## Documentation index

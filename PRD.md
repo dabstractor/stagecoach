@@ -2193,9 +2193,9 @@ Go modules. `make build` → `./bin/stagecoach`. `make test`, `make lint`, `make
 `.goreleaser.yaml` produces:
 
 - Archives + standalone binaries for `linux/darwin/windows × amd64/arm64`.
-- Homebrew formula to a tap repo (`dabstractor/homebrew-tap`).
+- Homebrew formula to a tap repo (`dabstractor/homebrew-stagecoach`; tap namespace = `dabstractor/stagecoach`).
 - AUR `stagecoach` + `stagecoach-bin` (via a maintained PKGBUILD; possibly community).
-- Scoop manifest (Windows) to a bucket.
+- Scoop manifest (Windows) to a bucket (`dabstractor/stagecoach-bucket`).
 - `.deb` (Debian/Ubuntu/Mint) + `.rpm` (Fedora/RHEL/Rocky/Alma/openSUSE) packages via goreleaser's native `nfpms:` pipe — `stagecoach_<v>_linux_{amd64,arm64}.{deb,rpm}` in every Release; install to `/usr/bin`. There is no apt/dnf **repo** (the PM updaters cannot fetch a new version), so `stagecoach upgrade` detects the `deb`/`rpm` channels (FR-U2) and prints the manual reinstall recipe (FR-U3) instead of self-swapping a PM-owned file (FR-U1).
 - Checksums + a changelog.
 - `go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest` works from the tagged commit.
@@ -2212,7 +2212,7 @@ Go modules. `make build` → `./bin/stagecoach`. `make test`, `make lint`, `make
 
 ```bash
 # Homebrew (macOS / Linuxbrew)
-brew install dabstractor/tap/stagecoach
+brew install dabstractor/stagecoach/stagecoach
 
 # Go install (anywhere with Go)
 go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
@@ -2221,7 +2221,8 @@ go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
 curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 
 # Windows (Scoop)
-scoop install dabstractor/stagecoach
+scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
+scoop install stagecoach/stagecoach
 
 # Windows (Winget — the Win11 default)
 winget install dabstractor.stagecoach

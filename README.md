@@ -92,10 +92,11 @@ Pick whichever channel matches your platform or workflow (commands per [PRD §21
 
 ```bash
 # Homebrew (macOS / Linuxbrew)
-brew install dabstractor/tap/stagecoach
+brew install dabstractor/stagecoach/stagecoach
 
 # Windows (Scoop)
-scoop install dabstractor/stagecoach
+scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
+scoop install stagecoach/stagecoach
 
 # Windows (Winget — the Win11 default)
 winget install dabstractor.stagecoach

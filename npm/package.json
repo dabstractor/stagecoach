@@ -5,6 +5,10 @@
   "bin": {
     "stagecoach": "./bin/stagecoach.js"
   },
+  "files": [
+    "bin",
+    "install.cjs"
+  ],
   "scripts": {
     "postinstall": "node install.cjs"
   },
