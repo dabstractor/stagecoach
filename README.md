@@ -101,8 +101,8 @@ scoop install stagecoach/stagecoach
 # Windows (Winget — the Win11 default)
 winget install dabstractor.stagecoach
 
-# npm (zero-install trial: npx stagecoach; or global install)
-npm install -g @dabstractor/stagecoach
+# npm (zero-install trial: npx stagecoach-ai; or global install)
+npm install -g stagecoach-ai
 
 # Nix (flake — no channel/registry needed)
 nix profile install github:dabstractor/stagecoach

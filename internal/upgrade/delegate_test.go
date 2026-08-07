@@ -205,7 +205,7 @@ func TestDelegate_PrintChannels(t *testing.T) {
 // TestDelegate_NpmVariant asserts the npm-family command syntax follows the injected Env:
 // PNPM_HOME ⇒ pnpm add -g; BUN_INSTALL ⇒ bun add -g; nil/empty Env ⇒ npm install -g.
 func TestDelegate_NpmVariant(t *testing.T) {
-	pkg := "@dabstractor/stagecoach@latest"
+	pkg := "stagecoach-ai@latest"
 	cases := []struct {
 		name string
 		env  func(string) string

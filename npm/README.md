@@ -1,11 +1,11 @@
-# @dabstractor/stagecoach
+# stagecoach-ai
 
-`@dabstractor/stagecoach` is a thin npm wrapper that downloads the **stagecoach** native binary at install time (via a `postinstall` script) and execs it on every `stagecoach` invocation. stagecoach is a snapshot-based AI commit-message generator that uses YOUR local CLI agent. If the `postinstall` download was blocked (for example by running `npm install --ignore-scripts` or a corporate npm mirror that disables scripts), the `stagecoach` command prints a message pointing at https://github.com/dabstractor/stagecoach#install — install directly or use a package manager that allows `postinstall`.
+`stagecoach-ai` is a thin npm wrapper that downloads the **stagecoach** native binary at install time (via a `postinstall` script) and execs it on every `stagecoach` invocation. stagecoach is a snapshot-based AI commit-message generator that uses YOUR local CLI agent. If the `postinstall` download was blocked (for example by running `npm install --ignore-scripts` or a corporate npm mirror that disables scripts), the `stagecoach` command prints a message pointing at https://github.com/dabstractor/stagecoach#install — install directly or use a package manager that allows `postinstall`.
 
 ## Install
 
 ```sh
-npm install -g @dabstractor/stagecoach
+npm install -g stagecoach-ai
 stagecoach
 ```
 
@@ -23,8 +23,8 @@ goreleaser has no native npm pipe, so an `npm-publish` job (in `release.yml`) ru
 2. `npm install --ignore-scripts --no-package-lock` — validates the `tar` / `extract-zip` deps
    resolve WITHOUT running `postinstall` (the native binary is fetched at *user* install time, not
    publish time) and WITHOUT writing a lockfile into the tarball.
-3. `npm publish --access public` — the package is scoped (`@dabstractor/...`), so `--access public`
-   is required.
+3. `npm publish` — the package is **unscoped** (`stagecoach-ai`), so it is public by default; no
+   `--access` flag is needed (that flag is scoped-packages-only).
 
 **Required secret:** `NPM_TOKEN` — an npm **automation** token (npmjs.com → Access Tokens →
 "Automation"), which bypasses publish 2FA for non-interactive CI. Add it under the repo's

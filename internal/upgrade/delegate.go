@@ -35,7 +35,7 @@ import (
 
 // npmPackage is the npm registry package spec for stagecoach. It is shared by the npm, pnpm, and bun
 // variant argvs (they differ only in the command verb: npm uses "install", pnpm/bun use "add").
-const npmPackage = "@dabstractor/stagecoach@latest"
+const npmPackage = "stagecoach-ai@latest"
 
 // ErrDirectSwap is returned by Delegate when the detected channel is ChannelDirect. The direct
 // channel (a standalone binary, not managed by any package manager) is NOT delegated — its update
@@ -307,7 +307,7 @@ func runArgv(ch Channel, opts DelegateOptions) [][]string {
 // resolved ChannelNpm, so it never shells out to `npm config`/`which pnpm` (that would be detection,
 // not delegation). yarn is intentionally deferred: berry removed the `global` subcommand so
 // yarn-global is genuinely unreliable; defaulting to npm is safe because the package is the same
-// (@dabstractor/stagecoach). The variant→argv map in runArgv is trivially extensible.
+// (stagecoach-ai). The variant→argv map in runArgv is trivially extensible.
 func npmVariant(env func(string) string) string {
 	if env == nil {
 		return "npm"

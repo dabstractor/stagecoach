@@ -61,7 +61,7 @@ jobs:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
   # --- npm wrapper publish (PRD §21.2 "Beyond goreleaser"; external_deps.md §3) ----------------
-  # goreleaser has NO native npm pipe, so @dabstractor/stagecoach is published by a SEPARATE job.
+  # goreleaser has NO native npm pipe, so stagecoach-ai is published by a SEPARATE job.
   # `needs: goreleaser` ensures the GitHub Release (archives + checksums) EXISTS before users
   # `npm install` — the postinstall fetches the binary from that Release. Without `needs:` the two
   # jobs run concurrently and npm could publish before the Release exists, 404'ing early installers.
@@ -87,7 +87,7 @@ jobs:
         working-directory: npm
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"   # refs/tags/v1.2.0 -> 1.2.0 ; v1.2.0-rc.1 -> 1.2.0-rc.1
-          echo "Publishing @dabstractor/stagecoach@$VERSION"
+          echo "Publishing stagecoach-ai@$VERSION"
           npm version "$VERSION" --no-git-tag-version
 
       - name: Validate deps resolve (no postinstall, no lockfile)
@@ -99,11 +99,11 @@ jobs:
         run: npm install --ignore-scripts --no-package-lock
 
       - name: Publish to npm
-        # --access public: REQUIRED — @dabstractor/stagecoach is scoped (scoped packages default to
-        #   private/restricted; a bare `npm publish` is rejected or publishes privately).
+        # The package is UNSCOPED (stagecoach-ai) — public by default, so no `--access` flag is needed
+        # (that flag is scoped-packages-only). If the package is ever re-scoped, re-add `--access public`.
         # NODE_AUTH_TOKEN is resolved from THIS step's env by the ~/.npmrc that setup-node wrote.
         working-directory: npm
-        run: npm publish --access public
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

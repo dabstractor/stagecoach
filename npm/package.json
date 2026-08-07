@@ -1,5 +1,5 @@
 {
-  "name": "@dabstractor/stagecoach",
+  "name": "stagecoach-ai",
   "version": "0.0.0",
   "description": "Thin npm wrapper that downloads and runs the stagecoach native binary — a snapshot-based AI commit-message generator that uses YOUR local CLI agent.",
   "bin": {

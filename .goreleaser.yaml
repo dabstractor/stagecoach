@@ -74,7 +74,7 @@ release:
   # its NATIVE pipes here only — Homebrew (`brews:` below), Scoop (`scoops:` below), AUR (`aurs:`
   # below, best-effort) — plus the 6 archives + checksums.txt. The REMAINING channels are
   # "Beyond goreleaser" (PRD §21.2), implemented as separate CI/release artifacts, NOT goreleaser pipes:
-  #   • npm       — release.yml `npm-publish` job → @dabstractor/stagecoach (npm/ wrapper)
+  #   • npm       — release.yml `npm-publish` job → stagecoach-ai (npm/ wrapper)
   #   • WinGet    — release.yml `winget` job → vedantmgoyal9/winget-releaser → microsoft/winget-pkgs
   #   • Nix       — flake.nix (nix profile install github:dabstractor/stagecoach)
   #   • mise/asdf — plugins/asdf-stagecoach/ (one POSIX-sh plugin serves both; see docs/packaging.md)

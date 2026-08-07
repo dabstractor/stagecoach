@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 // (a) FR-U2: tag every invocation so `stagecoach upgrade` detects npm + delegates
-//     to `npm install -g @dabstractor/stagecoach@latest` (FR-U3) instead of
+//     to `npm install -g stagecoach-ai@latest` (FR-U3) instead of
 //     self-swapping the cached binary. MUST be set on process.env BEFORE spawning
 //     so the native child inherits it via { env: process.env }.
 process.env.STAGECOACH_INSTALL_METHOD = 'npm';

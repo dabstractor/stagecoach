@@ -201,7 +201,7 @@ The README hero pitch, verbatim candidate:
 - **G24.** Implement **orphaned-run lock reclamation** (§9.27): when stagecoach's launcher closes without killing it (the lazygit/IDE case), a parent-death watchdog self-exits the run through the rescue + lock-release path so a reparented, still-running holder cannot hold the per-repo run lock forever; add `SIGHUP` to the caught signals; add a read-only `stagecoach lock status`. Self-termination only — never contender-side force-breaking (FR52's guarantee preserved).
 - **G25.** Render every built-in provider **chrome-less** (§9.28): skills, extensions/prompt-templates, context files, and MCP servers disabled wherever the agent CLI exposes a switch (pi today; claude via `--tools ""`/`--setting-sources ""`), with any MCP-disable flag set explicitly (pi has no `--no-mcp` today) and any surface a read-only-constrained provider cannot switch off (codex/cursor/opencode/agy/qwen-code) documented as a tracked limitation — so a commit-message call never loads agent chrome it does not need.
 - **G26.** Implement **self-update** (§9.29): `stagecoach upgrade [--check|--version <v>|--prerelease|--force|--rollback|--install-method <m>|--yes]` — an install-method-aware, **delegate-first** updater. It detects how the binary was installed (Homebrew, Scoop, Winget, AUR, npm, go install, Nix, mise/asdf, direct) and delegates to that channel's native updater wherever one exists, prints the command where running it needs privileges or is declarative, and falls back to a SHA256-verified, atomic, rollback-able direct-binary swap ONLY for the direct-binary channel. Supersedes the v2.1 rejection of self-update (Appendix F); walled off from the commit core (no repo, lock, index, or provider interaction); §19's "no network calls" is scoped to the commit path and this is its named exception.
-- **G27.** Expand the **distribution surface** (§21) to the channels the tool's audience actually lives in: an **npm wrapper** package (thin JS shim + postinstall platform-binary download → `npx stagecoach` / `npm i -g stagecoach`, the most universal reach), **Winget** (the Windows default, complementing Scoop), a **Nix flake** (`flake.nix` in-repo; no external repo or secret), and **mise/asdf** plugins (tiny shell-script plugins pointing at GitHub Releases). Brew/Scoop/AUR/go-install/GitHub-Releases remain as in G9. Build/release plumbing only — no FR surface.
+- **G27.** Expand the **distribution surface** (§21) to the channels the tool's audience actually lives in: an **npm wrapper** package (thin JS shim + postinstall platform-binary download → `npx stagecoach-ai` / `npm i -g stagecoach-ai`, the most universal reach), **Winget** (the Windows default, complementing Scoop), a **Nix flake** (`flake.nix` in-repo; no external repo or secret), and **mise/asdf** plugins (tiny shell-script plugins pointing at GitHub Releases). Brew/Scoop/AUR/go-install/GitHub-Releases remain as in G9. Build/release plumbing only — no FR surface.
 - **G28.** Add **native Linux package formats** `.deb` and `.rpm` to the release surface (§21.2/§21.3) via goreleaser's `nfpms:` pipe — no external apt/dnf repo, no CI step; the four `stagecoach_<v>_linux_{amd64,arm64}.{deb,rpm}` assets ship in every GitHub Release. `stagecoach upgrade` detects these installs (FR-U2 `deb`/`rpm` channels) and prints the manual update recipe (FR-U3) rather than self-swapping a package-manager-owned `/usr/bin/stagecoach` (FR-U1). Distribution plumbing + upgrade-detection only — no commit-path FR surface.
 
 ### 6.2 Non-goals (v1 — explicitly deferred)
@@ -600,7 +600,7 @@ The command is walled off from the commit-generation core: it acquires no run lo
   - **Homebrew** → `brew upgrade stagecoach`
   - **Scoop** → `scoop update stagecoach`
   - **Winget** → `winget upgrade stagecoach`
-  - **npm** → `npm install -g @dabstractor/stagecoach@latest` (detect pnpm/yarn/bun globals and emit the matching syntax)
+  - **npm** → `npm install -g stagecoach-ai@latest` (detect pnpm/yarn/bun globals and emit the matching syntax)
   - **mise** → `mise upgrade stagecoach`
   - **asdf** → `asdf install stagecoach latest` (+ `asdf global stagecoach latest` if it was global)
   - **AUR** → print `sudo pacman -Syu stagecoach-bin` (or the AUR-helper form, e.g. `yay -Syu stagecoach-bin`); do NOT run it (system-wide, needs root — FR-U4)
@@ -2201,7 +2201,7 @@ Go modules. `make build` → `./bin/stagecoach`. `make test`, `make lint`, `make
 - `go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest` works from the tagged commit.
 
 **Beyond goreleaser (v3.0, → G27)** — the channels goreleaser has no native pipe for, built by separate CI steps:
-- **npm wrapper** (`@dabstractor/stagecoach`): a thin JS package whose `postinstall` detects `process.platform`/`process.arch`, downloads the matching prebuilt binary from GitHub Releases into a cache, SHA256-verifies it against `checksums.txt`, and whose `bin` field execs the cached binary — the `esbuild`/`turbo`/`prisma` pattern. Gives `npx stagecoach` (zero-install trial) and `npm i -g stagecoach`. The wrapper sets `STAGECOACH_INSTALL_METHOD=npm` on every invocation so `stagecoach upgrade` recognizes the install and delegates to `npm` instead of self-swapping the cached binary (FR-U2). Handle `--ignore-scripts`/corporate-npm with a fallback message pointing at the direct binary.
+- **npm wrapper** (`stagecoach-ai`): a thin JS package whose `postinstall` detects `process.platform`/`process.arch`, downloads the matching prebuilt binary from GitHub Releases into a cache, SHA256-verifies it against `checksums.txt`, and whose `bin` field execs the cached binary — the `esbuild`/`turbo`/`prisma` pattern. Gives `npx stagecoach-ai` (zero-install trial) and `npm i -g stagecoach-ai`. The wrapper sets `STAGECOACH_INSTALL_METHOD=npm` on every invocation so `stagecoach upgrade` recognizes the install and delegates to `npm` instead of self-swapping the cached binary (FR-U2). Handle `--ignore-scripts`/corporate-npm with a fallback message pointing at the direct binary.
 - **Winget** (Windows default package manager): a GitHub Action (e.g. `winget-releaser`) opens a manifest PR per tag. Complements Scoop (power users) — Winget reaches the broad Windows 11 audience.
 - **Nix flake** (`flake.nix` in-repo): no external repo, no secret, no registry gatekeeping; `nix run`/`nix profile install`. Also powers devbox/nix-shell.
 - **mise/asdf plugins**: ~30-line shell-script plugins pointing at the GitHub Release archives.
@@ -2227,8 +2227,8 @@ scoop install stagecoach/stagecoach
 # Windows (Winget — the Win11 default)
 winget install dabstractor.stagecoach
 
-# npm (zero-install trial: npx stagecoach; or global install)
-npm install -g @dabstractor/stagecoach
+# npm (zero-install trial: npx stagecoach-ai; or global install)
+npm install -g stagecoach-ai
 
 # Nix (flake — no channel/registry needed)
 nix profile install github:dabstractor/stagecoach
