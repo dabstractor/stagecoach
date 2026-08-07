@@ -188,9 +188,10 @@ func (o DelegateOptions) out() io.Writer {
 //
 //   - ChannelDirect → (zero, ErrDirectSwap). The direct channel's update is the P1.M3 self-swap
 //     (FR-U5); Delegate never self-swaps (FR-U1) and hands it off via the sentinel.
-//   - ChannelAUR, ChannelNix → PRINT. AUR needs root (FR-U4); Nix is immutable/declarative (no
-//     in-place swap). The exact command is written to opts.Out and Ran=false, ExitCode=0 (FR-U4:
-//     "a printed command exits 0").
+//   - ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm → PRINT. AUR needs root (FR-U4); Nix is
+//     immutable/declarative; .deb/.rpm ship in Releases with NO apt/dnf repo (the PM updaters
+//     cannot fetch a new version) and are PM-owned (FR-U1 — never self-swap). The exact command is
+//     written to opts.Out and Ran=false, ExitCode=0 (FR-U4: "a printed command exits 0").
 //   - everything else (brew/scoop/winget/npm/mise/asdf/go-install) → RUN. The channel's argv is
 //     built by runArgv and executed via opts.Exec (nil ⇒ osExecRunner), streaming to opts.Out.
 //     asdf is a 2-step (install then global), executed in sequence; the loop stops on the first
@@ -208,7 +209,7 @@ func Delegate(ctx context.Context, ch Channel, opts DelegateOptions) (DelegateRe
 		// sentinel; the command layer routes it. Exec is never called (no recorded calls).
 		return DelegateResult{}, ErrDirectSwap
 
-	case ChannelAUR, ChannelNix:
+	case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm:
 		// PRINT channels: AUR needs root, Nix is declarative/immutable (FR-U4). Write the exact
 		// command for the user to run; a printed command exits 0 (FR-U4).
 		primary, full := printCommand(ch)
@@ -352,9 +353,31 @@ func printCommand(ch Channel) (primary, full string) {
 		primary = "nix profile upgrade stagecoach"
 		full = "nix profile upgrade stagecoach\n# (declarative/flake users: run `nix flake update` in your config)"
 		return primary, full
+	case ChannelDeb:
+		// .deb (Debian/Ubuntu/Mint) ships in GitHub Releases with NO apt repo, so apt's own updater
+		// cannot fetch a new version. Per FR-U1 /usr/bin/stagecoach is dpkg-owned (never self-swap);
+		// print the canonical apt reinstall + a no-repo fallback (download the new .deb). Needs root
+		// ⇒ print, never auto-sudo (FR-U4).
+		primary = "sudo apt install --only-upgrade stagecoach"
+		full = "sudo apt install --only-upgrade stagecoach\n" +
+			"# (stagecoach's .deb is in GitHub Releases, NOT an apt repo; if apt finds no update,\n" +
+			"#  download the new stagecoach_<version>_linux_amd64.deb from\n" +
+			"#  https://github.com/dabstractor/stagecoach/releases/latest and run:\n" +
+			"#  sudo apt install ./stagecoach_<version>_linux_amd64.deb)"
+		return primary, full
+	case ChannelRpm:
+		// .rpm (Fedora/RHEL/Rocky/Alma/SUSE) ships in GitHub Releases with NO dnf repo, so dnf's own
+		// updater cannot fetch a new version. FR-U1: /usr/bin/stagecoach is rpm-owned (never self-swap);
+		// print the canonical dnf upgrade + a no-repo fallback. Needs root ⇒ print (FR-U4).
+		primary = "sudo dnf upgrade stagecoach"
+		full = "sudo dnf upgrade stagecoach\n" +
+			"# (stagecoach's .rpm is in GitHub Releases, NOT a dnf repo; if dnf finds no update,\n" +
+			"#  download the new .rpm from https://github.com/dabstractor/stagecoach/releases/latest\n" +
+			"#  and run: sudo dnf install ./stagecoach-<version>.<arch>.rpm)"
+		return primary, full
 	default:
-		// Unreachable: Delegate routes only ChannelAUR/ChannelNix into printCommand. Return empty
-		// strings so an unknown channel no-ops rather than panicking.
+		// Unreachable: Delegate routes only ChannelAUR/ChannelNix/ChannelDeb/ChannelRpm into
+		// printCommand. Return empty strings so an unknown channel no-ops rather than panicking.
 		return "", ""
 	}
 }

@@ -112,6 +112,28 @@ scoops:
     license: MIT                   # ADJUST to the repo's actual license if different.
     url_template: 'https://github.com/dabstractor/stagecoach/releases/download/{{ .Tag }}/{{ .ArtifactName }}'
 
+# .deb + .rpm — native Linux packages via goreleaser's nfpm pipe (PRD §21.2/§21.3; v3.1/G28).
+# Produces stagecoach_<v>_linux_{amd64,arm64}.{deb,rpm} in every Release (nfpm maps goarch to the distro
+# arch internally: amd64->amd64/x86_64, arm64->arm64/aarch64). Installs to /usr/bin (bindir). NO apt/dnf
+# repo — GitHub-Release assets, so the PM updaters cannot fetch a new version; `stagecoach upgrade`
+# detects deb/rpm (FR-U2) and prints the manual reinstall recipe (FR-U3) instead of self-swapping the
+# PM-owned /usr/bin/stagecoach (FR-U1).
+nfpms:
+  - id: stagecoach
+    package_name: stagecoach            # the dpkg/rpm package name; matches `dpkg -s stagecoach` / `rpm -q stagecoach` (FR-U2)
+    file_name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    # (builds auto-selected by goreleaser nfpm; the linux builds are packaged — darwin/windows are
+    # skipped for the deb/rpm formats. `builds:` is deprecated: goreleaser.com/deprecations#nfpmsbuilds)
+    formats:
+      - deb
+      - rpm
+    vendor: dabstractor
+    homepage: https://github.com/dabstractor/stagecoach
+    maintainer: 'dabstractor <dabstractor@example.com>'   # REPLACE with the maintainer's real name <email>.
+    description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
+    license: MIT
+    bindir: /usr/bin                    # matches the deb/rpm FR-U2 detection assumption (/usr/bin/stagecoach)
+
 # AUR — BEST-EFFORT (PRD §21.2; contract LOGIC bullets don't list AUR, so this is nice-to-have).
 # Native pipe produces stagecoach-BIN only (prebuilt binary PKGBUILD), pushed over SSH (NOT a PAT).
 # From-source `stagecoach` AUR package is OUT of scope (manual/community PKGBUILD; PRD "possibly community").

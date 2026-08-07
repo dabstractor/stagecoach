@@ -188,6 +188,26 @@ func TestDetect_PMProbesConfirm(t *testing.T) {
 			want: ChannelAUR,
 		},
 		{
+			name: "dpkg/deb installed (linux)", goos: "linux",
+			canned: func(n string, _ []string) (string, int, error) {
+				if n == "dpkg" {
+					return "", 0, nil
+				}
+				return "", 1, nil
+			},
+			want: ChannelDeb,
+		},
+		{
+			name: "rpm installed (linux)", goos: "linux",
+			canned: func(n string, _ []string) (string, int, error) {
+				if n == "rpm" {
+					return "", 0, nil
+				}
+				return "", 1, nil
+			},
+			want: ChannelRpm,
+		},
+		{
 			name: "scoop installed (windows)", goos: "windows",
 			canned: func(n string, _ []string) (string, int, error) {
 				if n == "scoop" {
@@ -299,7 +319,7 @@ func TestDetect_GOOSGating(t *testing.T) {
 	r2 := &fakeRunner{canned: func(string, []string) (string, int, error) { return "", 1, nil }}
 	d2 := &Detector{Exec: r2, GOOS: "darwin", ExePath: "/home/me/bin/stagecoach"}
 	_, _, _ = d2.Detect(context.Background())
-	for _, banned := range []string{"winget", "scoop", "pacman"} {
+	for _, banned := range []string{"winget", "scoop", "pacman", "dpkg", "rpm"} {
 		if r2.called(banned) {
 			t.Errorf("%s probe must not run on GOOS=darwin; calls=%v", banned, r2.calls)
 		}
@@ -312,7 +332,7 @@ func TestDetect_GOOSGating(t *testing.T) {
 	r3 := &fakeRunner{canned: func(string, []string) (string, int, error) { return "", 1, nil }}
 	d3 := &Detector{Exec: r3, GOOS: "windows", ExePath: `C:\Users\me\bin\stagecoach.exe`}
 	_, _, _ = d3.Detect(context.Background())
-	for _, banned := range []string{"brew", "pacman"} {
+	for _, banned := range []string{"brew", "pacman", "dpkg", "rpm"} {
 		if r3.called(banned) {
 			t.Errorf("%s probe must not run on GOOS=windows; calls=%v", banned, r3.calls)
 		}

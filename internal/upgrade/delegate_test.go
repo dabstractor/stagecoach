@@ -159,6 +159,18 @@ func TestDelegate_PrintChannels(t *testing.T) {
 			primary:     "nix profile upgrade stagecoach",
 			containsAll: []string{"nix profile upgrade stagecoach", "nix flake update"},
 		},
+		{
+			name:        "deb",
+			ch:          ChannelDeb,
+			primary:     "sudo apt install --only-upgrade stagecoach",
+			containsAll: []string{"sudo apt install --only-upgrade stagecoach", "apt repo", "releases/latest"},
+		},
+		{
+			name:        "rpm",
+			ch:          ChannelRpm,
+			primary:     "sudo dnf upgrade stagecoach",
+			containsAll: []string{"sudo dnf upgrade stagecoach", "dnf repo", "releases/latest"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -109,6 +109,12 @@ nix profile install github:dabstractor/stagecoach
 # mise / asdf (version-manager users)
 mise use stagecoach@latest   # or: asdf plugin add stagecoach && asdf install stagecoach latest
 
+# Linux — native packages from GitHub Releases (Debian/Ubuntu & Fedora/RHEL)
+#   .deb:  download stagecoach_<version>_linux_amd64.deb (or _arm64), then:
+sudo apt install ./stagecoach_<version>_linux_amd64.deb
+#   .rpm:  download stagecoach_<version>_linux_amd64.rpm (or _arm64), then:
+sudo dnf install ./stagecoach_<version>_linux_amd64.rpm
+
 # Go install (anywhere with Go)
 go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
 

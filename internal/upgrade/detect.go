@@ -45,22 +45,24 @@ const (
 	ChannelAsdf      Channel = "asdf"
 	ChannelNix       Channel = "nix"
 	ChannelGoInstall Channel = "go-install"
+	ChannelDeb       Channel = "deb"    // Debian/Ubuntu/Mint (.deb / dpkg); FR-U2/U3 — PRINT channel (no apt repo).
+	ChannelRpm       Channel = "rpm"    // Fedora/RHEL/Rocky/Alma/SUSE (.rpm / rpm); FR-U2/U3 — PRINT channel (no dnf repo).
 	ChannelDirect    Channel = "direct" // the ONLY self-swap-eligible channel (FR-U1/U5).
 )
 
 // ErrUnknownChannel is returned when an explicit --install-method / STAGECOACH_INSTALL_METHOD
-// override names a channel that is not one of the 10 known Channel values. An invalid override is a
+// override names a channel that is not one of the 12 known Channel values. An invalid override is a
 // hard error (the user explicitly asked for something wrong), NOT a silent fallback to direct — a
 // typo could otherwise trigger a wrong-channel delegation or an unwanted self-swap. Only tiers (b)
 // and (c) AMBIGUITY falls through to direct.
 var ErrUnknownChannel = errors.New("upgrade: unknown --install-method")
 
-// validChannel reports whether s names one of the 10 known Channel values. It validates the explicit
+// validChannel reports whether s names one of the 12 known Channel values. It validates the explicit
 // override (tier a) so a typo surfaces immediately instead of silently defaulting to direct.
 func validChannel(s string) bool {
 	switch Channel(s) {
 	case ChannelBrew, ChannelScoop, ChannelWinget, ChannelAUR, ChannelNpm,
-		ChannelMise, ChannelAsdf, ChannelNix, ChannelGoInstall, ChannelDirect:
+		ChannelMise, ChannelAsdf, ChannelNix, ChannelGoInstall, ChannelDeb, ChannelRpm, ChannelDirect:
 		return true
 	}
 	return false
@@ -233,13 +235,13 @@ func (d *Detector) detectOverride() (Channel, string, bool, error) {
 	return "", "", false, nil
 }
 
-// knownChannelList returns the 10 channel identifiers as a comma-separated hint for the invalid-
+// knownChannelList returns the 12 channel identifiers as a comma-separated hint for the invalid-
 // override error message, in the canonical const-declaration order.
 func knownChannelList() string {
 	return strings.Join([]string{
 		string(ChannelBrew), string(ChannelScoop), string(ChannelWinget), string(ChannelAUR),
 		string(ChannelNpm), string(ChannelMise), string(ChannelAsdf), string(ChannelNix),
-		string(ChannelGoInstall), string(ChannelDirect),
+		string(ChannelGoInstall), string(ChannelDeb), string(ChannelRpm), string(ChannelDirect),
 	}, ", ")
 }
 
@@ -264,6 +266,8 @@ type pmProbe struct {
 var pmProbes = []pmProbe{
 	{channel: ChannelBrew, goos: []string{"darwin", "linux"}, name: "brew", args: []string{"list", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelAUR, goos: []string{"linux"}, name: "pacman", args: []string{"-Q", "stagecoach-bin"}, confirm: exit0Confirm},
+	{channel: ChannelDeb, goos: []string{"linux"}, name: "dpkg", args: []string{"-s", "stagecoach"}, confirm: exit0Confirm},
+	{channel: ChannelRpm, goos: []string{"linux"}, name: "rpm", args: []string{"-q", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelScoop, goos: []string{"windows"}, name: "scoop", args: []string{"prefix", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelWinget, goos: []string{"windows"}, name: "winget", args: []string{"list"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelNpm, goos: nil, name: "npm", args: []string{"ls", "-g", "--depth=0"}, confirm: grepConfirm("stagecoach")},
@@ -339,8 +343,9 @@ type pathHeuristic struct {
 // the prefix itself — Unix roots use forward slashes (/opt/homebrew/Cellar/), the Scoop root uses
 // Windows backslashes (\scoop\shims\). /usr/bin is DELIBERATELY ABSENT: it is ambiguous (a manual
 // `cp stagecoach /usr/bin/` would false-positive as AUR and the dispatcher would print `sudo
-// pacman…` for a non-pacman install). AUR detection is owned by the tier-(b) pacman QUERY instead,
-// which only confirms when pacman actually manages the package. FR-U2: ambiguous → direct.
+// pacman…` for a non-pacman install). The /usr/bin PMs — AUR (pacman), .deb (dpkg), .rpm (rpm) — are
+// all owned by tier-(b) QUERIES instead, each of which only confirms when THAT package manager
+// actually manages the package. FR-U2: ambiguous → direct.
 var pathHeuristics = []pathHeuristic{
 	{prefix: "/opt/homebrew/Cellar/", channel: ChannelBrew},
 	{prefix: "/usr/local/Cellar/", channel: ChannelBrew},
