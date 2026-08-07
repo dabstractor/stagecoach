@@ -204,13 +204,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31   # flakes + nix-command enabled by default (no nix.conf step); pin moving major (FR-D5: ~v31 late 2025)
+      - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: nix flake check
-        # Builds the x86_64-linux package (modern Nix defaults to the current system). On a
-        # first run with the lib.fakeHash placeholder, this fails with the got-hash to paste.
+      - name: nix flake check (evaluate only)
+        # NOTE: `nix flake check` only EVALUATES derivations — it does NOT build them, so a stale
+        # lib.fakeHash vendorHash passes here undetected. The build step below is what catches it.
         run: nix --print-build-logs flake check
+      - name: nix build .#default (vendorHash extraction; continue-on-error keeps CI green)
+        # TEMPORARY extraction: actually BUILD the package so the go-modules fixed-output
+        # derivation fails with the real `got:` hash (to paste into flake.nix) + generates
+        # flake.lock. continue-on-error:true keeps the job/workflow GREEN during extraction; the
+        # follow-up commit pastes the hash and removes continue-on-error so the build is a hard gate.
+        continue-on-error: true
+        run: nix --print-build-logs build .#default
+      - name: Upload flake.lock (extraction artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flake-lock
+          path: flake.lock
 
   # --- (7) asdf/mise plugin smoke (PRD §21.2/G27; external_deps.md §6) --------------------
   # shellchecks the 3 POSIX-sh plugin scripts (catches bashisms) + runs the fixture-archive
