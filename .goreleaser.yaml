@@ -135,14 +135,16 @@ nfpms:
     bindir: /usr/bin                    # matches the deb/rpm FR-U2 detection assumption (/usr/bin/stagecoach)
 
 # AUR — BEST-EFFORT (PRD §21.2; contract LOGIC bullets don't list AUR, so this is nice-to-have).
-# Native pipe publishes the prebuilt-binary `stagecoach` package (PKGBUILD), pushed over SSH (NOT a PAT).
-# A from-source/git `stagecoach-git` variant is a possible future community package — out of scope now.
+# Native pipe produces the PKGBUILD for `stagecoach-bin`, pushed over SSH (NOT a PAT). goreleaser v2
+# AUTO-APPENDS the `-bin` suffix to AUR names (documented, non-configurable) — `name: stagecoach-bin`
+# stays `stagecoach-bin` (no double suffix); bare `stagecoach` is unobtainable via goreleaser.
+# A future from-source/git `stagecoach-git` variant is a possible community package — out of scope now.
 # (AUR is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/WinGet/Nix/mise-asdf —
 #  are listed under `release:` above.)
 # DECISION GATE: if `goreleaser check` rejects any field below, COMMENT OUT this whole `aurs:` block and
 # ship the rest (brew+scoop+checksum+changelog+archives). AUR does not block the core contract.
 aurs:
-  - name: stagecoach                 # the binary package is `stagecoach`; a future `stagecoach-git` is community/out-of-scope
+  - name: stagecoach-bin           # goreleaser v2 enforces the `-bin` suffix — this IS the final package name
     ids:
       - default
     homepage: https://github.com/dabstractor/stagecoach
@@ -152,6 +154,10 @@ aurs:
     license: MIT
     depends:
       - git
+    provides:
+      - stagecoach                 # `yay -S stagecoach` resolves to this package
+    conflicts:
+      - stagecoach                 # conflicts with a hypothetical from-source `stagecoach` package
     private_key: '{{ .Env.AUR_SSH_PRIVATE_KEY }}'   # SSH private key whose pubkey is on the AUR account
     commit_author:
       name: goreleaserbot

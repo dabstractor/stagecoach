@@ -79,12 +79,12 @@ func TestConfirmUpgrade_TTYDeclines(t *testing.T) {
 
 func TestPrintDelegatedUpdate(t *testing.T) {
 	var out bytes.Buffer
-	printDelegatedUpdate(&out, "aur", "sudo pacman -Syu stagecoach")
+	printDelegatedUpdate(&out, "aur", "sudo pacman -Syu stagecoach-bin")
 	s := out.String()
 	if !strings.Contains(s, "aur") {
 		t.Errorf("missing channel: %q", s)
 	}
-	if !strings.Contains(s, "sudo pacman -Syu stagecoach") {
+	if !strings.Contains(s, "sudo pacman -Syu stagecoach-bin") {
 		t.Errorf("command not echoed verbatim: %q", s)
 	}
 	if !strings.Contains(s, "does not run") {
