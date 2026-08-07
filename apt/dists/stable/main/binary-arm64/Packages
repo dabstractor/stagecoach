@@ -1,0 +1,15 @@
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.10
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.10_linux_arm64.deb
+Size: 3830924
+MD5sum: ff26db3376ad6ae6bd5a178fb7be3187
+SHA1: 9150ea243dabc8aec5f9b4ebb15bc4b693487758
+SHA256: 43bb8777ee4ea8f362b698f67c23a1bfc783c265eae57ed96552c68414f3594f
+SHA512: 5a4069aab9a3e42663305e66944e627981a4fa967549f19370e501095bd5a17deedd59778a43dbb5f917c419862f9192edd62e59069fc3a3f0fa8b9307ee2a9f
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+

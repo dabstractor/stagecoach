@@ -1,0 +1,16 @@
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.10
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10012
+Filename: pool/main/amd64/stagecoach_0.1.10_linux_amd64.deb
+Size: 4187348
+MD5sum: 21f618fc27b047a160a47cd405ed4fdf
+SHA1: 2f19948adb9308a859f9fc36dc9f32ac21462afa
+SHA256: 44d0a4178208840d26154ecee56c7cb83db584bc52d52abceb06481e9cbe0e1a
+SHA512: a86c1675853d81acc85edb92396085dd393f9cfd3483760a562d4fc91a52b1308bbea98dd4338e2e53b8b5bb100f6bf2700641726deb048d717066e037832dbf
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+

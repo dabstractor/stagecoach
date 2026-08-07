@@ -1,0 +1,6 @@
+[stagecoach]
+name=stagecoach
+baseurl=https://dabstractor.github.io/stagecoach/rpm/
+enabled=1
+# nfpm does not GPG-sign the RPMs; disable the repo-level gpgcheck (apt side IS signed via InRelease).
+gpgcheck=0
