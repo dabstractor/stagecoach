@@ -98,9 +98,6 @@ brew install dabstractor/stagecoach/stagecoach
 scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
 scoop install stagecoach/stagecoach
 
-# Windows (Winget — the Win11 default)
-winget install dabstractor.stagecoach
-
 # npm (zero-install trial: npx stagecoach-ai; or global install)
 npm install -g stagecoach-ai
 
@@ -132,6 +129,12 @@ go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
 curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 ```
 
+> **Not yet available:** Windows WinGet and Arch AUR (`stagecoach-bin`) are wired up
+> in CI but aren't installable today — WinGet is pending acceptance into the
+> `microsoft/winget-pkgs` repository, and the AUR publish is waiting on the AUR
+> service. Windows users: use **Scoop** or **npm** in the meantime; Arch users: use
+> `go install`, the curl\|sh one-liner, or the npm wrapper.
+
 Verify:
 
 ```bash
@@ -159,7 +162,7 @@ stagecoach --version   # stagecoach version dev
 
 ### Updating
 
-Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, Winget, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
+Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
 
 ```bash
 stagecoach upgrade             # detect → delegate (or self-swap), confirm, apply
