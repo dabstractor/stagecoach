@@ -159,6 +159,7 @@ aurs:
     conflicts:
       - stagecoach                 # conflicts with a hypothetical from-source `stagecoach` package
     private_key: '{{ .Env.AUR_SSH_PRIVATE_KEY }}'   # SSH private key whose pubkey is on the AUR account
+    url: ssh://aur@aur.archlinux.org/stagecoach-bin.git   # REQUIRED AUR git SSH push target — without it goreleaser skips the publish ("url is empty")
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
