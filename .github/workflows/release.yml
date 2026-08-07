@@ -66,6 +66,7 @@ jobs:
   npm-publish:
     name: Publish npm wrapper
     needs: goreleaser
+    if: ${{ !cancelled() }}   # run even if goreleaser's post-publish AUR step failed (the Release is already up)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -114,6 +115,7 @@ jobs:
   winget:
     name: WinGet manifest PR (microsoft/winget-pkgs)
     needs: goreleaser           # the GitHub Release (windows zip + checksums) must exist first
+    if: ${{ !cancelled() }}   # run even if goreleaser's post-publish AUR step failed
     runs-on: windows-latest     # action is pwsh-native; matches the winget-releaser convention
     steps:
       - name: Open winget-pkgs manifest PR via WinGet Releaser
@@ -148,6 +150,7 @@ jobs:
   asdf-mirror:
     name: Mirror asdf plugin → dabstractor/asdf-stagecoach
     needs: goreleaser
+    if: ${{ !cancelled() }}   # run even if goreleaser's post-publish AUR step failed
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -192,6 +195,7 @@ jobs:
   apt-dnf-repo:
     name: Publish apt + dnf repo → gh-pages
     needs: goreleaser
+    if: ${{ !cancelled() }}   # run even if goreleaser's post-publish AUR step failed (Release is already up)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
