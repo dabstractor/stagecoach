@@ -217,11 +217,12 @@ jobs:
         run: nix --print-build-logs build .#default
 
   # --- (7) asdf/mise plugin smoke (PRD §21.2/G27; external_deps.md §6) --------------------
-  # shellchecks the 3 POSIX-sh plugin scripts (catches bashisms) + runs the fixture-archive
+  # shellchecks the POSIX-sh plugin scripts (catches bashisms) + runs the fixture-archive
   # smoke test (build a fake stagecoach archive, serve locally, run bin/install, assert the
-  # happy path + the SHA256-mismatch abort-before-write). Keeps the plugin scripts from rotting
-  # on every PR (parity with npm-smoke above + nix-flake-check). ubuntu-latest ships shellcheck
-  # + python3 (FR-D5: re-confirmed in the runner pre-installed tool list).
+  # happy path + the SHA256-mismatch abort-before-write; + bin/latest-stable resolution against a
+  # local fixture git repo). Keeps the plugin scripts from rotting on every PR (parity with
+  # npm-smoke above + nix-flake-check). ubuntu-latest ships shellcheck + python3 + git
+  # (FR-D5: re-confirmed in the runner pre-installed tool list).
   asdf-plugin-smoke:
     name: asdf/mise plugin smoke
     runs-on: ubuntu-latest
@@ -232,6 +233,7 @@ jobs:
         run: |
           shellcheck -s sh plugins/asdf-stagecoach/bin/list-all
           shellcheck -s sh plugins/asdf-stagecoach/bin/install
+          shellcheck -s sh plugins/asdf-stagecoach/bin/latest-stable
           shellcheck -s sh plugins/asdf-stagecoach/test/smoke.sh
       - name: smoke test (fixture archive install)
         working-directory: plugins/asdf-stagecoach

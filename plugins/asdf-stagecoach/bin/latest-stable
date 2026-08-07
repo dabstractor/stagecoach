@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# latest-stable — single newest version for asdf/mise. (PRD §21.3/G27; external_deps.md §6)
+#
+# asdf/mise take this callback's output AT FACE VALUE (asdf PR #2030) for
+#   `asdf install stagecoach latest`  and  `asdf latest stagecoach [<prefix>]`
+# (and the mise equivalents), instead of their OWN internal "latest" filtering. Without it asdf —
+# including the 0.20 Go rewrite — tries to resolve "latest" itself and, on that path, hands
+# bin/install the ENTIRE version list as ASDF_INSTALL_VERSION; that multi-line string then reaches
+# the download URL → curl "(3) URL rejected: Malformed input to a URL function". bin/list-all
+# already sorts ascending (newest LAST via sort -V), so the latest stable version is simply its
+# last line. mise honors the same callback.
+#
+# Prints ONE bare version (e.g. 0.1.10) to stdout; exit 0. Optional $1 = a version prefix
+# (e.g. "0.1") → newest tag beginning with it (for `asdf install stagecoach latest:0.1`).
+set -eu
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+filter="${1:-}"
+
+# Delegate to list-all (the single source of truth for the tag pipeline + the STAGECOACH_GIT_REPO
+# override), keep only prefix-matching lines when a filter is given, then take the newest (last).
+# No `pipefail`: the pipeline's status is tail's (0 even when grep matches nothing), so `set -e`
+# never aborts on an empty result (which asdf/mise then report as "no matching version").
+if [ -n "$filter" ]; then
+  "$HERE/list-all" 2>/dev/null | grep "^${filter}" | tail -n 1
+else
+  "$HERE/list-all" 2>/dev/null | tail -n 1
+fi

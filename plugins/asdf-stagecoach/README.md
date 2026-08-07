@@ -68,6 +68,12 @@ see the [stagecoach install guide](https://github.com/dabstractor/stagecoach#ins
   which is rate-limited to 60 req/h/IP for unauthenticated callers and would
   break `list-all` / tab-completion at scale). Tags are stripped of their
   leading `v` and sorted ascending via `sort -V` (newest last).
+- **`bin/latest-stable`** resolves the single newest version for
+  `asdf install stagecoach latest` / `asdf latest stagecoach [<prefix>]` (and
+  the `mise` equivalents). asdf/mise take this callback's output at face value;
+  without it, asdf would hand `bin/install` the **whole** version list as
+  `ASDF_INSTALL_VERSION`, producing a multi-line download URL that `curl`
+  rejects. It is simply the last (newest) line of `bin/list-all`.
 - **`bin/install`** reads the standard `ASDF_INSTALL_TYPE` / `ASDF_INSTALL_VERSION`
   / `ASDF_INSTALL_PATH` environment variables (mise sets the **same** vars), maps
   the host `uname` to a goreleaser `GOOS`/`GOARCH`, downloads the matching

@@ -45,8 +45,9 @@ serve="$(mktemp -d)"
 tmp1=""
 tmp2=""
 srvpid=""
+fixrepo=""
 cleanup() {
-  rm -rf "${serve:-}" "${tmp1:-}" "${tmp2:-}"
+  rm -rf "${serve:-}" "${tmp1:-}" "${tmp2:-}" "${fixrepo:-}"
   if [ -n "${srvpid:-}" ]; then kill "$srvpid" 2>/dev/null || true; fi
 }
 trap cleanup EXIT
@@ -106,5 +107,33 @@ if ASDF_INSTALL_TYPE=version ASDF_INSTALL_VERSION="$version" ASDF_INSTALL_PATH="
 fi
 grep -qi 'mismatch' "${serve}/mismatch.err" || fail "mismatch path: stderr did not mention mismatch"
 [ ! -e "${tmp2}/bin/stagecoach" ] || fail "mismatch path: a binary was left behind (abort-before-write violated)"
+
+# --- LATEST-STABLE PATH ----------------------------------------------------------
+# Without bin/latest-stable, asdf hands bin/install the ENTIRE version list as ASDF_INSTALL_VERSION
+# → a multi-line download URL → curl "(3) URL rejected: Malformed input". This callback is what makes
+# `asdf install stagecoach latest` resolve to ONE version. Verify it offline against a LOCAL git repo
+# (list-all honors STAGECOACH_GIT_REPO): it must return the single newest tag, and sort -V must put
+# 0.0.10 AFTER 0.0.9 (lexicographic order would wrongly pick 0.0.9). Also exercise the optional
+# prefix filter ($1): "0.0.1" must match both 0.0.1 and 0.0.10 and resolve to 0.0.10.
+fixrepo="$(mktemp -d)"
+git -C "$fixrepo" init -q
+git -C "$fixrepo" config user.email "t@t"
+git -C "$fixrepo" config user.name "t"
+git -C "$fixrepo" commit -q --allow-empty -m init
+for t in 0.0.1 0.0.2 0.0.10 0.0.9; do git -C "$fixrepo" tag "v$t"; done
+
+latest_out="$(STAGECOACH_GIT_REPO="$fixrepo" sh "${HERE}/../bin/latest-stable" 2>"${serve}/latest.err")" \
+  || fail "latest-stable: exited non-zero ($(cat "${serve}/latest.err"))"
+[ "$latest_out" = "0.0.10" ] \
+  || fail "latest-stable: expected 0.0.10, got '${latest_out}' (is sort -V being used?)"
+# the asdf contract: exactly ONE line (a bare version) — never the whole list.
+nlines="$(printf '%s\n' "$latest_out" | wc -l | tr -d ' ')"
+[ "$nlines" = "1" ] \
+  || fail "latest-stable: must print one line, got ${nlines}"
+
+flt="$(STAGECOACH_GIT_REPO="$fixrepo" sh "${HERE}/../bin/latest-stable" 0.0.1)" \
+  || fail "latest-stable (filter 0.0.1): exited non-zero"
+[ "$flt" = "0.0.10" ] \
+  || fail "latest-stable (filter 0.0.1): expected 0.0.10, got '${flt}'"
 
 printf 'SMOKE PASS\n'
