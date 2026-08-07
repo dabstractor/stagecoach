@@ -129,7 +129,7 @@ nfpms:
       - rpm
     vendor: dabstractor
     homepage: https://github.com/dabstractor/stagecoach
-    maintainer: 'dabstractor <dabstractor@example.com>'   # REPLACE with the maintainer's real name <email>.
+    maintainer: 'Dustin Schultz <dustindschultz@gmail.com>'
     description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
     license: MIT
     bindir: /usr/bin                    # matches the deb/rpm FR-U2 detection assumption (/usr/bin/stagecoach)
@@ -148,7 +148,7 @@ aurs:
     homepage: https://github.com/dabstractor/stagecoach
     description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
     maintainers:
-      - 'dabstractor <dabstractor@example.com>'   # REPLACE with the maintainer's real name <email>.
+      - 'Dustin Schultz <dustindschultz@gmail.com>'
     license: MIT                        # ADJUST to the repo's actual license if different.
     depends:
       - git
