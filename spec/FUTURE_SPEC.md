@@ -1,6 +1,6 @@
 # Stagecoach — Future Spec (deferred & rejected ideas)
 
-Companion to `PRD.md` (v3.0). The PRD carries **no stubs or placeholders**: if a capability is
+Companion to `spec/SPEC.md` (v3.0). The PRD carries **no stubs or placeholders**: if a capability is
 described there, it is in scope. Everything else — ideas we like but haven't specified, and ideas
 we have deliberately rejected — lives here, each with its reasoning, so future revisions don't
 re-litigate them from scratch.
@@ -81,5 +81,5 @@ All future targets inherit the FR-I3 no-mangle write protocol unchanged.
 
 ---
 
-*When promoting anything out of this file, move it into `PRD.md` as numbered FRs and delete it
+*When promoting anything out of this file, move it into `spec/SPEC.md` as numbered FRs and delete it
 here — an idea must live in exactly one of the two documents.*

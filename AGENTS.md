@@ -6,10 +6,10 @@
 
 ## Hard rules
 
-1. **Never modify `PRD.md` outside of an interactive session.** The PRD is the product's
+1. **Never modify `spec/SPEC.md` outside of an interactive session.** The PRD is the product's
    source of truth; spec changes are design decisions, not code edits, and require the human
    in the loop. If you find a spec gap or contradiction while working, surface it (open an
-   issue / raise it in chat) and stop — do not edit `PRD.md` to "fix" it on your own.
+   issue / raise it in chat) and stop — do not edit `spec/SPEC.md` to "fix" it on your own.
 
 2. **Never modify code without a PRP document — unless the code is provably out-of-spec
    against the PRD.** Implementation work is driven by a PRP (under
@@ -33,7 +33,7 @@ a CI run against the latest commit exists, completes, and every job is green.
 
 ## Reference
 
-- **PRD** — [`PRD.md`](PRD.md): product requirements + technical spec; the authority on
+- **PRD** — [`spec/SPEC.md`](spec/SPEC.md): product requirements + technical spec; the authority on
   behavior.
 - **CI workflow** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 - **CI validation procedure** — [`docs/ci-validation.md`](docs/ci-validation.md).

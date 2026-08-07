@@ -239,7 +239,7 @@ lazygit     ✓         not installed  —
 - **STATUS**: `not installed`, `installed`, or `foreign` (a conflicting entry exists)
 - **CONFIG**: the resolved config file path the integration edits (— if the tool is absent or the path cannot be determined)
 
-Supported targets are `git-alias` and `lazygit`. (gitui is blocked upstream — see FUTURE_SPEC.md.)
+Supported targets are `git-alias` and `lazygit`. (gitui is blocked upstream — see spec/FUTURE_SPEC.md.)
 
 Detection gating (FR-I2): a target whose tool is absent is still listed (DETECTED=✗) but `install`/`remove` for it prints a note and exits 1.
 

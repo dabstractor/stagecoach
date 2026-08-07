@@ -53,7 +53,7 @@ Antigravity, Cursor) or by incentive (Z.ai). Opencode is the outlier.
 </details>
 
 > [!NOTE]
-> What we deliberately didn't build is tracked in [FUTURE_SPEC.md](FUTURE_SPEC.md).
+> What we deliberately didn't build is tracked in [FUTURE_SPEC.md](spec/FUTURE_SPEC.md).
 
 ## Features
 
@@ -88,7 +88,7 @@ Stagecoach does one thing — commit messages — and a few things around them.
 
 ### Package managers
 
-Pick whichever channel matches your platform or workflow (commands per [PRD §21.3](PRD.md)):
+Pick whichever channel matches your platform or workflow (commands per [PRD §21.3](spec/SPEC.md)):
 
 ```bash
 # Homebrew (macOS / Linuxbrew)
@@ -242,7 +242,7 @@ stagecoach integrate list                  # see what's installed / detected
 ```
 
 > [!NOTE]
-> gitui isn't supported — see [FUTURE_SPEC.md](FUTURE_SPEC.md) §1.2.
+> gitui isn't supported — see [FUTURE_SPEC.md](spec/FUTURE_SPEC.md) §1.2.
 
 <details>
 <summary><em>Manual install (no <code>stagecoach integrate</code>)</em></summary>
@@ -435,7 +435,7 @@ Yes. As of v2.4, the default `stagecoach` command runs your repository's standar
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason — live in [FUTURE_SPEC.md](FUTURE_SPEC.md). (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
+Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason — live in [FUTURE_SPEC.md](spec/FUTURE_SPEC.md). (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
 
 ---
 

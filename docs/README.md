@@ -57,9 +57,9 @@ Each v2.1 capability maps to a specific doc anchor:
 
 ## Product specification
 
-The [PRD](../PRD.md) is the authoritative product and technical specification (read-only). These docs are derived from it and from the shipped binary — refer to the PRD for the canonical requirements and design rationale.
+The [PRD](../spec/SPEC.md) is the authoritative product and technical specification (read-only). These docs are derived from it and from the shipped binary — refer to the PRD for the canonical requirements and design rationale.
 
-The [FUTURE_SPEC.md](../FUTURE_SPEC.md) lists deferred and rejected ideas — each with its reason.
+The [FUTURE_SPEC.md](../spec/FUTURE_SPEC.md) lists deferred and rejected ideas — each with its reason.
 
 ## Contributing
 
