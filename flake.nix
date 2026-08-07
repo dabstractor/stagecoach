@@ -51,9 +51,11 @@
           # DERIVATION name; the nix-built binary still reports "dev" (see header comment).
           version = "unstable-${self.sourceInfo.lastModifiedDate}";
           src = self.outPath; # the flake source root (working tree / store path)
-          # placeholder — run `nix build`, paste the got-hash (see header comment).
-          # If CI's first `nix flake check` prints a `got:` hash here, paste it in a follow-up commit.
-          vendorHash = pkgs.lib.fakeHash;
+          # REAL vendorHash (extracted via ci.yml's `nix build .#default` — `nix flake check` only
+          # evaluates, so a stale hash is caught only by an actual build). To update when go.mod/
+          # go.sum change: set this to lib.fakeHash, run `nix build .#default`, paste the `got:` SRI
+          # hash, and commit flake.lock too if the pinned nixpkgs rev moved.
+          vendorHash = "sha256-cfUrtq/ds3WjzwgayY3hI8/nGePdTlRFwkflA2fcpyY=";
           subPackages = [ "cmd/stagecoach" ];
           env.CGO_ENABLED = 0; # static build; matches .goreleaser.yaml + ci.yml
         };
