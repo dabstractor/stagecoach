@@ -462,8 +462,8 @@ func TestVerifyFreezeSubset_ContentViolation(t *testing.T) {
 	if !strings.Contains(err.Error(), "a.txt") {
 		t.Errorf("error missing 'a.txt'; got: %s", err.Error())
 	}
-	if !strings.Contains(err.Error(), "staged content differs from the frozen working-tree snapshot") {
-		t.Errorf("error missing 'staged content differs from the frozen working-tree snapshot'; got: %s", err.Error())
+	if !strings.Contains(err.Error(), "staged content is not traceable to the frozen working-tree snapshot") {
+		t.Errorf("error missing 'staged content is not traceable to the frozen working-tree snapshot'; got: %s", err.Error())
 	}
 	if !strings.Contains(err.Error(), "test-concept") {
 		t.Errorf("error missing concept title 'test-concept'; got: %s", err.Error())
@@ -534,7 +534,7 @@ func TestVerifyFreezeSubset_ConceptTitleWiring(t *testing.T) {
 	if !errors.Is(cerr, ErrFreezeViolation) {
 		t.Fatalf("expected ErrFreezeViolation, got %v", cerr)
 	}
-	for _, want := range []string{title, "in concept 0", "a.txt", "staged content differs from the frozen working-tree snapshot"} {
+	for _, want := range []string{title, "in concept 0", "a.txt", "staged content is not traceable to the frozen working-tree snapshot"} {
 		if !strings.Contains(cerr.Error(), want) {
 			t.Errorf("content-violation error missing %q; got: %s", want, cerr.Error())
 		}

@@ -487,6 +487,16 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 	if derr != nil {
 		return handleDecomposeError(derr) // suppress re-print; map exit code
 	}
+	if len(res.Commits) == 0 {
+		// A dirty tree that yields zero commits means every concept was empty-skipped (FR-M8): the
+		// stager staged nothing. Without this message the run exits 0 with no output — the silent
+		// no-op users hit when the stager role's provider/model can't do tool-driven staging.
+		fmt.Fprintln(stderr, "stagecoach: decompose created no commits — the stager staged nothing for any concept.")
+		fmt.Fprintln(stderr, "Your working-tree changes are untouched. This usually means the stager role's")
+		fmt.Fprintln(stderr, "provider/model could not perform tool-driven staging. Try a different")
+		fmt.Fprintln(stderr, "--stager-provider / --stager-model, or use --single for a one-commit run.")
+		return exitcode.New(exitcode.Error, errors.New("decompose staged nothing"))
+	}
 	if err := runPush(ctx, stderr, g, *cfg); err != nil { // §9.22 FR-P1/P2
 		return exitcode.New(exitcode.Error, err)
 	}

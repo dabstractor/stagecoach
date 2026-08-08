@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/dabstractor/stagecoach/internal/config"
+	"github.com/dabstractor/stagecoach/internal/git"
 	"github.com/dabstractor/stagecoach/internal/prompt"
 	"github.com/dabstractor/stagecoach/internal/provider"
 )
@@ -177,26 +178,52 @@ func verifyFreezeSubset(ctx context.Context, deps Deps, baseTree, tStart string,
 			ErrFreezeViolation, i, conceptTitle, strings.Join(extra, ", "))
 	}
 
-	// (B) CONTENT check: tree[i]'s changed paths must carry T_start's blob content.
-	//     changedTreeI ∩ DiffTreeNames(treeI, tStart) == ∅ isolates the changed paths whose
-	//     content differs from T_start (proven equivalent to the contract's path-restricted
-	//     `git diff treeI tStart -- <changed paths>` without needing a pathspec).
-	delta, err := deps.Git.DiffTreeNames(ctx, treeI, tStart)
-	if err != nil {
-		return fmt.Errorf("%w: freeze check diff-tree-names[%d]: %w", ErrDecomposeFailed, i, err)
-	}
-	deltaSet := pathSet(delta)
-	var mismatch []string
-	for _, p := range changedTreeI {
-		if _, ok := deltaSet[p]; ok {
-			mismatch = append(mismatch, p)
+	// (B) CONTENT check (hunk-aware, FR-M1c): tree[i]'s staged content must be TRACEABLE to T_start.
+	// A stager either stages a whole file from T_start (blob == T_start) or — when the planner split a
+	// single file across concepts (FR-M3/M5/M2b) — stages a HUNK SUBSET (base + some of T_start's
+	// hunks): a legitimate partial whose blob legitimately differs from T_start's full blob. The correct
+	// test is a 3-way merge: merging tree[i] into T_start over baseTree must reconstruct T_start exactly
+	// with no conflicts. tree[i] ⊆ T_start ⇒ merge == T_start (clean); an off-T_start change (concurrent
+	// work the stager swept in, or a rogue stager) ⇒ conflict or divergence. (The earlier full-blob-
+	// equality form DiffTreeNames(treeI, tStart) ∩ changedTreeI false-positived on every legal hunk subset.)
+	mergedTree, conflicts, merr := deps.Git.MergeTrees(ctx, baseTree, treeI, tStart)
+	if merr != nil {
+		if errors.Is(merr, git.ErrMergeTreeUnsupported) {
+			// Pre-2.38 git: degrade to path-only enforcement (part A above). Weaker — a concurrent
+			// modification of an existing T_start path is not detected here — but never a false positive
+			// and never an error. Hunk-aware enforcement needs git ≥2.38; log the degradation at --verbose.
+			if deps.Verbose != nil {
+				deps.Verbose.VerboseWarn("hunk-aware freeze check unavailable (git <2.38); path-only enforcement in effect")
+			}
+			return nil
 		}
+		return fmt.Errorf("%w: freeze check merge-tree[%d]: %w", ErrDecomposeFailed, i, merr)
 	}
-	if len(mismatch) > 0 {
-		return fmt.Errorf("%w in concept %d (%q): staged content differs from the frozen working-tree snapshot for: %s. "+
-			"This indicates concurrent working-tree changes were picked up by the stager. "+
+	if conflicts || mergedTree != tStart {
+		// Name the candidate offenders: staged paths whose content is not a clean subset of T_start
+		// (changedTreeI narrowed to those that differ from T_start). At least one of these is off-T_start.
+		delta, derr := deps.Git.DiffTreeNames(ctx, treeI, tStart)
+		if derr != nil {
+			return fmt.Errorf("%w: freeze check diff-tree-names[%d]: %w", ErrDecomposeFailed, i, derr)
+		}
+		deltaSet := pathSet(delta)
+		var named []string
+		for _, p := range changedTreeI {
+			if _, ok := deltaSet[p]; ok {
+				named = append(named, p)
+			}
+		}
+		if len(named) == 0 {
+			named = changedTreeI // defensive: name all staged paths if the diff was unexpectedly empty
+		}
+		cause := "introduced content not present at the start of the run"
+		if conflicts {
+			cause = "conflicts with the frozen working-tree snapshot"
+		}
+		return fmt.Errorf("%w in concept %d (%q): staged content is not traceable to the frozen working-tree snapshot among: %s. "+
+			"The stager %s (a concurrent working-tree change or a misbehaving stager). "+
 			"Aborting to protect the freeze boundary.",
-			ErrFreezeViolation, i, conceptTitle, strings.Join(mismatch, ", "))
+			ErrFreezeViolation, i, conceptTitle, strings.Join(named, ", "), cause)
 	}
 	return nil
 }

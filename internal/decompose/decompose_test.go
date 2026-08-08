@@ -822,6 +822,135 @@ func concurrentSentinelSeam(t *testing.T, repo string, conceptFiles map[string][
 //     commit): dcmLogCount == 2 (the two loop commits). Proven via dcmLogCount, NOT result.Amended
 //     (Amended is 0 for both "skipped" and "ran+null" — see decompose.go:72).
 //
+// stagePartialBlob stages an ARBITRARY blob for path into the live index WITHOUT touching the
+// working tree (git hash-object -w --stdin | git update-index --cacheinfo). It is exactly what
+// `git apply --cached` does mechanically — it lands a blob in the index that need not equal the
+// working-tree content. Used below to simulate FR-M5 hunk-level staging of a single file whose
+// changes are split across two concepts.
+func stagePartialBlob(t *testing.T, repo, path, content string) {
+	t.Helper()
+	hashCmd := exec.Command("git", "-C", repo, "hash-object", "-w", "--stdin")
+	hashCmd.Stdin = strings.NewReader(content)
+	out, err := hashCmd.Output()
+	if err != nil {
+		t.Fatalf("hash-object: %v", err)
+	}
+	sha := strings.TrimSpace(string(out))
+	dcmRunGit(t, repo, "update-index", "--cacheinfo", "100644,"+sha+","+path)
+}
+
+// TestDecompose_HunkSplitAcrossConcepts is the FR-M5/M3/M2b regression net for the intermittent
+// "freeze violation … staged content differs from the frozen working-tree snapshot" abort: a single
+// file split across two concepts, each concept staging only its own hunk via `git apply --cached`
+// (simulated here by staging an arbitrary blob). The hunk-aware FR-M1c content check (a 3-way merge
+// of tree[i] into T_start over base) accepts the legal partial and the run lands two commits. The
+// earlier full-blob-equality form false-positived on every legal hunk subset (the bug this guards).
+func TestDecompose_HunkSplitAcrossConcepts(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	base := "def get_links():\n    return []\n\ndef sort_items():\n    return []\n"
+	tStart := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return sorted(links, key=lambda c: c.code)\n"
+	basePlusA := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return []\n" // concept 0's hunk only
+
+	dcmWriteFile(t, repo, "store.py", base)
+	dcmStageFile(t, repo, "store.py")
+	dcmCommitRaw(t, repo, "initial") // born repo; HEAD.tree == base
+	dcmWriteFile(t, repo, "store.py", tStart) // dirty, un-staged → triggers decompose
+
+	// Planner splits store.py across two concepts (FR-M3: "a single file split across two concepts").
+	plannerJSON := `{"count":2,"single":false,"commits":[` +
+		`{"title":"feat: add link fetching","description":"the get_links change","files":["store.py"]},` +
+		`{"title":"feat: sort listed links by code","description":"the sort_items change","files":["store.py"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add link fetching", "feat: sort listed links by code"})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Commits = 2 // forced count overrides the FR-M2b one-file short-circuit so the loop runs
+
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		switch concept.Title {
+		case "feat: add link fetching":
+			stagePartialBlob(t, repo, "store.py", basePlusA) // hunk A only — a strict subset of T_start
+		case "feat: sort listed links by code":
+			stagePartialBlob(t, repo, "store.py", tStart) // + hunk B ⇒ index == T_start for store.py
+		}
+		return nil
+	}
+
+	res, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("legal hunk-level split must succeed, got %v", err)
+	}
+	if len(res.Commits) != 2 {
+		t.Fatalf("expected 2 commits (one per concept's hunk), got %d", len(res.Commits))
+	}
+	// The two commits reconstruct T_start exactly: concept 0 = hunk A, concept 1 = hunk B, so the
+	// final tip's store.py equals the full working-tree change staged at the freeze.
+	if got, want := dcmGitOut(t, repo, "show", "HEAD:store.py"), strings.TrimRight(tStart, "\n"); got != want {
+		t.Errorf("final tip store.py must reconstruct the full change; got %q want %q", got, want)
+	}
+	if n := dcmLogCount(t, repo); n != 3 { // initial + 2 concepts
+		t.Errorf("commit count = %d, want 3", n)
+	}
+}
+
+// TestDecompose_HunkSplit_RejectsOffTStartContent is the negative sibling: the hunk-aware check still
+// HARD-ABORTS when the stager stages content NOT traceable to T_start (a concurrent change or a rogue
+// stager). Concept 0 stages store.py with a line that appears in neither base nor T_start → the 3-way
+// merge conflicts → ErrFreezeViolation.
+func TestDecompose_HunkSplit_RejectsOffTStartContent(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	base := "def get_links():\n    return []\n\ndef sort_items():\n    return []\n"
+	tStart := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return sorted(links, key=lambda c: c.code)\n"
+	offPath := "def get_links():\n    return CONCURRENT_CHANGE()\n\ndef sort_items():\n    return []\n" // not in T_start
+
+	dcmWriteFile(t, repo, "store.py", base)
+	dcmStageFile(t, repo, "store.py")
+	dcmCommitRaw(t, repo, "initial")
+	dcmWriteFile(t, repo, "store.py", tStart)
+
+	plannerJSON := `{"count":2,"single":false,"commits":[` +
+		`{"title":"feat: add link fetching","description":"the get_links change","files":["store.py"]},` +
+		`{"title":"feat: sort listed links by code","description":"the sort_items change","files":["store.py"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add link fetching", "feat: sort listed links by code"})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Commits = 2
+
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		if concept.Title == "feat: add link fetching" {
+			stagePartialBlob(t, repo, "store.py", offPath) // off-T_start content (a concurrent change)
+		}
+		return nil
+	}
+
+	_, err := Decompose(context.Background(), deps)
+	if !errors.Is(err, ErrFreezeViolation) {
+		t.Fatalf("expected ErrFreezeViolation for off-T_start content, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "not traceable to the frozen working-tree snapshot") {
+		t.Errorf("error should say content is not traceable to T_start; got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "store.py") {
+		t.Errorf("error should name store.py; got: %s", err.Error())
+	}
+	if n := dcmLogCount(t, repo); n != 1 { // only 'initial' — the run aborted before committing
+		t.Errorf("commit count = %d, want 1 (HEAD unchanged)", n)
+	}
+}
+
 // Success-path sibling of TestDecompose_StagerFreezeViolation (which STAGES the sentinel).
 func TestDecompose_ConcurrentChangeExclusion(t *testing.T) {
 	bin := stubtest.Build(t)

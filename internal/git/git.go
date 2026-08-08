@@ -427,6 +427,28 @@ type Git interface {
 	// when treeA == treeB. Read-only w.r.t. refs and the index.
 	DiffTreeNameStatus(ctx context.Context, treeA, treeB string) (nameStatus string, err error)
 
+	// MergeTrees performs a THREE-WAY tree merge of ourTree and theirTree over baseTree via
+	// `git merge-tree --write-tree --merge-base=<baseTree> <ourTree> <theirTree>` (git ≥2.38). It is the
+	// HUNK-AWARE SUBSET primitive for FR-M1c freeze enforcement (§9.14): the caller passes ourTree=tree[i]
+	// and theirTree=T_start, so a 3-way merge reconstructs T_start EXACTLY when tree[i] is a content-subset
+	// of T_start — including the LEGAL case where the planner split one file across concepts (FR-M3/M5/M2b)
+	// and the stager staged only a HUNK SUBSET (base + some of T_start's hunks). For such a subset,
+	// merge(base, base+subset, T_start) == T_start cleanly. An off-T_start change (concurrent work the
+	// stager swept in, or a rogue stager) makes the merge either CONFLICT or diverge from T_start.
+	//
+	// Returns mergedTree (the resulting tree SHA — stdout line 1; merge-tree --write-tree writes ONLY a
+	// tree object to the object store, never .git/index or HEAD) and conflicts (true iff git reported
+	// merge conflicts, exit 1). err is non-nil ONLY for infrastructural failures: missing git binary,
+	// cancelled context, start failure, or a git exit other than 0/1 (a real error such as a bad tree
+	// SHA, exit 128). Read-only w.r.t. refs and the index (PRD §18.1).
+	//
+	// OLD-GIT GRACEFUL DEGRADATION: a git predating 2.38 does not understand --write-tree and exits 129
+	// (usage). MergeTrees surfaces that as the ErrMergeTreeUnsupported sentinel so the freeze check
+	// (verifyFreezeSubset) can DEGRADE to path-only enforcement instead of erroring or false-positiving.
+	// Hunk-aware freeze enforcement needs git ≥2.38; older git keeps the (weaker, never-false-positive)
+	// path-only guard.
+	MergeTrees(ctx context.Context, baseTree, ourTree, theirTree string) (mergedTree string, conflicts bool, err error)
+
 	// Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
 	// passed writers (the CLI passes os.Stdout/os.Stderr so the user sees git's real output: progress,
 	// the no-upstream hint, rejected non-fast-forwards, etc.). It NEVER adds `--set-upstream` (FR-P2:
@@ -709,6 +731,14 @@ func (g *gitRunner) CommitTree(ctx context.Context, tree string, parents []strin
 // orchestrator via RevParseHEAD when it observes this error (it is deliberately NOT captured here —
 // see P1.M1.T2.S5 research §3 / decision D5).
 var ErrCASFailed = errors.New("git update-ref: compare-and-swap failed (ref moved since snapshot)")
+
+// ErrMergeTreeUnsupported is returned by MergeTrees when the installed git predates 2.38 and does not
+// understand `merge-tree --write-tree` (git exits 129 — usage). The freeze-enforcement caller
+// (decompose.verifyFreezeSubset) detects it via errors.Is and DEGRADES to path-only enforcement
+// (FR-M1c part A only): weaker than the hunk-aware content check, but never a false positive and never
+// an error. Hunk-aware freeze enforcement (required for splitting a single file across concepts,
+// FR-M3/M5/M2b) needs git ≥2.38.
+var ErrMergeTreeUnsupported = errors.New("git merge-tree --write-tree unsupported (requires git >= 2.38)")
 
 // UpdateRefCAS atomically moves ref to newSHA only if ref's current value equals expectedOld — the
 // 3-arg compare-and-swap form of git update-ref (git takes the ref lock, reads the current value, and
@@ -2153,6 +2183,30 @@ func (g *gitRunner) DiffTreeNameStatus(ctx context.Context, treeA, treeB string)
 		return "", fmt.Errorf("git diff-tree --name-status: failed (exit %d): %s", code, strings.TrimSpace(stderr))
 	}
 	return stdout, nil // raw A/M/D lines; caller prefixes with "# " for the EDITMSG
+}
+
+// MergeTrees performs a three-way tree merge of ourTree and theirTree over baseTree via
+// `git merge-tree --write-tree --merge-base=<baseTree> <ourTree> <theirTree>` (git >=2.38). See the
+// interface doc comment for the full contract. Exit-code semantics: 0 = clean merge, 1 = conflicts
+// (mergedTree is still written, stdout line 1), 128 = bad tree SHA (real error), 129 = usage
+// (pre-2.38 git that does not recognize --write-tree -> ErrMergeTreeUnsupported). The merged tree SHA
+// is stdout line 1 in both the clean and conflict cases (conflict detail follows on subsequent lines /
+// stderr, which we discard — verifyFreezeSubset only needs the tree OID + the clean/conflict bit).
+func (g *gitRunner) MergeTrees(ctx context.Context, baseTree, ourTree, theirTree string) (string, bool, error) {
+	stdout, stderr, code, err := g.run(ctx, g.workDir,
+		"merge-tree", "--write-tree", "--merge-base="+baseTree, ourTree, theirTree)
+	if err != nil {
+		return "", false, err // git binary missing / context cancelled / start failure (run sets code=-1)
+	}
+	if code == 129 {
+		return "", false, ErrMergeTreeUnsupported // pre-2.38 git: --write-tree not recognized -> degrade
+	}
+	if code > 1 { // 128 (bad SHA) and any other non-0/1/129 are real errors
+		return "", false, fmt.Errorf("git merge-tree: failed (exit %d): %s", code, strings.TrimSpace(stderr))
+	}
+	// code 0 = clean merge; code 1 = conflicts. stdout line 1 is the merged tree SHA in both cases.
+	mergedTree := strings.TrimSpace(strings.SplitN(stdout, "\n", 2)[0])
+	return mergedTree, code == 1, nil
 }
 
 // Push runs plain `git push` (NO arguments — §9.22 FR-P1) streaming its stdout/stderr VERBATIM to the
