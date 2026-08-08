@@ -156,14 +156,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Regression test for BUG-002 (duplicate-subject collision)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Test runLoopFastPath with >=2 disjoint concepts whose message agent emits the same subject. Assert no two published commits share a subject — one concept must be re-generated with a distinct subject or rescued. This test would fail on the pre-fix code (where both concepts pass the stale dedupe check) and passes on the fixed code (where the incremental cross-concept dedupe catches the collision).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Test fast-path with same-subject collision: no duplicate subjects",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"

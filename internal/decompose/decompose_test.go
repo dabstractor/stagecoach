@@ -4675,6 +4675,117 @@ func TestRunLoopFastPath_CrossConceptDedupe(t *testing.T) {
 	}
 }
 
+// TestRunLoopFastPath_DuplicateSubjectDedupe is the DETERMINISTIC BUG-002 regression (US7/FR30-33):
+// on the file-disjoint fast-path, when two disjoint concepts' message agent emits the SAME subject,
+// the run does NOT publish two commits with that identical subject. The fix (P1.M2.T1.S1 — the
+// seenSubjects cross-concept accumulator in runLoopFastPath's serial publish loop) is LANDED; this test
+// locks the DETERMINISTIC rescue outcome against regression.
+//
+// Determinism: the serial publish loop processes concepts IN ORDER (i=0 then i=1). Concept 0 always
+// publishes first (its subject isn't yet in seenSubjects); concept 1 always collides → regenerate. The
+// single-response stub returns the SAME subject on regen, so concept 1 CANNOT produce a distinct subject
+// → it is RESCUED. The outcome (dre.Index==1, 1 published commit) is fixed regardless of goroutine
+// scheduling; the concurrent GENERATION order is nondeterministic but the serial PUBLISH order is not,
+// and dedupe happens in the publish loop. cfg.Edit=false ISOLATES BUG-002 from the BUG-001 editor path.
+//
+// This complements TestRunLoopFastPath_CrossConceptDedupe (which accepts EITHER rescue OR success as a
+// valid outcome); this test pins the precise deterministic rescue + the specific subject + the git-log
+// US7 user-visible guarantee ("git log doesn't contain the same line twice").
+func TestRunLoopFastPath_DuplicateSubjectDedupe(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// Seed a base commit with two disjoint files, then modify both disjointly in the working tree.
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmRunGit(t, repo, "add", "a.txt", "b.txt")
+	dcmCommitRaw(t, repo, "initial") // BORN repo → baseTree = HEAD^{tree}, isUnborn=false
+	// Disjoint working-tree change set: modify each file independently (the FR-M13 disjoint partition).
+	dcmWriteFile(t, repo, "a.txt", "AAA\n")
+	dcmWriteFile(t, repo, "b.txt", "BBB\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+
+	// Mirror what Decompose does internally: capture baseTree (HEAD^{tree}), then FreezeWorkingTree to
+	// capture T_start (the full working-tree change set) AND reset the index back to baseTree so the
+	// per-concept sweep starts clean.
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// BUG-002 trigger: BOTH concepts emit the SAME subject. Each concept's diff names a distinct file, so
+	// the input-derived stub routes each to its rule — but the rule's msg is identical.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "chore: update thing"}, // SAME subject for both ← BUG-002 trigger
+		{substr: "b.txt", msg: "chore: update thing"},
+	})
+
+	cfg := config.Defaults()
+	cfg.Edit = false            // isolate BUG-002 from BUG-001 (no EditMessage in the serial loop)
+	cfg.MaxDuplicateRetries = 0 // faster: regen rescues on the first collision (the single-response stub
+	// keeps emitting the colliding subject, so generateMessageCore's loop exhausts without a distinct
+	// subject → *RescueError). The default (3) also reaches the same rescue; 0 is the simpler variant.
+
+	deps := Deps{Git: g, Config: cfg, Roles: RoleManifests{Message: messageM}, Verbose: nil}
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "c1", Files: []string{"a.txt"}},
+		{Title: "c2", Files: []string{"b.txt"}},
+	}
+
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+
+	// DETERMINISTIC rescue: concept 0 publishes "chore: update thing" (appended to seenSubjects);
+	// concept 1 collides → regen (single-response stub returns the same subject) → still collides →
+	// rescued. Assert the *DecomposeRescueError shape + the partial published set.
+	var dre *DecomposeRescueError
+	if !errors.As(err, &dre) {
+		t.Fatalf("runLoopFastPath error = %T (%v), want *DecomposeRescueError (concept 1 rescued after same-subject collision)", err, err)
+	}
+	if len(commits) != 1 || len(dre.Commits) != 1 {
+		t.Errorf("published commits = %d (dre.Commits=%d), want 1 (concept 0 only; concept 1 rescued)", len(commits), len(dre.Commits))
+	}
+	if dre.Index != 1 {
+		t.Errorf("dre.Index = %d, want 1 (concept 1 is the rescued concept)", dre.Index)
+	}
+	if len(dre.Commits) == 1 && dre.Commits[0].Subject != "chore: update thing" {
+		t.Errorf("published subject = %q, want %q", dre.Commits[0].Subject, "chore: update thing")
+	}
+
+	// US7 / FR30-33 guarantee — the USER-VISIBLE proof: git log contains the subject exactly ONCE (no
+	// duplicate subjects). The base commit "initial" is the only other log line, so the count is 1.
+	log := dcmLogOneline(t, repo)
+	if n := strings.Count(log, "chore: update thing"); n != 1 {
+		t.Errorf("git log contains %q %d times, want 1 (US7 no-duplicate-subjects):\n%s", "chore: update thing", n, log)
+	}
+
+	// Belt-and-suspenders: no two PUBLISHED commits share a subject (the core invariant; trivially true
+	// with 1 published commit but stated as the US7 guarantee this test pins).
+	if dups := dupPublishedSubjects(commitSubjects(dre.Commits)); len(dups) > 0 {
+		t.Errorf("duplicate published subjects: %v", dups)
+	}
+}
+
+// dupPublishedSubjects returns any subject strings appearing more than once in ss (the US7 invariant
+// check helper). Used by the BUG-002 deterministic regression test.
+func dupPublishedSubjects(ss []string) []string {
+	seen := map[string]int{}
+	var dups []string
+	for _, s := range ss {
+		seen[s]++
+	}
+	for s, n := range seen {
+		if n > 1 {
+			dups = append(dups, s)
+		}
+	}
+	return dups
+}
+
 // commitSubjects extracts the Subject from each CommitResult in order. Used by the BUG-002 regression
 // test to collect published-commit subjects from either the success path (commits) or the rescue path
 // (DecomposeRescueError.Commits) for the no-duplicate-subjects assertion.

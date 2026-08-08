@@ -163,16 +163,17 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	// [role.*] for the target (UNCOMMENTED), canonical order: planner, stager, message, arbiter
 	models := DefaultModelsForProvider(target) // non-nil (target is a validated built-in)
 	piBlanked := target == "pi"
-	if piBlanked {
-		// pi is a multi-backend provider: the model must carry the inference backend as a
-		// slash-prefix (FR-R5b). The bootstrap writes per-role models blank so the user supplies
-		// their own backend/model.
+	opencodeBlanked := target == "opencode" // power-user wildcard: plan-/backend-dependent
+	if piBlanked || opencodeBlanked {
+		// pi is multi-backend (FR-R5b: a bare model is an error) and opencode's provider-prefixed models
+		// are plan-dependent wildcards. Blank the written [role.*] models so the user supplies their own;
+		// the roleDefaults placeholders remain the internal fallback + commented suggestions only.
 		for role := range models {
 			models[role] = ""
 		}
 	}
 	stagerName, stagerModel := StagerFallback(target, models)
-	if piBlanked {
+	if piBlanked || opencodeBlanked {
 		// stagerFallback re-pulls pi’s stager model from the FR-D4 table (a fresh copy); force
 		// it blank so all four roles stay empty. pi remains the stager (stager-capable).
 		stagerModel = ""
@@ -191,7 +192,11 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	applyOverrides(models, &stagerModel, overrides)
 
 	fmt.Fprintf(&b, "\n# --- per-role models for the default provider %q (PRD §16.4, §9.15) ---\n", target)
-	if piBlanked && !piHasOverrides {
+	if opencodeBlanked {
+		b.WriteString("# NOTE: opencode's models are plan-/backend-dependent (provider-prefixed, e.g. openai/gpt-5.4).\n")
+		b.WriteString("# The shipped per-role models are EMPTY so you supply your own — opencode then uses whatever\n")
+		b.WriteString("# model/backend your plan provides. opencode is a power-user provider.\n")
+	} else if piBlanked && !piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
 		b.WriteString("# e.g. model = \"zai/glm-5.2\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
 		b.WriteString("# The shipped per-role models are empty so you can supply your own backend/model.\n")
