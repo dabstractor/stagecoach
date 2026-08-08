@@ -4,21 +4,21 @@
       "type": "Phase",
       "id": "P1",
       "title": "Phase 1 — File-disjoint staging fast-path (G29, FR-M13/FR-M14)",
-      "status": "Ready",
+      "status": "Complete",
       "description": "Implement the v3.2 file-disjoint staging fast-path: when the planner's partition is pairwise file-disjoint, stage each concept deterministically with `git add` (no stager agent), freeze all trees up front, run all N message generations concurrently, and publish in strict CAS order. A shared file falls back transparently to the existing tooled-stager runLoop for the whole run. The fast-path is automatic and configuration-free. Spec is final (spec/01-product.md §9.14 FR-M13/M14, §13.6.3 addendum, G29); code does not exist yet (grep-confirmed zero hits). All §13.6.3/§20.2 invariants are preserved on both paths.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Implement + test the fast-path",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Land the fast-path as a sibling function to runLoop in internal/decompose/decompose.go, wire a one-line gate in Decompose(), and add a regression suite. runLoop is preserved verbatim as the shared-file fallback. The arbiter/planner/message roles are unchanged and consume the fast-path output without modification.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Implement the file-disjoint staging fast-path + regression suite",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Add isFileDisjoint (pure gate), runLoopFastPath (deterministic serial staging sweep -> concurrent message gen -> CAS-ordered publish -> FR-M12 isolation), the Decompose() dispatch, the docs/how-it-works.md Mode-A paragraph, and a comprehensive regression test suite. Reuse existing primitives (git.Add, freezeSnapshot, verifyFreezeSubset, generateMessage, publishCommit, buildCommitResult, drainMsg, signal.SetSnapshot/ClearSnapshot); do NOT reimplement them or modify runLoop/arbiter.go/chain.go.",
               "subtasks": [
                 {
@@ -126,7 +126,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S6",
                   "title": "docs/how-it-works.md — add the 'File-disjoint fast-path' paragraph (Mode A)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S3"
