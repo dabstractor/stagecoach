@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -133,6 +134,37 @@ func dcmMessageManifest(t *testing.T, bin string, out string) provider.Manifest 
 func dcmMessageScriptManifest(t *testing.T, bin string, responses []string) provider.Manifest {
 	t.Helper()
 	return stubtest.NewScript(t, bin, responses)
+}
+
+// dcmMessageMatchManifest builds a stub message manifest whose output is INPUT-DERIVED and thus
+// concurrency-safe (P1.M1.T1.S3). Unlike NewScript (which races on its file-backed counter when N
+// stub processes run concurrently), each process inspects its OWN stdin payload (the concept's
+// tree-to-tree diff) and emits the FIRST matching rule's message. rules is ordered by priority:
+// each entry is {substr, msg}; the first rule whose substr appears in stdin wins. This makes a
+// concept's message deterministic regardless of goroutine scheduling — essential for the FR-M14
+// concurrent fast-path's focused tests.
+func dcmMessageMatchManifest(t *testing.T, bin string, rules []messageMatchRule) provider.Manifest {
+	t.Helper()
+	var b strings.Builder
+	for _, r := range rules {
+		b.WriteString(r.substr)
+		b.WriteByte('|')
+		b.WriteString(r.msg)
+		b.WriteByte('\n')
+	}
+	m := stubtest.Manifest(bin, stubtest.Options{Out: ""})
+	m.Env["STAGECOACH_STUB_MATCHFILE"] = t.TempDir() + "/match.txt"
+	if err := os.WriteFile(m.Env["STAGECOACH_STUB_MATCHFILE"], []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write matchfile: %v", err)
+	}
+	return m
+}
+
+// messageMatchRule is one input-derived rule for dcmMessageMatchManifest: if substr appears in the
+// concept's stdin (its diff), emit msg.
+type messageMatchRule struct {
+	substr string
+	msg    string
 }
 
 // dcmDeps builds a minimal Deps for decompose tests (no ResolveRoles). All four roles are populated.
@@ -2973,12 +3005,17 @@ func TestIsFileDisjoint(t *testing.T) {
 	}
 }
 
-// TestRunLoopFastPath_Sweep is the focused sweep-only test for the FR-M13 file-disjoint fast-path's
-// serial staging sweep (P1.M1.T1.S2). The comprehensive regression suite is P1.M1.T1.S5; this proves the
-// sweep runs end-to-end: 3 pairwise-disjoint concepts → deps.Git.Add → freezeSnapshot → verifyFreezeSubset
-// (FR-M1c) → no FR-M8 skip → the S3 sentinel error carrying the staged count. No stager seam is needed —
-// runLoopFastPath calls deps.Git.Add directly (the whole point of the fast-path: no stager agent).
-func TestRunLoopFastPath_Sweep(t *testing.T) {
+// TestRunLoopFastPath_ConcurrentPublish (P1.M1.T1.S3) is the focused happy-path test for the FR-M13
+// file-disjoint fast-path's CONCURRENT PHASE: 3 pairwise-disjoint concepts → runLoopFastPath launches
+// all 3 message generations CONCURRENTLY (FR-M14) then publishes them in strict CAS order (FR-M7),
+// producing (commits, chainData, nil) in the SAME shapes runLoop returns. Asserts CAS order
+// (commit[i].Parent == i==0 ? preRunHEAD : commits[i-1].SHA), chainData parallelism, and that the total
+// elapsed is ≈ 1 message latency, not N× (concurrency observable). The concurrency-timing assertion is a
+// soft warning (CI jitter); the CAS-order assertion is the hard correctness gate. The comprehensive
+// regression suite is P1.M1.T1.S5; this replaces S2's TestRunLoopFastPath_Sweep (which asserted the
+// now-removed S3 sentinel).
+func TestRunLoopFastPath_ConcurrentPublish(t *testing.T) {
+	bin := stubtest.Build(t)
 	repo := t.TempDir()
 	dcmInitRepo(t, repo)
 	// Seed a base commit with three files, then modify all three disjointly in the working tree.
@@ -3004,35 +3041,232 @@ func TestRunLoopFastPath_Sweep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FreezeWorkingTree: %v", err)
 	}
+	preRunHEAD := dcmHeadSHA(t, repo)
 
+	// Message stub: INPUT-DERIVED + concurrency-safe (P1.M1.T1.S3). Each concept's tree-to-tree diff
+	// names a distinct file (a.go/b.go/c.go); the stub inspects its OWN stdin and emits the matching
+	// subject. This sidesteps the script stub's file-backed counter (which races across N concurrent
+	// stub processes) so a concept's message is deterministic regardless of goroutine scheduling. A
+	// 150ms sleep per call makes concurrency observable: if serial, total ≈ 450ms; if concurrent, ≈ 150ms.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{"a.go", "feat: add a"},
+		{"b.go", "feat: add b"},
+		{"c.go", "feat: add c"},
+	})
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "150"
+
+	roles := RoleManifests{Message: messageM}
 	var logBuf bytes.Buffer
 	deps := Deps{
 		Git:     g,
 		Config:  config.Defaults(),
+		Roles:   roles,
 		Verbose: ui.NewVerbose(&logBuf, true),
 	}
 
 	concepts := []prompt.PlannerCommit{
-		{Title: "a", Files: []string{"a.go"}},
-		{Title: "b", Files: []string{"b.go"}},
-		{Title: "c", Files: []string{"c.go"}},
+		{Title: "c1", Files: []string{"a.go"}},
+		{Title: "c2", Files: []string{"b.go"}},
+		{Title: "c3", Files: []string{"c.go"}},
 	}
 
-	_, _, err = runLoopFastPath(ctx, deps, concepts, baseTree, tStart, dcmHeadSHA(t, repo), false)
-	// S2's sweep returns the S3 sentinel — assert it (proves the sweep ran end-to-end without a
-	// freeze/verify/add error).
+	start := time.Now()
+	commits, chainData, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("runLoopFastPath: %v", err)
+	}
+
+	// Shape: 3 commits + 3 parallel chain entries.
+	if len(commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(commits))
+	}
+	if len(chainData) != 3 {
+		t.Fatalf("chainData len = %d, want 3", len(chainData))
+	}
+
+	// Subjects in concept order.
+	wantSubjects := []string{"feat: add a", "feat: add b", "feat: add c"}
+	for i, want := range wantSubjects {
+		if commits[i].Subject != want {
+			t.Errorf("Commits[%d].Subject = %q, want %q", i, commits[i].Subject, want)
+		}
+	}
+
+	// HARD GATE — CAS order (FR-M7). commit[i] parent = i==0 ? preRunHEAD : commits[i-1].SHA.
+	for i, c := range commits {
+		parent := dcmGitOut(t, repo, "rev-parse", c.SHA+"^")
+		wantParent := preRunHEAD
+		if i > 0 {
+			wantParent = commits[i-1].SHA
+		}
+		if parent != wantParent {
+			t.Errorf("commit[%d] parent = %s, want %s (CAS order violated)", i, parent, wantParent)
+		}
+	}
+	// HEAD advanced to the last commit.
+	if head := dcmHeadSHA(t, repo); head != commits[2].SHA {
+		t.Errorf("HEAD = %s, want %s (last commit)", head, commits[2].SHA)
+	}
+	// chainData parallelism: SHA == commits[i].SHA; Parent mirrors the CAS chain.
+	for i, ce := range chainData {
+		if ce.SHA != commits[i].SHA {
+			t.Errorf("chainData[%d].SHA = %s, want %s", i, ce.SHA, commits[i].SHA)
+		}
+		wantParent := preRunHEAD
+		if i > 0 {
+			wantParent = commits[i-1].SHA
+		}
+		if ce.Parent != wantParent {
+			t.Errorf("chainData[%d].Parent = %s, want %s", i, ce.Parent, wantParent)
+		}
+	}
+
+	// git log shows exactly 3 commits reachable from HEAD (the base "initial" is the parent of commit 0).
+	if n := dcmLogCount(t, repo); n != 4 { // initial + 3 fast-path commits
+		t.Errorf("git log count = %d, want 4 (initial + 3)", n)
+	}
+
+	// SOFT GATE — concurrency observable. If serial, elapsed ≈ 3×150ms = 450ms; if concurrent,
+	// elapsed ≈ 150ms + git ops. Log a warning on CI jitter (the CAS-order gate above is the hard one).
+	if elapsed >= 3*150*time.Millisecond {
+		t.Logf("WARNING: elapsed = %v (may indicate no concurrency — CI variability)", elapsed)
+	} else {
+		t.Logf("concurrency confirmed: elapsed = %v (< 3×150ms = %v)", elapsed, 3*150*time.Millisecond)
+	}
+	// The concurrent-launch summary log proves the FR-M14 launch-all fired.
+	if !strings.Contains(logBuf.String(), "launched 3 concurrent message generations") {
+		t.Errorf("expected 'launched 3 concurrent message generations' log; got: %q", logBuf.String())
+	}
+}
+
+// TestRunLoopFastPath_RescueIsolation (P1.M1.T1.S3, FR-M12a + no-leak drain) asserts that when message[i]
+// fails mid-publish, (a) commits 0..i-1 STAND (HEAD == commits[i-1].SHA), (b) a *DecomposeRescueError
+// (wrapping *RescueError, errors.Is(ErrRescue)) is returned naming concept i, (c) FormatRescueMulti is
+// printed to deps.Out, (d) the remaining i+1..N-1 in-flight channels are DRAINED (no goroutine leak),
+// and (e) the rescue recipe's -p parent is the AUTHORITATIVE commits[i-1].SHA — the §5 fix's proof —
+// NOT preRunHEAD (which generateMessage captured via RevParseHEAD during concurrent generation, possibly
+// before commit[i-1] landed, and is therefore stale).
+func TestRunLoopFastPath_RescueIsolation(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 1\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 1\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 1\n")
+	dcmRunGit(t, repo, "add", "a.go", "b.go", "c.go")
+	dcmCommitRaw(t, repo, "initial") // BORN repo
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 2\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 2\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 2\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// Message stub: INPUT-DERIVED + concurrency-safe (P1.M1.T1.S3). Concept 0 (a.go) → success;
+	// concept 1 (b.go) → EMPTY (parse-fail → RescueError with MaxDuplicateRetries=0); concept 2 (c.go)
+	// → would-be (drained, not published). Deterministic per-concept regardless of goroutine
+	// scheduling (the script stub's counter would race). A 100ms sleep makes the goroutines truly
+	// concurrent so the drain of concept 2's in-flight channel is exercised.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{"a.go", "feat: add a"}, // concept 0: success
+		{"b.go", ""},            // concept 1: empty → parse fail → RescueError (MaxDuplicateRetries=0)
+		{"c.go", "feat: add c"}, // concept 2: would-be (drained, not published)
+	})
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "100"
+
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0 // fail immediately on parse failure → RescueError
+
+	roles := RoleManifests{Message: messageM}
+	deps, buf := dcmOutBuffer(t, repo, roles)
+	deps.Config = cfg
+	deps.Git = g // dcmOutBuffer builds its own Git; re-point to the repo's runner
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "c1", Files: []string{"a.go"}},
+		{Title: "c2", Files: []string{"b.go"}},
+		{Title: "c3", Files: []string{"c.go"}},
+	}
+
+	beforeGoroutines := runtime.NumGoroutine()
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+	afterGoroutines := runtime.NumGoroutine()
 	if err == nil {
-		t.Fatalf("runLoopFastPath: expected the S3 sentinel error, got nil")
+		t.Fatal("expected error (message rescue for concept 1), got nil")
 	}
-	if !strings.Contains(err.Error(), "runLoopFastPath concurrent phase not yet implemented") {
-		t.Fatalf("expected the S3 sentinel error; got: %v", err)
+
+	// (a) errors.As → *DecomposeRescueError naming concept 1.
+	var dre *DecomposeRescueError
+	if !errors.As(err, &dre) {
+		t.Fatalf("error = %v, want *DecomposeRescueError", err)
 	}
-	// All 3 disjoint concepts staged (none empty-skipped): the count appears in the sentinel.
-	if !strings.Contains(err.Error(), "staged 3 concepts") {
-		t.Errorf("expected 'staged 3 concepts' in the sentinel; got: %v", err)
+	if dre.Index != 1 {
+		t.Errorf("dre.Index = %d, want 1 (concept 1 failed)", dre.Index)
 	}
-	// The summary log proves the sweep reached its end and read the staged count.
-	if !strings.Contains(logBuf.String(), "staged 3/3 concepts") {
-		t.Errorf("expected 'staged 3/3 concepts' summary log; got: %q", logBuf.String())
+	if dre.Count != 3 {
+		t.Errorf("dre.Count = %d, want 3", dre.Count)
+	}
+	// (b) errors.As → *generate.RescueError (via Unwrap).
+	var re *generate.RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("error does not unwrap to *RescueError: %v", err)
+	}
+	// (c) errors.Is → generate.ErrRescue (→ exitcode 3).
+	if !errors.Is(err, generate.ErrRescue) {
+		t.Errorf("error is not ErrRescue: %v", err)
+	}
+
+	// (d) partial commits stand: exactly 1 (concept 0), and HEAD == commits[0].SHA (concept 1 never
+	// published). This is the PARTIAL-STAND proof.
+	if len(commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1 (only concept 0 landed)", len(commits))
+	}
+	if head := dcmHeadSHA(t, repo); head != commits[0].SHA {
+		t.Errorf("HEAD = %s, want %s (concept 1 never published; partial stands)", head, commits[0].SHA)
+	}
+	if dcmLogCount(t, repo) != 2 { // initial + concept 0
+		t.Errorf("git log count = %d, want 2 (initial + concept 0)", dcmLogCount(t, repo))
+	}
+
+	// (e) FormatRescueMulti printed to deps.Out, naming "concept 2 of 3" (1-based).
+	out := buf.String()
+	if !strings.Contains(out, "concept 2 of 3") {
+		t.Errorf("rescue output missing 'concept 2 of 3'; got: %s", out)
+	}
+	if !strings.Contains(out, "update-ref HEAD") {
+		t.Errorf("rescue output missing 'update-ref HEAD'; got: %s", out)
+	}
+
+	// (f) §5 fix proof — the rescue recipe's -p parent is the AUTHORITATIVE commits[0].SHA, NOT
+	// preRunHEAD. FormatRescueMulti emits "git commit-tree -p <parentSHA> ..."; the parent in that
+	// command must equal commits[0].SHA. The stale re.ParentSHA (captured under concurrency) would have
+	// been preRunHEAD; the shallow-copy fix overrides it to prevSHA (== commits[0].SHA after concept 0
+	// published). Assert the recipe references commits[0].SHA as the parent and does NOT reference
+	// preRunHEAD anywhere in the -p position.
+	if !strings.Contains(out, "-p "+commits[0].SHA) {
+		t.Errorf("rescue recipe's -p parent = want %s (authoritative prevSHA); output: %s", commits[0].SHA, out)
+	}
+	if strings.Contains(out, "-p "+preRunHEAD) {
+		t.Errorf("rescue recipe's -p parent is STALE preRunHEAD %s (should be commits[0].SHA); output: %s", preRunHEAD, out)
+	}
+	// The DecomposeRescueError.Rescue.ParentSHA must ALSO carry the authoritative parent (the fix).
+	if re.ParentSHA != commits[0].SHA {
+		t.Errorf("RescueError.ParentSHA = %s, want %s (authoritative prevSHA; §5 fix)", re.ParentSHA, commits[0].SHA)
+	}
+
+	// (g) NO GOROUTION LEAK — concept 2's in-flight channel was drained. Allow a generous delta for
+	// the runtime's own goroutines + GC; the hard proof is that the call RETURNED (a blocked drain would
+	// hang until the test timeout). Give the scheduler a beat to retire the goroutines.
+	time.Sleep(50 * time.Millisecond)
+	delta := runtime.NumGoroutine() - beforeGoroutines
+	if delta > 0 {
+		t.Logf("goroutine delta after drain = %d (before=%d, after=%d, post-wait=%d) — informational; the call returned so concept 2 was drained", delta, beforeGoroutines, afterGoroutines, runtime.NumGoroutine())
 	}
 }

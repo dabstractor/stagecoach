@@ -30,13 +30,16 @@ func envInt(key string, def int) int {
 func main() {
 	// 1. Drain stdin FIRST (deadlock guard, §4): the executor pipes the payload via a bounded OS
 	//    pipe (~64 KiB). If we slept before draining and the payload exceeded the buffer,
-	//    parent+child would deadlock. Tee to file if STAGECOACH_STUB_STDINFILE is set (payload-capture
-	//    for tests); else drain to Discard. Both branches drain FULLY (the deadlock guard must hold).
-	//    /dev/null (Stdin=="") → io.Copy returns immediately.
+	//    parent+child would deadlock. Tee to a buffer for the optional MATCHFILE input-derived mode
+	//    (P1.M1.T1.S3) if STAGECOACH_STUB_MATCHFILE is set; else to Discard (or STDINFILE for capture).
+	//    Both branches drain FULLY (the deadlock guard must hold). /dev/null (Stdin=="") → io.Copy
+	//    returns immediately.
+	var stdin bytes.Buffer
 	if sf := os.Getenv("STAGECOACH_STUB_STDINFILE"); sf != "" {
-		var buf bytes.Buffer
-		io.Copy(&buf, os.Stdin)
-		os.WriteFile(sf, buf.Bytes(), 0o644)
+		io.Copy(&stdin, os.Stdin)
+		os.WriteFile(sf, stdin.Bytes(), 0o644)
+	} else if mf := os.Getenv("STAGECOACH_STUB_MATCHFILE"); mf != "" {
+		io.Copy(&stdin, os.Stdin) // retain for input-derived output selection (below)
 	} else {
 		io.Copy(io.Discard, os.Stdin)
 	}
@@ -66,9 +69,12 @@ func main() {
 		fmt.Fprint(os.Stderr, s)
 	}
 
-	// 4. Select + write stdout. Script mode ⇒ call-varying (dedupe loop); else single-response OUT.
+	// 4. Select + write stdout. Precedence: MATCHFILE (input-derived, concurrency-safe —
+	//    P1.M1.T1.S3) > Script (call-varying, dedupe loop) > single-response OUT.
 	out := os.Getenv("STAGECOACH_STUB_OUT")
-	if scriptFile := os.Getenv("STAGECOACH_STUB_SCRIPT"); scriptFile != "" {
+	if mf := os.Getenv("STAGECOACH_STUB_MATCHFILE"); mf != "" {
+		out = selectMatched(mf, stdin.String())
+	} else if scriptFile := os.Getenv("STAGECOACH_STUB_SCRIPT"); scriptFile != "" {
 		out = selectScripted(scriptFile)
 	}
 	fmt.Fprint(os.Stdout, out) // EXACTLY `out` — no extra newline (ParseOutput trims; assertions stay byte-exact)
@@ -114,4 +120,37 @@ func readCounter(path string) int {
 
 func writeCounter(path string, n int) {
 	_ = os.WriteFile(path, []byte(strconv.Itoa(n)), 0o644)
+}
+
+// selectMatched implements INPUT-DERIVED, CONCURRENCY-SAFE output selection (P1.M1.T1.S3). The
+// FR-M14 fast-path launches N message generations concurrently; the file-backed counter behind
+// selectScripted races across the N concurrent stub processes (read-increment-write with no lock),
+// so a concept's response becomes non-deterministic and two concepts can collide on the same
+// index. selectMatched sidesteps the counter ENTIRELY: each process inspects its OWN stdin payload
+// (the concept's tree-to-tree diff, which is unique per disjoint concept) and emits the FIRST
+// matching line's message. This is purely process-local — no shared counter ⇒ no race ⇒
+// deterministic per-concept output under concurrency.
+//
+// matchFile format: one rule per line, "<substring>|<output>". The FIRST rule whose substring
+// appears ANYWHERE in stdin wins (order = priority). No match ⇒ falls back to STAGECOACH_STUB_OUT.
+// The substring is matched literally against the raw stdin (the rendered prompt), so a path like
+// "a.go" matches when the concept's diff names that file. The '|' is the FIRST one in the line
+// (output may contain '|'); a line with no '|' is skipped.
+func selectMatched(matchFile, stdin string) string {
+	data, err := os.ReadFile(matchFile)
+	if err != nil {
+		return os.Getenv("STAGECOACH_STUB_OUT") // unreadable matchfile ⇒ single-response fallback
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		idx := strings.Index(line, "|")
+		if idx < 0 {
+			continue // blank/malformed line — skip
+		}
+		substr := line[:idx]
+		msg := line[idx+1:]
+		if substr != "" && strings.Contains(stdin, substr) {
+			return msg
+		}
+	}
+	return os.Getenv("STAGECOACH_STUB_OUT") // no rule matched ⇒ single-response fallback
 }

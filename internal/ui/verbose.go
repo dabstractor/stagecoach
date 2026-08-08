@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 )
 
 // Verbose is Stagecoach's --verbose diagnostics sink (PRD §9.13 FR50, §15.2, §19). When ON, it prints
@@ -23,7 +24,15 @@ import (
 // pkg/stagecoach passes its own writer or nil. This keeps the library side-effect-free by default
 // (it never writes to os.Stderr directly). Sibling to output.go (P1.M4.T3.S1's ↳/color layer); this
 // file owns ONLY verbose diagnostics.
+// GOROUTINE-SAFE: every write method holds an internal mutex. The FR-M14 file-disjoint fast-path
+// (P1.M1.T1.S3 runLoopFastPath) launches N message generations CONCURRENTLY, each of which calls
+// generateMessage → VerboseRawOutput/VerboseRetry/VerboseStderr; without serialization the shared
+// writer (stderr in prod, a *bytes.Buffer in tests) would race. The mutex makes those concurrent
+// writes safe (runLoop's 1-deep overlap never had >1 message goroutine alive, so it never exercised
+// this; the fast-path does). Verbose is only ever constructed via NewVerbose and threaded as
+// *Verbose (never copied by value), so the mutex lives in the one allocation.
 type Verbose struct {
+	mu sync.Mutex
 	w  io.Writer // destination (stderr in prod, *bytes.Buffer in tests); nil ⇒ no-op
 	on bool      // cfg.Verbose — resolved by config.Load across all 7 layers
 }
@@ -43,6 +52,8 @@ func (v *Verbose) VerboseCommand(cmd string) {
 	if v == nil || v.w == nil || !v.on {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprintln(v.w, "DEBUG: command: "+cmd)
 }
 
@@ -58,6 +69,8 @@ func (v *Verbose) VerboseRawOutput(output string) {
 	if v == nil || v.w == nil || !v.on {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprint(v.w, "DEBUG: raw output:\n")
 	fmt.Fprint(v.w, output)
 	if !strings.HasSuffix(output, "\n") {
@@ -78,6 +91,8 @@ func (v *Verbose) VerboseStderr(stderr string) {
 	if v == nil || v.w == nil || !v.on || stderr == "" {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprint(v.w, "DEBUG: stderr:\n")
 	fmt.Fprint(v.w, stderr)
 	if !strings.HasSuffix(stderr, "\n") {
@@ -98,6 +113,8 @@ func (v *Verbose) VerbosePayload(bytes int) {
 	if v == nil || v.w == nil || !v.on || bytes <= 0 {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprintf(v.w, "DEBUG: payload: %d bytes (~%d tokens est)\n", bytes, (bytes+3)/4)
 }
 
@@ -107,6 +124,8 @@ func (v *Verbose) VerboseWarn(msg string) {
 	if v == nil || v.w == nil || !v.on {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprintln(v.w, "DEBUG: "+msg)
 }
 
@@ -117,6 +136,8 @@ func (v *Verbose) VerboseRetry(attempt int, reason string) {
 	if v == nil || v.w == nil || !v.on {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	fmt.Fprintf(v.w, "DEBUG: attempt %d: %s\n", attempt, reason)
 }
 
@@ -144,6 +165,8 @@ func (v *Verbose) VerboseRoles(roles []RoleLine) {
 	if v == nil || v.w == nil || !v.on {
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	for _, r := range roles {
 		fmt.Fprintf(v.w, "DEBUG: %-8s %s%s\n", r.Name, invocation(r.Model, r.Provider), reasoningSuffix(r.Reasoning))
 	}

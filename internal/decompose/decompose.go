@@ -661,12 +661,8 @@ type stagedConcept struct {
 // the sentinel return below.
 func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, baseTree, tStart, preRunHEAD string, isUnborn bool) ([]CommitResult, []ChainEntry, error) {
 	var commits []CommitResult
+	var chainData []ChainEntry
 	prevTree := baseTree
-	// preRunHEAD / isUnborn are consumed by S3's publish phase (CAS expected-old + root-commit parent);
-	// the S2 sweep publishes nothing. Referenced here to keep the signature parity with runLoop honest
-	// and to silence any unused-param linter until S3 wires them.
-	_ = preRunHEAD
-	_ = isUnborn
 
 	// FR-M1c: T_start's changed-path set (invariant across the run) — the subset baseline every tree[i]
 	// is verified against after each staging step. Computed ONCE (mirrors runLoop).
@@ -711,15 +707,103 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 	// After the sweep: every non-skipped tree[i] is FROZEN — the FR-M14 precondition for S3's concurrent
 	// message generation (each message reasons over diff(sc.prevTree, sc.tree)).
 
-	// --- P1.M1.T1.S3 inserts the concurrent message generation + CAS-ordered publish here ---
-	// S2 delivers the frozen []stagedConcept slice; S3 consumes it. Until S3 lands, return a sentinel so
-	// the Decompose dispatch (S4, which lands AFTER S3) is not wired to an incomplete fast-path.
-	// commits/chainData stay nil (the sweep publishes nothing).
-	stagedCount := len(staged)
-	if deps.Verbose != nil {
-		deps.Verbose.VerboseWarn(fmt.Sprintf("fast-path: staged %d/%d concepts (concurrent phase pending P1.M1.T1.S3)", stagedCount, len(concepts)))
+	// --- P1.M1.T1.S3: FR-M14 concurrent message generation + FR-M7 CAS-ordered publish + FR-M12 isolation ---
+
+	// Nothing to publish (every concept FR-M8-skipped): return empty — Decompose's arbiter gate
+	// guards len(commits) > 0.
+	if len(staged) == 0 {
+		return commits, chainData, nil
 	}
-	return nil, nil, fmt.Errorf("%w: runLoopFastPath concurrent phase not yet implemented (staged %d concepts; P1.M1.T1.S3)", ErrDecomposeFailed, stagedCount)
+
+	// FR-M14: launch ALL N (non-skipped) message generations CONCURRENTLY. Safe: each goroutine calls
+	// generateMessage, which reasons over a tree-to-tree diff (read-only tree reads) and never touches
+	// the live .git/index (git_primitives.md). No cap (FR-M14; max_commits default 12 bounds N).
+	launch := func(i int, treeA, treeB string) chan msgOut {
+		ch := make(chan msgOut, 1) // buffered(1) — goroutine sends once + exits; never blocks
+		go func() {
+			m, e := generateMessage(ctx, deps, treeA, treeB)
+			ch <- msgOut{conceptIdx: i, treeA: treeA, treeB: treeB, msg: m, err: e}
+		}()
+		return ch
+	}
+	inflight := make([]chan msgOut, len(staged))
+	for i, sc := range staged {
+		inflight[i] = launch(sc.idx, sc.prevTree, sc.tree)
+	}
+	if deps.Verbose != nil {
+		deps.Verbose.VerboseWarn(fmt.Sprintf("fast-path: launched %d concurrent message generations", len(staged)))
+	}
+
+	// FR-M7: PUBLISH STRICTLY IN CAS ORDER (concept order). The publish loop is the serialization
+	// point: commit[i] parent = prevSHA (preRunHEAD/root for i=0, newSHA[i-1] otherwise); each CAS
+	// requires HEAD == prevSHA. prevSHA is AUTHORITATIVE for the rescue parent (see findings §5 —
+	// runLoop's 1-deep overlap guarantees it at launch; the concurrent path knows it only at publish
+	// time, so arm signal + fix the rescue parent HERE, in this serial loop).
+	prevSHA := preRunHEAD
+	for i, ch := range inflight {
+		sc := staged[i]
+		// Arm rescue for concept i with the AUTHORITATIVE parent. Serial loop ⇒ no race on the single
+		// global snapshot; prevSHA is newSHA[i-1] (commit[i-1] just published). (runLoop arms at launch
+		// under its 1-deep overlap; that invariant does not hold here.)
+		signal.SetSnapshot(sc.tree, prevSHA, "")
+		res := <-ch
+		signal.ClearSnapshot()
+
+		if res.err != nil {
+			var re *generate.RescueError
+			if errors.As(res.err, &re) {
+				// FR-M12a: message[i] failed → rescue for concept i ONLY. Commits 0..i-1 already
+				// published (they stand). §5: re.ParentSHA may be STALE (generateMessage captured it
+				// via RevParseHEAD during concurrent generation, possibly before commit[i-1] landed) —
+				// prevSHA is authoritative. Fix a shallow copy so the printed recipe AND the
+				// DecomposeRescueError.Rescue both carry the correct parent. Exit-code mapping checks
+				// Kind, not ParentSHA, so it is unaffected.
+				title := ""
+				if sc.idx < len(concepts) {
+					title = concepts[sc.idx].Title
+				}
+				fixed := *re
+				fixed.ParentSHA = prevSHA
+				if deps.Out != nil {
+					fmt.Fprintln(deps.Out, generate.FormatRescueMulti(fixed.TreeSHA, fixed.ParentSHA, fixed.Candidate, title, sc.idx, len(concepts)))
+				}
+				drainMsgs(inflight[i+1:]) // drain the N-i-1 still-in-flight channels (no leak)
+				return commits, nil, &DecomposeRescueError{Rescue: &fixed, ConceptTitle: title, Index: sc.idx, Count: len(concepts), Commits: commits}
+			}
+			drainMsgs(inflight[i+1:])
+			return commits, nil, res.err // HARD (ErrMessageFailed-wrapped infra) — propagate
+		}
+
+		// Publish in CAS order: parent = prevSHA (CAS expected-old). publishCommit runs hooks +
+		// CommitTree (dangling) + UpdateRefCAS — touches NO index.
+		newSHA, err := publishCommit(ctx, deps, res.treeB, prevSHA, res.msg)
+		if err != nil {
+			var ce *generate.CASError
+			if errors.As(err, &ce) {
+				// FR-M12b: CAS failed → §13.5 message (ce.Error() has tree[i] recovery). Prior commits stand.
+				if deps.Out != nil {
+					fmt.Fprintln(deps.Out, ce.Error())
+				}
+				drainMsgs(inflight[i+1:])
+				return commits, nil, ce // partial; DecomposeResult.Commits = commits (0..i-1)
+			}
+			drainMsgs(inflight[i+1:])
+			return commits, nil, err // HARD (ErrPublicationFailed-wrapped CommitTree)
+		}
+
+		// §6: isRoot = the FIRST published commit on an unborn repo (concept 0 may be FR-M8-skipped,
+		// so sc.idx is unreliable; len(commits)==0 is authoritative). Correct for commits 2..N too.
+		isRoot := len(commits) == 0 && isUnborn
+		cr, bErr := buildCommitResult(ctx, deps, newSHA, res.msg, isRoot)
+		if bErr != nil {
+			drainMsgs(inflight[i+1:])
+			return commits, nil, fmt.Errorf("%w: diff-tree[%d]: %w", ErrDecomposeFailed, sc.idx, bErr)
+		}
+		commits = append(commits, cr)
+		chainData = append(chainData, ChainEntry{SHA: newSHA, Tree: res.treeB, Message: res.msg, Parent: prevSHA})
+		prevSHA = newSHA
+	}
+	return commits, chainData, nil
 }
 
 // drainMsg receives-and-discards a buffered(1) message channel's result to avoid a goroutine leak when
@@ -730,6 +814,18 @@ func drainMsg(ch chan msgOut) {
 		return
 	}
 	<-ch
+}
+
+// drainMsgs receives-and-discards a slice of buffered(1) message channels to avoid goroutine leaks
+// when the FR-M14 concurrent fast-path publish loop aborts with N-i-1 messages still in flight
+// (P1.M1.T1.S3). Each goroutine sends exactly once to its buffered channel before exiting, so each
+// receive completes. nil-safe per channel (drainMsg guards nil). This is the ONLY behavioral
+// difference from runLoop's single-channel drainMsg: it covers a slice. drainMsg (single channel)
+// stays for runLoop — runLoop is byte-identical (the shared-file fallback).
+func drainMsgs(chs []chan msgOut) {
+	for _, ch := range chs {
+		drainMsg(ch)
+	}
 }
 
 // runArbiterPhase runs the arbiter + resolution when the working tree is non-empty after the loop
