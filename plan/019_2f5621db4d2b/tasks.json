@@ -62,7 +62,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S3",
                   "title": "runLoopFastPath — concurrent message generation + CAS-ordered publish + FR-M12 failure isolation",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S2"
@@ -84,7 +84,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S4",
                   "title": "Decompose() dispatch wiring — gate isFileDisjoint -> runLoopFastPath else runLoop",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -105,7 +105,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S5",
                   "title": "Fast-path regression suite in decompose_test.go (disjoint/fallback/concurrency/CAS/isolation/skip/freeze)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S4"
