@@ -3363,6 +3363,103 @@ func TestRunLoopFastPath_EditSerial(t *testing.T) {
 	}
 }
 
+// TestRunLoopFastPath_EditGate_NoCrossContamination (BUG-001 regression test) locks in the P1.M1 fix:
+// on the file-disjoint fast-path, --edit (cfg.Edit=true) must publish each concept with its OWN message —
+// no concept silently receives a sibling's message via the shared .git/STAGECOACH_EDITMSG race that
+// existed when EditMessage ran concurrently in each generateMessage goroutine. The fix moved
+// EditMessage into the SERIAL publish loop (decompose.go:806, one concept at a time) so each concept
+// reads back its own STAGECOACH_EDITMSG content. The no-op editor (GIT_EDITOR=true) preserves each
+// concept's written message so the per-concept assertion is deterministic; the single-response
+// stubeditor would write the same message every invocation and mask the cross-contamination this
+// test exists to catch. This mirrors TestRunLoopFastPath_ConcurrentPublish with 3 deltas: cfg.Edit=true,
+// GIT_EDITOR=true (no-op editor), and 2 disjoint concepts. It verifies FIXED correctness (the race is
+// non-deterministic on old code), not bug reproduction — its job is to catch a regression of the
+// serialization. Distinct subjects isolate BUG-001 cleanly from the separate BUG-002 sibling test.
+func TestRunLoopFastPath_EditGate_NoCrossContamination(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// Base commit with 2 files (BORN repo → baseTree = HEAD^{tree}).
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 1\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 1\n")
+	dcmRunGit(t, repo, "add", "a.go", "b.go")
+	dcmCommitRaw(t, repo, "initial")
+	// Disjoint dirty change set: modify each file independently.
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 2\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 2\n")
+
+	// BUG-001 delta: --edit on. GIT_EDITOR=true is a NO-OP editor (preserves each concept's written
+	// message unchanged). The fixed serial EditMessage then guarantees each concept reads back its
+	// own STAGECOACH_EDITMSG content.
+	t.Setenv("GIT_EDITOR", "true")
+	cfg := config.Defaults()
+	cfg.Edit = true
+
+	g := git.New(repo)
+	ctx := context.Background()
+
+	// Mirror what Decompose does internally: capture baseTree (HEAD^{tree}), then FreezeWorkingTree to
+	// capture T_start (the full working-tree change set) AND reset the index back to baseTree so the
+	// per-concept sweep starts clean. After this the working-tree changes are "in T_start", the index
+	// is at baseTree, and runLoopFastPath's own sweep does the per-concept `git add`.
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// Concurrency-safe, INPUT-DERIVED message stub: each concept's tree-to-tree diff names a distinct
+	// file ⇒ the stub inspects its OWN stdin and emits the matching subject deterministically.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.go", msg: "feat: add a"},
+		{substr: "b.go", msg: "feat: add b"},
+	})
+	roles := RoleManifests{Message: messageM}
+	var logBuf bytes.Buffer
+	deps := Deps{
+		Git:     g,
+		Config:  cfg,
+		Roles:   roles,
+		Verbose: ui.NewVerbose(&logBuf, true),
+	}
+
+	concepts := []prompt.PlannerCommit{ // BUG-001 delta: 2 disjoint concepts
+		{Title: "c1", Files: []string{"a.go"}},
+		{Title: "c2", Files: []string{"b.go"}},
+	}
+
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+	if err != nil {
+		t.Fatalf("runLoopFastPath: %v\nverbose:\n%s", err, logBuf.String())
+	}
+
+	// BUG-001 regression: each concept gets its OWN message (no shared-STAGECOACH_EDITMSG contamination).
+	if len(commits) != 2 {
+		t.Fatalf("Commits len = %d, want 2\nverbose:\n%s", len(commits), logBuf.String())
+	}
+	if commits[0].Subject != "feat: add a" {
+		t.Errorf("commits[0].Subject = %q, want %q (concept 0's own message — BUG-001 cross-contamination?)", commits[0].Subject, "feat: add a")
+	}
+	if commits[1].Subject != "feat: add b" {
+		t.Errorf("commits[1].Subject = %q, want %q (concept 1's own message — BUG-001 cross-contamination?)", commits[1].Subject, "feat: add b")
+	}
+	if commits[0].Subject == commits[1].Subject {
+		t.Errorf("cross-contamination: both commits share subject %q (BUG-001 — EditMessage not serialized)", commits[0].Subject)
+	}
+
+	// CAS-order sanity (mirrors the skeleton's hard gate; cheap + catches structural breakage too).
+	if parent := dcmGitOut(t, repo, "rev-parse", commits[0].SHA+"^"); parent != preRunHEAD {
+		t.Errorf("commit[0] parent = %s, want %s (preRunHEAD)", parent, preRunHEAD)
+	}
+	if parent := dcmGitOut(t, repo, "rev-parse", commits[1].SHA+"^"); parent != commits[0].SHA {
+		t.Errorf("commit[1] parent = %s, want %s (commit[0].SHA — CAS order)", parent, commits[0].SHA)
+	}
+	if head := dcmHeadSHA(t, repo); head != commits[1].SHA {
+		t.Errorf("HEAD = %s, want %s (last commit)", head, commits[1].SHA)
+	}
+}
+
 // TestRunLoopFastPath_RescueIsolation (P1.M1.T1.S3, FR-M12a + no-leak drain) asserts that when message[i]
 // fails mid-publish, (a) commits 0..i-1 STAND (HEAD == commits[i-1].SHA), (b) a *DecomposeRescueError
 // (wrapping *RescueError, errors.Is(ErrRescue)) is returned naming concept i, (c) FormatRescueMulti is
