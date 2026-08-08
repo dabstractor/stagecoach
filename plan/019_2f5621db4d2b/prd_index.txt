@@ -160,4 +160,4 @@ h1.3 Appendices
  h2.30 Appendix F — Decision log (key calls and why)
  h2.31 Note: this project was originally named "stagehand" and has been renamed. All references to "stagehand" must be replaced with "stagecoach".
 ---
-code:44 para:191 list:76 table:12 quote:3
+code:44 para:192 list:76 table:12 quote:3
