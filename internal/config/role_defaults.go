@@ -51,48 +51,53 @@ type RoleModelDefaults map[string]map[string]string
 // (pi, claude); "" otherwise (agy, opencode, codex, cursor, qwen-code) — the bootstrap applies the fallback.
 var roleDefaults = RoleModelDefaults{
 	"pi": {
-		"planner": "gpt-5.4",      // flagship/smart tier (FR-D3)
-		"stager":  "gpt-5.4-mini", // stager-capable (TooledFlags set in builtin.go)
-		"message": "gpt-5.4-nano", // fast tier
-		"arbiter": "gpt-5.4-mini", // mid tier
+		// multi-backend (FR-R5b): placeholders — the bootstrap BLANKS pi's written [role.*] models so the
+		// user supplies their inference/model prefix; these are the internal fallback + commented suggestions.
+		"planner": "gpt-5.4-nano",
+		"stager":  "gpt-5.4-mini",
+		"message": "gpt-5.4-nano",
+		"arbiter": "gpt-5.4-nano",
 	},
 	"claude": {
-		"planner": "opus",   // flagship/smart (bare alias → current gen, opus=4.8)
-		"stager":  "sonnet", // stager-capable (TooledFlags set); bare alias (sonnet=5)
-		"message": "haiku",  // fast tier
-		"arbiter": "sonnet", // mid tier
+		"planner": "haiku",  // fast tier (FR-D3 fast-by-default)
+		"stager":  "sonnet", // mid tier — tool-use reliability for git staging
+		"message": "haiku",  // fast tier (highest-volume role)
+		"arbiter": "haiku",  // fast tier
 	},
 	"agy": {
-		// agy --model takes the `agy models` display label VERBATIM (spaces + reasoning suffix included);
-		// API-style ids silently fall back to agy's default. Refreshed 2026-07-03 per FR-D5.
-		"planner": "Gemini 3.5 Flash (High)",   // flagship/smart tier = flash with high thinking
-		"stager":  "",                          // NOT stager-capable (TooledFlags nil)
-		"message": "Gemini 3.5 Flash (Low)",    // fast/cheapest tier = flash with low thinking
-		"arbiter": "Gemini 3.5 Flash (Medium)", // mid tier
+		// agy --model takes the `agy models` display label VERBATIM (reasoning baked into the suffix).
+		"planner": "Gemini 3.5 Flash (Low)",   // fast tier
+		"stager":  "Gemini 3.5 Flash (Medium)", // mid tier (stager-capable, §12.5.1.1 item 4)
+		"message": "Gemini 3.5 Flash (Low)",    // fast tier
+		"arbiter": "Gemini 3.5 Flash (Low)",    // fast tier
 	},
 	"qwen-code": {
-		"planner": "qwen3-coder-plus",  // flagship/smart (FR-D3). # TO CONFIRM per FR-D5
-		"stager":  "",                  // NOT stager-capable (TooledFlags nil in builtinQwenCode) — bootstrap applies FR-D4 fallback
-		"message": "qwen3-coder-flash", // fast/cheapest tier (FR-D3). # TO CONFIRM per FR-D5
-		"arbiter": "qwen3-coder-plus",  // mid tier. # TO CONFIRM per FR-D5
+		"planner": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
+		"stager":  "",                  // NOT stager-capable (TooledFlags nil) — bootstrap applies FR-D4 fallback
+		"message": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
+		"arbiter": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
 	},
 	"opencode": {
-		"planner": "openai/gpt-5.4", // provider-prefixed (opencode ProviderFlag empty)
-		"stager":  "",               // NOT stager-capable (TooledFlags nil)
+		// plan-/backend-dependent (provider-prefixed) — the bootstrap BLANKS opencode's written [role.*]
+		// models (power-user wildcard); these fast placeholders are the internal fallback + suggestions.
+		"planner": "openai/gpt-5.4-nano",
+		"stager":  "openai/gpt-5.4-mini",
 		"message": "openai/gpt-5.4-nano",
-		"arbiter": "openai/gpt-5.4-mini",
+		"arbiter": "openai/gpt-5.4-nano",
 	},
 	"codex": {
-		"planner": "gpt-5.1-codex-max",
-		"stager":  "", // NOT stager-capable (TooledFlags nil)
-		"message": "gpt-5.4-nano",
-		"arbiter": "gpt-5.1-codex-mini",
+		"planner": "gpt-5.4-nano",      // fast tier
+		"stager":  "gpt-5.1-codex-mini", // mid tier (stager-capable)
+		"message": "gpt-5.4-nano",      // fast tier
+		"arbiter": "gpt-5.4-nano",      // fast tier
 	},
 	"cursor": {
-		"planner": "gpt-5.4",      // FR-D5: PRD tier-name "flagship" → best-guess OpenAI token; VERIFY agent --help
-		"stager":  "",             // NOT stager-capable (TooledFlags nil)
-		"message": "gpt-5.4-nano", // FR-D5: PRD tier-name "nano" → best-guess; VERIFY
-		"arbiter": "gpt-5.4-mini", // FR-D5: PRD tier-name "mid" → best-guess; VERIFY
+		// cursor model names are plan-entitlement-dependent; composer-2.5* is available on ALL plans
+		// (incl. free). Reasoning is baked into the model-name suffix, not a flag.
+		"planner": "composer-2.5-fast", // fast tier, all-plans-available
+		"stager":  "composer-2.5",      // mid tier (stager-capable)
+		"message": "composer-2.5-fast", // fast tier
+		"arbiter": "composer-2.5-fast", // fast tier
 	},
 }
 

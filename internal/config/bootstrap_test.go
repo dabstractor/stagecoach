@@ -71,7 +71,7 @@ func TestBuildBootstrapConfig_Pi(t *testing.T) {
 	}
 }
 
-func TestBuildBootstrapConfig_AgyStagerFallback(t *testing.T) {
+func TestBuildBootstrapConfig_AgyStagerCapable(t *testing.T) {
 	content := buildBootstrapConfig("agy", nil, nil)
 
 	// provider = "agy"
@@ -79,30 +79,20 @@ func TestBuildBootstrapConfig_AgyStagerFallback(t *testing.T) {
 		t.Error("missing provider = \"agy\"")
 	}
 
-	// agy's planner model (display label, verbatim)
-	assertContains(t, content, "[role.planner]", `model = "Gemini 3.5 Flash (High)"`)
+	// agy is stager-capable now (§12.5.1.1 item 4) — fast-by-default planner.
+	assertContains(t, content, "[role.planner]", `model = "Gemini 3.5 Flash (Low)"`)
 
-	// stager routed to pi
-	assertContains(t, content, "[role.stager]", `provider = "pi"`)
-	assertContains(t, content, "[role.stager]", `model = ""`)
-	if strings.Contains(content, `gpt-5.4`) {
-		t.Errorf("agy stager-fallback config must not ship a bare gpt-5.4* stager model (FR-R5b); got:\n%s", content)
+	// stager stays on agy (inherits [defaults]; mid tier), NOT routed to pi.
+	if strings.Contains(content, `provider = "pi"`) {
+		t.Errorf("agy must not fall back to pi for the stager (it is stager-capable); got:\n%s", content)
 	}
-	if !strings.Contains(content, "multi-backend provider") {
-		t.Error("agy stager-fallback config should include the pi multi-backend guidance in the stager annotation")
+	if strings.Contains(content, "cannot serve as the stager") {
+		t.Errorf("agy is stager-capable; the config should not carry a stager-fallback annotation")
 	}
 
-	// annotation
-	if !strings.Contains(content, "cannot serve as the stager") {
-		t.Error("agy config should have stager fallback annotation")
-	}
-	if !strings.Contains(content, "routed to pi") {
-		t.Error("agy config should mention routed to pi")
-	}
-
-	// agy's message and arbiter
+	// agy's message and arbiter (fast tier)
 	assertContains(t, content, "[role.message]", `model = "Gemini 3.5 Flash (Low)"`)
-	assertContains(t, content, "[role.arbiter]", `model = "Gemini 3.5 Flash (Medium)"`)
+	assertContains(t, content, "[role.arbiter]", `model = "Gemini 3.5 Flash (Low)"`)
 }
 
 // TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel is the Issue 1 cross-provider
@@ -120,7 +110,7 @@ func TestBuildBootstrapConfig_AgyStagerFallback(t *testing.T) {
 // `gpt-5.4-mini`. This still catches the regression (the bare model lived in the stager block) while
 // avoiding a false positive from opencode's correctly-prefixed default models.
 func TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel(t *testing.T) {
-	for _, target := range []string{"agy", "opencode", "qwen-code"} {
+	for _, target := range []string{"qwen-code"} {
 		t.Run(target, func(t *testing.T) {
 			content := buildBootstrapConfig(target, nil, nil)
 
@@ -286,7 +276,7 @@ func TestGenerateBootstrapConfig_NamedProvider(t *testing.T) {
 	}
 
 	// claude's role models
-	assertContains(t, content, "[role.planner]", `model = "opus"`)
+	assertContains(t, content, "[role.planner]", `model = "haiku"`)
 	assertContains(t, content, "[role.stager]", `provider = "claude"`)
 	assertContains(t, content, "[role.stager]", `model = "sonnet"`)
 	assertContains(t, content, "[role.message]", `model = "haiku"`)

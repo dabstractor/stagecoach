@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Fast-Path Concurrency Safety Fixes",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Fix two concurrency bugs in runLoopFastPath (the FR-M13/FR-M14 file-disjoint fast-path in internal/decompose/decompose.go). BUG-001 (critical): with --edit, N concurrent editors race on the single shared .git/STAGECOACH_EDITMSG file, silently attaching the wrong message to a commit. BUG-002 (major): all messages generate before any publish, so cross-concept duplicate-subject detection is lost — a single run can emit two identical subjects. Both stem from generateMessage containing operations (EditMessage, stale recent-subjects fetch) that are NOT concurrency-safe under the fast-path's N-way goroutine fan-out. The fix extracts generateMessageCore (generation without EditMessage, with seedRejections for cross-concept retry), moves EditMessage to the serial publish loop, and adds an incremental cross-concept dedupe pass in that same serial loop.",
       "milestones": [
         {
@@ -122,7 +122,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Regression tests, concurrency-safety comment, and documentation",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add regression tests for both bugs (the existing suite uses per-concept distinct messages and never exercises --edit or same-subject collisions on the fast-path). Tighten the runLoopFastPath concurrency-safety comment to account for EditMessage (now serial) and dedupe (now incremental). Sweep changeset-level documentation.",
           "tasks": [
             {
@@ -183,14 +183,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Tighten runLoopFastPath concurrency-safety comment",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Update the concurrency-safety comment in runLoopFastPath (decompose.go ~745-749) to accurately account for EditMessage (now deferred to the serial publish loop, serialized per FR-E4) and cross-concept dedupe (now checked incrementally in the serial publish loop, restoring US7/FR32). The current comment only reasons about the .git/index and is silent on these two hazards — the blind spot that allowed both bugs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Update concurrency-safety comment for EditMessage and dedupe",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S2",
@@ -212,14 +212,14 @@
               "type": "Task",
               "id": "P1.M3.T4",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Review and update any changeset-level documentation (README.md, docs/*.md) that describes the fast-path's concurrency behavior, --edit interaction, or duplicate-subject guarantee. Ensure the docs accurately reflect the corrected behavior: EditMessage is serialized on the fast-path, and cross-concept dedupe is guaranteed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T4.S1",
                   "title": "Review and update changeset-level documentation",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S2",

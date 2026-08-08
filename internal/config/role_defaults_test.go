@@ -8,25 +8,25 @@ import "testing"
 func TestDefaultModelsForProvider_PerProvider(t *testing.T) {
 	want := map[string]map[string]string{
 		"pi": {
-			"planner": "gpt-5.4", "stager": "gpt-5.4-mini", "message": "gpt-5.4-nano", "arbiter": "gpt-5.4-mini",
+			"planner": "gpt-5.4-nano", "stager": "gpt-5.4-mini", "message": "gpt-5.4-nano", "arbiter": "gpt-5.4-nano",
 		},
 		"claude": {
-			"planner": "opus", "stager": "sonnet", "message": "haiku", "arbiter": "sonnet",
+			"planner": "haiku", "stager": "sonnet", "message": "haiku", "arbiter": "haiku",
 		},
 		"agy": {
-			"planner": "Gemini 3.5 Flash (High)", "stager": "", "message": "Gemini 3.5 Flash (Low)", "arbiter": "Gemini 3.5 Flash (Medium)",
+			"planner": "Gemini 3.5 Flash (Low)", "stager": "Gemini 3.5 Flash (Medium)", "message": "Gemini 3.5 Flash (Low)", "arbiter": "Gemini 3.5 Flash (Low)",
 		},
 		"opencode": {
-			"planner": "openai/gpt-5.4", "stager": "", "message": "openai/gpt-5.4-nano", "arbiter": "openai/gpt-5.4-mini",
+			"planner": "openai/gpt-5.4-nano", "stager": "openai/gpt-5.4-mini", "message": "openai/gpt-5.4-nano", "arbiter": "openai/gpt-5.4-nano",
 		},
 		"codex": {
-			"planner": "gpt-5.1-codex-max", "stager": "", "message": "gpt-5.4-nano", "arbiter": "gpt-5.1-codex-mini",
+			"planner": "gpt-5.4-nano", "stager": "gpt-5.1-codex-mini", "message": "gpt-5.4-nano", "arbiter": "gpt-5.4-nano",
 		},
 		"cursor": {
-			"planner": "gpt-5.4", "stager": "", "message": "gpt-5.4-nano", "arbiter": "gpt-5.4-mini",
+			"planner": "composer-2.5-fast", "stager": "composer-2.5", "message": "composer-2.5-fast", "arbiter": "composer-2.5-fast",
 		},
 		"qwen-code": {
-			"planner": "qwen3-coder-plus", "stager": "", "message": "qwen3-coder-flash", "arbiter": "qwen3-coder-plus",
+			"planner": "qwen3-coder-flash", "stager": "", "message": "qwen3-coder-flash", "arbiter": "qwen3-coder-flash",
 		},
 	}
 	for name, exp := range want {
@@ -64,15 +64,19 @@ func TestDefaultModelsForProvider_AllRolesPresent(t *testing.T) {
 	}
 }
 
-// TestDefaultModelsForProvider_StagerCapability isolates the stager="" signal: pi+claude have
-// non-empty stager (TooledFlags set in builtin.go); the other 5 have stager=="" (nil TooledFlags).
+// TestDefaultModelsForProvider_StagerCapability isolates the stager="" signal: every provider EXCEPT
+// qwen-code has a non-empty stager cell (pi, claude, agy, codex, cursor, opencode are all
+// stager-capable as of 2026-07-09). qwen-code is the only one with stager="" (nil TooledFlags).
+// NOTE: pi/opencode's stager cell is a non-empty PLACEHOLDER — the bootstrap blanks their WRITTEN
+// [role.*] models (power-user); the cell stays non-empty here so StagerFallback's table lookup treats
+// them as capable.
 func TestDefaultModelsForProvider_StagerCapability(t *testing.T) {
-	for _, capable := range []string{"pi", "claude"} {
+	for _, capable := range []string{"pi", "claude", "agy", "codex", "cursor", "opencode"} {
 		if m := DefaultModelsForProvider(capable)["stager"]; m == "" {
-			t.Errorf("%q should be stager-capable (non-empty stager), got %q", capable, m)
+			t.Errorf("%q should be stager-capable (non-empty stager cell), got %q", capable, m)
 		}
 	}
-	for _, incapable := range []string{"agy", "opencode", "codex", "cursor", "qwen-code"} {
+	for _, incapable := range []string{"qwen-code"} {
 		if m := DefaultModelsForProvider(incapable)["stager"]; m != "" {
 			t.Errorf("%q must have stager==\"\" (not stager-capable), got %q", incapable, m)
 		}

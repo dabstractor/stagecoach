@@ -733,13 +733,28 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 		return commits, chainData, nil
 	}
 
-	// FR-M14: launch ALL N (non-skipped) message generations CONCURRENTLY. Each goroutine calls
-	// generateMessageCore — the bare generate/dedupe core (tree-to-tree diff, read-only tree reads, never
-	// touches the live .git/index; git_primitives.md). seedRejections is nil here (cross-concept dedupe is
-	// applied in the serial publish loop — P1.M2). EditMessage is DELIBERATELY NOT called in the goroutine:
-	// it writes/opens a single shared .git/STAGECOACH_EDITMSG and is not concurrency-safe, so it is deferred
-	// to the serial publish loop (one editor at a time, FR-E4 serialized publication; P1.M1.T2.S2).
-	// No cap (FR-M14; max_commits default 12 bounds N).
+	// FR-M14 CONCURRENCY-SAFETY CONTRACT — why launching all N (non-skipped) message generations
+	// concurrently is safe, and what is deliberately held back to the serial publish loop. Both bugs that
+	// prompted this block (BUG-001, BUG-002) were a goroutine doing something that is only safe serially;
+	// this contract enumerates the invariants so the blind spot recurs less easily.
+	//
+	// Each goroutine calls generateMessageCore ONLY — the bare generate + per-concept dedupe core. It is
+	// concurrent-safe because it does THREE things and no more: (1) read-only tree reads
+	// (diff(sc.prevTree, sc.tree) — never Add/WriteTree/UpdateRef; git_primitives.md); (2) the message-agent
+	// call; (3) the per-concept duplicate-rejection loop against a PRE-RUN history snapshot
+	// (seedRejections is nil here). It does NO interactive I/O and touches NO live .git/index — the staging
+	// sweep above is strictly serial (FR-M13), so the index is never mutated concurrently.
+	//
+	// The two NOT-concurrency-safe operations are DEFERRED to the serial publish loop below:
+	//   - EditMessage (BUG-001): it writes/opens a single shared .git/STAGECOACH_EDITMSG + an interactive
+	//     $EDITOR; N concurrent editors on one file silently cross-contaminate commit messages. Applied one
+	//     editor at a time in CAS order in the serial loop (FR-E4 "serialized publication"; P1.M1.T2.S2).
+	//   - cross-concept dedupe (BUG-002): each goroutine sees only the pre-run history snapshot, so two
+	//     disjoint concepts emitting the same subject both pass per-concept dedupe. Checked incrementally in
+	//     the serial loop — each concept's subject is judged against seenSubjects (pre-run history + the
+	//     already-decided siblings) BEFORE publish, restoring US7/FR30-33 (P1.M2.T1.S1).
+	//
+	// No cap on the fan-out (FR-M14; max_commits default 12 bounds N).
 	launch := func(i int, treeA, treeB string) chan msgOut {
 		ch := make(chan msgOut, 1) // buffered(1) — goroutine sends once + exits; never blocks
 		go func() {
@@ -767,10 +782,13 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 	seenSubjects, _ := messageRecentSubjects(ctx, deps.Git, isUnborn)
 
 	// FR-M7: PUBLISH STRICTLY IN CAS ORDER (concept order). The publish loop is the serialization
-	// point: commit[i] parent = prevSHA (preRunHEAD/root for i=0, newSHA[i-1] otherwise); each CAS
-	// requires HEAD == prevSHA. prevSHA is AUTHORITATIVE for the rescue parent (see findings §5 —
-	// runLoop's 1-deep overlap guarantees it at launch; the concurrent path knows it only at publish
-	// time, so arm signal + fix the rescue parent HERE, in this serial loop).
+	// point for EVERYTHING that cannot run concurrently in the launch phase above: (1) the CAS chain —
+	// commit[i] parent = prevSHA (preRunHEAD/root for i=0, newSHA[i-1] otherwise), each CAS requires
+	// HEAD == prevSHA; (2) the cross-concept dedupe check against the growing seenSubjects set
+	// (BUG-002 — see the launch contract above), run BEFORE publish; and (3) EditMessage applied one
+	// editor at a time (BUG-001, FR-E4), also before publish. prevSHA is AUTHORITATIVE for the rescue
+	// parent (see findings §5 — runLoop's 1-deep overlap guarantees it at launch; the concurrent path
+	// knows it only at publish time, so arm signal + fix the rescue parent HERE, in this serial loop).
 	prevSHA := preRunHEAD
 	for i, ch := range inflight {
 		sc := staged[i]
