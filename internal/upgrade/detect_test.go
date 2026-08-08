@@ -10,7 +10,7 @@ import (
 )
 
 // fakeRunner is the canned Runner used to exercise the tier-(b) cascade without any real package
-// manager on PATH (CI has none of brew/scoop/winget/pacman/npm/mise/asdf). It records every
+// manager on PATH (CI has none of brew/scoop/choco/pacman/npm/mise/asdf). It records every
 // invocation as "name args…" so the GOOS-gating and never-mutates tests can assert against what was
 // actually run, and delegates the canned (stdout, exitCode, err) outcome to the caller's func.
 type fakeRunner struct {
@@ -24,7 +24,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string
 }
 
 // called reports whether a recorded invocation starts with the given command prefix (e.g.
-// called("winget") is true iff the winget probe was invoked at all — used by the GOOS-gating tests).
+// called("choco") is true iff the choco probe was invoked at all — used by the GOOS-gating tests).
 func (f *fakeRunner) called(prefix string) bool {
 	for _, c := range f.calls {
 		if strings.HasPrefix(c, prefix+" ") || c == prefix {
@@ -44,7 +44,7 @@ func silentRunner() *fakeRunner {
 
 func TestValidChannel(t *testing.T) {
 	for _, c := range []Channel{
-		ChannelBrew, ChannelScoop, ChannelWinget, ChannelAUR, ChannelNpm,
+		ChannelBrew, ChannelScoop, ChannelChocolatey, ChannelAUR, ChannelNpm,
 		ChannelMise, ChannelAsdf, ChannelNix, ChannelGoInstall, ChannelDirect,
 	} {
 		if !validChannel(string(c)) {
@@ -218,14 +218,16 @@ func TestDetect_PMProbesConfirm(t *testing.T) {
 			want: ChannelScoop,
 		},
 		{
-			name: "winget installed (windows)", goos: "windows",
+			name: "chocolatey installed (windows)", goos: "windows",
 			canned: func(n string, _ []string) (string, int, error) {
-				if n == "winget" {
-					return "stagecoach 1.0.0", 0, nil
+				// choco uses exit0Confirm (exit code ONLY); stdout is irrelevant. choco list --local-only
+				// stagecoach exits 0 iff installed.
+				if n == "choco" {
+					return "", 0, nil
 				}
 				return "", 1, nil
 			},
-			want: ChannelWinget,
+			want: ChannelChocolatey,
 		},
 		{
 			name: "npm installed (linux)", goos: "linux",
@@ -304,22 +306,22 @@ func TestDetect_PMAbsent_StartErrorSkips(t *testing.T) {
 }
 
 func TestDetect_GOOSGating(t *testing.T) {
-	// On GOOS=linux, the winget + scoop probes must NEVER be invoked (Windows-only).
+	// On GOOS=linux, the choco + scoop probes must NEVER be invoked (Windows-only).
 	r := &fakeRunner{canned: func(string, []string) (string, int, error) { return "", 1, nil }}
 	d := &Detector{Exec: r, GOOS: "linux", ExePath: "/home/me/bin/stagecoach"}
 	_, _, _ = d.Detect(context.Background())
-	if r.called("winget") {
-		t.Errorf("winget probe must not run on GOOS=linux; calls=%v", r.calls)
+	if r.called("choco") {
+		t.Errorf("choco probe must not run on GOOS=linux; calls=%v", r.calls)
 	}
 	if r.called("scoop") {
 		t.Errorf("scoop probe must not run on GOOS=linux; calls=%v", r.calls)
 	}
 
-	// On GOOS=darwin, pacman (AUR) + winget + scoop must never run (brew runs and probes).
+	// On GOOS=darwin, pacman (AUR) + choco + scoop must never run (brew runs and probes).
 	r2 := &fakeRunner{canned: func(string, []string) (string, int, error) { return "", 1, nil }}
 	d2 := &Detector{Exec: r2, GOOS: "darwin", ExePath: "/home/me/bin/stagecoach"}
 	_, _, _ = d2.Detect(context.Background())
-	for _, banned := range []string{"winget", "scoop", "pacman", "dpkg", "rpm"} {
+	for _, banned := range []string{"choco", "scoop", "pacman", "dpkg", "rpm"} {
 		if r2.called(banned) {
 			t.Errorf("%s probe must not run on GOOS=darwin; calls=%v", banned, r2.calls)
 		}

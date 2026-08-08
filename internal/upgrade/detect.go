@@ -4,7 +4,7 @@
 // file (FR-U1) and routes to the native updater instead (FR-U3). Detect runs a 4-tier cascade:
 // (a) explicit override (--install-method flag > STAGECOACH_INSTALL_METHOD env, validated against
 // the known channels — unknown = error, not silent direct); (b) GOOS-gated package-manager DB
-// queries (brew/scoop/winget/pacman/npm/mise/asdf — first confirming query wins; nix + go-install
+// queries (brew/scoop/chocolatey/pacman/npm/mise/asdf — first confirming query wins; nix + go-install
 // have no ownership query and are path-only); (c) path heuristics on realpath(ExePath) (Homebrew
 // Cellar, Scoop shims, Nix store, $GOPATH/bin, npm node_modules); (d) default direct (the only
 // self-swap-eligible channel). Detection is best-effort, read-only (queries never mutate), and
@@ -36,18 +36,18 @@ import (
 type Channel string
 
 const (
-	ChannelBrew      Channel = "brew"
-	ChannelScoop     Channel = "scoop"
-	ChannelWinget    Channel = "winget"
-	ChannelAUR       Channel = "aur" // Arch/AUR (pacman-owned); FR-U3 "AUR".
-	ChannelNpm       Channel = "npm"
-	ChannelMise      Channel = "mise"
-	ChannelAsdf      Channel = "asdf"
-	ChannelNix       Channel = "nix"
-	ChannelGoInstall Channel = "go-install"
-	ChannelDeb       Channel = "deb"    // Debian/Ubuntu/Mint (.deb / dpkg); FR-U2/U3 — PRINT channel (no apt repo).
-	ChannelRpm       Channel = "rpm"    // Fedora/RHEL/Rocky/Alma/SUSE (.rpm / rpm); FR-U2/U3 — PRINT channel (no dnf repo).
-	ChannelDirect    Channel = "direct" // the ONLY self-swap-eligible channel (FR-U1/U5).
+	ChannelBrew       Channel = "brew"
+	ChannelScoop      Channel = "scoop"
+	ChannelChocolatey Channel = "chocolatey" // Chocolatey (Windows; goreleaser-native chocolatey: pipe). FR-U2 detection cascade; FR-U3 PRINT channel (choco upgrade needs admin — FR-U4 forbids self-swap).
+	ChannelAUR        Channel = "aur"        // Arch/AUR (pacman-owned); FR-U3 "AUR".
+	ChannelNpm        Channel = "npm"
+	ChannelMise       Channel = "mise"
+	ChannelAsdf       Channel = "asdf"
+	ChannelNix        Channel = "nix"
+	ChannelGoInstall  Channel = "go-install"
+	ChannelDeb        Channel = "deb"    // Debian/Ubuntu/Mint (.deb / dpkg); FR-U2/U3 — PRINT channel (no apt repo).
+	ChannelRpm        Channel = "rpm"    // Fedora/RHEL/Rocky/Alma/SUSE (.rpm / rpm); FR-U2/U3 — PRINT channel (no dnf repo).
+	ChannelDirect     Channel = "direct" // the ONLY self-swap-eligible channel (FR-U1/U5).
 )
 
 // ErrUnknownChannel is returned when an explicit --install-method / STAGECOACH_INSTALL_METHOD
@@ -61,7 +61,7 @@ var ErrUnknownChannel = errors.New("upgrade: unknown --install-method")
 // override (tier a) so a typo surfaces immediately instead of silently defaulting to direct.
 func validChannel(s string) bool {
 	switch Channel(s) {
-	case ChannelBrew, ChannelScoop, ChannelWinget, ChannelAUR, ChannelNpm,
+	case ChannelBrew, ChannelScoop, ChannelChocolatey, ChannelAUR, ChannelNpm,
 		ChannelMise, ChannelAsdf, ChannelNix, ChannelGoInstall, ChannelDeb, ChannelRpm, ChannelDirect:
 		return true
 	}
@@ -84,7 +84,7 @@ type Runner interface {
 
 // osRunner is the production Runner. Each Run wraps the command in a per-query context timeout
 // (default 3s when timeout is zero) per external_deps §7: "these queries must not hang — apply a
-// short timeout." The timeout is per-QUERY, not per-cascade, so a single hung brew/scoop/winget
+// short timeout." The timeout is per-QUERY, not per-cascade, so a single hung brew/scoop/chocolatey
 // cannot stall `stagecoach upgrade`.
 type osRunner struct {
 	timeout time.Duration // 0 ⇒ 3s default (defaultQueryTimeout).
@@ -147,7 +147,7 @@ func (r *osRunner) Run(ctx context.Context, name string, args ...string) (string
 // Detector resolves how the running binary was installed (FR-U2). Every environment-touching seam is
 // an injectable field so the resolver is fully unit-testable against canned outputs without any real
 // package manager on PATH: Exec is the tier-(b) subprocess seam (nil ⇒ skip PM probes), ExePath is
-// os.Executable() ("" ⇒ skip path heuristics), GOOS gates which PM probes run (winget⇒windows,
+// os.Executable() ("" ⇒ skip path heuristics), GOOS gates which PM probes run (chocolatey⇒windows,
 // brew⇒darwin/linux, …; "" ⇒ runtime.GOOS), Override is the --install-method flag value ("" ⇒ unset),
 // Env reads the environment (nil ⇒ skip the env override), Log is the --verbose logger (nil ⇒ no-op).
 // A zero-value Detector{} with no override returns ChannelDirect (the safe default).
@@ -239,7 +239,7 @@ func (d *Detector) detectOverride() (Channel, string, bool, error) {
 // override error message, in the canonical const-declaration order.
 func knownChannelList() string {
 	return strings.Join([]string{
-		string(ChannelBrew), string(ChannelScoop), string(ChannelWinget), string(ChannelAUR),
+		string(ChannelBrew), string(ChannelScoop), string(ChannelChocolatey), string(ChannelAUR),
 		string(ChannelNpm), string(ChannelMise), string(ChannelAsdf), string(ChannelNix),
 		string(ChannelGoInstall), string(ChannelDeb), string(ChannelRpm), string(ChannelDirect),
 	}, ", ")
@@ -261,15 +261,15 @@ type pmProbe struct {
 // probes run first. nix and go-install are deliberately ABSENT: neither has an ownership query (a
 // nix profile / a `go install`ed binary cannot be distinguished from a manual copy via a DB lookup),
 // so they are detected by the tier-(c) path heuristics instead. Each confirm predicate is tuned per
-// PM exit/listing semantics: brew/scoop/pacman exit 0 iff the package is installed (exit0Confirm);
-// winget/npm/mise/asdf list everything and we grep the listing for "stagecoach" (grepConfirm).
+// PM exit/listing semantics: brew/scoop/pacman/choco exit 0 iff the package is installed (exit0Confirm);
+// npm/mise/asdf list everything and we grep the listing for "stagecoach" (grepConfirm).
 var pmProbes = []pmProbe{
 	{channel: ChannelBrew, goos: []string{"darwin", "linux"}, name: "brew", args: []string{"list", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelAUR, goos: []string{"linux"}, name: "pacman", args: []string{"-Q", "stagecoach-bin"}, confirm: exit0Confirm},
 	{channel: ChannelDeb, goos: []string{"linux"}, name: "dpkg", args: []string{"-s", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelRpm, goos: []string{"linux"}, name: "rpm", args: []string{"-q", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelScoop, goos: []string{"windows"}, name: "scoop", args: []string{"prefix", "stagecoach"}, confirm: exit0Confirm},
-	{channel: ChannelWinget, goos: []string{"windows"}, name: "winget", args: []string{"list"}, confirm: grepConfirm("stagecoach")},
+	{channel: ChannelChocolatey, goos: []string{"windows"}, name: "choco", args: []string{"list", "--local-only", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelNpm, goos: nil, name: "npm", args: []string{"ls", "-g", "--depth=0"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelMise, goos: nil, name: "mise", args: []string{"ls"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelAsdf, goos: nil, name: "asdf", args: []string{"list"}, confirm: grepConfirm("stagecoach")},
@@ -280,7 +280,7 @@ var pmProbes = []pmProbe{
 func exit0Confirm(_ string, exitCode int) bool { return exitCode == 0 }
 
 // grepConfirm returns a confirm predicate that reports a PM-owned install when the query's stdout
-// contains needle. winget/npm/mise/asdf list every package and cannot exit-nonzero on a single
+// contains needle. npm/mise/asdf list every package and cannot exit-nonzero on a single
 // missing one, so ownership is proven by finding the stagecoach entry in the listing.
 func grepConfirm(needle string) func(string, int) bool {
 	return func(stdout string, _ int) bool { return strings.Contains(stdout, needle) }
@@ -308,7 +308,7 @@ func (d *Detector) detectPackageManager(ctx context.Context) (Channel, string, b
 	goos := d.goos()
 	for _, p := range pmProbes {
 		if !goosAdmits(p.goos, goos) {
-			continue // GOOS-gated: winget/scoop are Windows-only, brew is darwin/linux, pacman is linux.
+			continue // GOOS-gated: choco/scoop are Windows-only, brew is darwin/linux, pacman is linux.
 		}
 		stdout, code, err := d.Exec.Run(ctx, p.name, p.args...)
 		switch {
@@ -351,6 +351,7 @@ var pathHeuristics = []pathHeuristic{
 	{prefix: "/usr/local/Cellar/", channel: ChannelBrew},
 	{prefix: `\scoop\shims\`, channel: ChannelScoop},
 	{prefix: "/nix/store/", channel: ChannelNix},
+	{prefix: "ProgramData/chocolatey/", channel: ChannelChocolatey},
 }
 
 // detectPath resolves the tier-(c) path heuristics on realpath(ExePath). It first EvalSymlinks the
