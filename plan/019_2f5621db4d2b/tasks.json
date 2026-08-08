@@ -150,14 +150,14 @@
       "type": "Phase",
       "id": "P2",
       "title": "Phase 2 — Provider-docs sync (close the stale-doc gap from the shipped agy/codex stagers)",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Bring docs/providers.md into agreement with the code (internal/provider/builtin.go) and spec for stager capability. Commits c34f480 (agy stager) and f40ac87 (codex stager) made agy and codex stager-capable in code, but docs/providers.md was not updated. Research found the doc is stale for THREE providers (agy, codex, AND opencode — the PRD's claim that opencode is non-stager is a factual error; see architecture/findings_and_divergences.md D1). This phase also sweeps changeset-level docs (Mode B). The agy/codex/opencode stager CODE already ships; this phase is docs-only (the role_defaults.go code drift is flagged as a residual risk, out of this docs-only scope).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Sync docs/providers.md + changeset-level documentation",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Fix the stale stager-capability rows/prose in docs/providers.md (agy, codex, opencode) to match builtin.go, and run the Mode B changeset-level docs sweep (README + overview) as the final task.",
           "tasks": [
             {
@@ -191,14 +191,14 @@
               "type": "Task",
               "id": "P2.M1.T2",
               "title": "Sync changeset-level documentation (Mode B sweep)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Final cross-cutting docs sweep: verify README.md and any top-level capability-overview docs are consistent with the whole changeset (the file-disjoint fast-path + the agy/codex/opencode stager status). Per SOW §5 Mode B this runs last, after all implementing subtasks. Expected outcome: README needs no change (both deltas are invisible/additive), but it must be verified, not assumed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T2.S1",
                   "title": "Sweep README.md + overview docs for the whole changeset; update only stale top-level claims",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S6",
