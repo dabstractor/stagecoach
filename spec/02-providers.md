@@ -361,7 +361,7 @@ Google's **Gemini CLI (`gemini`) is no longer shipped** — it was superseded by
 
 ### 12.5.1 Built-in provider: Antigravity CLI (`agy`) — the Gemini-CLI successor
 
-Antigravity CLI (`agy`) is Google's terminal coding agent; it **superseded `gemini` (Gemini CLI) on 2026-06-18** and is the Gemini lineage's current surface. It matters to stagecoach for the same structural reason every provider does: **the Antigravity coding-plan quota is reachable only through `agy`**, never over the public API. Flag surface below is **verified against `agy --help` + live end-to-end runs (2026-07-08, agy v1.1.0)**. The Antigravity CLI has **diverged** from the gemini-cli lineage it forked from: it dropped `--approval-mode`, made `-p`/`--print`/`--prompt` **value-taking**, and uses `--model` (not `-m`). The bare-roles invocation an earlier draft assumed (`--approval-mode default -p` + stdin) no longer works on v1.1.0; the manifest below is corrected and re-verified. agy still ships `experimental` (§12.7.2) pending only the tooled/stager flag combo (§12.5.1.1 item 4).
+Antigravity CLI (`agy`) is Google's terminal coding agent; it **superseded `gemini` (Gemini CLI) on 2026-06-18** and is the Gemini lineage's current surface. It matters to stagecoach for the same structural reason every provider does: **the Antigravity coding-plan quota is reachable only through `agy`**, never over the public API. Flag surface below is **verified against `agy --help` + live end-to-end runs (2026-07-08, agy v1.1.0; tooled/stager combo re-verified 2026-07-09, agy v1.1.11)**. The Antigravity CLI has **diverged** from the gemini-cli lineage it forked from: it dropped `--approval-mode`, made `-p`/`--print`/`--prompt` **value-taking**, and uses `--model` (not `-m`). The bare-roles invocation an earlier draft assumed (`--approval-mode default -p` + stdin) no longer works on v1.1.0; the manifest below is corrected and re-verified. agy is **stager-capable** (§12.5.1.1 item 4, verified 2026-07-09) and still ships `experimental` (§12.7.2) pending a full --help re-verification pass.
 
 ```toml
 # Antigravity CLI. --help + end-to-end verified 2026-07-08 (agy v1.1.0).
@@ -380,11 +380,14 @@ provider_flag = ""
 # agy v1.1.0 has NO --approval-mode (removed). The read-only equivalent is `--mode plan`
 # (choices: accept-edits | plan); verified to produce clean commit-message output, no plan-mode noise.
 bare_flags = ["--mode", "plan"]
-# tooled mode (STAGER): still OPEN (§12.5.1.1 item 4) — tooled_flags is intentionally absent/nil; agy
-# cannot serve as a stager until the scoped, non-interactive, git-scoped combo is verified.
+# tooled mode (STAGER): VERIFIED 2026-07-09 (agy v1.1.11, §12.5.1.1 item 4). agy has NO scoped
+# --allowed-tools allowlist; the only non-interactive tool auto-approve knob is --dangerously-skip-permissions
+# (all tools — UNSCOPED, §12.7.1, same model as pi). `accept-edits` is the mutating counterpart of --mode plan.
+tooled_flags = ["--mode", "accept-edits", "--dangerously-skip-permissions"]
+tooled_repo_dir_flag = "--add-dir"   # agy does NOT auto-adopt cwd; the stager appends --add-dir <repo>.
 output = "raw"
 strip_code_fence = true
-experimental = true               # ships experimental pending only §12.5.1.1 item 4
+experimental = true               # item 4 cleared; stays experimental pending a full --help re-verification pass
 ```
 
 Rendered, bare (model `Gemini 3.5 Flash (Low)`):
@@ -395,15 +398,23 @@ agy --model "Gemini 3.5 Flash (Low)" --mode plan   < <sys+user payload via stdin
 
 (No `-p` flag: agy v1.1.0's `-p`/`--print`/`--prompt` is value-taking, so a bare `-p` fails. agy reads the prompt from stdin when `-p` is absent and stdin is a pipe. This also routes ~300 KB diffs over stdin, past the 128 KB `MAX_ARG_STRLEN` ceiling that argv/positional delivery would hit.)
 
+Rendered, tooled (stager; repo at `/repo`):
+
+```
+agy --model "Gemini 3.5 Flash (Low)" --mode accept-edits --dangerously-skip-permissions --add-dir /repo   < <stager task via stdin>
+```
+
+(agy does not auto-adopt its cwd as the workspace, so the stager appends `--add-dir <repo>` — the manifest's `tooled_repo_dir_flag`, threaded from the run's repo path.)
+
 #### 12.5.1.1 Status (agy) — verified 2026-07-08 against agy v1.1.0
 
 1. **RESOLVED — non-TTY stdout drop (issue [#76](https://github.com/google-antigravity/antigravity-cli/issues/76)):** **no longer reproduces on v1.1.0.** `agy` invoked non-interactively with piped stdin (no `-p`) returns stdout correctly — verified with single-token replies and full commit-message generation. The PTY-shim workaround is no longer needed.
 2. **RESOLVED — Model flag:** confirmed `--model` (the gemini-cli lineage's `-m` is rejected with "flags provided but not defined"). Model labels are `agy models` display labels VERBATIM, reasoning suffix included (e.g. "Gemini 3.5 Flash (Low)", "GPT-OSS 120B (Medium)"). NOTE: GPT-OSS 120B is subject to transient backend 503 "No capacity available" errors; retries succeed (external capacity issue, not a stagecoach bug).
 3. **RESOLVED — Prompt delivery + read-only mode:** agy v1.1.0 **diverged** from gemini-cli. `-p`/`--print`/`--prompt` is **value-taking** (a bare `-p` fails with "flag needs an argument: -p"); agy reads the prompt from **stdin** when `-p` is absent. `--approval-mode` was **removed**; the read-only equivalent is `--mode plan` (verified to emit clean commit messages with no plan-mode formatting noise). No first-class system-prompt flag (sys is prepended to the payload, §12.2).
-4. **OPEN — Tooled (stager) flags:** determine the exact combination that yields _non-interactive, git-scoped, auto-approved_ tool execution **without** the unscoped `--dangerously-skip-permissions` (which §19 forbids). Candidates: a `--allowed-tools`/`--allowed-tools-pattern` allowlist restricted to `git`/`Read`/`Edit`, paired with the least-permissive mode that still executes non-interactively. Until this is known, `tooled_flags` is nil and `agy` **cannot serve as a stager** (it serves the bare roles).
+4. **RESOLVED (unscoped) — Tooled (stager) flags:** verified 2026-07-09 against agy v1.1.11 (end-to-end: a stdin stager task stages exactly the requested paths and leaves the rest alone). agy exposes **no** scoped `--allowed-tools`/`--allowed-tools-pattern` allowlist — the only non-interactive tool auto-approve knob is `--dangerously-skip-permissions` (auto-approves ALL tools). The verified combo is `--mode accept-edits --dangerously-skip-permissions` (plus `--add-dir <repo>`, since agy does not auto-adopt its cwd as the workspace). This is the **UNSCOPED** model (§12.7.1) — the same one **pi** uses; the §17.6 stager prompt + the HEAD-movement guard (Issue 2 / §19) + `verifyFreezeSubset` (FR-M1c) are the safety net, not flag-scoping. A scoped git/Read/Edit allowlist remains a desirable future hardening if agy adds one; until then agy is stager-capable via the unscoped path (parity with pi).
 5. **Print-mode timeout:** `agy` exposes `--print-timeout` (default 5m); stagecoach's own `--timeout` (§9.5) governs the kill, but a shorter `--print-timeout` makes `agy` exit cleanly rather than hang — wire it to the same budget.
 
-Items 1–3 are cleared; agy ships `experimental = true` (§12.7.2) solely pending item 4.
+Items 1–4 are cleared; agy is stager-capable. It still ships `experimental = true` (§12.7.2) pending a full `--help` re-verification pass (item 4 itself is resolved).
 
 ### 12.5.2 Built-in provider: qwen-code — the Qwen3-Coder CLI (a Gemini-CLI fork)
 
