@@ -4,21 +4,21 @@
       "type": "Phase",
       "id": "P1",
       "title": "Phase 1 — File-disjoint staging fast-path (G29, FR-M13/FR-M14)",
-      "status": "Planned",
+      "status": "Ready",
       "description": "Implement the v3.2 file-disjoint staging fast-path: when the planner's partition is pairwise file-disjoint, stage each concept deterministically with `git add` (no stager agent), freeze all trees up front, run all N message generations concurrently, and publish in strict CAS order. A shared file falls back transparently to the existing tooled-stager runLoop for the whole run. The fast-path is automatic and configuration-free. Spec is final (spec/01-product.md §9.14 FR-M13/M14, §13.6.3 addendum, G29); code does not exist yet (grep-confirmed zero hits). All §13.6.3/§20.2 invariants are preserved on both paths.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Implement + test the fast-path",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Land the fast-path as a sibling function to runLoop in internal/decompose/decompose.go, wire a one-line gate in Decompose(), and add a regression suite. runLoop is preserved verbatim as the shared-file fallback. The arbiter/planner/message roles are unchanged and consume the fast-path output without modification.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Implement the file-disjoint staging fast-path + regression suite",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Add isFileDisjoint (pure gate), runLoopFastPath (deterministic serial staging sweep -> concurrent message gen -> CAS-ordered publish -> FR-M12 isolation), the Decompose() dispatch, the docs/how-it-works.md Mode-A paragraph, and a comprehensive regression test suite. Reuse existing primitives (git.Add, freezeSnapshot, verifyFreezeSubset, generateMessage, publishCommit, buildCommitResult, drainMsg, signal.SetSnapshot/ClearSnapshot); do NOT reimplement them or modify runLoop/arbiter.go/chain.go.",
               "subtasks": [
                 {
@@ -105,7 +105,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S5",
                   "title": "Fast-path regression suite in decompose_test.go (disjoint/fallback/concurrency/CAS/isolation/skip/freeze)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S4"
@@ -126,7 +126,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S6",
                   "title": "docs/how-it-works.md — add the 'File-disjoint fast-path' paragraph (Mode A)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S3"
@@ -150,7 +150,7 @@
       "type": "Phase",
       "id": "P2",
       "title": "Phase 2 — Provider-docs sync (close the stale-doc gap from the shipped agy/codex stagers)",
-      "status": "Ready",
+      "status": "Planned",
       "description": "Bring docs/providers.md into agreement with the code (internal/provider/builtin.go) and spec for stager capability. Commits c34f480 (agy stager) and f40ac87 (codex stager) made agy and codex stager-capable in code, but docs/providers.md was not updated. Research found the doc is stale for THREE providers (agy, codex, AND opencode — the PRD's claim that opencode is non-stager is a factual error; see architecture/findings_and_divergences.md D1). This phase also sweeps changeset-level docs (Mode B). The agy/codex/opencode stager CODE already ships; this phase is docs-only (the role_defaults.go code drift is flagged as a residual risk, out of this docs-only scope).",
       "milestones": [
         {
@@ -164,14 +164,14 @@
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "Update docs/providers.md stager table + prose for agy, codex, and opencode",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Correct the main provider table Stager? column, the prose note, and the Tools-disable asymmetry section so they match internal/provider/builtin.go (5 stager-capable: pi, claude, agy, opencode, codex; 2 not: qwen-code, cursor). Corrects the PRD's opencode error (D1).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T1.S1",
                   "title": "Fix the agy/codex/opencode stager rows + prose note + Tools-disable asymmetry section",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/019_2f5621db4d2b/architecture/provider_docs_state.md and findings_and_divergences.md (D1). Code (internal/provider/builtin.go) is the source of truth for stager CAPABILITY (non-nil TooledFlags <=> stager-capable). VERIFIED: stager-capable = pi, claude, agy, opencode, codex (5); NOT = qwen-code, cursor (2). PRD CORRECTION (D1): the PRD said 'leave opencode as -- no (TooledFlags nil)' — this is WRONG; opencode's TooledFlags is NON-NIL = [--agent, build] (builtin.go:351-353). So docs/providers.md is stale for THREE providers (agy, codex, opencode), not two. The PRD's own verification step mandates matching builtin.go for all seven. Also see role_defaults_drift.md: the per-role models table + role_defaults.go are a SEPARATE code drift, OUT of this docs-only task. spec/02-providers.md §12.5.1 already reflects agy stager-capable; spec §12.7 codex manifest is itself stale (no tooled_flags) — DO NOT edit spec/ (AGENTS.md hard rule 1); ground the codex doc edit in the code and flag the spec gap.\n2. INPUT: docs/providers.md regions — main provider table Stager? column (L80-86); prose note (L88); Tools-disable asymmetry section (L90-100); per-role models table footer (L142). The builtin.go capability matrix (provider_docs_state.md section 1): pi UNSCOPED, claude STRUCTURALLY-scoped, agy UNSCOPED (+TooledRepoDirFlag --add-dir), opencode UNSCOPED (--agent build), codex UNSCOPED (--sandbox danger-full-access); qwen-code + cursor nil.\n3. LOGIC: Bring docs/providers.md into agreement with builtin.go + spec/02-providers.md §12.5.1/§12.7.1 (surgical edits only): (a) Main table Stager? column: agy -> 'check-mark yes (unscoped)'; codex -> 'check-mark yes (unscoped)'; opencode -> 'check-mark yes (unscoped)'. Leave pi as 'check-mark yes'; annotate claude as 'check-mark yes (scoped)' for consistency (claude is the ONLY structurally-scoped stager per §12.7.1). Leave cursor and qwen-code as 'dash no' (their TooledFlags ARE nil). Use the (unscoped)/(scoped) annotation so a reader knows the safety model. (b) Prose note (L88): rewrite the agy sentence — agy IS stager-capable via the unscoped --mode accept-edits --dangerously-skip-permissions + --add-dir <repo> combo (same unscoped model as pi); §12.5.1.1 item 4 is RESOLVED (2026-07-09, agy v1.1.11); drop the 'cannot serve as a stager (empty tooled_flags)' clause entirely; keep agy's experimental note (still pending a full --help re-verification pass). Leave the qwen-code sentence as-is (still non-stager). (c) Tools-disable asymmetry section (L90-100): add a sentence noting agy + codex + opencode join pi as stager-capable via the UNSCOPED tooled profile (no git-scoped allowlist); claude remains the only STRUCTURALLY-scoped stager (--allowed-tools Bash(git ...)). Cross-ref §12.7.1 and the §17.6 stager prompt + HEAD-movement guard + verifyFreezeSubset as the safety net for the unscoped providers. (d) Per-role models table footer (L142): update the capability claim 'FR-D4 fallback — currently pi or claude' -> list all five stager-capable providers (pi, claude, agy, opencode, codex). Do NOT invent stager model tokens for the per-role *(cannot)* cells — those mirror role_defaults.go which is STALE code (role_defaults_drift.md); leave the cells OR add a one-line note that the per-role stager model assignment is pending a role_defaults.go update (residual risk, separate PRP). (e) Keep the edit surgical — only agy/codex/opencode stager status + directly-dependent prose. Do not reflow the rest of the table or section.\n4. MOCKING: None — documentation only. No code, no tests. Verify by re-reading the file and confirming every Stager? cell matches builtin.go's TooledFlags (non-nil <=> stager-capable) for all seven providers.\n5. OUTPUT: docs/providers.md whose provider table + prose match the code and spec. Consumed by anyone reading the provider reference; no downstream code dependency.\n6. DOCS: [Phase 2 is docs-only] THIS IS the doc update. No code, no tests.",

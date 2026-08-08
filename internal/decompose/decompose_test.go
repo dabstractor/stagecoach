@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,6 +151,10 @@ func dcmMessageMatchManifest(t *testing.T, bin string, rules []messageMatchRule)
 		b.WriteString(r.substr)
 		b.WriteByte('|')
 		b.WriteString(r.msg)
+		if r.sleepMs > 0 { // P1.M1.T1.S5: optional 3rd field for per-match sleep ordering
+			b.WriteByte('|')
+			b.WriteString(strconv.Itoa(r.sleepMs))
+		}
 		b.WriteByte('\n')
 	}
 	m := stubtest.Manifest(bin, stubtest.Options{Out: ""})
@@ -161,10 +166,13 @@ func dcmMessageMatchManifest(t *testing.T, bin string, rules []messageMatchRule)
 }
 
 // messageMatchRule is one input-derived rule for dcmMessageMatchManifest: if substr appears in the
-// concept's stdin (its diff), emit msg.
+// concept's stdin (its diff), emit msg. The optional sleepMs (P1.M1.T1.S5) adds a per-match sleep to
+// the stub so a test can order message completion (e.g. make a later concept finish FIRST); it is
+// written as a 3rd "|sleepMs" field. Zero sleepMs (the default / S3's 2-field form) ⇒ no extra sleep.
 type messageMatchRule struct {
-	substr string
-	msg    string
+	substr  string
+	msg     string
+	sleepMs int
 }
 
 // dcmDeps builds a minimal Deps for decompose tests (no ResolveRoles). All four roles are populated.
@@ -956,9 +964,9 @@ func TestDecompose_Dispatch_DisjointFastPath(t *testing.T) {
 		`]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
-		{"a.txt", "feat: add a"},
-		{"b.txt", "feat: add b"},
-		{"c.txt", "feat: add c"},
+		{substr: "a.txt", msg: "feat: add a"},
+		{substr: "b.txt", msg: "feat: add b"},
+		{substr: "c.txt", msg: "feat: add c"},
 	})
 	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
 	roles.Planner = plannerM
@@ -3174,9 +3182,9 @@ func TestRunLoopFastPath_ConcurrentPublish(t *testing.T) {
 	// stub processes) so a concept's message is deterministic regardless of goroutine scheduling. A
 	// 150ms sleep per call makes concurrency observable: if serial, total ≈ 450ms; if concurrent, ≈ 150ms.
 	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
-		{"a.go", "feat: add a"},
-		{"b.go", "feat: add b"},
-		{"c.go", "feat: add c"},
+		{substr: "a.go", msg: "feat: add a"},
+		{substr: "b.go", msg: "feat: add b"},
+		{substr: "c.go", msg: "feat: add c"},
 	})
 	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "150"
 
@@ -3300,9 +3308,9 @@ func TestRunLoopFastPath_RescueIsolation(t *testing.T) {
 	// scheduling (the script stub's counter would race). A 100ms sleep makes the goroutines truly
 	// concurrent so the drain of concept 2's in-flight channel is exercised.
 	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
-		{"a.go", "feat: add a"}, // concept 0: success
-		{"b.go", ""},            // concept 1: empty → parse fail → RescueError (MaxDuplicateRetries=0)
-		{"c.go", "feat: add c"}, // concept 2: would-be (drained, not published)
+		{substr: "a.go", msg: "feat: add a"}, // concept 0: success
+		{substr: "b.go", msg: ""},            // concept 1: empty → parse fail → RescueError (MaxDuplicateRetries=0)
+		{substr: "c.go", msg: "feat: add c"}, // concept 2: would-be (drained, not published)
 	})
 	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "100"
 
@@ -3393,5 +3401,980 @@ func TestRunLoopFastPath_RescueIsolation(t *testing.T) {
 	delta := runtime.NumGoroutine() - beforeGoroutines
 	if delta > 0 {
 		t.Logf("goroutine delta after drain = %d (before=%d, after=%d, post-wait=%d) — informational; the call returned so concept 2 was drained", delta, beforeGoroutines, afterGoroutines, runtime.NumGoroutine())
+	}
+}
+
+// =============================================================================
+// P1.M1.T1.S5 — Fast-path regression suite (FR-M13/FR-M14).
+// Drives the file-disjoint fast-path end-to-end through Decompose (cases 1–8) and
+// directly via runLoopFastPath (case 9), locking every invariant the PRD/spec
+// demand. runLoopFastPath/runLoop/isFileDisjoint/drains + the dispatch + arbiter
+// phase + all non-test source are exercised here, never edited.
+// =============================================================================
+
+// sortedFileNames returns the sorted list of bare path names from a git diff-tree
+// "--name-only" output (one path per line, trimmed). Used to assert concept isolation
+// (each commit's diff-tree vs its parent == exactly its concept's Files).
+func sortedFileNames(diffOut string) []string {
+	var out []string
+	for _, l := range strings.Split(diffOut, "\n") {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			out = append(out, l)
+		}
+	}
+	sortStrings(out)
+	return out
+}
+
+// sortStrings sorts a string slice in place (test-local to avoid a sort import just here).
+func sortStrings(s []string) {
+	// insertion sort — these slices are tiny (1-3 paths); avoids a "sort" import.
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+}
+
+// stringSlicesEqual reports whether two string slices are element-wise equal.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// fastPathStagerFatal is the routing oracle: the file-disjoint fast-path must NEVER invoke the stager
+// (system_context §6). t.Fatal makes a passing run PROOF the fast-path was taken.
+func fastPathStagerFatal(t *testing.T) func(context.Context, Deps, prompt.PlannerCommit) error {
+	t.Helper()
+	return func(ctx context.Context, _ Deps, concept prompt.PlannerCommit) error {
+		t.Fatalf("fast-path must not invoke the stager (concept %q routed to runLoop)", concept.Title)
+		return nil
+	}
+}
+
+// readArbiterCounter reads the stub arbiter's call-counter file and returns its integer value
+// (0/empty ⇒ arbiter NOT called; ≥1 ⇒ called). Mirrors MessageRescuePartial / CASAbortPartial.
+func readArbiterCounter(t *testing.T, counterFile string) int {
+	t.Helper()
+	data, err := os.ReadFile(counterFile)
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// ---------------------------------------------------------------------------
+// Case 1 — TestDecompose_FastPath_DisjointIsolationAndCompleteness
+//
+// The flagship fast-path regression: a pairwise file-disjoint planner partition routes to
+// runLoopFastPath (stager NEVER invoked), produces N correctly-isolated commits (each commit's
+// diff-tree == exactly its concept's Files) in strict CAS order, AND T_start completeness holds in
+// BOTH arbiter sub-cases: (A) planner union == all T_start paths ⇒ leftover empty ⇒ arbiter skipped
+// (counter 0); (B) one T_start path declared for NO concept ⇒ leftover non-empty ⇒ arbiter folds it
+// (counter ≥1, the (N+1)-th commit's tree == T_start).
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_DisjointIsolationAndCompleteness(t *testing.T) {
+	bin := stubtest.Build(t)
+
+	// --- Sub-case A: disjoint union == all T_start paths ⇒ arbiter skipped. ---
+	t.Run("arbiter_skipped_leftover_empty", func(t *testing.T) {
+		repo := t.TempDir()
+		dcmInitRepo(t, repo)
+		dcmRunGit(t, repo, "commit", "--allow-empty", "-m", "base") // BORN repo ⇒ preRunHEAD resolves
+
+		dcmWriteFile(t, repo, "a.txt", "aaa\n")
+		dcmWriteFile(t, repo, "b.txt", "bbb\n")
+		dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+		// Planner union == all 3 T_start paths ⇒ leftover empty ⇒ arbiter NOT called.
+		plannerJSON := `{"count":3,"single":false,"commits":[` +
+			`{"title":"c1","description":"a","files":["a.txt"]},` +
+			`{"title":"c2","description":"b","files":["b.txt"]},` +
+			`{"title":"c3","description":"c","files":["c.txt"]}` +
+			`]}`
+		plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+		messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+			{substr: "a.txt", msg: "feat: add a"},
+			{substr: "b.txt", msg: "feat: add b"},
+			{substr: "c.txt", msg: "feat: add c"},
+		})
+		roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+		roles.Planner = plannerM
+		roles.Message = messageM
+
+		// Arbiter counter: should remain 0 (leftover empty ⇒ arbiter skipped).
+		counterDir := t.TempDir()
+		counterFile := counterDir + "/counter"
+		roles.Arbiter = stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
+
+		deps := dcmDeps(t, repo, roles)
+		deps.stager = fastPathStagerFatal(t) // routing oracle
+
+		preRunHEAD := dcmHeadSHA(t, repo) // born repo — captured before Decompose mutates HEAD
+		result, err := Decompose(context.Background(), deps)
+		if err != nil {
+			t.Fatalf("Decompose: %v", err)
+		}
+		if len(result.Commits) != 3 {
+			t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+		}
+
+		// Concept isolation: each commit's diff-tree vs its parent == exactly its concept's Files.
+		wantFiles := [][]string{{"a.txt"}, {"b.txt"}, {"c.txt"}}
+		wantSubjects := []string{"feat: add a", "feat: add b", "feat: add c"}
+		for i, c := range result.Commits {
+			if c.Subject != wantSubjects[i] {
+				t.Errorf("Commits[%d].Subject = %q, want %q", i, c.Subject, wantSubjects[i])
+			}
+			parent := preRunHEAD
+			if i > 0 {
+				parent = result.Commits[i-1].SHA
+			}
+			diff := dcmGitOut(t, repo, "diff-tree", "--no-commit-id", "--name-only", "-r", c.SHA, parent)
+			if got := sortedFileNames(diff); !stringSlicesEqual(got, wantFiles[i]) {
+				t.Errorf("commit[%d] not isolated: got %v, want %v (diff-tree=%q)", i, got, wantFiles[i], diff)
+			}
+			// CAS-ordered parents.
+			if gotParent := dcmGitOut(t, repo, "rev-parse", c.SHA+"^"); gotParent != parent {
+				t.Errorf("commit[%d] parent = %s, want %s (CAS order)", i, gotParent, parent)
+			}
+		}
+
+		// Arbiter skipped (leftover empty).
+		if n := readArbiterCounter(t, counterFile); n != 0 {
+			t.Errorf("arbiter call count = %d, want 0 (leftover empty ⇒ arbiter skipped)", n)
+		}
+		if result.Amended != 0 {
+			t.Errorf("Amended = %d, want 0", result.Amended)
+		}
+		if status := dcmStatusPorcelain(t, repo); status != "" {
+			t.Errorf("status = %q, want empty (clean)", status)
+		}
+	})
+
+	// --- Sub-case B: one T_start path declared for NO concept ⇒ arbiter folds it. ---
+	t.Run("arbiter_folds_leftover_present", func(t *testing.T) {
+		repo := t.TempDir()
+		dcmInitRepo(t, repo)
+
+		// 4 disjoint files; the planner declares ONLY a/b/c — d.txt is a frozen leftover.
+		dcmWriteFile(t, repo, "a.txt", "aaa\n")
+		dcmWriteFile(t, repo, "b.txt", "bbb\n")
+		dcmWriteFile(t, repo, "c.txt", "ccc\n")
+		dcmWriteFile(t, repo, "d.txt", "ddd\n")
+
+		// Capture the EXACTLY-T_start oracle (the full 4-file working-tree change set) for the
+		// arbiter-commit tree assertion below.
+		dcmRunGit(t, repo, "add", "a.txt", "b.txt", "c.txt", "d.txt")
+		tStart := dcmGitOut(t, repo, "write-tree")
+		dcmRunGit(t, repo, "rm", "--cached", "--ignore-unmatch", "a.txt", "b.txt", "c.txt", "d.txt")
+
+		plannerJSON := `{"count":3,"single":false,"commits":[` +
+			`{"title":"c1","description":"a","files":["a.txt"]},` +
+			`{"title":"c2","description":"b","files":["b.txt"]},` +
+			`{"title":"c3","description":"c","files":["c.txt"]}` +
+			`]}`
+		plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+		messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+			{substr: "a.txt", msg: "feat: add a"},
+			{substr: "b.txt", msg: "feat: add b"},
+			{substr: "c.txt", msg: "feat: add c"},
+			{substr: "d.txt", msg: "feat: arbiter leftover"},
+		})
+		roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+		roles.Planner = plannerM
+		roles.Message = messageM
+		// null target ⇒ the arbiter makes a NEW commit folding the leftover (resolveNewCommit).
+		roles.Arbiter = dcmArbiterManifest(t, bin, `{"target": null}`)
+
+		deps := dcmDeps(t, repo, roles)
+		deps.stager = fastPathStagerFatal(t) // routing oracle
+
+		result, err := Decompose(context.Background(), deps)
+		if err != nil {
+			t.Fatalf("Decompose: %v", err)
+		}
+		// 3 fast-path commits + 1 arbiter fold = 4.
+		if len(result.Commits) != 4 {
+			t.Fatalf("Commits len = %d, want 4 (3 fast-path + 1 arbiter fold)", len(result.Commits))
+		}
+
+		// The arbiter commit's tree == EXACTLY T_start (it folded ONLY the frozen leftover d.txt).
+		headTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+		if headTree != tStart {
+			t.Errorf("arbiter commit tree = %s, want EXACTLY T_start = %s", headTree, tStart)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Case 2 — TestDecompose_FastPath_SharedFallbackMatchesRunLoop
+//
+// The inverse oracle: a SHARED file (one path in ≥2 concepts) routes to runLoop, which invokes the
+// stager per concept. The stager is called for BOTH concepts (flag set) and the tip reconstructs T_start
+// exactly (byte-identical to runLoop-only behavior) — proving the fallback is the UNCHANGED runLoop.
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_SharedFallbackMatchesRunLoop(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	base := "def get_links():\n    return []\n\ndef sort_items():\n    return []\n"
+	tStartContent := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return sorted(links, key=lambda c: c.code)\n"
+	basePlusA := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return []\n" // concept 0's hunk only
+
+	dcmWriteFile(t, repo, "store.py", base)
+	dcmStageFile(t, repo, "store.py")
+	dcmCommitRaw(t, repo, "initial")
+	dcmWriteFile(t, repo, "store.py", tStartContent) // dirty → triggers decompose
+
+	// store.py is declared in BOTH concepts ⇒ isFileDisjoint FALSE ⇒ runLoop.
+	plannerJSON := `{"count":2,"single":false,"commits":[` +
+		`{"title":"feat: add link fetching","description":"the get_links change","files":["store.py"]},` +
+		`{"title":"feat: sort listed links by code","description":"the sort_items change","files":["store.py"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add link fetching", "feat: sort listed links by code"})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Commits = 2 // forced count overrides the FR-M2b one-file short-circuit
+
+	// THE FALLBACK ORACLE: runLoop MUST call the stager. A counter proves BOTH concepts were staged.
+	var stagerCalls []string
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		stagerCalls = append(stagerCalls, concept.Title)
+		switch concept.Title {
+		case "feat: add link fetching":
+			stagePartialBlob(t, repo, "store.py", basePlusA) // hunk A only — a strict subset of T_start
+		case "feat: sort listed links by code":
+			stagePartialBlob(t, repo, "store.py", tStartContent) // + hunk B ⇒ index == T_start for store.py
+		}
+		return nil
+	}
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(stagerCalls) != 2 {
+		t.Fatalf("stager called %d times, want 2 (shared file ⇒ runLoop stager per concept): %v", len(stagerCalls), stagerCalls)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("Commits len = %d, want 2", len(result.Commits))
+	}
+	// The two commits reconstruct T_start exactly — byte-identical to runLoop-only behavior.
+	if got, want := dcmGitOut(t, repo, "show", "HEAD:store.py"), strings.TrimRight(tStartContent, "\n"); got != want {
+		t.Errorf("final tip store.py must reconstruct the full change; got %q want %q", got, want)
+	}
+	if n := dcmLogCount(t, repo); n != 3 { // initial + 2 concepts
+		t.Errorf("commit count = %d, want 3", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 3 — TestDecompose_FastPath_ConcurrencyIntervalOverlap
+//
+// HARD per-goroutine interval overlap: each stub message invocation appends "start_ns end_ns\n" to a
+// shared file via the STAGECOACH_STUB_INTERVAL_FILE hook (atomic on POSIX). The test reads all lines,
+// parses N intervals, sorts by start, and asserts ≥1 consecutive pair where start[j] < end[i] (overlap)
+// — NOT strictly serial. A uniform 100ms sleep makes all N overlap robustly (ms-scale exec jitter <<
+// 100ms). This is the regression guard a future silent re-serialization cannot evade.
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_ConcurrencyIntervalOverlap(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a"},
+		{substr: "b.txt", msg: "feat: add b"},
+		{substr: "c.txt", msg: "feat: add c"},
+	})
+	// A uniform 100ms sleep widens the concurrency window; the interval probe records it.
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "100"
+	intervalFile := t.TempDir() + "/intervals.txt"
+	messageM.Env["STAGECOACH_STUB_INTERVAL_FILE"] = intervalFile
+
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	var logBuf bytes.Buffer
+	deps := Deps{
+		Git:     git.New(repo),
+		Config:  config.Defaults(),
+		Roles:   roles,
+		Verbose: ui.NewVerbose(&logBuf, true), // captures the "launched N concurrent" log
+	}
+	deps.stager = fastPathStagerFatal(t)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+	}
+
+	// Corroborate the concurrent-launch log (FR-M14).
+	if !strings.Contains(logBuf.String(), "launched 3 concurrent message generations") {
+		t.Errorf("expected 'launched 3 concurrent message generations' log; got: %q", logBuf.String())
+	}
+
+	// HARD GATE — per-goroutine interval overlap. Read + parse the interval file.
+	data, rerr := os.ReadFile(intervalFile)
+	if rerr != nil {
+		t.Fatalf("read interval file: %v", rerr)
+	}
+	type interval struct{ start, end int64 }
+	var intervals []interval
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		s, e1 := strconv.ParseInt(fields[0], 10, 64)
+		e, e2 := strconv.ParseInt(fields[1], 10, 64)
+		if e1 != nil || e2 != nil {
+			continue
+		}
+		intervals = append(intervals, interval{s, e})
+	}
+	if len(intervals) != 3 {
+		t.Fatalf("expected 3 interval records, got %d (data=%q)", len(intervals), string(data))
+	}
+	// Sort by start (insertion sort — N=3).
+	for i := 1; i < len(intervals); i++ {
+		for j := i; j > 0 && intervals[j-1].start > intervals[j].start; j-- {
+			intervals[j-1], intervals[j] = intervals[j], intervals[j-1]
+		}
+	}
+	// Assert NOT strictly serial: there EXISTS a consecutive pair where start[j] < end[i] (overlap).
+	overlapped := false
+	for i := 0; i < len(intervals)-1; i++ {
+		if intervals[i+1].start < intervals[i].end {
+			overlapped = true
+			break
+		}
+	}
+	if !overlapped {
+		t.Errorf("intervals are strictly serial (no overlap) — the fast-path was re-serialized: %+v", intervals)
+	} else {
+		t.Logf("concurrency confirmed: intervals overlap (hard gate) — %+v", intervals)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 4 — TestDecompose_FastPath_OutOfOrderCompletesOrderedPublish
+//
+// Per-match sleep orders message completion OUT of concept order (concept 0 slowest, concept 2
+// fastest) yet the publish loop STILL emits the chain in strict CAS order
+// (preRunHEAD→c0→c1→c2). This proves the serial publish loop blocks on inflight[0] until the slowest
+// message finishes, THEN publishes in order.
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_OutOfOrderCompletesOrderedPublish(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmRunGit(t, repo, "commit", "--allow-empty", "-m", "base") // BORN repo ⇒ preRunHEAD resolves
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	// Per-match sleep: message 0 (a.txt) is SLOWEST, message 2 (c.txt) is FASTEST. So message 2
+	// finishes FIRST, message 0 finishes LAST — but the publish loop must still emit c0→c1→c2 in order.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a", sleepMs: 300},
+		{substr: "b.txt", msg: "feat: add b", sleepMs: 200},
+		{substr: "c.txt", msg: "feat: add c", sleepMs: 100},
+	})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.stager = fastPathStagerFatal(t)
+
+	preRunHEAD := dcmHeadSHA(t, repo) // born repo — captured before Decompose mutates HEAD
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+	}
+
+	// Subjects in CONCEPT order (not completion order) — proves ordered publish.
+	wantSubjects := []string{"feat: add a", "feat: add b", "feat: add c"}
+	for i, want := range wantSubjects {
+		if result.Commits[i].Subject != want {
+			t.Errorf("Commits[%d].Subject = %q, want %q (publish order ≠ completion order)", i, result.Commits[i].Subject, want)
+		}
+	}
+
+	// STRICT CAS order: commit[i] parent = i==0 ? preRunHEAD : commits[i-1].SHA.
+	for i, c := range result.Commits {
+		parent := dcmGitOut(t, repo, "rev-parse", c.SHA+"^")
+		wantParent := preRunHEAD
+		if i > 0 {
+			wantParent = result.Commits[i-1].SHA
+		}
+		if parent != wantParent {
+			t.Errorf("commit[%d] parent = %s, want %s (CAS order violated under out-of-order completion)", i, parent, wantParent)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 5a — TestDecompose_FastPath_RescueIsolation
+//
+// Through Decompose (S3's _RescueIsolation is direct-call): message[1] fails (empty ⇒ parse-fail ⇒
+// RescueError, MaxDuplicateRetries=0) ⇒ *DecomposeRescueError(Index==1, Count==3), exactly 1 partial
+// commit (concept 0), "concept 2 of 3" + "update-ref HEAD" in Out, arbiter NOT called.
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_RescueIsolation(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a"}, // concept 0: success
+		{substr: "b.txt", msg: ""},            // concept 1: empty ⇒ parse-fail ⇒ RescueError
+		{substr: "c.txt", msg: "feat: add c"}, // concept 2: would-be (drained, not published)
+	})
+	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "100" // widen the concurrency window
+
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0 // fail immediately on parse failure ⇒ RescueError
+
+	counterDir := t.TempDir()
+	counterFile := counterDir + "/counter"
+	roles := RoleManifests{
+		Planner: plannerM,
+		Stager:  tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
+		Message: messageM,
+		Arbiter: stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
+	}
+	deps, buf := dcmOutBuffer(t, repo, roles)
+	deps.Config = cfg
+	deps.stager = fastPathStagerFatal(t)
+
+	result, err := Decompose(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected error (message rescue for concept 1), got nil")
+	}
+
+	// (a) errors.As → *DecomposeRescueError naming concept 1.
+	var dre *DecomposeRescueError
+	if !errors.As(err, &dre) {
+		t.Fatalf("error = %v, want *DecomposeRescueError", err)
+	}
+	if dre.Index != 1 {
+		t.Errorf("dre.Index = %d, want 1", dre.Index)
+	}
+	if dre.Count != 3 {
+		t.Errorf("dre.Count = %d, want 3", dre.Count)
+	}
+	// (b) errors.As → *generate.RescueError (via Unwrap).
+	var re *generate.RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("error does not unwrap to *RescueError: %v", err)
+	}
+	// (c) errors.Is → generate.ErrRescue (→ exitcode 3).
+	if !errors.Is(err, generate.ErrRescue) {
+		t.Errorf("error is not ErrRescue: %v", err)
+	}
+	// (d) partial commits: exactly 1 (concept 0).
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1 (only concept 0 landed)", len(result.Commits))
+	}
+	if result.Commits[0].Subject != "feat: add a" {
+		t.Errorf("Commits[0].Subject = %q, want %q", result.Commits[0].Subject, "feat: add a")
+	}
+	// (e) Out names "concept 2 of 3" (1-indexed) + the rescue recipe.
+	out := buf.String()
+	if !strings.Contains(out, "concept 2 of 3") {
+		t.Errorf("rescue output missing 'concept 2 of 3'; got: %s", out)
+	}
+	if !strings.Contains(out, "update-ref HEAD") {
+		t.Errorf("rescue output missing 'update-ref HEAD'; got: %s", out)
+	}
+	// (f) arbiter NOT called (rescue skips the arbiter).
+	if n := readArbiterCounter(t, counterFile); n != 0 {
+		t.Errorf("arbiter call count = %d, want 0 (rescue should skip arbiter)", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 5b — TestDecompose_FastPath_CASAbortPartial
+//
+// FR-M12b on the fast-path: an external goroutine moves HEAD between c0's publish and c1's publish
+// (created by per-match sleep: c0 fast, c1 slow). The move uses commit-tree/update-ref (NOT
+// --allow-empty) so c1's publish CAS fails ⇒ *generate.CASError, errors.Is(ErrCASFailed), "HEAD moved"
+// in Out, exactly 1 partial commit (c0), arbiter NOT called.
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_CASAbortPartial(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	// Per-match sleep creates the CAS window: c0 (a.txt) FAST, c1 (b.txt) SLOW (in flight when c0
+	// publishes), c2 (c.txt) fast. The HEAD move lands while c1's message is in flight.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a", sleepMs: 0},
+		{substr: "b.txt", msg: "feat: add b", sleepMs: 400},
+		{substr: "c.txt", msg: "feat: add c", sleepMs: 0},
+	})
+	counterDir := t.TempDir()
+	counterFile := counterDir + "/counter"
+	roles := RoleManifests{
+		Planner: plannerM,
+		Stager:  tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
+		Message: messageM,
+		Arbiter: stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
+	}
+	deps, buf := dcmOutBuffer(t, repo, roles)
+	deps.stager = fastPathStagerFatal(t)
+
+	// External HEAD-move goroutine: poll until c0 ("feat: add a") is in the log AND c1 ("feat: add b")
+	// is NOT yet, then commit-tree/update-ref HEAD (mirror CASAbortPartial :1642's idiom). The move
+	// lands while c1's 400ms message is in flight ⇒ c1's publish CAS fails.
+	go func() {
+		deadline := time.Now().Add(30 * time.Second)
+		for time.Now().Before(deadline) {
+			logOut, _ := exec.Command("git", "-C", repo, "log", "--format=%s").CombinedOutput()
+			s := string(logOut)
+			if strings.Contains(s, "feat: add a") && !strings.Contains(s, "feat: add b") {
+				// Brief armed delay to land inside c1's in-flight window.
+				time.Sleep(50 * time.Millisecond)
+				tree := dcmRunGit(t, repo, "rev-parse", "HEAD^{tree}")
+				c := dcmRunGit(t, repo, "commit-tree", tree, "-p", "HEAD", "-m", "external head move")
+				dcmRunGit(t, repo, "update-ref", "HEAD", c)
+				return
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		// deadline expired without the window — leave HEAD alone; the test's assertions fail loudly.
+	}()
+
+	result, err := Decompose(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected CAS error, got nil")
+	}
+
+	// (a) errors.As → *generate.CASError.
+	var ce *generate.CASError
+	if !errors.As(err, &ce) {
+		t.Fatalf("error = %v, want *generate.CASError", err)
+	}
+	// (b) errors.Is → git.ErrCASFailed (→ exitcode 1).
+	if !errors.Is(err, git.ErrCASFailed) {
+		t.Errorf("error is not ErrCASFailed: %v", err)
+	}
+	// (c) deps.Out contains "HEAD moved".
+	out := buf.String()
+	if !strings.Contains(out, "HEAD moved") {
+		t.Errorf("CAS output missing 'HEAD moved'; got: %s", out)
+	}
+	// (d) partial commits: exactly 1 (concept 0 landed before CAS failure on concept 1's publish).
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1 (only c0 landed before CAS failure)", len(result.Commits))
+	}
+	if result.Commits[0].Subject != "feat: add a" {
+		t.Errorf("Commits[0].Subject = %q, want %q", result.Commits[0].Subject, "feat: add a")
+	}
+	// (e) arbiter NOT called (CAS abort skips the arbiter).
+	if n := readArbiterCounter(t, counterFile); n != 0 {
+		t.Errorf("arbiter call count = %d, want 0 (CAS abort should skip arbiter)", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 6 — TestDecompose_FastPath_EmptyConceptSkip
+//
+// FR-M8 empty-skip on the fast-path: concept[1] has empty Files (or a path not in T_start) ⇒ stages
+// nothing ⇒ treeI==prevTree ⇒ skipped (no empty commit). The CAS chain is gap-free: 2 commits land
+// (a.txt, c.txt) with correct parents (c0→c1).
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_EmptyConceptSkip(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmRunGit(t, repo, "commit", "--allow-empty", "-m", "base") // BORN repo ⇒ preRunHEAD resolves
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+	// b.txt is NOT written; concept 1 declares EMPTY files ⇒ git add no-op ⇒ treeI==prevTree ⇒ FR-M8 skip.
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":[]},` + // empty Files ⇒ git add no-op ⇒ FR-M8 skip
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	// Only 2 messages needed: concept 1 is skipped (no message generated). Match rules for a + c only.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a"},
+		{substr: "c.txt", msg: "feat: add c"},
+	})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.stager = fastPathStagerFatal(t)
+
+	initialCommits := dcmLogCount(t, repo)
+	preRunHEAD := dcmHeadSHA(t, repo) // born repo — captured before Decompose mutates HEAD
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(empty-skip): %v", err)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("Commits len = %d, want 2 (concept 1 FR-M8-skipped)", len(result.Commits))
+	}
+	wantSubjects := []string{"feat: add a", "feat: add c"}
+	for i, want := range wantSubjects {
+		if result.Commits[i].Subject != want {
+			t.Errorf("Commits[%d].Subject = %q, want %q", i, result.Commits[i].Subject, want)
+		}
+	}
+	// No empty commit for the skipped concept: log grew by exactly 2.
+	if n := dcmLogCount(t, repo); n != initialCommits+2 {
+		t.Errorf("commit count = %d, want %d (no empty commit for skipped concept)", n, initialCommits+2)
+	}
+	// Gap-free CAS chain: c0→c1, parents correct.
+	for i, c := range result.Commits {
+		parent := dcmGitOut(t, repo, "rev-parse", c.SHA+"^")
+		wantParent := preRunHEAD
+		if i > 0 {
+			wantParent = result.Commits[i-1].SHA
+		}
+		if parent != wantParent {
+			t.Errorf("commit[%d] parent = %s, want %s (CAS chain gap-free despite skip)", i, parent, wantParent)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 7 — TestDecompose_FastPath_FreezeGuardWired
+//
+// FR-M1c defense-in-depth: verifyFreezeSubset is PROVABLY wired on the fast-path (called once per
+// concept in the sweep, BEFORE the FR-M8 skip check). MergeTrees is verifyFreezeSubset's unique part-B
+// call, so a counting git wrapper that overrides MergeTrees counts it. With 3 disjoint NON-skipped
+// concepts, count == 3 == len(concepts).
+// ---------------------------------------------------------------------------
+
+// countingGit wraps git.Git and counts MergeTrees calls (verifyFreezeSubset's unique part-B primitive).
+type countingGit struct {
+	git.Git
+	n *atomic.Int64
+}
+
+func (c *countingGit) MergeTrees(ctx context.Context, baseTree, ourTree, theirTree string) (string, bool, error) {
+	c.n.Add(1)
+	return c.Git.MergeTrees(ctx, baseTree, ourTree, theirTree)
+}
+
+func TestDecompose_FastPath_FreezeGuardWired(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "feat: add a"},
+		{substr: "b.txt", msg: "feat: add b"},
+		{substr: "c.txt", msg: "feat: add c"},
+	})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	var n atomic.Int64
+	deps := Deps{
+		Git:     &countingGit{git.New(repo), &n},
+		Config:  config.Defaults(),
+		Roles:   roles,
+		Verbose: nil,
+	}
+	deps.stager = fastPathStagerFatal(t)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+	}
+	// verifyFreezeSubset runs for EVERY concept in the sweep (BEFORE the FR-M8 skip check), and each
+	// invocation calls MergeTrees exactly once (its unique part-B content check). With 3 disjoint
+	// NON-skipped concepts, count == 3 == len(concepts). (The arbiter does NOT call MergeTrees.)
+	if got := n.Load(); got != 3 {
+		t.Errorf("MergeTrees call count = %d, want 3 (verifyFreezeSubset wired once per concept)", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Case 8 — TestDecompose_FastPath_TooledFlagsLessProvider
+//
+// G29 side effect (FR-D4): a TooledFlags-less provider (BARE manifest — nil TooledFlags, the
+// opencode/qwen-code shape) DECOMPOSES a disjoint tree via the fast-path (stager bypassed ⇒
+// RenderTooled never called) but CANNOT serve as a stager on a shared-file tree: runLoop invokes the
+// real stageConcept → RenderTooled → 'tooled mode requires non-empty tooled_flags', which FR-M12d's
+// retry-once-then-empty SWALLOWS into an empty-skip for BOTH concepts (the error is ErrStagerFailed,
+// NOT ErrStagerMovedHEAD, so it is retried then treated as empty). The faithful proof is ZERO commits
+// + the Verbose "stager failed twice … treating concept as empty" log. deps.stager is left nil so the
+// REAL stageConcept fires (a seam would mask the error).
+// ---------------------------------------------------------------------------
+
+func TestDecompose_FastPath_TooledFlagsLessProvider(t *testing.T) {
+	bin := stubtest.Build(t)
+
+	// --- Sub-case: disjoint SUCCEEDS via the fast-path (stager bypassed). ---
+	t.Run("disjoint_succeeds", func(t *testing.T) {
+		repo := t.TempDir()
+		dcmInitRepo(t, repo)
+
+		dcmWriteFile(t, repo, "a.txt", "aaa\n")
+		dcmWriteFile(t, repo, "b.txt", "bbb\n")
+		dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+		plannerJSON := `{"count":3,"single":false,"commits":[` +
+			`{"title":"c1","description":"a","files":["a.txt"]},` +
+			`{"title":"c2","description":"b","files":["b.txt"]},` +
+			`{"title":"c3","description":"c","files":["c.txt"]}` +
+			`]}`
+		plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+		messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+			{substr: "a.txt", msg: "feat: add a"},
+			{substr: "b.txt", msg: "feat: add b"},
+			{substr: "c.txt", msg: "feat: add c"},
+		})
+		// BARE manifest (nil TooledFlags) for the Stager role — NOT tooledStubManifest. The fast-path
+		// never reaches the stager, so RenderTooled is never called ⇒ succeeds.
+		roles := RoleManifests{
+			Planner: plannerM,
+			Stager:  stubtest.Manifest(bin, stubtest.Options{Out: ""}),
+			Message: messageM,
+			Arbiter: stubtest.Manifest(bin, stubtest.Options{Out: ""}),
+		}
+		deps := dcmDeps(t, repo, roles)
+		// deps.stager left NIL — the fast-path doesn't invoke it; if the run mis-routed to runLoop it
+		// would hit the real stageConcept (the faithful path). No oracle here: the disjoint success IS
+		// the proof the fast-path bypassed the stager.
+
+		result, err := Decompose(context.Background(), deps)
+		if err != nil {
+			t.Fatalf("TooledFlags-less disjoint must succeed via fast-path bypass; got: %v", err)
+		}
+		if len(result.Commits) != 3 {
+			t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+		}
+		if status := dcmStatusPorcelain(t, repo); status != "" {
+			t.Errorf("status = %q, want empty (clean)", status)
+		}
+	})
+
+	// --- Sub-case: shared CANNOT serve as a stager (FR-M12d swallows the render error). ---
+	//
+	// A TooledFlags-less provider cannot render in tooled mode, so stageConcept errors with the
+	// unchanged 'tooled mode requires non-empty tooled_flags' message. runLoop's FR-M12d retry-once-
+	// then-empty logic SWALLOWS that stager error (it is ErrStagerFailed, NOT ErrStagerMovedHEAD) into
+	// an empty-skip for BOTH concepts, so the run returns nil error with ZERO commits. The faithful
+	// proof the stager was invoked + failed is the Verbose retry log ("stager failed twice … treating
+	// concept as empty"). The disjoint sub-case above proves the bypass; this proves the failure.
+	t.Run("shared_cannot_serve_as_stager", func(t *testing.T) {
+		repo := t.TempDir()
+		dcmInitRepo(t, repo)
+
+		base := "def get_links():\n    return []\n\ndef sort_items():\n    return []\n"
+		tStartContent := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return sorted(links, key=lambda c: c.code)\n"
+		dcmWriteFile(t, repo, "store.py", base)
+		dcmStageFile(t, repo, "store.py")
+		dcmCommitRaw(t, repo, "initial")
+		dcmWriteFile(t, repo, "store.py", tStartContent)
+
+		plannerJSON := `{"count":2,"single":false,"commits":[` +
+			`{"title":"feat: add link fetching","description":"the get_links change","files":["store.py"]},` +
+			`{"title":"feat: sort listed links by code","description":"the sort_items change","files":["store.py"]}` +
+			`]}`
+		plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+		messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add link fetching", "feat: sort listed links by code"})
+		roles := RoleManifests{
+			Planner: plannerM,
+			Stager:  stubtest.Manifest(bin, stubtest.Options{Out: ""}), // BARE — nil TooledFlags
+			Message: messageM,
+			Arbiter: stubtest.Manifest(bin, stubtest.Options{Out: ""}),
+		}
+		var logBuf bytes.Buffer
+		deps := Deps{
+			Git:     git.New(repo),
+			Config:  config.Defaults(),
+			Roles:   roles,
+			Verbose: ui.NewVerbose(&logBuf, true), // captures the FR-M12d stager-failed retry log
+		}
+		deps.Config.Commits = 2
+		// deps.stager NIL ⇒ the run hits the REAL stageConcept → RenderTooled → the unchanged error.
+
+		result, err := Decompose(context.Background(), deps)
+		if err != nil {
+			t.Fatalf("FR-M12d swallows the stager error into empty-skip; got unexpected err: %v", err)
+		}
+		// FR-M12d empty-skips BOTH concepts (stager fails twice each) ⇒ ZERO commits. A TooledFlags-less
+		// provider cannot decompose a shared-file tree (the G29 side effect's negative proof).
+		if len(result.Commits) != 0 {
+			t.Errorf("Commits len = %d, want 0 (TooledFlags-less stager cannot stage the shared file; both concepts FR-M8-skipped)", len(result.Commits))
+		}
+		// The Verbose log PROVES the stager was invoked + failed both times (the RenderTooled error
+		// fired for each concept), confirming the provider genuinely cannot serve as a stager.
+		logStr := logBuf.String()
+		if !strings.Contains(logStr, "stager failed twice") || !strings.Contains(logStr, "treating concept as empty") {
+			t.Errorf("expected FR-M12d 'stager failed twice … treating concept as empty' log (proof the TooledFlags-less stager failed); got: %s", logStr)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Case 9 — TestRunLoopFastPath_StartOfRunFreezeExcludesSentinel
+//
+// FR-M1b start-of-run freeze (DIRECT-CALL — there is no Go seam between Decompose's FreezeWorkingTree
+// and runLoopFastPath for exact freeze→sentinel→run control). A sentinel written AFTER
+// FreezeWorkingTree returns (T_start frozen) and BEFORE runLoopFastPath lands in NO commit and
+// survives in the worktree.
+// ---------------------------------------------------------------------------
+
+func TestRunLoopFastPath_StartOfRunFreezeExcludesSentinel(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// Seed a base commit with three files, then modify all three disjointly (S3's direct-call idiom).
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 1\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 1\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 1\n")
+	dcmRunGit(t, repo, "add", "a.go", "b.go", "c.go")
+	dcmCommitRaw(t, repo, "initial") // BORN repo
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 2\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 2\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 2\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// Write the sentinel AFTER the freeze (T_start captured) and BEFORE the run ⇒ it is NOT in T_start.
+	dcmWriteFile(t, repo, "sentinel.txt", "concurrent change")
+
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.go", msg: "feat: add a"},
+		{substr: "b.go", msg: "feat: add b"},
+		{substr: "c.go", msg: "feat: add c"},
+	})
+	roles := RoleManifests{Message: messageM}
+	deps := Deps{
+		Git:     g,
+		Config:  config.Defaults(),
+		Roles:   roles,
+		Verbose: nil,
+	}
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "c1", Files: []string{"a.go"}},
+		{Title: "c2", Files: []string{"b.go"}},
+		{Title: "c3", Files: []string{"c.go"}},
+	}
+
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+	if err != nil {
+		t.Fatalf("runLoopFastPath: %v", err)
+	}
+	if len(commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(commits))
+	}
+
+	// (a) The sentinel appears in NO commit's file list (the freeze excluded it).
+	for i, c := range commits {
+		for _, fc := range c.Files {
+			if fc.Path == "sentinel.txt" {
+				t.Errorf("commits[%d] contains sentinel.txt — the start-of-run freeze must exclude post-freeze changes", i)
+			}
+		}
+	}
+	// (b) The sentinel survives in the worktree (untracked, untouched by the run).
+	if status := dcmStatusPorcelain(t, repo); !strings.Contains(status, "sentinel.txt") {
+		t.Errorf("status = %q, want it to contain 'sentinel.txt' (post-freeze change survives in the worktree)", status)
 	}
 }
