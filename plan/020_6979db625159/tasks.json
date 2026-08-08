@@ -63,14 +63,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Release plumbing: goreleaser Chocolatey pipe, drop the WinGet CI job, add install.ps1",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Add a goreleaser-native chocolateys: pipe to .goreleaser.yaml, remove the winget CI job and WINGET_TOKEN from release.yml, and create install.ps1 (the Windows irm|iex installer). The install-method story must be coherent end-to-end with the upgrade subsystem changes from P1.M1.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "goreleaser chocolateys: pipe + remove WinGet CI job + add install.ps1",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Three coordinated release-plumbing changes: (a) add a native chocolateys: pipe to .goreleaser.yaml, (b) delete the winget CI job and WINGET_TOKEN references from release.yml, (c) create install.ps1 at the repo root as the Windows curl|sh analog.",
               "subtasks": [
                 {
@@ -108,7 +108,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S3",
                   "title": "install.ps1: create PowerShell installer at repo root (irm | iex Windows analog of install.sh)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/external_deps.md for the install.ps1 behavioral spec. install.sh (repo root, 9002 bytes) is the direct functional template — it documents the exact asset-naming convention (stagecoach_<v>_<os>_<arch>), checksums.txt verification, and STAGECOACH_INSTALL_METHOD tagging that install.ps1 must mirror. install.ps1 does NOT exist yet (confirmed: does not exist anywhere in the tree).\n2. INPUT: install.sh (repo root) as the structural template. The GitHub Releases API pattern from internal/upgrade/releases.go. The SHA256 verification pattern from internal/upgrade/download.go. Spec §21.3 (install paths).\n3. LOGIC: Create install.ps1 at the repo root. It must: (a) Detect arch via $env:PROCESSOR_ARCHITECTURE (AMD64→amd64, ARM64→arm64). (b) Resolve the latest release tag via GitHub Releases API (Invoke-RestMethod https://api.github.com/repos/dabstractor/stagecoach/releases/latest, unauthenticated). (c) Download stagecoach_<v>_windows_<arch>.zip + checksums.txt from the release assets. (d) SHA256-verify the zip against the matching checksums.txt line (hard gate — Write-Error + exit 1 on mismatch, like install.sh and download.go). (e) Extract stagecoach.exe to $LOCALAPPDATA\\stagecoach (use System.IO.Compression.ZipFile — no PowerShell gallery modules). (f) Prepend $LOCALAPPDATA\\stagecoach to the USER PATH via [Environment]::SetEnvironmentVariable('PATH', ..., 'User') (NOT Machine — no admin required). (g) Set STAGECOACH_INSTALL_METHOD=direct in the USER environment via [Environment]::SetEnvironmentVariable('STAGECOACH_INSTALL_METHOD', 'direct', 'User'). (h) Print a success message with 'Re-open your terminal for PATH changes to take effect.' (i) Add a header comment block cross-referencing spec §21.3 and explaining this is the Windows analog of install.sh. Keep it dependency-free.\n4. OUTPUT: install.ps1 exists at repo root. A PowerShell syntax check (powershell -NoProfile -Command '& { . ./install.ps1 -DryRun }' or pwsh -NoProfile -File install.ps1 -WhatIf, or at minimum a parse check) confirms it is valid PowerShell. The script follows the irm | iex invocation pattern: 'irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex'.\n5. DOCS: [Mode A] install.ps1 itself IS documentation (header comments). docs/packaging.md coverage of the PowerShell installer is handled in P1.M3.T1.S1.",
@@ -140,7 +140,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "docs/packaging.md: replace WinGet section (lines 8-73) with Chocolatey + PowerShell installer section",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1",
