@@ -75,7 +75,7 @@ release:
   # below, best-effort) — plus the 6 archives + checksums.txt. The REMAINING channels are
   # "Beyond goreleaser" (PRD §21.2), implemented as separate CI/release artifacts, NOT goreleaser pipes:
   #   • npm       — release.yml `npm-publish` job → stagecoach-ai (npm/ wrapper)
-  #   • WinGet    — release.yml `winget` job → vedantmgoyal9/winget-releaser → microsoft/winget-pkgs
+  #   • Chocolatey — goreleaser-native `chocolateys:` pipe (Windows package manager; see below)
   #   • Nix       — flake.nix (nix profile install github:dabstractor/stagecoach)
   #   • mise/asdf — plugins/asdf-stagecoach/ (one POSIX-sh plugin serves both; see docs/packaging.md)
   # `go install` and the curl|sh direct download consume the archives published here directly.
@@ -84,7 +84,7 @@ release:
 # (installed to $HOMEBREW_PREFIX/bin, on $PATH), NOT a cask (casks are for macOS GUI .app bundles
 # installed to /Applications). `brews:` is the current, non-deprecated field in goreleaser v2.
 # Users install with: brew install dabstractor/stagecoach/stagecoach
-# (Homebrew is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/WinGet/Nix/mise-asdf —
+# (Homebrew is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/Nix/mise-asdf —
 #  are listed under `release:` above.)
 brews:
   - repository:
@@ -101,7 +101,7 @@ scoops:
   - name: stagecoach
     ids:
       - default
-    # Scoop is a goreleaser-native pipe; the "Beyond goreleaser" channels (npm/WinGet/Nix/mise-asdf)
+    # Scoop is a goreleaser-native pipe; the "Beyond goreleaser" channels (npm/Nix/mise-asdf)
     # are listed under `release:` above.
     repository:
       owner: dabstractor
@@ -139,7 +139,7 @@ nfpms:
 # AUTO-APPENDS the `-bin` suffix to AUR names (documented, non-configurable) — `name: stagecoach-bin`
 # stays `stagecoach-bin` (no double suffix); bare `stagecoach` is unobtainable via goreleaser.
 # A future from-source/git `stagecoach-git` variant is a possible community package — out of scope now.
-# (AUR is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/WinGet/Nix/mise-asdf —
+# (AUR is a goreleaser-native pipe; the "Beyond goreleaser" channels — npm/Nix/mise-asdf —
 #  are listed under `release:` above.)
 # DECISION GATE: if `goreleaser check` rejects any field below, COMMENT OUT this whole `aurs:` block and
 # ship the rest (brew+scoop+checksum+changelog+archives). AUR does not block the core contract.
@@ -163,3 +163,28 @@ aurs:
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
+
+# Chocolatey (Windows package manager) — goreleaser-native `chocolateys:` pipe (PRD §21.2/G27).
+# Publishes a .nupkg to the community repo (chocolatey.org) so `choco install stagecoach` /
+# `choco upgrade stagecoach` work. Chosen for the Windows package-manager audience; the previous
+# Windows store channel was dropped (its repo ran a Microsoft Defender install-gate that hard-blocked
+# the unsigned binary every release; Chocolatey does not). `choco upgrade` needs admin, so
+# `stagecoach upgrade` detects a Chocolatey install (FR-U2) and PRINTs `choco upgrade stagecoach -y`
+# (FR-U4; do NOT self-swap — FR-U1: choco owns the binary under ProgramData\chocolatey).
+# DECISION GATE: if `goreleaser check` rejects any field below, COMMENT OUT that field and ship the
+# rest (same pattern as the `aurs:` block above).
+chocolateys:
+  - name: stagecoach
+    ids:
+      - default
+    owners: dabstractor
+    title: Stagecoach
+    authors: dabstractor
+    project_url: https://github.com/dabstractor/stagecoach
+    url_template: 'https://github.com/dabstractor/stagecoach/releases/download/{{ .Tag }}/{{ .ArtifactName }}'
+    license_url: 'https://github.com/dabstractor/stagecoach/blob/main/LICENSE'
+    copyright: 'Copyright 2026 dabstractor'
+    description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
+    release_notes: 'https://github.com/dabstractor/stagecoach/releases/tag/{{ .Tag }}'
+    api_key: '{{ .Env.CHOCOLATEY_API_KEY }}'
+    source_repo: 'https://push.chocolatey.org/'

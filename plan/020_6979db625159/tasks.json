@@ -77,7 +77,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": ".goreleaser.yaml: add chocolateys: pipe section + scrub 4 WinGet comments",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2"
@@ -94,7 +94,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "release.yml: delete winget job (lines 109-139) + WINGET_TOKEN header doc + add CHOCOLATEY_API_KEY",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/release_plumbing.md. The winget: job is at release.yml lines 109-139 (comment banner 109-114, job definition 115-139). It uses vedantmgoyal9/winget-releaser@v2 with secrets.WINGET_TOKEN. The WINGET_TOKEN is also documented in the header at lines 13-14. Safe to remove: the winget job uses continue-on-error:true + if:!cancelled(); no other job depends on it.\n2. INPUT: .github/workflows/release.yml (236 lines). The goreleaser job's env block.\n3. LOGIC: (a) DELETE the entire winget job block: the comment banner (lines 109-114) and the job definition (lines 115-139). (b) DELETE the WINGET_TOKEN documentation lines from the header secrets section (lines 13-14). (c) ADD CHOCOLATEY_API_KEY to the header secrets section (document it as the Chocolatey community source push key, obtained from chocolatey.org → Account Settings → API Key). (d) If the goreleaser job has an env block, add CHOCOLATEY_API_KEY there (the native chocolateys: pipe runs within the goreleaser job and reads '{{ .Env.CHOCOLATEY_API_KEY }}'). Do NOT add a winget-releaser-style external PR job for Chocolatey (the native pipe publishes directly).\n4. OUTPUT: 'rg -ni winget .github/workflows/release.yml' returns zero hits. The release.yml YAML is valid. No winget job, no WINGET_TOKEN reference remains.\n5. DOCS: [Mode A] The release.yml header comment is config documentation. The secret documentation change rides WITH this work.",
