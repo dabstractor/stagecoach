@@ -386,23 +386,12 @@ func TestConfigInit_ProviderStagerFallback(t *testing.T) {
 		t.Error("missing provider = \"agy\" in [defaults]")
 	}
 
-	// planner uses agy's model (display label, verbatim)
-	assertContains(t, content, "[role.planner]", `model = "Gemini 3.5 Flash (High)"`)
-
-	// stager is routed to pi (fallback). pi is multi-backend, so the fallback model is BLANKED
-	// (FR-R5b) — never a bare "gpt-5.4-mini". Mirrors the unit test
-	// TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel.
-	assertContains(t, content, "[role.stager]", `provider = "pi"`)
-	assertContains(t, content, "[role.stager]", `model = ""`)
-
-	if !strings.Contains(content, "cannot serve as the stager") {
-		t.Error("agy config should have stager fallback annotation")
-	}
-	if !strings.Contains(content, "routed to pi") {
-		t.Error("agy config should mention routed to pi")
-	}
-	if !strings.Contains(content, "multi-backend provider") {
-		t.Error("agy config should carry the pi multi-backend model guidance")
+	// agy is stager-capable (§12.5.1.1 item 4) — fast-by-default planner, NO pi fallback.
+	assertContains(t, content, "[role.planner]", `model = "Gemini 3.5 Flash (Low)"`)
+	// the ACTIVE stager block carries agy's own mid-tier model (proves agy is the stager, not pi).
+	assertContains(t, content, "[role.stager]", `model = "Gemini 3.5 Flash (Medium)"`)
+	if strings.Contains(content, "cannot serve as the stager") {
+		t.Errorf("agy is stager-capable; config should not carry a stager-fallback annotation")
 	}
 }
 

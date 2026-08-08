@@ -32,11 +32,11 @@ func TestModels_CuratedGolden(t *testing.T) {
 	// Assert fixed role order and expected model values for claude
 	substrings := []string{
 		"claude:",
-		"  planner  opus",   // %-8s: 7-char name + 1 pad + 1 literal = 2 spaces
-		"  stager   sonnet", // %-8s: 6-char name + 2 pad + 1 literal = 3 spaces
-		"  message  haiku",  // %-8s: 7-char name + 1 pad + 1 literal = 2 spaces
-		"  arbiter  sonnet", // %-8s: 7-char name + 1 pad + 1 literal = 2 spaces
-		"verified 2026-07-02",
+		"  planner  haiku",  // fast tier (FR-D3 fast-by-default)
+		"  stager   sonnet", // mid tier — tool-use reliability
+		"  message  haiku",  // fast tier (highest-volume role)
+		"  arbiter  haiku",  // fast tier
+		"verified 2026-07-09",
 		"consult `claude --help`",
 	}
 	for _, sub := range substrings {
@@ -48,20 +48,20 @@ func TestModels_CuratedGolden(t *testing.T) {
 
 func TestModels_CuratedGolden_NonStagerProvider(t *testing.T) {
 	reg := provider.NewRegistry(nil)
-	m, ok := reg.Get("agy")
+	m, ok := reg.Get("qwen-code") // qwen-code is the only provider still NOT stager-capable
 	if !ok {
-		t.Fatal("agy not found in registry")
+		t.Fatal("qwen-code not found in registry")
 	}
 
 	var buf bytes.Buffer
-	printCuratedTable(&buf, modelTarget{name: "agy", manifest: m})
+	printCuratedTable(&buf, modelTarget{name: "qwen-code", manifest: m})
 
 	got := buf.String()
-	// Stager should be "—" for non-stager-capable providers
+	// Stager should be "—" for non-stager-capable providers (only qwen-code as of 2026-07-09)
 	if !strings.Contains(got, "  stager   —") { // %-8s: 6-char + 2 pad + 1 literal = 3 spaces
-		t.Errorf("expected stager to be '—' for agy\nGot:\n%s", got)
+		t.Errorf("expected stager to be '—' for qwen-code\nGot:\n%s", got)
 	}
-	if !strings.Contains(got, "verified 2026-07-02") {
+	if !strings.Contains(got, "verified 2026-07-09") {
 		t.Errorf("curated table missing verification date\nGot:\n%s", got)
 	}
 }
@@ -86,8 +86,8 @@ func TestModels_CuratedGolden_UserDefined(t *testing.T) {
 
 func TestModels_CuratedGolden_VerificationDate(t *testing.T) {
 	// Verify the constant matches what's printed
-	if config.DefaultModelsVerificationDate != "2026-07-02" {
-		t.Errorf("DefaultModelsVerificationDate = %q, want %q", config.DefaultModelsVerificationDate, "2026-07-02")
+	if config.DefaultModelsVerificationDate != "2026-07-09" {
+		t.Errorf("DefaultModelsVerificationDate = %q, want %q", config.DefaultModelsVerificationDate, "2026-07-09")
 	}
 }
 
