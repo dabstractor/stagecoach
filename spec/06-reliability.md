@@ -162,13 +162,14 @@ Go modules. `make build` → `./bin/stagecoach`. `make test`, `make lint`, `make
 - Homebrew formula to a tap repo (`dabstractor/homebrew-stagecoach`; tap namespace = `dabstractor/stagecoach`).
 - AUR `stagecoach-bin` (prebuilt-binary package via goreleaser; `yay -S stagecoach` resolves to it via `provides`).
 - Scoop manifest (Windows) to a bucket (`dabstractor/stagecoach-bucket`).
+- Chocolatey package (Windows) via goreleaser's native `chocolatey:` pipe — publishes a `.nupkg` to the community repository (chocolatey.org), so `choco install stagecoach` / `choco upgrade stagecoach` work. Chosen OVER winget (v3.3): `microsoft/winget-pkgs` runs an install-in-clean-VM Microsoft Defender scan that hard-blocks the unsigned binary every release (`validationDefender`), an unbounded per-release tax Chocolatey does not impose. `choco upgrade` needs admin, so `stagecoach upgrade` detects a Chocolatey install (FR-U2) and PRINTs `choco upgrade stagecoach -y` (FR-U4; do NOT self-swap — FR-U1: choco owns the binary).
 - `.deb` (Debian/Ubuntu/Mint) + `.rpm` (Fedora/RHEL/Rocky/Alma/openSUSE) packages via goreleaser's native `nfpms:` pipe — `stagecoach_<v>_linux_{amd64,arm64}.{deb,rpm}` in every Release; install to `/usr/bin`. There is no apt/dnf **repo** (the PM updaters cannot fetch a new version), so `stagecoach upgrade` detects the `deb`/`rpm` channels (FR-U2) and prints the manual reinstall recipe (FR-U3) instead of self-swapping a PM-owned file (FR-U1).
 - Checksums + a changelog.
 - `go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest` works from the tagged commit.
 
 **Beyond goreleaser (v3.0, → G27)** — the channels goreleaser has no native pipe for, built by separate CI steps:
 - **npm wrapper** (`stagecoach-ai`): a thin JS package whose `postinstall` detects `process.platform`/`process.arch`, downloads the matching prebuilt binary from GitHub Releases into a cache, SHA256-verifies it against `checksums.txt`, and whose `bin` field execs the cached binary — the `esbuild`/`turbo`/`prisma` pattern. Gives `npx stagecoach-ai` (zero-install trial) and `npm i -g stagecoach-ai`. The wrapper sets `STAGECOACH_INSTALL_METHOD=npm` on every invocation so `stagecoach upgrade` recognizes the install and delegates to `npm` instead of self-swapping the cached binary (FR-U2). Handle `--ignore-scripts`/corporate-npm with a fallback message pointing at the direct binary.
-- **Winget** (Windows default package manager): a GitHub Action (e.g. `winget-releaser`) opens a manifest PR per tag. Complements Scoop (power users) — Winget reaches the broad Windows 11 audience.
+- **PowerShell installer (`install.ps1`)**: the Windows analog of the Unix `curl|sh` one-liner (§21.3) — `irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex` detects `process.arch`, downloads the matching `stagecoach_<v>_windows_<arch>.zip` from the latest Release, SHA256-verifies against `checksums.txt`, extracts `stagecoach.exe` to a user-local dir (e.g. `$LOCALAPPDATA\stagecoach`), and prepends it to the user `PATH` (the `rustup`/`starship`/`uv` pattern). It is the fallback for Windows users with NO package manager. The installer places a package-manager-unowned binary and tags the install (`STAGECOACH_INSTALL_METHOD=direct`), so `stagecoach upgrade` self-swaps it (FR-U5) like any `direct` install.
 - **Nix flake** (`flake.nix` in-repo): no external repo, no secret, no registry gatekeeping; `nix run`/`nix profile install`. Also powers devbox/nix-shell.
 - **mise/asdf plugins**: ~30-line shell-script plugins pointing at the GitHub Release archives.
 
@@ -190,8 +191,11 @@ curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
 scoop install stagecoach/stagecoach
 
-# Windows (Winget — the Win11 default)
-winget install dabstractor.stagecoach
+# Windows (Chocolatey)
+choco install stagecoach
+
+# Windows (PowerShell installer — no package manager needed)
+irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex
 
 # npm (zero-install trial: npx stagecoach-ai; or global install)
 npm install -g stagecoach-ai
@@ -229,7 +233,7 @@ Semantic versioning. v1.0.0 = feature-complete against this PRD's P0/P1 set. Pro
 3. "Why not opencommit/aicommits?" — the coding-plan paragraph, in 3 sentences.
 4. Install (the four paths above).
 5. Quick start (one `stagecoach` invocation).
-6. Configure your agent (`providers list` → set `stagecoach.provider`; for multi-backend providers prefix the model, e.g. `stagecoach.model zai/glm-5.2`).
+6. Configure your agent (`providers list` → set `stagecoach.provider`; for multi-backend providers prefix the model, e.g. `stagecoach.model anthropic/claude-haiku`).
 7. The snapshot workflow (§13.4 diagram) — the "stage while it thinks" payoff.
 8. Full CLI + config reference (link to docs).
 9. Adding a new agent (§12.8) — the contributor hook.
@@ -257,7 +261,7 @@ Semantic versioning. v1.0.0 = feature-complete against this PRD's P0/P1 set. Pro
 | **Planner context overflow (v2)** — a very large working-tree diff exceeds the planner's context window.                                                                                                                                                                                                                                 | Low                           | Medium (planner fails pre-staging).                                               | Same diff cap as v1 + binary filtering reduces payload; surface a clear "diff too large; use `--commits` or stage manually" error; no partial state (planning precedes all staging).                                                                                                                                                                                                                                         |
 | **Concurrency race on the index (v2)** — stager[i+1] and snapshot[i] could overlap incorrectly.                                                                                                                                                                                                                                          | Low                           | High (wrong commit contents).                                                     | Enforced ordering: snapshot[i] is taken synchronously before stager[i+1] starts (§13.6.3 invariant 1); concept diffs are tree-to-tree, not index-vs-HEAD, so they are immune to the race by construction.                                                                                                                                                                                                                    |
 
-**Self-update (v3.0; §9.29).** Three residual risks, each with its mitigation baked into the spec. (1) **Fighting a package manager** — a self-overwrite of a brew/scoop/winget/npm-managed binary is silently reverted on that manager's next upgrade and corrupts its bookkeeping. Mitigation: the install-method detection cascade (FR-U2) plus the hard rule that the command NEVER overwrites a manager-owned binary except via `--force` with a warning (FR-U1); the failure mode degrades to "delegated to the manager" rather than a fighting overwrite. (2) **Installing a broken/tampered binary** — a corrupt download or a MITM'd asset would brick the tool. Mitigation: mandatory SHA256 verification against `checksums.txt` before any write, plus a mandatory sanity-run of the new binary (`--version` matches target, exit 0) before the atomic swap (FR-U5 steps 4 & 6); a binary that fails either is never swapped in. (3) **Platform swap bugs** — Windows locks the running `.exe`. Mitigation: the Unix path is a single atomic `os.Rename`; the Windows path is the two-step rename-old/move-new/deferred-delete dance that never leaves zero binaries, with `.old` cleanup on next launch (FR-U7). Across all three, the swap is atomic by construction, so a network/checksum/sanity failure aborts before any on-disk change — there is no "half-upgraded" state (FR-U11).
+**Self-update (v3.0; §9.29).** Three residual risks, each with its mitigation baked into the spec. (1) **Fighting a package manager** — a self-overwrite of a brew/scoop/chocolatey/npm-managed binary is silently reverted on that manager's next upgrade and corrupts its bookkeeping. Mitigation: the install-method detection cascade (FR-U2) plus the hard rule that the command NEVER overwrites a manager-owned binary except via `--force` with a warning (FR-U1); the failure mode degrades to "delegated to the manager" rather than a fighting overwrite. (2) **Installing a broken/tampered binary** — a corrupt download or a MITM'd asset would brick the tool. Mitigation: mandatory SHA256 verification against `checksums.txt` before any write, plus a mandatory sanity-run of the new binary (`--version` matches target, exit 0) before the atomic swap (FR-U5 steps 4 & 6); a binary that fails either is never swapped in. (3) **Platform swap bugs** — Windows locks the running `.exe`. Mitigation: the Unix path is a single atomic `os.Rename`; the Windows path is the two-step rename-old/move-new/deferred-delete dance that never leaves zero binaries, with `.old` cleanup on next launch (FR-U7). Across all three, the swap is atomic by construction, so a network/checksum/sanity failure aborts before any on-disk change — there is no "half-upgraded" state (FR-U11).
 
 ### 22.2 Assumptions
 

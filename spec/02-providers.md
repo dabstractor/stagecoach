@@ -106,12 +106,12 @@ Stagecoach's provider system is the heart of its agent-agnosticism: given a logi
 | Concept      | What it is                                        | Examples                                                    | Config field | Flag         | Env                   | Git key               |
 | ------------ | ------------------------------------------------- | ----------------------------------------------------------- | ------------ | ------------ | --------------------- | --------------------- |
 | **provider** | the agent platform / CLI stagecoach shells out to | pi, opencode, claude, codex, cursor, agy, qwen-code | `provider`   | `--provider` | `stagecoach_PROVIDER` | `stagecoach.provider` |
-| **model**    | the model identifier                              | `zai/glm-5.2`, `openai/gpt-5.4`, `sonnet`, `gemini-3.1-pro` | `model`      | `--model`    | `stagecoach_MODEL`    | `stagecoach.model`    |
+| **model**    | the model identifier                              | `anthropic/claude-haiku`, `openai/gpt-5.4`, `sonnet`, `gemini-3.1-pro` | `model`      | `--model`    | `stagecoach_MODEL`    | `stagecoach.model`    |
 
-**The inference provider lives in the model string, not a separate field.** Some providers route to a choice of upstream inference backend — **pi** (via a separate `--provider <backend>` flag) and **opencode** (via a `backend/model` token like `openai/gpt-5.4`). For these, the model string carries the inference provider as a **slash-prefixed namespace**: `zai/glm-5.2`, `openai/gpt-5.4`, `anthropic/claude-sonnet-4`. Providers with a fixed backend (claude, codex, cursor, agy, qwen-code) take a bare model (`sonnet`, `gemini-3.1-pro`).
+**The inference provider lives in the model string, not a separate field.** Some providers route to a choice of upstream inference backend — **pi** (via a separate `--provider <backend>` flag) and **opencode** (via a `backend/model` token like `openai/gpt-5.4`). For these, the model string carries the inference provider as a **slash-prefixed namespace**: `anthropic/claude-haiku`, `openai/gpt-5.4`. Providers with a fixed backend (claude, codex, cursor, agy, qwen-code) take a bare model (`sonnet`, `gemini-3.1-pro`).
 
-- **pi renders the prefix as a separate flag; opencode passes it whole.** At `Render` (§12.2), if the provider's manifest declares a `provider_flag` (pi — the only one today), stagecoach splits the model on the first `/` and emits `--provider <prefix> --model <rest>` (so `zai/glm-5.2` → `pi --provider zai --model glm-5.2`). Providers without a `provider_flag` (opencode, and every single-backend provider) pass the model string verbatim.
-- **A bare model on a `provider_flag` provider is a hard error** (FR-R5b): `model = "glm-5.2"` on pi is rejected with "include the inference provider, e.g. `zai/glm-5.2`" — never silently rendered as an unroutable `pi --model glm-5.2`. This is precisely the bug class that motivated the design: there is no separate inference-provider field to forget, because **the prefix IS the field**.
+- **pi renders the prefix as a separate flag; opencode passes it whole.** At `Render` (§12.2), if the provider's manifest declares a `provider_flag` (pi — the only one today), stagecoach splits the model on the first `/` and emits `--provider <prefix> --model <rest>` (so `anthropic/claude-haiku` → `pi --provider anthropic --model claude-haiku`). Providers without a `provider_flag` (opencode, and every single-backend provider) pass the model string verbatim.
+- **A bare model on a `provider_flag` provider is a hard error** (FR-R5b): `model = "claude-haiku"` on pi is rejected with "include the inference provider, e.g. `anthropic/claude-haiku`" — never silently rendered as an unroutable `pi --model claude-haiku`. This is precisely the bug class that motivated the design: there is no separate inference-provider field to forget, because **the prefix IS the field**.
 - The manifest block is **`[provider.<name>]`**; the former `default_provider` field is **removed** — the model prefix replaces it.
 
 ### 12.1 The manifest schema
@@ -167,7 +167,7 @@ system_prompt_flag = "--system-prompt"
 
 # --- sub-provider (the inference backend) -------------------------------
 # pi has a --provider flag; per FR-R5b/§12.2 the inference backend is the slash-PREFIX
-# on `model` (e.g. model "zai/glm-5.2" → pi --provider zai --model glm-5.2). There is
+# on `model` (e.g. model "anthropic/claude-haiku" → pi --provider anthropic --model claude-haiku). There is
 # NO `default_provider` field in v3 — the prefix on `model` IS the provider. opencode
 # has no provider_flag and takes `backend/model` verbatim instead.
 provider_flag = "--provider"
@@ -252,7 +252,7 @@ if m.provider_flag != "":
         inf, model = split(model, "/", 1)
         args += [m.provider_flag, inf]
     else:
-        error("model %q on %s must be inference/model, e.g. zai/glm-5.2", model, m.name)
+        error("model %q on %s must be inference/model, e.g. anthropic/claude-haiku", model, m.name)
 if m.model_flag and model != "":
     args += [m.model_flag, model]               # verbatim for non-provider_flag providers (opencode, single-backend)
 # reasoning level (FR-R6): append the resolved level's tokens if the provider
@@ -285,7 +285,7 @@ cmd.Env   = os.Environ() + m.env
 
 ### 12.3 Built-in provider: pi
 
-Captured from `pi --help` on the author's machine (2026-06-29). pi is a **harness** that routes to model backends via its own sub-providers. Its shipped `default_model` is **deliberately empty** — it is populated per-role by `config init` (§9.17), and because pi is multi-backend the model is supplied in `backend/model` form (FR-R5b), e.g. `zai/glm-5-turbo`. The shipped default does **not** assume the author's personal z.ai/GLM subscription (FR-D2); that is shown as a personal _override_ below.
+Captured from `pi --help` on the author's machine (2026-06-29). pi is a **harness** that routes to model backends via its own sub-providers. Its shipped `default_model` is **deliberately empty** — it is populated per-role by `config init` (§9.17), and because pi is multi-backend the model is supplied in `backend/model` form (FR-R5b), e.g. `anthropic/claude-haiku`. The shipped default does **not** assume the author's personal z.ai/GLM subscription (FR-D2); that is shown as a personal _override_ below.
 
 ```toml
 name = "pi"
@@ -450,7 +450,7 @@ command = "opencode"
 subcommand = ["run"]
 prompt_delivery = "positional"      # `opencode run [message..]`
 print_flag = ""
-model_flag = "-m"                   # format: provider/model, e.g. "anthropic/claude-sonnet-4"
+model_flag = "-m"                   # format: provider/model, e.g. "anthropic/claude-haiku"
 default_model = ""                  # opencode has no single sensible default; require user set
 system_prompt_flag = ""             # not exposed as a flag on `run`; use --agent or config
 provider_flag = ""                  # provider is part of the model string
@@ -462,10 +462,10 @@ strip_code_fence = true
 
 **Stager (tooled):** opencode CAN serve as the stager — verified end-to-end 2026-07-09 (`opencode run -m zhipuai-coding-plan/glm-5.2` staged exactly the requested paths). opencode has **no** CLI permission/approval flag; tool execution is governed by the user's opencode permission config (the `build` agent, typically `"permission": {"*": "allow"}`). `--agent build` selects that write-capable primary agent explicitly. NOTE: the earlier "`run` is read-only by design" claim is **wrong** — `run` mutates when the task asks it to; bare roles stay safe only because a message/planner task does not request mutation. §12.7.1 UNSCOPED (same model as pi/agy/codex).
 
-Rendered (model `anthropic/claude-sonnet-4`):
+Rendered (model `anthropic/claude-haiku`):
 
 ```
-opencode run -m anthropic/claude-sonnet-4 "<sys>\n\n<user payload>"
+opencode run -m anthropic/claude-haiku "<sys>\n\n<user payload>"
 ```
 
 Caveats: opencode's `run` subcommand is non-interactive and prints the final message to stdout (good). It has no system-prompt flag; the system prompt is prepended to the payload. For finer control of agent persona, opencode supports `--agent <name>` against a user-defined agent in `opencode.json` — Stagecoach can expose this via an `extra_args` passthrough or a dedicated `agent_flag` field in a later revision. `default_model` is intentionally empty: opencode's model space is huge and user-specific, so we require the user to set `model` (via flag/env/config) rather than guess.

@@ -52,7 +52,7 @@ With no command, runs the default action: commit staged changes (auto-staging al
 - **`stagecoach integrate list|install <target>…|remove <target>…`** — Wire stagecoach into installed git tools (§9.21). Targets: `git-alias` (adds `git stagecoach`; `--alias-name` overrides), `lazygit` (customCommands keybind; `--key` overrides `<c-a>`). Every file edit runs the no-mangle protocol (FR-I3): preview diff + `y/N` (skip with `--yes`), timestamped backup, post-write validation with auto-restore.
 - **`stagecoach models [<provider>]`** — List models reachable by a provider, via the manifest's `list_models_command` where the agent CLI supports it, else the curated FR-D4 table; `--all` covers every detected provider. Never an HTTP call (§9.23, FR-L1).
 - **`stagecoach lock status`** — Read-only diagnostic for this repo's run lock (§9.27, FR-K4): prints the lock path, the holder's `pid`/`hostname`/`repo`/`timestamp`/`snapshot`, whether the holder is alive, and (Unix) whether it appears orphaned (reparented). With no lock held, prints "no run lock for `<repo>`". Changes nothing; the user decides whether to `kill`/`rm`. Never auto-breaks (FR52).
-- **`stagecoach upgrade [--check] [--version <v>] [--prerelease] [--force] [--rollback] [--install-method <m>] [--yes]`** — Install-method-aware self-update (§9.29, FR-U1–U12). Detects how the binary was installed and delegates to that channel's native updater (Homebrew/Scoop/Winget/npm/mise/asdf/go-install), prints the command where running it needs privileges (AUR) or is declarative (Nix), and falls back to a SHA256-verified, atomic, rollback-able direct-binary swap only for the direct-binary channel. `--check`/`-c` probes without changing anything (exit `6` if an update is available). Never touches any repository, run lock, index, or provider — walled off from the commit-generation core.
+- **`stagecoach upgrade [--check] [--version <v>] [--prerelease] [--force] [--rollback] [--install-method <m>] [--yes]`** — Install-method-aware self-update (§9.29, FR-U1–U12). Detects how the binary was installed and delegates to that channel's native updater (Homebrew/Scoop/Chocolatey/npm/mise/asdf/go-install), prints the command where running it needs privileges (AUR/Chocolatey) or is declarative (Nix), and falls back to a SHA256-verified, atomic, rollback-able direct-binary swap only for the direct-binary channel. `--check`/`-c` probes without changing anything (exit `6` if an update is available). Never touches any repository, run lock, index, or provider — walled off from the commit-generation core.
 
 ### 15.4 Exit codes
 
@@ -76,11 +76,11 @@ stagecoach
 stagecoach --provider claude --model sonnet
 
 # A multi-backend provider carries its inference backend as a model prefix (FR-R5b).
-stagecoach --provider pi --model zai/glm-5.2
+stagecoach --provider pi --model anthropic/claude-haiku
 
 # Set a per-repo default (persisted in the repo's git config).
 git config stagecoach.provider pi
-git config stagecoach.model zai/glm-5.2
+git config stagecoach.model anthropic/claude-haiku
 
 # Dry run: see what it would write, commit nothing.
 stagecoach --dry-run
@@ -137,7 +137,7 @@ stagecoach --planner-provider agy --planner-model gemini-3.1-pro
 #   .stagecoach.toml:
 #     [defaults]
 #       provider = "pi"
-#       model    = "zai/glm-5.2"
+#       model    = "anthropic/claude-haiku"
 #     [role.planner]
 #       provider = "agy"
 #       model    = "gemini-3.1-pro"
@@ -170,7 +170,7 @@ Higher wins. Agent-platform manifests merge field-by-field (a user override that
 
 [defaults]
 provider = "pi"          # the AGENT PLATFORM (pi, claude, opencode, …)
-model    = "zai/glm-5.2"  # inference provider is a slash-PREFIX for multi-backend providers (FR-R5b); bare for single-backend
+model    = "anthropic/claude-haiku"  # inference provider is a slash-PREFIX for multi-backend providers (FR-R5b); bare for single-backend
 reasoning = "off"         # off|low|medium|high; shipped default is off for every role (FR-R6)
 timeout  = "120s"         # global fallback for every role (FR-R7); planner defaults to 480s
 auto_stage_all = true
@@ -225,7 +225,7 @@ For users who prefer to keep config with the repo and don't want a `.stagecoach.
 ```ini
 [stagecoach]
     provider = pi          # the agent platform
-    model = zai/glm-5.2    # inference provider is the slash-prefix (FR-R5b)
+    model = anthropic/claude-haiku    # inference provider is the slash-prefix (FR-R5b)
     timeout = 90
     autoStageAll = true
     noParentWatchdog = false   # v2.7 (§9.27, FR-K6): opt out of the parent-death lock watchdog
@@ -243,7 +243,7 @@ The four roles — **planner, stager, message, arbiter** (§13.6.2) — each res
 # One setting for everything: set only [defaults].
 [defaults]
 provider = "pi"
-model    = "zai/glm-5.2"   # multi-backend: inference provider is the prefix (FR-R5b)
+model    = "anthropic/claude-haiku"   # multi-backend: inference provider is the prefix (FR-R5b)
 reasoning = "off"       # global default for every role; off is the shipped default (FR-R6)
 
 # Granular: route planning to a large-context provider, leave the rest on the global.
