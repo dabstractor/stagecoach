@@ -461,6 +461,15 @@ func builtinCursor() Manifest {
 			"--mode", "ask", // "Q&A style, read-only" — overrides -p's default full-tools profile
 			"--trust", // skip the workspace-trust prompt (else -p would block)
 		},
+		// TOOLED (stager) — VERIFIED 2026-07-09 (cursor-agent) end-to-end: stages exactly the requested
+		// paths. `-p` (PrintFlag, shared with bare) is non-interactive WITH FULL TOOLS (write+shell);
+		// `--mode ask` (bare) overrides that to read-only, so tooled OMITS --mode. `--yolo` (= --force)
+		// auto-approves tool calls non-interactively; `--trust` skips the workspace prompt. cursor defaults
+		// to its cwd as the workspace, so NO TooledRepoDirFlag. §12.7.1 UNSCOPED (like pi/agy/codex/opencode).
+		TooledFlags: []string{
+			"--trust", // skip the workspace-trust prompt (else -p would block)
+			"--yolo",  // auto-approve tool calls non-interactively (alias for --force)
+		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
 		// PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent in §12.7).

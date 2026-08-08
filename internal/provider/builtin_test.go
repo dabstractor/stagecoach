@@ -176,6 +176,7 @@ default_model = ""
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = ["--mode", "ask", "--trust"]
+tooled_flags = ["--trust", "--yolo"]   # stager (verified 2026-07-09): -p gives full tools; --yolo auto-approves non-interactively (unscoped)
 output = "raw"
 strip_code_fence = true
 `
