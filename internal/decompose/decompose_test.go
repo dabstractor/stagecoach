@@ -2972,3 +2972,67 @@ func TestIsFileDisjoint(t *testing.T) {
 		})
 	}
 }
+
+// TestRunLoopFastPath_Sweep is the focused sweep-only test for the FR-M13 file-disjoint fast-path's
+// serial staging sweep (P1.M1.T1.S2). The comprehensive regression suite is P1.M1.T1.S5; this proves the
+// sweep runs end-to-end: 3 pairwise-disjoint concepts → deps.Git.Add → freezeSnapshot → verifyFreezeSubset
+// (FR-M1c) → no FR-M8 skip → the S3 sentinel error carrying the staged count. No stager seam is needed —
+// runLoopFastPath calls deps.Git.Add directly (the whole point of the fast-path: no stager agent).
+func TestRunLoopFastPath_Sweep(t *testing.T) {
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// Seed a base commit with three files, then modify all three disjointly in the working tree.
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 1\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 1\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 1\n")
+	dcmRunGit(t, repo, "add", "a.go", "b.go", "c.go")
+	dcmCommitRaw(t, repo, "initial") // BORN repo → baseTree = HEAD^{tree}
+	// Disjoint working-tree change set: modify each file independently (the FR-M13 disjoint partition).
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 2\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 2\n")
+	dcmWriteFile(t, repo, "c.go", "package c\n\nvar C = 2\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+
+	// Mirror what Decompose does internally: capture baseTree (HEAD^{tree}), then FreezeWorkingTree to
+	// capture T_start (the full working-tree change set) AND reset the index back to baseTree so the
+	// per-concept sweep starts clean. After this the working-tree changes are “in T_start”, the index is
+	// at baseTree, and each concept's `git add <its file>` re-stages its slice of T_start.
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+
+	var logBuf bytes.Buffer
+	deps := Deps{
+		Git:     g,
+		Config:  config.Defaults(),
+		Verbose: ui.NewVerbose(&logBuf, true),
+	}
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "a", Files: []string{"a.go"}},
+		{Title: "b", Files: []string{"b.go"}},
+		{Title: "c", Files: []string{"c.go"}},
+	}
+
+	_, _, err = runLoopFastPath(ctx, deps, concepts, baseTree, tStart, dcmHeadSHA(t, repo), false)
+	// S2's sweep returns the S3 sentinel — assert it (proves the sweep ran end-to-end without a
+	// freeze/verify/add error).
+	if err == nil {
+		t.Fatalf("runLoopFastPath: expected the S3 sentinel error, got nil")
+	}
+	if !strings.Contains(err.Error(), "runLoopFastPath concurrent phase not yet implemented") {
+		t.Fatalf("expected the S3 sentinel error; got: %v", err)
+	}
+	// All 3 disjoint concepts staged (none empty-skipped): the count appears in the sentinel.
+	if !strings.Contains(err.Error(), "staged 3 concepts") {
+		t.Errorf("expected 'staged 3 concepts' in the sentinel; got: %v", err)
+	}
+	// The summary log proves the sweep reached its end and read the staged count.
+	if !strings.Contains(logBuf.String(), "staged 3/3 concepts") {
+		t.Errorf("expected 'staged 3/3 concepts' summary log; got: %q", logBuf.String())
+	}
+}

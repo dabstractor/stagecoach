@@ -634,6 +634,94 @@ func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, ba
 	return commits, chainData, nil
 }
 
+// stagedConcept is one concept's frozen tree from the FR-M13 fast-path serial staging sweep, handed to
+// the concurrent message phase (P1.M1.T1.S3). idx is the original concept index (for ordering / messages);
+// tree is the frozen write-tree SHA; prevTree is the tree it was staged on top of (tree[i-1], or baseTree
+// for the first non-skipped concept) — the (prevTree, tree) pair is the message agent's tree-to-tree diff.
+type stagedConcept struct {
+	idx      int
+	tree     string
+	prevTree string
+}
+
+// runLoopFastPath is the FR-M13 file-disjoint fast-path: a STRICTLY SERIAL deterministic staging sweep
+// (no stager agent) that freezes every concept's tree up front via plain `git add`, under the unchanged
+// accumulate-never-reset index model. It is the sibling of runLoop (the shared-file fallback); S4's
+// dispatch (P1.M1.T1.S4) selects it when isFileDisjoint(concepts) is true.
+//
+// SERIAL IS LOAD-BEARING: gitRunner has NO in-process index lock — Add/WriteTree mutate .git/index, so
+// the staging sweep cannot be concurrent (a concurrent sweep would corrupt the index). S3's concurrent
+// MESSAGE goroutines are confined to read-only tree reads and never touch Add/WriteTree. A plain serial
+// `for` loop satisfies the constraint by construction. The index is already reset to baseTree by
+// Decompose's FreezeWorkingTree step, so prevTree := baseTree is the correct baseline.
+//
+// P1.M1.T1.S2 implements the STAGING SWEEP ONLY (FR-M1c on every tree + FR-M8 empty-skip), producing
+// []stagedConcept — the FR-M14 precondition (every tree[i] frozen before any message starts). The
+// concurrent message generation + CAS-ordered publish (FR-M14/FR-M7/FR-M12) is P1.M1.T1.S3, marked by
+// the sentinel return below.
+func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, baseTree, tStart, preRunHEAD string, isUnborn bool) ([]CommitResult, []ChainEntry, error) {
+	var commits []CommitResult
+	prevTree := baseTree
+	// preRunHEAD / isUnborn are consumed by S3's publish phase (CAS expected-old + root-commit parent);
+	// the S2 sweep publishes nothing. Referenced here to keep the signature parity with runLoop honest
+	// and to silence any unused-param linter until S3 wires them.
+	_ = preRunHEAD
+	_ = isUnborn
+
+	// FR-M1c: T_start's changed-path set (invariant across the run) — the subset baseline every tree[i]
+	// is verified against after each staging step. Computed ONCE (mirrors runLoop).
+	tStartPaths, err := deps.Git.DiffTreeNames(ctx, baseTree, tStart)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: freeze baseline diff-tree-names: %w", ErrDecomposeFailed, err)
+	}
+
+	// FR-M13/FR-M14 SERIAL staging sweep: deterministic per-concept git add (no stager agent).
+	var staged []stagedConcept
+	for i, concept := range concepts {
+		if cerr := ctx.Err(); cerr != nil {
+			return commits, nil, cerr // cancelled — partial (nothing is published in the sweep)
+		}
+		// Deterministic whole-path staging (adds + mods + deletions). Nil-safe on empty Files
+		// (len==0 ⇒ no-op ⇒ treeI==prevTree ⇒ FR-M8 skip below). Called directly — no wrapper.
+		if err := deps.Git.Add(ctx, concept.Files); err != nil {
+			return commits, nil, fmt.Errorf("%w: fast-path add[%d]: %w", ErrDecomposeFailed, i, err)
+		}
+		treeI, err := freezeSnapshot(ctx, deps)
+		if err != nil {
+			return commits, nil, fmt.Errorf("%w: freeze snapshot[%d]: %w", ErrDecomposeFailed, i, err)
+		}
+		// FR-M1c: verify EVERY tree is a content-subset of T_start. Whole-path adds of T_start content
+		// pass trivially, but it MUST run (defense-in-depth; catches a concurrent working-tree change
+		// swept in by a path glob). NON-RESCUE — there is no in-flight message channel to drain in the
+		// sweep (message generation is S3), so the error returns directly.
+		if vErr := verifyFreezeSubset(ctx, deps, baseTree, tStart, tStartPaths, i, concept.Title, treeI); vErr != nil {
+			return commits, nil, vErr
+		}
+		// FR-M8 empty-skip: concept staged nothing new (incl. empty Files ⇒ Add no-op). Skip the concept,
+		// keep prevTree UNCHANGED, and continue. (No message, no publish — those are S3.)
+		if treeI == prevTree {
+			if deps.Verbose != nil {
+				deps.Verbose.VerboseWarn(fmt.Sprintf("fast-path: concept %d %q staged nothing new (FR-M8 skip)", i, concept.Title))
+			}
+			continue
+		}
+		staged = append(staged, stagedConcept{idx: i, tree: treeI, prevTree: prevTree})
+		prevTree = treeI
+	}
+	// After the sweep: every non-skipped tree[i] is FROZEN — the FR-M14 precondition for S3's concurrent
+	// message generation (each message reasons over diff(sc.prevTree, sc.tree)).
+
+	// --- P1.M1.T1.S3 inserts the concurrent message generation + CAS-ordered publish here ---
+	// S2 delivers the frozen []stagedConcept slice; S3 consumes it. Until S3 lands, return a sentinel so
+	// the Decompose dispatch (S4, which lands AFTER S3) is not wired to an incomplete fast-path.
+	// commits/chainData stay nil (the sweep publishes nothing).
+	stagedCount := len(staged)
+	if deps.Verbose != nil {
+		deps.Verbose.VerboseWarn(fmt.Sprintf("fast-path: staged %d/%d concepts (concurrent phase pending P1.M1.T1.S3)", stagedCount, len(concepts)))
+	}
+	return nil, nil, fmt.Errorf("%w: runLoopFastPath concurrent phase not yet implemented (staged %d concepts; P1.M1.T1.S3)", ErrDecomposeFailed, stagedCount)
+}
+
 // drainMsg receives-and-discards a buffered(1) message channel's result to avoid a goroutine leak when
 // the loop aborts with a message goroutine in flight. The goroutine sends exactly once to the buffered
 // channel before exiting, so the receive is guaranteed to complete. nil-safe.
