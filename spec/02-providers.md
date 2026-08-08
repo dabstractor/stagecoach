@@ -455,9 +455,12 @@ default_model = ""                  # opencode has no single sensible default; r
 system_prompt_flag = ""             # not exposed as a flag on `run`; use --agent or config
 provider_flag = ""                  # provider is part of the model string
 bare_flags = []
+tooled_flags = ["--agent", "build"]   # STAGER (verified 2026-07-09): run stages correctly; tool exec is gated by the build agent's permission config (unscoped)
 output = "raw"
 strip_code_fence = true
 ```
+
+**Stager (tooled):** opencode CAN serve as the stager — verified end-to-end 2026-07-09 (`opencode run -m zhipuai-coding-plan/glm-5.2` staged exactly the requested paths). opencode has **no** CLI permission/approval flag; tool execution is governed by the user's opencode permission config (the `build` agent, typically `"permission": {"*": "allow"}`). `--agent build` selects that write-capable primary agent explicitly. NOTE: the earlier "`run` is read-only by design" claim is **wrong** — `run` mutates when the task asks it to; bare roles stay safe only because a message/planner task does not request mutation. §12.7.1 UNSCOPED (same model as pi/agy/codex).
 
 Rendered (model `anthropic/claude-sonnet-4`):
 

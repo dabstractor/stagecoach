@@ -91,6 +91,7 @@ default_model = ""
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = []
+tooled_flags = ["--agent", "build"]   # stager (verified 2026-07-09); opencode tool exec relies on the build agent's permission config (unscoped)
 output = "raw"
 strip_code_fence = true
 `

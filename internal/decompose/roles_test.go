@@ -43,7 +43,7 @@ func bogusRegistry(t *testing.T, installed []string) *provider.Registry {
 	overrides := make(map[string]provider.Manifest)
 	// Override ALL built-in names to a bogus command AND detect (DetectCommand returns Detect first).
 	bogus := "definitely-not-a-real-command-xyzzy"
-	for _, name := range []string{"pi", "opencode", "cursor", "agy", "codex", "claude"} {
+	for _, name := range []string{"pi", "opencode", "cursor", "agy", "codex", "claude", "qwen-code"} {
 		overrides[name] = provider.Manifest{Command: &bogus, Detect: &bogus}
 	}
 	// Then override the "installed" ones back to "go".
@@ -135,18 +135,18 @@ func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback(t *testing.T) {
-	// Stager is set to opencode (TooledFlags nil → cannot stage); fallback to claude (the first
+	// Stager is set to qwen-code (TooledFlags nil → cannot stage); fallback to claude (the first
 	// tooled-capable INSTALLED provider — pi/agy are not installed in this fixture). Claude is
 	// single-backend (ProviderFlag="") so the FR-R5b guard does not fire on the fallback model.
 	// (agy is stager-capable now, so it is deliberately NOT installed — otherwise the fallback would
 	// land on agy, which precedes claude in the preferred order.)
-	reg := bogusRegistry(t, []string{"opencode", "claude"})
+	reg := bogusRegistry(t, []string{"qwen-code", "claude"})
 	wantClaude := claudeManifest(t)
 
 	cfg := config.Config{
-		Provider: "opencode",
+		Provider: "qwen-code",
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "opencode", Model: "oc-model"},
+			"stager": {Provider: "qwen-code", Model: "oc-model"},
 		},
 	}
 
@@ -174,11 +174,11 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 		t.Error("Stager.TooledFlags is empty after fallback, want non-empty")
 	}
 
-	// Other roles should be opencode (global default).
+	// Other roles should be qwen-code (global default).
 	for _, role := range []string{"planner", "message", "arbiter"} {
 		rc := roleModel(rmodels, role)
-		if rc.Provider != "opencode" {
-			t.Errorf("role %q provider = %q, want opencode", role, rc.Provider)
+		if rc.Provider != "qwen-code" {
+			t.Errorf("role %q provider = %q, want qwen-code", role, rc.Provider)
 		}
 	}
 }
@@ -188,15 +188,15 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback_PiNotInstalled_FallsToClaude(t *testing.T) {
-	// Pi NOT installed; opencode is the global (not stager-capable); claude IS installed and capable.
-	// Stager set to opencode → fallback should go to claude (pi + agy are not installed).
-	reg := bogusRegistry(t, []string{"opencode", "claude"})
+	// Pi NOT installed; qwen-code is the global (not stager-capable); claude IS installed and capable.
+	// Stager set to qwen-code → fallback should go to claude (pi + agy are not installed).
+	reg := bogusRegistry(t, []string{"qwen-code", "claude"})
 	wantClaude := claudeManifest(t)
 
 	cfg := config.Config{
-		Provider: "opencode",
+		Provider: "qwen-code",
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "opencode"},
+			"stager": {Provider: "qwen-code"},
 		},
 	}
 
@@ -222,7 +222,7 @@ func TestResolveRoles_StagerFallback_PiNotInstalled_FallsToClaude(t *testing.T) 
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
-	// Stager is set to opencode (TooledFlags nil → cannot stage); fallback to pi (first
+	// Stager is set to qwen-code (TooledFlags nil → cannot stage); fallback to pi (first
 	// tooled-capable installed). Pi is multi-provider (ProviderFlag="--provider").
 	// Tests two sub-cases via subtests:
 	//   - bare model from the old provider's config → cleared (invalid on pi)
@@ -235,20 +235,20 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 	}{
 		{
 			name:     "bare_model_from_old_provider",
-			stagerRC: config.RoleConfig{Provider: "opencode", Model: "oc-model"},
+			stagerRC: config.RoleConfig{Provider: "qwen-code", Model: "oc-model"},
 		},
 		{
 			name:     "no_explicit_model",
-			stagerRC: config.RoleConfig{Provider: "opencode"},
+			stagerRC: config.RoleConfig{Provider: "qwen-code"},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			reg := bogusRegistry(t, []string{"opencode", "pi"})
+			reg := bogusRegistry(t, []string{"qwen-code", "pi"})
 
 			cfg := config.Config{
-				Provider: "opencode",
+				Provider: "qwen-code",
 				Roles: map[string]config.RoleConfig{
 					"stager": tc.stagerRC,
 				},
@@ -273,11 +273,11 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 				t.Errorf("Stager model = %q, want empty string (bare model cleared for multi-provider pi)", rmodels.Stager.Model)
 			}
 
-			// Other roles should remain opencode (global default).
+			// Other roles should remain qwen-code (global default).
 			for _, role := range []string{"planner", "message", "arbiter"} {
 				rc := roleModel(rmodels, role)
-				if rc.Provider != "opencode" {
-					t.Errorf("role %q provider = %q, want opencode", role, rc.Provider)
+				if rc.Provider != "qwen-code" {
+					t.Errorf("role %q provider = %q, want qwen-code", role, rc.Provider)
 				}
 			}
 		})
@@ -289,13 +289,13 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_NoStagerCapable(t *testing.T) {
-	// Stager set to opencode (not capable); pi, agy, and claude NOT installed → no fallback possible.
-	// Only opencode is installed (via Command="go" override); all others have bogus commands.
-	reg := bogusRegistry(t, []string{"opencode"})
+	// Stager set to qwen-code (not capable); pi, agy, and claude NOT installed → no fallback possible.
+	// Only qwen-code is installed (via Command="go" override); all others have bogus commands.
+	reg := bogusRegistry(t, []string{"qwen-code"})
 
 	cfg := config.Config{
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "opencode"},
+			"stager": {Provider: "qwen-code"},
 		},
 	}
 

@@ -27,7 +27,7 @@
 #
 # CHROME-DISABLE (FR-C5, §9.28): verified vs `opencode run --help` (external_deps.md
 #   §opencode, opencode 1.1.23, 2026-07-08). `run` is inherently read-only by design
-#   and exposes NO per-surface chrome-disable switch. bare_flags is empty because `run`
+#   when the task asks; tool exec is gated by the build agent's permission config. bare_flags is empty because `run`
 #   is already a read-only one-shot — mutation safety, NOT chrome. Chrome MAY load;
 #   the call stays read-only. Documented LIMITATION (FR-C4).
 # ============================================================================
@@ -64,7 +64,8 @@ provider_flag = ""                  # NON-NIL empty: provider is part of the mod
 # default_provider is ABSENT (nil) — opencode has no sub-provider concept.
 
 # --- bare mode (§12.7.1: read-only constraint) ---
-bare_flags = []                     # NON-NIL empty array: `run` is already a read-only, non-interactive
+bare_flags = []
+tooled_flags = ["--agent", "build"]   # stager (verified 2026-07-09); opencode tool exec relies on the build agent permission config (unscoped)                     # NON-NIL empty array: `run` is already a read-only, non-interactive
                                     # one-shot — no extra bare flags needed. (Present-but-empty, NOT absent.)
 
 # --- output ---

@@ -324,10 +324,12 @@ func builtinQwenCode() Manifest {
 // (FINDING D). (4) ReasoningLevels is nil — §12.6 OMITS the key.
 //
 // CHROME-DISABLE (FR-C5, §9.28): verified vs `opencode run --help` (external_deps.md §opencode,
-// opencode 1.1.23, 2026-07-08). The `run` subcommand is inherently read-only by design and exposes
-// NO per-surface chrome-disable switch. bare_flags is empty because `run` is already a read-only
-// one-shot — that is mutation safety, NOT chrome. Chrome MAY load; the call stays read-only.
-// Documented LIMITATION (FR-C4).
+// opencode 1.1.23, 2026-07-08). opencode has NO per-surface chrome-disable switch. NOTE: the earlier
+// "run is read-only by design" claim is WRONG — verified 2026-07-09, `opencode run` mutates the repo
+// when the task asks it to (it staged files end-to-end); tool execution is gated by the user's opencode
+// permission config (the `build` agent), not by `run` itself. bare roles stay safe in practice because a
+// commit-message/planner task does not request mutation. Chrome MAY load; the call is NOT structurally
+// read-only — documented LIMITATION (FR-C4).
 func builtinOpenCode() Manifest {
 	return Manifest{
 		Name:              "opencode",
@@ -342,6 +344,15 @@ func builtinOpenCode() Manifest {
 		SystemPromptFlag:  strPtr(""), // §12.6 explicit empty (NON-NIL) — no sys flag on `run`; sys prepended (§12.2)
 		ProviderFlag:      strPtr(""), // §12.6 explicit empty (NON-NIL) — provider is part of the model string
 		BareFlags:         []string{}, // §12.6 `bare_flags = []` → NON-NIL empty slice (FINDING D); do NOT omit
+		// TOOLED (stager) — VERIFIED 2026-07-09 (opencode 1.1.23) end-to-end: `run` stages exactly the
+		// requested paths. opencode has NO CLI permission flag; tool execution relies on the user's opencode
+		// permission config (the `build` agent's permissions — `"permission":{"*":"allow"}`). `--agent build`
+		// selects that write-capable primary agent explicitly (it is also the default, but naming it makes the
+		// tooled mode non-empty + unambiguous). opencode operates on its cwd, so NO TooledRepoDirFlag.
+		// §12.7.1 UNSCOPED — same model as pi/agy/codex.
+		TooledFlags: []string{
+			"--agent", "build",
+		},
 		Output:            strPtr("raw"),
 		StripCodeFence:    boolPtr(true),
 		// PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent in §12.6).
