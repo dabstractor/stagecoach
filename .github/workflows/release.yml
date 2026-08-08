@@ -10,8 +10,10 @@
 #                              bypasses publish 2FA for non-interactive CI). Settings → Secrets → Actions.
 #                              NOTE: use an AUTOMATION token, NOT a "Publish" token — a Publish token
 #                              fails with "requires a one-time password" if the account has publish 2FA on.
-#   WINGET_TOKEN                classic PAT, public_repo scope — forks microsoft/winget-pkgs to
-#                              dabstractor/winget-pkgs + opens the manifest PR. Settings → Secrets → Actions.
+#   CHOCOLATEY_API_KEY          Chocolatey community-source push key (chocolatey.org → Account Settings
+#                              → API Key). Used by the goreleaser-native `chocolateys:` pipe (in
+#                              .goreleaser.yaml) to publish the .nupkg to push.chocolatey.org.
+#                              Settings → Secrets → Actions.
 # (GITHUB_TOKEN is auto-provided — no secret needed for the GitHub Release itself.)
 name: release
 
@@ -57,6 +59,7 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
 
   # --- npm wrapper publish (PRD §21.2 "Beyond goreleaser"; external_deps.md §3) ----------------
   # goreleaser has NO native npm pipe, so stagecoach-ai is published by a SEPARATE job.
@@ -105,38 +108,6 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  # --- WinGet (Windows Package Manager) manifest automation (PRD §21.2/§21.3; external_deps §4) ---
-  # vedantmgoyal9/winget-releaser@v2 opens a PR to microsoft/winget-pkgs per release, bumping the
-  # PackageVersion + the windows_amd64.zip InstallerUrl/SHA256. Komac (the action's core) REUSES the
-  # EXISTING manifest structure, so dabstractor.Stagecoach must be bootstrapped ONCE in winget-pkgs
-  # first (see docs/packaging.md). Until then this step exits 1 (the action HEAD-checks the
-  # PackageIdentifier) → continue-on-error keeps the first release green.
-  winget:
-    name: WinGet manifest PR (microsoft/winget-pkgs)
-    needs: goreleaser           # the GitHub Release (windows zip + checksums) must exist first
-    if: ${{ !cancelled() }}   # run even if goreleaser's post-publish AUR step failed
-    runs-on: windows-latest     # action is pwsh-native; matches the winget-releaser convention
-    steps:
-      - name: Open winget-pkgs manifest PR via WinGet Releaser
-        # continue-on-error: BEST-EFFORT + FIRST-RELEASE GATE. The action exits 1 until
-        # dabstractor.Stagecoach is bootstrapped in winget-pkgs (its first step HEAD-checks the
-        # PackageIdentifier path). After bootstrap it succeeds; the gate is then a harmless safety
-        # net (a winget-pkgs PR hiccup must never block a Go release).
-        continue-on-error: true
-        uses: vedantmgoyal9/winget-releaser@v2
-        with:
-          identifier: dabstractor.Stagecoach   # PackageIdentifier: <Publisher>.<Product>
-          # installers-regex: the action's DEFAULT (.(exe|msi|msix|appx)...) does NOT match .zip —
-          # our goreleaser windows asset is stagecoach_<ver>_windows_amd64.zip. Override to match
-          # exactly the x64 zip (Komac maps amd64→x64). PowerShell -match is .NET regex (escape .).
-          installers-regex: 'windows_amd64\.zip$'
-          # version: left UNSET — the action defaults to the tag without leading v (= goreleaser
-          # {{.Version}}); they match. release-repository/release-tag/fork-user defaults are correct
-          # for this trigger; fork-user is set explicitly for clarity.
-          fork-user: dabstractor               # Komac forks microsoft/winget-pkgs → dabstractor/winget-pkgs
-          max-versions-to-keep: '0'            # keep all versions (0 = keep all; the default)
-          token: ${{ secrets.WINGET_TOKEN }}   # classic PAT, public_repo scope (NOT the default GITHUB_TOKEN)
 
   # --- asdf / mise plugin mirror (PRD §21.2/§21.3; G27) ----------------------------------------
   # The asdf plugin's single source of truth is plugins/asdf-stagecoach/ in THIS repo. asdf/mise
