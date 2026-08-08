@@ -522,12 +522,15 @@ provider_flag = ""
 #   --mode ask   → "Q&A style, read-only" (no edits) — the right semantic for msg gen
 #   --trust      → skip the workspace-trust prompt that would otherwise block `-p`
 bare_flags = ["--mode", "ask", "--trust"]
+tooled_flags = ["--trust", "--yolo"]   # STAGER (verified 2026-07-09): -p is non-interactive WITH FULL TOOLS; --yolo auto-approves (unscoped)
 output = "raw"                      # could use "json" with json_field from --output-format json
 strip_code_fence = true
-# We deliberately DO NOT set --force / --yolo (those force-allow commands).
-# TO CONFIRM (integration): that `--mode ask` wins over `-p`'s default full-tools
-# behavior — i.e. the combo is genuinely read-only. Expected, since `ask` is defined
-# as read-only; verify against a real run.
+# Bare is read-only via `--mode ask` (which overrides -p's full-tools default); the stager OMITS
+# `--mode` so -p's full tool access applies, and adds `--yolo` (= --force) to auto-approve tool calls
+# non-interactively. Both verified end-to-end 2026-07-09 (cursor-agent): bare emitted clean JSON;
+# the stager staged exactly the requested paths. §12.7.1 UNSCOPED (like pi/agy/codex/opencode).
+# NOTE: free Cursor plans allow ONLY `--model auto`; named models need a paid plan. An invalid or
+# non-entitled model prints the error to STDERR and leaves stdout EMPTY.
 ```
 
 Rendered (model e.g. `gpt-5`):

@@ -436,9 +436,12 @@ func builtinCodex() Manifest {
 // single default), no sys-prompt flag (sys prepended), no sub-provider. (4) ReasoningLevels is nil —
 // §12.7 OMITS the key. (5) The sys prompt is prepended (no --system-prompt flag on agent).
 //
-// TO CONFIRM (integration): that `--mode ask` wins over `-p`'s default full-tools profile — i.e. the
-// combo (-p --mode ask --trust) is genuinely read-only. Expected (ask is defined as read-only Q&A);
-// verify against a real run during the real-agent scaffold (P1.M5.T1.S2).
+// CONFIRMED (integration, 2026-07-09, cursor-agent): `--mode ask` DOES win over `-p`'s default
+// full-tools profile — the bare combo (-p --mode ask --trust) is genuinely read-only (emitted clean
+// JSON with no mutation). cursor is STAGER-CAPABLE: tooled omits --mode so -p's full tool access
+// applies, plus --yolo to auto-approve non-interactively (verified: staged exactly the requested paths).
+// §12.7.1 UNSCOPED (like pi/agy/codex/opencode). NOTE: free Cursor plans allow ONLY `--model auto`;
+// an invalid/non-entitled model errors to STDERR with empty stdout.
 //
 // CHROME-DISABLE (FR-C5, §9.28): verified vs `agent --help` (external_deps.md §cursor). cursor
 // exposes NO per-surface chrome-disable switch. --mode ask + --trust (bare_flags) are the read-only

@@ -71,7 +71,15 @@ bare_flags = [                      # appended VERBATIM to enforce a read-only, 
                                     # full-tools profile. §12.7.1 read-only constraint.
   "--trust",                        # skip the workspace-trust prompt that would otherwise block -p.
 ]
-# Deliberately does NOT set --force / --yolo (those force-allow commands).
+
+# --- tooled mode (§11.5/§12.1: the STAGER role; verified 2026-07-09, cursor-agent) ---
+tooled_flags = [                    # appended VERBATIM for the stager (tools on, full access, non-interactive).
+  "--trust",                        # skip the workspace-trust prompt.
+  "--yolo",                         # auto-approve tool calls non-interactively (alias for --force).
+]
+# `-p` (print_flag, shared with bare) is non-interactive WITH FULL TOOLS (write+shell); bare's
+# `--mode ask` overrides that to read-only, so tooled OMITS --mode. §12.7.1 UNSCOPED (like pi/agy/codex/opencode).
+# Deliberately does NOT set --force in addition to --yolo (--yolo is its alias).
 
 # --- output ---
 output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
