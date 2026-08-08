@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Replace Winget with Chocolatey + PowerShell installer",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Swap the Windows distribution channel from Winget (blocked by winget-pkgs Defender gate) to Chocolatey (goreleaser-native chocolateys: pipe, no acceptance gate) plus a PowerShell installer (irm | iex, the Windows curl|sh analog). The upgrade subsystem must detect Chocolatey installs and PRINT 'choco upgrade stagecoach -y' (admin, never self-swap). All Winget references in code, CI config, and docs must be eliminated.",
       "milestones": [
         {
@@ -126,21 +126,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Distribution docs sync (Mode A — ride with the work)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Sync all user-facing distribution documentation off Winget to Chocolatey + PowerShell installer. These docs describe the release plumbing that now exists from P1.M2.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Sync docs/packaging.md, docs/cli.md, README.md off Winget → Chocolatey + PowerShell",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Replace all Winget references in distribution documentation with Chocolatey + PowerShell installer descriptions. The docs must match the code (Phase 1) and the spec (§21.2/§21.3).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "docs/packaging.md: replace WinGet section (lines 8-73) with Chocolatey + PowerShell installer section",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1",
@@ -157,7 +157,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S2",
                   "title": "docs/cli.md + README.md: winget→chocolatey in upgrade channel list + features blurb + delete 'Not yet available' note",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2",

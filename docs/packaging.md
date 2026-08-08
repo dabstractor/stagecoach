@@ -1,76 +1,63 @@
 # Packaging notes (maintainer)
 
 Distribution-surface decisions and one-time bootstraps that are NOT code. This file covers
-WinGet (PRD §21.2/§21.3); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew/Scoop/AUR
+Chocolatey (PRD §21.2/§21.3); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew/Scoop/AUR
 are pending their target repos (release.yml runs goreleaser with `--skip=homebrew,scoop,aur` until
 those exist).
 
-## WinGet (`dabstractor.Stagecoach`)
+## Chocolatey
 
-Every `v*` tag runs a `winget` job in
-[`release.yml`](../.github/workflows/release.yml) that uses
-[`vedantmgoyal9/winget-releaser@v2`](https://github.com/vedantmgoyal9/winget-releaser) to open a
-manifest PR to [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs). The action
-(powered by [Komac](https://github.com/russellbanks/Komac)) matches the release's
-`stagecoach_<version>_windows_amd64.zip` via `installers-regex`, then bumps `PackageVersion` + the
-`InstallerUrl`/`InstallerSha256` of the existing manifest. Windows users install with
-`winget install dabstractor.Stagecoach`.
+Every `v*` tag runs goreleaser's native
+[`chocolateys:`](https://goreleaser.com/customization/chocolatey/) pipe (PRD §21.2), which builds a
+`.nupkg` and pushes it to the [Chocolatey community repository](https://community.chocolatey.org/)
+(`push.chocolatey.org`). Windows users install and update with Chocolatey directly:
 
-- **PackageIdentifier**: `dabstractor.Stagecoach` — `<Publisher>.<Product>` convention.
-- **Installer asset**: the goreleaser `stagecoach_<version>_windows_amd64.zip` (a ZIP containing
-  the bare `stagecoach.exe`). Download URL:
-  `https://github.com/dabstractor/stagecoach/releases/download/v<version>/stagecoach_<version>_windows_amd64.zip`.
-- **InstallerType**: `zip` (goreleaser ships a zip, not an exe/msi). **NestedInstallerType**:
-  `portable` (the zip holds a bare CLI exe). winget REQUIRES these for a zip installer (1.5+).
-- **Secret**: `WINGET_TOKEN` — a classic PAT with `public_repo` scope (the default `GITHUB_TOKEN`
-  cannot fork winget-pkgs). Add under repo Settings → Secrets → Actions.
+```sh
+choco install stagecoach
+choco upgrade stagecoach -y     # needs admin
+```
 
-### One-time bootstrap (release-day checklist — NOT a code step)
+- **Package**: `stagecoach` (owners `dabstractor`, title `Stagecoach`) on the community repo. The
+  pipe fields live in the `chocolateys:` block of [`.goreleaser.yaml`](../.goreleaser.yaml)
+  (`source_repo: https://push.chocolatey.org/`).
+- **Secret**: `CHOCOLATEY_API_KEY` — the Chocolatey community-source push key (chocolatey.org →
+  Account Settings → API Key). It is consumed by the `chocolateys:` pipe inside the goreleaser job
+  (see [`release.yml`](../.github/workflows/release.yml)); add it under repo
+  Settings → Secrets → Actions.
+- **Why Chocolatey, not the Windows store channel (v3.3)**: the previous Windows store channel
+  submitted a manifest to Microsoft's community package manifest repository, whose
+  `validationDefender` step runs an install-in-a-clean-VM Microsoft Defender scan that
+  **hard-blocks the unsigned binary every release** — an unbounded per-release tax. Chocolatey
+  publishes directly via the API key with no such gate, so there is no manifest-acceptance queue
+  to bootstrap or track.
+- **`stagecoach upgrade` behavior**: `choco upgrade` needs admin, so `stagecoach upgrade` detects
+  a Chocolatey install (FR-U2) and **prints** `choco upgrade stagecoach -y` for the user to run
+  (FR-U4). It does **not** self-swap — Chocolatey owns the binary under `ProgramData\chocolatey`
+  (FR-U1).
 
-The action's first step HEAD-checks `microsoft/winget-pkgs/manifests/d/dabstractor/Stagecoach`
-and EXITS 1 if the PackageIdentifier does not yet exist. So the FIRST release must be preceded
-by a one-time manual manifest submission that ESTABLISHES `dabstractor.Stagecoach`. Komac's
-`update` then REUSES this manifest's structure for every later version (it cannot infer
-`NestedInstallerType` from a URL — the bootstrap pins it).
+> No one-time bootstrap, no installer YAML, and no pending-acceptance checklist: unlike the old
+> manifest-PR flow, Chocolatey publishes on every release via the API key. The previous manifest
+> tooling, the nested-portable installer YAML, and the "pending acceptance" steps are all gone.
 
-1. After the first `v*` release exists (goreleaser published the GitHub Release), draft the
-   initial manifest. Use `wingetcreate` (the winget-pkgs PR tool) or the New-Package PR template:
+### PowerShell installer (no package manager)
 
-   ```sh
-   wingetcreate new https://github.com/dabstractor/stagecoach/releases/download/v<version>/stagecoach_<version>_windows_amd64.zip
-   ```
+Windows users without Chocolatey (or Scoop) can use the `irm | iex` one-liner — the Windows analog
+of the Unix `curl | sh` installer (PRD §21.3). It downloads [`install.ps1`](../install.ps1) from the
+repo root and executes it:
 
-   then edit the generated YAML so the installer block is EXACTLY:
+```powershell
+irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex
+```
 
-   ```yaml
-   PackageIdentifier: dabstractor.Stagecoach
-   PackageVersion: <version>
-   Installers:
-     - Architecture: x64
-       InstallerType: zip
-       InstallerUrl: https://github.com/dabstractor/stagecoach/releases/download/v<version>/stagecoach_<version>_windows_amd64.zip
-       InstallerSha256: <the windows_amd64.zip SHA256 from stagecoach_<version>_checksums.txt>
-       NestedInstallerType: portable
-       NestedInstallerFiles:
-         - RelativeFilePath: stagecoach.exe
-           PortableCommandAlias: stagecoach
-   ```
+`install.ps1` detects the Windows arch, downloads the matching
+`stagecoach_<version>_windows_<arch>.zip` from the latest GitHub Release, SHA256-verifies it
+against `checksums.txt`, extracts `stagecoach.exe` to `$LOCALAPPDATA\stagecoach` (the
+`rustup`/`starship`/`uv` pattern — user-owned, no admin), and prepends that directory to the
+**user** `PATH`. Because the binary is package-manager-unowned, the installer tags it
+`STAGECOACH_INSTALL_METHOD=direct` so `stagecoach upgrade` self-swaps it like any direct install
+(FR-U5).
 
-2. Submit the manifest as a New-Package PR to `microsoft/winget-pkgs` and let it merge.
-3. Confirm the PackageIdentifier path now exists. From the NEXT release on, the `release.yml`
-   `winget` job auto-opens the version-bump PR. (The job's `continue-on-error: true` keeps the
-   pre-bootstrap first release green; it is harmless thereafter.)
-
-### Release-day checklist (WinGet)
-
-- [ ] `WINGET_TOKEN` secret exists (classic PAT, `public_repo` scope).
-- [ ] FIRST RELEASE ONLY: bootstrap manifest submitted + merged (above).
-- [ ] The `release.yml` `winget` job ran (best-effort; a winget-pkgs PR hiccup does not block).
-- [ ] The winget-pkgs manifest PR for `<version>` was opened (check `microsoft/winget-pkgs` PRs).
-
-> FR-D5 (verify at impl): re-confirm the `wingetcreate new` flow, the exact
-> `NestedInstallerType`/`NestedInstallerFiles` shape, and the `vedantmgoyal9/winget-releaser`
-> version against the current winget manifest spec + action release at implementation time.
+> Re-open your terminal for the `PATH` change to take effect.
 
 ## Nix (flakes)
 
