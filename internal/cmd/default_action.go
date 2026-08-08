@@ -453,6 +453,18 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 		{Name: "message", Model: roleModels.Message.Model, Provider: roleModels.Message.Provider, Reasoning: roleModels.Message.Reasoning},
 		{Name: "arbiter", Model: roleModels.Arbiter.Model, Provider: roleModels.Arbiter.Provider, Reasoning: roleModels.Arbiter.Reasoning},
 	})
+	// Surface the FR-D4 stager fallback as a stderr NOTICE (non-verbose): if the user configured the
+	// stager to a provider that cannot stage (agy/opencode/qwen-code — nil TooledFlags), ResolveRoles
+	// silently swapped it to a tooled-capable one. Without this notice the user has no idea their stager
+	// isn't running on the provider they configured — and a fallback onto a multi-provider agent with no
+	// model (pi) silently stages nothing, producing the "0 commits" trap.
+	if cp, _, _ := config.ResolveRoleModel("stager", *cfg); cp != "" && cp != roleModels.Stager.Provider {
+		fmt.Fprintf(stderr, "stagecoach: the stager provider %q cannot perform tool-driven staging; falling back to %q.\n",
+			cp, roleModels.Stager.Provider)
+		if roleModels.Stager.Model == "" {
+			fmt.Fprintf(stderr, "  the fallback left the stager with no model — set [role.stager] model explicitly or it may stage nothing.\n")
+		}
+	}
 	// FR51b: main progress line. FR-M2b (PRD §9.14): in AUTO mode with EXACTLY one dirty path the
 	// planner is bypassed entirely and the MESSAGE role generates the single commit. Emitting
 	// "Decomposing with <planner>…" on that path is a lie (the planner never runs). Detect the
