@@ -125,7 +125,7 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 			return prompt.PlannerOutput{}, fmt.Errorf("%w: render: %w", ErrPlannerFailed, rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, plannerTimeout, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, plannerTimeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) || errors.Is(execErr, context.Canceled) {
 				return prompt.PlannerOutput{}, fmt.Errorf("%w: %w", ErrPlannerFailed, execErr) // non-rescue; no retry
@@ -135,7 +135,13 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 
 		parsed, perr := prompt.ParsePlannerOutput(out)
 		if perr != nil {
-			lastErr = perr
+			// Empty stdout almost always means the agent errored before generating (invalid/unentitled
+			// model, auth, quota) — the cause is on stderr. Surface it instead of the opaque parse error.
+			if h := provider.StderrHint(out, stderr); h != "" {
+				lastErr = errors.New(h)
+			} else {
+				lastErr = perr
+			}
 			continue // parse failure → retry
 		}
 		if verr := validatePlannerOutput(parsed); verr != nil {

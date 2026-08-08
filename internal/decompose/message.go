@@ -153,7 +153,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 			return "", fmt.Errorf("%w: render: %w", ErrMessageFailed, rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, messageTimeout, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, messageTimeout, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.
@@ -179,6 +179,11 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		if !ok {
 			parseFail = true
 			candidate = m
+			// Empty stdout ⇒ the agent errored before generating (invalid/unentitled model, auth, quota);
+			// stderr has the cause — record it so the eventual rescue surfaces the real reason.
+			if h := provider.StderrHint(out, stderr); h != "" {
+				lastCause = errors.New(h)
+			}
 			deps.Verbose.VerboseRetry(attempt+1, "parse failed (no valid commit message)")
 			continue // FR29 retry (consumes an attempt)
 		}

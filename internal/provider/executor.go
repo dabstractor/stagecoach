@@ -12,6 +12,27 @@ import (
 	"github.com/dabstractor/stagecoach/internal/ui"
 )
 
+// StderrHint surfaces a provider's stderr when its stdout is empty/unusable — the common case when an
+// agent errors BEFORE generating output (invalid/unentitled model, auth, quota, usage limit). Providers
+// put these errors on stderr and leave stdout empty, which otherwise surfaces downstream as an opaque
+// "not valid JSON" / empty-output parse error that hides the real cause.
+//
+// Returns "" when stdout carries usable (non-whitespace) content OR stderr is empty, so callers can
+// branch on it unconditionally. Otherwise it returns a single-line hint carrying the trimmed, length-
+// capped stderr — the text that explains why the agent produced nothing.
+func StderrHint(stdout, stderr string) string {
+	if strings.TrimSpace(stdout) != "" || strings.TrimSpace(stderr) == "" {
+		return ""
+	}
+	hint := strings.TrimSpace(stderr)
+	// collapse to a single line and cap so a noisy provider can't flood the error
+	hint = strings.ReplaceAll(hint, "\n", " ")
+	if len(hint) > 1000 {
+		hint = hint[:1000] + "…"
+	}
+	return "agent produced no output; provider stderr: " + hint
+}
+
 // Execute runs a provider CmdSpec as a subprocess and returns its captured stdout, captured stderr,
 // and a result error. It is the third stage of the provider pipeline (PRD §9.5/FR24–FR25): manifests
 // (T1–T3) describe the agent; Render (T4) composes the CmdSpec; Execute (T5.S1) runs it; the parser
