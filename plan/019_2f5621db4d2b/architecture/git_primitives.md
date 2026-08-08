@@ -46,11 +46,24 @@ Verified by direct read of `internal/git/git.go`. No files modified.
 - **Implication for the fast-path (stage serially → generate messages concurrently):**
   - The **staging sweep** (per-concept `Add` + `WriteTree` live) MUTATES `.git/index` → MUST run
     **strictly serially** (the caller serializes; this matches runLoop's serial staging).
-  - The **message-generation phase** MUST NOT touch the live `.git/index`. As long as each goroutine
-    reasons only over **tree-to-tree diffs** (`generateMessage` does `diff(tree[i-1], tree[i])`,
-    which is read-only tree reads via `DiffTreeNames`/`TreeDiff`) — no `Add`/`ReadTree`/`WriteTree`(live)
-    during message gen — concurrency is safe. `generateMessage`'s existing contract already uses
-    tree-to-tree diffs (§13.6.3 invariant 2), so it does NOT touch the live index. ✅
+  - The **message-generation phase** MUST NOT touch the live `.git/index` — and must NOT do any
+    interactive I/O or write any shared file. Each goroutine calls **`generateMessageCore`** ONLY
+    (the BUG-001 refactor, P1.M1.T1.S1/T2.S1): the bare tree-to-tree diff via read-only tree reads
+    (`diff(tree[i-1], tree[i])` over `DiffTreeNames`/`TreeDiff`) + the message-agent call + the
+    per-concept dedupe loop against a pre-run history snapshot — no `Add`/`ReadTree`/`WriteTree`(live),
+    so the `.git/index` is never touched concurrently. `generateMessage` (message.go:249) is the
+    WRAPPER that ADDITIONALLY applies `EditMessage`; it is therefore NOT concurrency-safe and the
+    fast-path deliberately calls the Core variant. Two operations are held back to the SERIAL
+    publish loop (decompose.go ~769-890): **`EditMessage`** — it writes/opens a single shared
+    `.git/STAGECOACH_EDITMSG` + an interactive `$EDITOR`, so N concurrent editors on one file
+    silently cross-contaminate commit messages (BUG-001); applied one editor at a time in CAS order
+    (FR-E4 "serialized publication"). **cross-concept dedupe** — each goroutine sees only the pre-run
+    history snapshot, so two disjoint concepts emitting the same subject both pass per-concept dedupe;
+    checked incrementally against the growing `seenSubjects` set before publish (US7/FR32, BUG-002).
+    ✅ (The ORIGINAL version of this bullet reasoned ONLY about the `.git/index` — "does NOT touch
+    the live index" — and named `generateMessage`; that index-only test was necessary-but-NOT-
+    sufficient and was the exact blind spot that let BUG-001 and BUG-002 ship. See the tightened
+    in-code launch contract at decompose.go ~741-757, P1.M3.T3.S1.)
   - **publishCommit** runs `CommitTree` (dangling object, no index) + `UpdateRefCAS` (no index) — safe,
     but the `update-ref`s MUST serialize in CAS order (FR-M7). The publish loop is the serialization point.
 - **Safe-to-concurrentize set (read-only w.r.t. index):** `DiffTreeNames`, `TreeDiff`, `RevParseTree`,
@@ -58,7 +71,11 @@ Verified by direct read of `internal/git/git.go`. No files modified.
   `WriteTree`(live), `FreezeWorkingTree`, `OverlayTreePaths`.
 - **Net:** the fast-path's design (serial staging sweep freezes all trees up front → concurrent
   message gen over frozen trees → serial CAS publish) is SOUND and needs NO new mutex, PROVIDED the
-  implementer keeps the staging sweep strictly serial and confines message goroutines to tree reads.
+  implementer keeps the staging sweep strictly serial, confines each message goroutine to
+  `generateMessageCore` (tree reads + message-agent + per-concept dedupe ONLY), and keeps
+  `EditMessage` + the cross-concept `seenSubjects` dedupe in the SERIAL publish loop (BUG-001/FR-E4,
+  BUG-002/US7). The original analysis named `generateMessage` and confined its reasoning to the
+  `.git/index`; that understated the contract (see above).
   There is no existing concurrent-index test precedent — the new regression suite is the net.
 
 ## No concurrency cap in spec
