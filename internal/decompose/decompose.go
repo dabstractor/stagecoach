@@ -796,6 +796,26 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 			return commits, nil, res.err // HARD (ErrMessageFailed-wrapped infra) — propagate
 		}
 
+		// BUG-001 fix: apply EditMessage in the SERIAL loop (one editor at a time). After S1 moved
+		// generation to generateMessageCore (no editor in the goroutine), the serial loop is the only
+		// place the shared .git/STAGECOACH_EDITMSG file is touched — so it is concurrency-safe (FR-E4:
+		// --edit gates each commit's message before its already-serialized publication). Mirrors
+		// generateMessage's EditMessage site (message.go) exactly; treeA=sc.prevTree, treeB=sc.tree.
+		if deps.Config.Edit {
+			nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, sc.prevTree, sc.tree) // best-effort; "" on err
+			edited, eErr := generate.EditMessage(ctx, res.msg, deps.Config, generate.EditContext{
+				Git: deps.Git, TreeSHA: sc.tree, NameStatus: nameStatus,
+			})
+			if eErr != nil {
+				// ErrEmptyMessage (editor emptied) or editor abort (e.g. vim :cq) — NON-RESCUE hard error:
+				// propagate directly (exit 1, NOT a rescue), mirroring generateMessage's behavior. Commits
+				// 0..i-1 stand; drain the N-i-1 in-flight channels to avoid a goroutine leak.
+				drainMsgs(inflight[i+1:])
+				return commits, nil, eErr
+			}
+			res.msg = edited
+		}
+
 		// Publish in CAS order: parent = prevSHA (CAS expected-old). publishCommit runs hooks +
 		// CommitTree (dangling) + UpdateRefCAS — touches NO index.
 		newSHA, err := publishCommit(ctx, deps, res.treeB, prevSHA, res.msg)

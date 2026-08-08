@@ -3273,6 +3273,96 @@ func TestRunLoopFastPath_ConcurrentPublish(t *testing.T) {
 	}
 }
 
+// TestRunLoopFastPath_EditSerial (BUG-001 regression, step 2/2) proves --edit is honored on the
+// file-disjoint fast-path in a CONCURRENCY-SAFE way: the serial publish loop runs the editor ONCE
+// PER CONCEPT in publish order, so each commit carries its OWN concept's edited message — never
+// another concept's. Before the BUG-001 fix, N concurrent goroutines each ran EditMessage on the
+// single shared .git/STAGECOACH_EDITMSG file (a race), and a concept could silently receive another
+// concept's message. After S1 (P1.M1.T2.S1) moved generation to generateMessageCore (no editor in the
+// goroutine), this test gates the re-applied serial-loop EditMessage block (S2 / FR-E4).
+//
+// The no-op editor (GIT_EDITOR=true) is INTENTIONAL: it preserves each concept's written message so
+// the per-concept assertion is deterministic. The single-response stubeditor (stubtest.BuildEditor)
+// writes the same message every invocation, which would give both concepts the SAME edited message
+// and mask the cross-contamination the test exists to catch.
+func TestRunLoopFastPath_EditSerial(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// Seed a base commit with two disjoint files, then modify both disjointly in the working tree.
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 1\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 1\n")
+	dcmRunGit(t, repo, "add", "a.go", "b.go")
+	dcmCommitRaw(t, repo, "initial")
+	// Disjoint working-tree change set: modify each file independently (the FR-M13 disjoint partition).
+	dcmWriteFile(t, repo, "a.go", "package a\n\nvar A = 2\n")
+	dcmWriteFile(t, repo, "b.go", "package b\n\nvar B = 2\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+
+	// Mirror what Decompose does internally: capture baseTree (HEAD^{tree}), then FreezeWorkingTree to
+	// capture T_start (the full working-tree change set) AND reset the index back to baseTree so the
+	// per-concept sweep starts clean.
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// NO-OP editor (GIT_EDITOR=true): exits 0 without modifying the file, so EditMessage reads back
+	// what it wrote — each concept's OWN message. This is the only deterministic way to assert no
+	// cross-contamination (the single-response stubeditor would write the same message every time).
+	t.Setenv("GIT_EDITOR", "true")
+
+	// Input-derived, concurrency-safe message stub: each concept's tree-to-tree diff names a distinct
+	// file (a.go/b.go); the stub inspects its OWN stdin and emits the matching subject.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.go", msg: "feat: add a"},
+		{substr: "b.go", msg: "feat: add b"},
+	})
+
+	roles := RoleManifests{Message: messageM}
+	var logBuf bytes.Buffer
+	deps := Deps{
+		Git:     g,
+		Config:  config.Defaults(),
+		Roles:   roles,
+		Verbose: ui.NewVerbose(&logBuf, true),
+	}
+	deps.Config.Edit = true // BUG-001: --edit on the file-disjoint fast-path
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "c1", Files: []string{"a.go"}},
+		{Title: "c2", Files: []string{"b.go"}},
+	}
+
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+	if err != nil {
+		t.Fatalf("runLoopFastPath: %v", err)
+	}
+
+	// Shape: 2 commits (one per disjoint concept).
+	if len(commits) != 2 {
+		t.Fatalf("commits len = %d, want 2", len(commits))
+	}
+
+	// BUG-001 PROOF — each commit carries its OWN concept's edited message (no cross-contamination).
+	// The no-op editor preserves what generateMessageCore wrote for each concept; if the serial-loop
+	// EditMessage block were absent OR racy on the shared EDITMSG file, a subject could be wrong or
+	// both subjects could coincide.
+	want := []string{"feat: add a", "feat: add b"}
+	for i, w := range want {
+		if commits[i].Subject != w {
+			t.Errorf("commits[%d].Subject = %q, want %q (BUG-001: own message, no cross-contamination)", i, commits[i].Subject, w)
+		}
+	}
+	if commits[0].Subject == commits[1].Subject {
+		t.Errorf("cross-contamination: both subjects = %q", commits[0].Subject)
+	}
+}
+
 // TestRunLoopFastPath_RescueIsolation (P1.M1.T1.S3, FR-M12a + no-leak drain) asserts that when message[i]
 // fails mid-publish, (a) commits 0..i-1 STAND (HEAD == commits[i-1].SHA), (b) a *DecomposeRescueError
 // (wrapping *RescueError, errors.Is(ErrRescue)) is returned naming concept i, (c) FormatRescueMulti is

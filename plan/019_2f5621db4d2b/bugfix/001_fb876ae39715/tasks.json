@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Fix concurrent editor race on fast-path (BUG-001)",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Eliminate the shared STAGECOACH_EDITMSG race by deferring EditMessage out of the concurrent generateMessage goroutine and performing it in runLoopFastPath's serial publish loop. This serializes the editor (one at a time, in CAS order) while preserving the concurrency win for message generation (the LLM call stays concurrent). Involves extracting generateMessageCore from generateMessage so the fast-path goroutines can generate messages without invoking the interactive editor.",
           "tasks": [
             {
@@ -42,7 +42,7 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Move EditMessage to serial publish loop in runLoopFastPath",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Change runLoopFastPath (internal/decompose/decompose.go:680-828) so that concurrent goroutines call generateMessageCore (no editor) instead of generateMessage, and EditMessage is applied in the strictly-serial CAS publish loop after receiving each concept's message and before publishCommit. This eliminates the shared-file race because only one EditMessage runs at a time.",
               "subtasks": [
                 {
@@ -66,7 +66,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S2",
                   "title": "Apply EditMessage in the serial publish loop before publishCommit",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -87,21 +87,21 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Restore cross-concept duplicate-subject detection on fast-path (BUG-002)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Add an incremental cross-concept dedupe pass to runLoopFastPath's serial publish loop. After receiving each concept's generated message, check its subject against a growing set of seen subjects (initialized from the pre-run recent subjects, accumulating each accepted sibling's subject). On collision, re-generate via generateMessageCore with seedRejections containing the seen subjects. If re-generation still collides (exhausts retries), enter the rescue path. This restores US7/FR32's no-duplicate-subjects guarantee without sacrificing the concurrency win (generation stays concurrent; only the dedupe check + re-generation is serial).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Add incremental cross-concept dedupe to serial publish loop",
-              "status": "Planned",
+              "status": "Researching",
               "description": "In runLoopFastPath's serial publish loop (after receiving each concept's message, before EditMessage and publishCommit), maintain a growing seenSubjects slice. Check each concept's generated subject against it. On collision, re-generate via generateMessageCore with seedRejections=seenSubjects. Handle rescue if re-generation fails. This runs AFTER the BUG-001 fix (EditMessage in serial loop) so the dedupe check operates on the generated (pre-edit) subject, preserving FR-E3's bypass.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Add seenSubjects tracking and cross-concept dedupe with re-generation/rescue",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2"
