@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Upgrade subsystem: Chocolatey replaces Winget in detect + delegate",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Replace the ChannelWinget constant, detection probe, path heuristic, and delegation logic with Chocolatey. Chocolatey is a PRINT channel (admin — FR-U4), not a RUN channel like Winget was. Includes all unit test updates.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Replace Winget with Chocolatey in detect + delegate (+ unit tests)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Surgical swap of the winget channel for chocolatey across the upgrade detection cascade (detect.go) and delegation dispatch (delegate.go). Chocolatey is detected via 'choco list --local-only stagecoach' (exit0Confirm) + a ProgramData path heuristic, and delegates to a PRINT channel ('choco upgrade stagecoach -y') because choco owns the binary and needs admin (FR-U1/FR-U4).",
               "subtasks": [
                 {
@@ -41,7 +41,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "delegate.go: move Chocolatey from RUN to PRINT, add printCommand case, remove runArgv case + tests + upgrade.go comments",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"

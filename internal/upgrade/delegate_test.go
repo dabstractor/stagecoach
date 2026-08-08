@@ -59,7 +59,6 @@ func TestDelegate_RunArgvPerChannel(t *testing.T) {
 	}{
 		{"brew", ChannelBrew, [][]string{{"brew", "upgrade", "stagecoach"}}},
 		{"scoop", ChannelScoop, [][]string{{"scoop", "update", "stagecoach"}}},
-		{"choco", ChannelChocolatey, [][]string{{"choco", "upgrade", "stagecoach"}}},
 		{"mise", ChannelMise, [][]string{{"mise", "upgrade", "stagecoach"}}},
 		{"go-install", ChannelGoInstall, [][]string{{"go", "install", "github.com/dabstractor/stagecoach/cmd/stagecoach@latest"}}},
 	}
@@ -170,6 +169,12 @@ func TestDelegate_PrintChannels(t *testing.T) {
 			ch:          ChannelRpm,
 			primary:     "sudo dnf upgrade stagecoach",
 			containsAll: []string{"sudo dnf upgrade stagecoach", "dnf repo", "releases/latest"},
+		},
+		{
+			name:        "chocolatey",
+			ch:          ChannelChocolatey,
+			primary:     "choco upgrade stagecoach -y",
+			containsAll: []string{"choco upgrade stagecoach -y", "admin", "FR-U1"},
 		},
 	}
 	for _, tc := range cases {
@@ -335,7 +340,7 @@ func TestDelegate_StreamsToWriter(t *testing.T) {
 // sudo may appear ONLY in the AUR print string (which the USER runs).
 func TestDelegate_NeverSudo(t *testing.T) {
 	runChannels := []Channel{
-		ChannelBrew, ChannelScoop, ChannelChocolatey, ChannelNpm, ChannelMise, ChannelAsdf, ChannelGoInstall,
+		ChannelBrew, ChannelScoop, ChannelNpm, ChannelMise, ChannelAsdf, ChannelGoInstall,
 	}
 	for _, ch := range runChannels {
 		f := okRunner()

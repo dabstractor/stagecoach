@@ -1,7 +1,7 @@
 // Package cmd implements the upgrade command for Stagecoach (PRD §9.29 FR-U1–U12, §15.4).
 // It provides the `upgrade` cobra leaf on root — the v3.0 binary self-update command:
 // stagecoach detects the install method and delegates to that channel's updater
-// (Homebrew/Scoop/winget/npm/mise/asdf/Nix/AUR/go-install), self-swapping only for the
+// (Homebrew/Scoop/chocolatey/npm/mise/asdf/Nix/AUR/go-install), self-swapping only for the
 // direct-binary channel.
 //
 // This is NOT `config upgrade`. `config upgrade` (a SEPARATE command, run as
@@ -76,7 +76,7 @@ var upgradeCmd = &cobra.Command{
 	Long: `Update the stagecoach binary to the latest release (PRD §9.29 FR-U1).
 
 stagecoach detects the install method and delegates to that channel's updater
-(Homebrew, Scoop, winget, npm, mise, asdf, Nix, AUR, go install), self-swapping only
+(Homebrew, Scoop, chocolatey, npm, mise, asdf, Nix, AUR, go install), self-swapping only
 for the direct-binary channel. This is the v3.0 delegate-first updater.
 
 Distinct from 'config upgrade': 'config upgrade' (run as 'stagecoach config upgrade')

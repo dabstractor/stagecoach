@@ -1,8 +1,9 @@
 // delegate.go implements the FR-U3 delegation table + FR-U4 run-vs-print policy — the dispatcher
 // the `stagecoach upgrade` command (P1.M4.T2 runUpgrade) calls after Detect (detect.go) has resolved
 // how the running binary was installed. Given a detected Channel, Delegate builds that channel's
-// NATIVE updater command and either RUNs it (brew/scoop/choco/npm/mise/asdf/go-install — streaming
-// its output live to opts.Out) or PRINTs it (aur needs root; nix is declarative/immutable). The
+// NATIVE updater command and either RUNs it (brew/scoop/npm/mise/asdf/go-install — streaming
+// its output live to opts.Out) or PRINTs it (aur needs root; nix is declarative/immutable;
+// chocolatey needs admin and owns the binary — FR-U1/FR-U4). The
 // `direct` channel is NOT delegated: Delegate returns ErrDirectSwap and the command layer routes it
 // to the P1.M3 self-swap (FR-U5). This is the "delegate-first" core of `stagecoach upgrade`: it
 // never overwrites a package-manager-owned file (FR-U1) because it never writes a file at all — it
@@ -71,7 +72,7 @@ type ExecRunner interface {
 // osExecRunner is the production ExecRunner. Each Run builds an exec.CommandContext and assigns the
 // injected stdout/stderr writers so the updater's output streams live to opts.Out (and, by the
 // Delegate convention, opts.Out is used for both streams so the user sees a single interleaved
-// stream). No Setpgid/process-group setup is applied — a delegated brew/scoop/choco is the USER's
+// stream). No Setpgid/process-group setup is applied — a delegated brew/scoop/npm/mise/asdf is the USER's
 // package manager running in the FOREGROUND group; Ctrl-C reaches it naturally (the Setpgid dance in
 // internal/provider/executor.go is for stagecoach's OWN child agents in the commit path — a
 // different concern). The exit-vs-start-failure distinction is the same as detect.go's osRunner.
@@ -192,7 +193,9 @@ func (o DelegateOptions) out() io.Writer {
 //     immutable/declarative; .deb/.rpm ship in Releases with NO apt/dnf repo (the PM updaters
 //     cannot fetch a new version) and are PM-owned (FR-U1 — never self-swap). The exact command is
 //     written to opts.Out and Ran=false, ExitCode=0 (FR-U4: "a printed command exits 0").
-//   - everything else (brew/scoop/choco/npm/mise/asdf/go-install) → RUN. The channel's argv is
+//     ChannelChocolatey also PRINTs: choco owns the binary under ProgramData\chocolatey (FR-U1 —
+//     never self-swap) and `choco upgrade` needs admin (FR-U4 — never auto-elevate).
+//   - everything else (brew/scoop/npm/mise/asdf/go-install) → RUN. The channel's argv is
 //     built by runArgv and executed via opts.Exec (nil ⇒ osExecRunner), streaming to opts.Out.
 //     asdf is a 2-step (install then global), executed in sequence; the loop stops on the first
 //     non-zero exit or error.
@@ -209,16 +212,17 @@ func Delegate(ctx context.Context, ch Channel, opts DelegateOptions) (DelegateRe
 		// sentinel; the command layer routes it. Exec is never called (no recorded calls).
 		return DelegateResult{}, ErrDirectSwap
 
-	case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm:
-		// PRINT channels: AUR needs root, Nix is declarative/immutable (FR-U4). Write the exact
-		// command for the user to run; a printed command exits 0 (FR-U4).
+	case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm, ChannelChocolatey:
+		// PRINT channels: AUR needs root, Nix is declarative/immutable, Chocolatey needs admin and
+		// owns the binary (FR-U1/FR-U4). Write the exact command for the user to run; a printed
+		// command exits 0 (FR-U4).
 		primary, full := printCommand(ch)
 		fmt.Fprintln(opts.out(), full)
 		verbose(opts, "printed update command for "+string(ch)+": "+primary)
 		return DelegateResult{Ran: false, Command: primary, ExitCode: 0}, nil
 
 	default:
-		// RUN channels: brew/scoop/choco/npm/mise/asdf/go-install. Build the channel's argv (asdf is
+		// RUN channels: brew/scoop/npm/mise/asdf/go-install. Build the channel's argv (asdf is
 		// a 2-step), stream the updater's output to opts.Out, and return Ran:true + the exit code.
 		argvs := runArgv(ch, opts)
 		cmd := joinArgv(argvs)
@@ -270,8 +274,6 @@ func runArgv(ch Channel, opts DelegateOptions) [][]string {
 		return [][]string{{"brew", "upgrade", "stagecoach"}}
 	case ChannelScoop:
 		return [][]string{{"scoop", "update", "stagecoach"}}
-	case ChannelChocolatey:
-		return [][]string{{"choco", "upgrade", "stagecoach"}}
 	case ChannelMise:
 		return [][]string{{"mise", "upgrade", "stagecoach"}}
 	case ChannelGoInstall:
@@ -375,9 +377,15 @@ func printCommand(ch Channel) (primary, full string) {
 			"#  download the new .rpm from https://github.com/dabstractor/stagecoach/releases/latest\n" +
 			"#  and run: sudo dnf install ./stagecoach-<version>.<arch>.rpm)"
 		return primary, full
+	case ChannelChocolatey:
+		// Chocolatey owns the binary under ProgramData\chocolatey (FR-U1: never self-swap) and
+		// `choco upgrade` needs admin (FR-U4: print, never auto-elevate). The user runs this.
+		primary = "choco upgrade stagecoach -y"
+		full = "choco upgrade stagecoach -y\n# (choco owns the binary under ProgramData\\chocolatey; run as admin — FR-U1/FR-U4)"
+		return primary, full
 	default:
-		// Unreachable: Delegate routes only ChannelAUR/ChannelNix/ChannelDeb/ChannelRpm into
-		// printCommand. Return empty strings so an unknown channel no-ops rather than panicking.
+		// Unreachable: Delegate routes only ChannelAUR/ChannelNix/ChannelDeb/ChannelRpm/ChannelChocolatey
+		// into printCommand. Return empty strings so an unknown channel no-ops rather than panicking.
 		return "", ""
 	}
 }

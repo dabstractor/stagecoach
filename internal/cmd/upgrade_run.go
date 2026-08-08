@@ -263,7 +263,7 @@ func runDirectSwap(ctx context.Context, cmd *cobra.Command, client *upgrade.Clie
 	return nil // exit 0 (Swap already cleaned tempDir)
 }
 
-// runDelegate implements the FR-U3/U4/U9 delegation path (every non-direct channel: brew/scoop/winget/
+// runDelegate implements the FR-U3/U4/U9 delegation path (every non-direct channel: brew/scoop/chocolatey/
 // npm/mise/asdf/go-install RUN; aur/nix/deb/rpm PRINT). RUN channels confirm first (FR-U9) — target "latest"
 // (the PM fetches it; no extra ResolveTarget network call), action "Update via <channel>'s updater.".
 // AUR/Nix (PRINT) NEVER confirm. Delegate is called with upgradeExecRunner (nil ⇒ osExecRunner prod
