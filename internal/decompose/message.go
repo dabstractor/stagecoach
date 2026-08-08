@@ -67,7 +67,17 @@ var ErrPublicationFailed = errors.New("decompose: publication failed")
 // concurrent stager mutates the INDEX, not HEAD). Recent subjects are fetched FRESH each call
 // (includes just-committed concepts for cross-concept dedupe). It does NOT import or call the
 // signal package (SIGNAL-FREE — signal.RestoreDefault is one-shot; loop signal is P3.M4.T1.S2).
-func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (string, error) {
+// generateMessageCore is the BARE message-role generate/dedupe core (steps 1-6 of generateMessage)
+// WITHOUT EditMessage — concurrent-safe (no interactive I/O, no shared .git/STAGECOACH_EDITMSG file).
+// Used by runLoopFastPath's goroutines (S2) so the BUG-001 editor race is eliminated (EditMessage runs
+// in the serial publish loop, not the concurrent generation goroutine). seedRejections pre-seeds the
+// dedupe rejection list (BuildUserPayload's rejection block) and the IsDuplicate check set
+// (dedupeRecent = recent ∪ seedRejections) for cross-concept duplicate avoidance (P1.M2, BUG-002).
+// With seedRejections=nil it is byte-identical to generateMessage's steps 1-6 (append([]string{},nil...)
+// is empty, and len(nil)>0 is false ⇒ dedupeRecent == recent ⇒ IsDuplicate unchanged). Returns the
+// pre-edit message, or *generate.RescueError (direct) / ErrMessageFailed-wrapped errors EXACTLY as
+// generateMessage does for those steps. Does NOT import or call the signal package (SIGNAL-FREE).
+func generateMessageCore(ctx context.Context, deps Deps, treeA, treeB string, seedRejections []string) (string, error) {
 	// 1. Current HEAD (parent for rescue + isUnborn for prompt). Derived BEFORE the diff so the FR3i
 	//    prompt-reserve seam (P1.M4.T1.S2) can build the system prompt and measure its worst-case token
 	//    count upstream. Safe under overlap: the concurrent stager mutates the INDEX, not HEAD.
@@ -121,6 +131,13 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 	if err != nil {
 		return "", fmt.Errorf("%w: recent subjects: %w", ErrMessageFailed, err)
 	}
+	// dedupeRecent is the IsDuplicate check set: the pristine recent git-history subjects ∪ the
+	// caller-supplied seedRejections (P1.M2 cross-concept dedupe). recent itself stays pristine (it is
+	// NOT merged into the prompt). Built with a fresh head copy so append cannot mutate recent's array.
+	dedupeRecent := recent
+	if len(seedRejections) > 0 {
+		dedupeRecent = append(append([]string{}, recent...), seedRejections...)
+	}
 
 	// 5. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
@@ -132,7 +149,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 	// 6. GENERATION+DEDUPE LOOP — a variant of CommitStaged's step-6 loop (diff = concept diff,
 	//    not StagedDiff; manifest = deps.Roles.Message; Render BARE; ResolveRoleModel for
 	//    provider/model).
-	var rejected []string
+	rejected := append([]string{}, seedRejections...) // pre-seed the BuildUserPayload rejection block (P1.M2 cross-concept dedupe)
 	var candidate string
 	var parseFail bool
 	var lastCause error
@@ -191,7 +208,7 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		m = generate.FinalizeMessage(m, deps.Config) // §9.19 FR-F8 seam — before dedupe
 
 		subject := generate.ExtractSubject(m)
-		if generate.IsDuplicate(subject, recent) {
+		if generate.IsDuplicate(subject, dedupeRecent) {
 			rejected = append(rejected, subject)
 			candidate = m
 			deps.Verbose.VerboseRetry(attempt+1, fmt.Sprintf("subject %q matches an existing commit", subject))
@@ -209,9 +226,35 @@ func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (strin
 		}
 	}
 
-	// §9.22 FR-E1: post-dedupe editor gate. AFTER the dedupe loop accepts a message and BEFORE
-	// the caller publishes. The user's hand-edited message bypasses the re-check (FR-E3 git parity).
-	// This site ALSO covers the arbiter N+1 (chain.go resolveNewCommit reuses generateMessage — transitively).
+	// Core returns the accepted pre-edit message (NO EditMessage — that interactive, non-
+	// concurrent-safe tail is the caller's job; runLoopFastPath must NOT run it in a goroutine, S2).
+	return msg, nil
+}
+
+// generateMessage is the BARE message-role generate/dedupe/parse loop over a tree-to-tree concept
+// diff (PRD §13.6.2 / §13.6.3 invariant 2, §9.14 FR-M6/M7/M8/M12). It is "a variant of
+// generate.CommitStaged's loop that takes a diff string instead of calling StagedDiff": the diff
+// source is TreeDiff(treeA, treeB) (tree-to-tree, never index-vs-HEAD).
+//
+// Delegates generation+dedupe to generateMessageCore (concurrent-safe; seedRejections=nil here) and
+// then applies the §9.22 FR-E1 editor gate — the interactive, non-concurrent-safe tail that
+// runLoopFastPath must NOT run in a goroutine (S2 moves it to the serial publish loop to fix the
+// BUG-001 shared-EDITMSG editor race). All callers use this signature `(ctx, deps, treeA, treeB)`;
+// only runLoopFastPath (decompose.go) switches to Core directly in S2.
+//
+// The rescue parent + isUnborn are derived INTERNALLY via RevParseHEAD (safe under overlap: the
+// concurrent stager mutates the INDEX, not HEAD). Recent subjects are fetched FRESH each call
+// (includes just-committed concepts for cross-concept dedupe). It does NOT import or call the
+// signal package (SIGNAL-FREE — signal.RestoreDefault is one-shot; loop signal is P3.M4.T1.S2).
+func generateMessage(ctx context.Context, deps Deps, treeA, treeB string) (string, error) {
+	msg, err := generateMessageCore(ctx, deps, treeA, treeB, nil)
+	if err != nil {
+		return "", err
+	}
+
+	// §9.22 FR-E1: post-dedupe editor gate (verbatim from the former step 7). AFTER Core accepts a
+	// message and BEFORE the caller publishes. The user's hand-edited message bypasses re-check
+	// (FR-E3 git parity). This site ALSO covers the arbiter N+1 (chain.go resolveNewCommit).
 	nameStatus, _ := deps.Git.DiffTreeNameStatus(ctx, treeA, treeB) // best-effort; "" on err
 	msg, err = generate.EditMessage(ctx, msg, deps.Config, generate.EditContext{Git: deps.Git, TreeSHA: treeB, NameStatus: nameStatus})
 	if err != nil {
