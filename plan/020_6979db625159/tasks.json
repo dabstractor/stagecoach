@@ -1,0 +1,232 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Replace Winget with Chocolatey + PowerShell installer",
+      "status": "Planned",
+      "description": "Swap the Windows distribution channel from Winget (blocked by winget-pkgs Defender gate) to Chocolatey (goreleaser-native chocolateys: pipe, no acceptance gate) plus a PowerShell installer (irm | iex, the Windows curl|sh analog). The upgrade subsystem must detect Chocolatey installs and PRINT 'choco upgrade stagecoach -y' (admin, never self-swap). All Winget references in code, CI config, and docs must be eliminated.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Upgrade subsystem: Chocolatey replaces Winget in detect + delegate",
+          "status": "Planned",
+          "description": "Replace the ChannelWinget constant, detection probe, path heuristic, and delegation logic with Chocolatey. Chocolatey is a PRINT channel (admin — FR-U4), not a RUN channel like Winget was. Includes all unit test updates.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Replace Winget with Chocolatey in detect + delegate (+ unit tests)",
+              "status": "Planned",
+              "description": "Surgical swap of the winget channel for chocolatey across the upgrade detection cascade (detect.go) and delegation dispatch (delegate.go). Chocolatey is detected via 'choco list --local-only stagecoach' (exit0Confirm) + a ProgramData path heuristic, and delegates to a PRINT channel ('choco upgrade stagecoach -y') because choco owns the binary and needs admin (FR-U1/FR-U4).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "detect.go: rename ChannelWinget→ChannelChocolatey, swap pmProbe, add path heuristic, update all references + tests",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.45", "h3.103", "h3.104", "h3.10", "h3.107"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/upgrade_subsystem.md for exact line numbers. Key facts: (a) ChannelWinget is at detect.go:41, (b) the pmProbe is at detect.go:272 using grepConfirm, (c) validChannel() at lines 62-68 and knownChannelList() at lines 240-245 both reference ChannelWinget, (d) the pathHeuristics table at lines 350-353 has NO winget entry — a new Chocolatey entry must be added, (e) detect_test.go has a 'winget installed (windows)' case at lines 220-229 and GOOS-gating assertions at lines 307-322. NOTE: the PRD's reference to 'the --install-method allowed-values slice (line 242)' is actually knownChannelList() — the flag itself is a free-form StringVar in upgrade.go:139; the code change point is the same but the naming is imprecise.\n2. INPUT: The Channel const block (detect.go:39-50), the pmProbes table (detect.go:267-276), the validChannel switch (detect.go:62-68), knownChannelList (detect.go:240-245), the pathHeuristics table (detect.go:350-353), and all narrative comments mentioning winget (detect.go lines 7, 87, 150, 265, 283, 311).\n3. LOGIC: (a) Rename ChannelWinget→ChannelChocolatey = 'chocolatey' at line 41, update doc comment to cite FR-U2/U3 PRINT channel. (b) In pmProbes (line 272), replace the winget row with: {channel: ChannelChocolatey, goos: []string{\"windows\"}, name: \"choco\", args: []string{\"list\", \"--local-only\", \"stagecoach\"}, confirm: exit0Confirm} — choco list --local-only exits 0 iff installed (NOT grepConfirm). (c) Update validChannel (line 64) and knownChannelList (line 241) to use ChannelChocolatey. (d) In pathHeuristics (line 350+), add {prefix: \"ProgramData/chocolatey/\", channel: ChannelChocolatey} (forward slashes for cross-GOOS normalization, matching the Scoop convention at detect.go:385-392). (e) Update all 6 narrative comments (lines 7, 87, 150, 265, 283, 311) to name chocolatey instead of winget. (f) In detect_test.go: convert the 'winget installed (windows)' case (lines 220-229) to 'chocolatey installed (windows)' — canned response must exit 0 for 'choco' (exit0Confirm checks exit code only, not stdout content); update want to ChannelChocolatey. Update GOOS-gating assertions (lines 307-322): replace 'winget' with 'choco' in called() checks and banned lists. Update comment-only mentions at lines 13, 27.\n4. OUTPUT: go test ./internal/upgrade/... green. 'rg -n winget internal/upgrade/detect.go internal/upgrade/detect_test.go' returns zero hits. No behavioral change to any non-Windows channel.\n5. DOCS: [Mode A] No user-facing/config/API surface change in detect.go itself — the channel constant is internal. The narrative comments are the only doc surface and they ride with this work. No separate docs subtask needed for detect.go."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "delegate.go: move Chocolatey from RUN to PRINT, add printCommand case, remove runArgv case + tests + upgrade.go comments",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": ["h3.45", "h3.103", "h3.104", "h3.10", "h3.107"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/upgrade_subsystem.md for exact line numbers. Key facts: (a) winget is currently a RUN channel — delegate.go:273-274 has 'case ChannelWinget: return [][]string{{\"winget\",\"upgrade\",\"stagecoach\"}}', (b) the PRINT set is 'case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm:' at delegate.go:212, (c) printCommand() at delegate.go:342 handles AUR/Nix/Deb/Rpm with per-channel text, (d) delegate_test.go has a RUN-table row at line 62 and a channel-set assertion at line 338, (e) upgrade.go lines 4,79 and upgrade_run.go line 266 have winget comments.\n2. INPUT: ChannelChocolatey constant from P1.M1.T1.S1 (detect.go). The Delegate dispatch switch (delegate.go:205+), runArgv (delegate.go:259+), printCommand (delegate.go:342+).\n3. LOGIC: (a) In delegate.go Delegate() switch: add ChannelChocolatey to the PRINT set arm at line 212 (extend 'case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm:' to include ChannelChocolatey). (b) In runArgv(): DELETE the 'case ChannelWinget:' arm (lines 273-274). (c) In printCommand(): add a new 'case ChannelChocolatey:' arm after ChannelRpm, emitting primary = 'choco upgrade stagecoach -y' and full = primary + '\\n# (choco owns the binary; run as admin — FR-U1/FR-U4)' — mirror the AUR/.deb/.rpm comment style. (d) Update narrative comments at delegate.go lines 4, 74, 195, 221 to name Chocolatey in PRINT set and drop winget from RUN list. (e) In upgrade.go: change 'winget' to 'chocolatey' in comments at lines 4 and 79. (f) In upgrade_run.go: change 'winget' to 'chocolatey' in comment at line 266. (g) In delegate_test.go: DELETE the winget RUN-table row at line 62. REMOVE ChannelWinget from the runChannels slice at line 338 (now 6 RUN channels, not 7). ADD a new printCommand test: Delegate(ctx, ChannelChocolatey, opts) → Ran: false, ExitCode: 0, Command: 'choco upgrade stagecoach -y'; assert output contains the FR-U1/FR-U4 comment. ADD ChannelChocolatey to any PRINT-channel assertion slice.\n4. OUTPUT: go test ./internal/upgrade/... green. 'rg -n winget internal/upgrade/delegate.go internal/upgrade/delegate_test.go internal/cmd/upgrade.go internal/cmd/upgrade_run.go' returns zero hits. Chocolatey is verified as a PRINT channel (exits 0, prints command, never runs).\n5. DOCS: [Mode A] The upgrade.go Long help text (line 79) lists channels — this is user-facing via 'stagecoach upgrade --help'. The channel list change rides WITH this work. No separate docs subtask."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M2",
+          "title": "Release plumbing: goreleaser Chocolatey pipe, drop the WinGet CI job, add install.ps1",
+          "status": "Planned",
+          "description": "Add a goreleaser-native chocolateys: pipe to .goreleaser.yaml, remove the winget CI job and WINGET_TOKEN from release.yml, and create install.ps1 (the Windows irm|iex installer). The install-method story must be coherent end-to-end with the upgrade subsystem changes from P1.M1.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M2.T1",
+              "title": "goreleaser chocolateys: pipe + remove WinGet CI job + add install.ps1",
+              "status": "Planned",
+              "description": "Three coordinated release-plumbing changes: (a) add a native chocolateys: pipe to .goreleaser.yaml, (b) delete the winget CI job and WINGET_TOKEN references from release.yml, (c) create install.ps1 at the repo root as the Windows curl|sh analog.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
+                  "title": ".goreleaser.yaml: add chocolateys: pipe section + scrub 4 WinGet comments",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S2"],
+                  "prd_selectors": ["h3.103", "h3.104", "h3.10", "h2.30"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/release_plumbing.md and external_deps.md. The goreleaser Chocolatey struct (verified against goreleaser master pkg/config/config.go) uses YAML key 'chocolateys:' (plural). Fields: name, ids, package_source_url, owners, title, authors, project_url, url_template, icon_url, copyright, license_url, require_license_acceptance, project_source_url, docs_url, bug_tracker_url, tags, summary, description, release_notes, dependencies, skip_publish, api_key, source_repo, goamd64. The 4 WinGet comments are at .goreleaser.yaml lines 78, 87, 104, 142. Structural template: mirror the existing scoops: block (line 100).\n2. INPUT: .goreleaser.yaml (165 lines). Existing native pipes: brews: (89), scoops: (100), nfpms: (121), aurs: (146).\n3. LOGIC: (a) Add a chocolateys: section after the aurs: block (line ~165). Use fields: name: stagecoach, ids: [default], owners: dabstractor, title: Stagecoach, authors: Dustin Schultz, project_url: https://github.com/dabstractor/stagecoach, url_template: 'https://github.com/dabstractor/stagecoach/releases/download/{{ .Tag }}/{{ .ArtifactName }}', license_url (point to LICENSE), copyright, description (same as other pipes), release_notes, api_key: '{{ .Env.CHOCOLATEY_API_KEY }}', source_repo: 'https://push.chocolatey.org/'. DECISION GATE: run 'goreleaser check' — if it rejects any field, comment it out and ship the rest (same pattern as the aurs: block). (b) Update the 4 WinGet comments: line 78 — replace 'WinGet — release.yml winget job' with 'Chocolatey — goreleaser-native chocolateys: pipe'; lines 87, 104, 142 — remove 'WinGet' from the 'Beyond goreleaser' lists (Chocolatey IS goreleaser-native, so it moves out of that list).\n4. OUTPUT: 'goreleaser check' passes with the chocolateys: section. 'rg -ni winget .goreleaser.yaml' returns zero hits. The chocolateys: section is structurally valid.\n5. DOCS: [Mode A] The .goreleaser.yaml comments ARE the config documentation for the release pipeline. The comment updates ride WITH this work. docs/packaging.md is handled in P1.M3.T1 (separate task)."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S2",
+                  "title": "release.yml: delete winget job (lines 109-139) + WINGET_TOKEN header doc + add CHOCOLATEY_API_KEY",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.103", "h3.104", "h3.10"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/release_plumbing.md. The winget: job is at release.yml lines 109-139 (comment banner 109-114, job definition 115-139). It uses vedantmgoyal9/winget-releaser@v2 with secrets.WINGET_TOKEN. The WINGET_TOKEN is also documented in the header at lines 13-14. Safe to remove: the winget job uses continue-on-error:true + if:!cancelled(); no other job depends on it.\n2. INPUT: .github/workflows/release.yml (236 lines). The goreleaser job's env block.\n3. LOGIC: (a) DELETE the entire winget job block: the comment banner (lines 109-114) and the job definition (lines 115-139). (b) DELETE the WINGET_TOKEN documentation lines from the header secrets section (lines 13-14). (c) ADD CHOCOLATEY_API_KEY to the header secrets section (document it as the Chocolatey community source push key, obtained from chocolatey.org → Account Settings → API Key). (d) If the goreleaser job has an env block, add CHOCOLATEY_API_KEY there (the native chocolateys: pipe runs within the goreleaser job and reads '{{ .Env.CHOCOLATEY_API_KEY }}'). Do NOT add a winget-releaser-style external PR job for Chocolatey (the native pipe publishes directly).\n4. OUTPUT: 'rg -ni winget .github/workflows/release.yml' returns zero hits. The release.yml YAML is valid. No winget job, no WINGET_TOKEN reference remains.\n5. DOCS: [Mode A] The release.yml header comment is config documentation. The secret documentation change rides WITH this work."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S3",
+                  "title": "install.ps1: create PowerShell installer at repo root (irm | iex Windows analog of install.sh)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.103", "h3.104", "h3.10"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/external_deps.md for the install.ps1 behavioral spec. install.sh (repo root, 9002 bytes) is the direct functional template — it documents the exact asset-naming convention (stagecoach_<v>_<os>_<arch>), checksums.txt verification, and STAGECOACH_INSTALL_METHOD tagging that install.ps1 must mirror. install.ps1 does NOT exist yet (confirmed: does not exist anywhere in the tree).\n2. INPUT: install.sh (repo root) as the structural template. The GitHub Releases API pattern from internal/upgrade/releases.go. The SHA256 verification pattern from internal/upgrade/download.go. Spec §21.3 (install paths).\n3. LOGIC: Create install.ps1 at the repo root. It must: (a) Detect arch via $env:PROCESSOR_ARCHITECTURE (AMD64→amd64, ARM64→arm64). (b) Resolve the latest release tag via GitHub Releases API (Invoke-RestMethod https://api.github.com/repos/dabstractor/stagecoach/releases/latest, unauthenticated). (c) Download stagecoach_<v>_windows_<arch>.zip + checksums.txt from the release assets. (d) SHA256-verify the zip against the matching checksums.txt line (hard gate — Write-Error + exit 1 on mismatch, like install.sh and download.go). (e) Extract stagecoach.exe to $LOCALAPPDATA\\stagecoach (use System.IO.Compression.ZipFile — no PowerShell gallery modules). (f) Prepend $LOCALAPPDATA\\stagecoach to the USER PATH via [Environment]::SetEnvironmentVariable('PATH', ..., 'User') (NOT Machine — no admin required). (g) Set STAGECOACH_INSTALL_METHOD=direct in the USER environment via [Environment]::SetEnvironmentVariable('STAGECOACH_INSTALL_METHOD', 'direct', 'User'). (h) Print a success message with 'Re-open your terminal for PATH changes to take effect.' (i) Add a header comment block cross-referencing spec §21.3 and explaining this is the Windows analog of install.sh. Keep it dependency-free.\n4. OUTPUT: install.ps1 exists at repo root. A PowerShell syntax check (powershell -NoProfile -Command '& { . ./install.ps1 -DryRun }' or pwsh -NoProfile -File install.ps1 -WhatIf, or at minimum a parse check) confirms it is valid PowerShell. The script follows the irm | iex invocation pattern: 'irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex'.\n5. DOCS: [Mode A] install.ps1 itself IS documentation (header comments). docs/packaging.md coverage of the PowerShell installer is handled in P1.M3.T1.S1."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M3",
+          "title": "Distribution docs sync (Mode A — ride with the work)",
+          "status": "Planned",
+          "description": "Sync all user-facing distribution documentation off Winget to Chocolatey + PowerShell installer. These docs describe the release plumbing that now exists from P1.M2.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M3.T1",
+              "title": "Sync docs/packaging.md, docs/cli.md, README.md off Winget → Chocolatey + PowerShell",
+              "status": "Planned",
+              "description": "Replace all Winget references in distribution documentation with Chocolatey + PowerShell installer descriptions. The docs must match the code (Phase 1) and the spec (§21.2/§21.3).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S1",
+                  "title": "docs/packaging.md: replace WinGet section (lines 8-73) with Chocolatey + PowerShell installer section",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M2.T1.S1", "P1.M2.T1.S3"],
+                  "prd_selectors": ["h3.103", "h3.104", "h2.30"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/release_plumbing.md. The WinGet section in docs/packaging.md spans lines 8-73 (header at line 8, next section '## Nix' starts at line 75). It contains: the winget-releaser description (8-17), the one-time bootstrap with wingetcreate (28-62), and the release-day checklist (64-73). The spec (spec/06-reliability.md §21.2/§21.3, already updated by b0105e5) is the source of truth.\n2. INPUT: The goreleaser chocolateys: pipe from P1.M2.T1.S1, the install.ps1 installer from P1.M2.T1.S3, the CHOCOLATEY_API_KEY secret documentation from P1.M2.T1.S2.\n3. LOGIC: (a) Replace the entire '## WinGet (`dabstractor.Stagecoach`)' section (lines 8-73) with '## Chocolatey' — describe: the goreleaser-native chocolateys: pipe, 'choco install stagecoach', 'choco upgrade stagecoach -y' (admin), the CHOCOLATEY_API_KEY secret, and explicitly note the NON-reason: NO winget-pkgs Defender gate (the v3.3 rationale). Delete the wingetcreate bootstrap, the NestedInstallerType/SHA256 installer YAML, and the 'pending winget-pkgs acceptance' checklist entirely (inapplicable). (b) Add a short '### PowerShell installer (no package manager)' subsection documenting: irm | iex one-liner, install dir ($LOCALAPPDATA\\stagecoach), user PATH update, STAGECOACH_INSTALL_METHOD=direct tag, and 're-open your shell' notice. Cross-reference spec §21.3.\n4. OUTPUT: 'rg -ni winget docs/packaging.md' returns zero hits. The Chocolatey section accurately describes the goreleaser pipe and the PowerShell installer.\n5. DOCS: [Mode A] This IS the docs work — it rides with the release-plumbing tasks it depends on."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M3.T1.S2",
+                  "title": "docs/cli.md + README.md: winget→chocolatey in upgrade channel list + features blurb + delete 'Not yet available' note",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S2", "P1.M2.T1.S3"],
+                  "prd_selectors": ["h3.103", "h3.104", "h3.77", "h3.106"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/system_context.md. Three stale references: docs/cli.md line 404 (channel list in upgrade blurb: 'Homebrew, Scoop, winget, npm, …'), README.md line 6 (v3.0 features blurb: 'expands distribution (Homebrew, Scoop, Winget, npm, Nix, mise/asdf)'), README.md lines 132-135 ('Not yet available: Windows WinGet … pending acceptance into microsoft/winget-pkgs').\n2. INPUT: The upgrade channel story from P1.M1.T1.S2 (Chocolatey is a PRINT channel). The install.ps1 from P1.M2.T1.S3 (PowerShell installer exists).\n3. LOGIC: (a) docs/cli.md line 404: change 'winget' to 'chocolatey' in the channel list parenthetical. Add a note that choco is printed (admin), consistent with the §15.3 upgrade-subcommand text. (b) README.md line 6: change 'Winget' to 'Chocolatey' in the v3.0 distribution list; optionally add 'PowerShell installer' to the parenthetical. (c) README.md lines 132-135: DELETE the entire 'Not yet available' blockquote note about WinGet pending acceptance (Chocolatey + the PowerShell installer have no acceptance gate). If the note also mentions AUR, check whether AUR is now available (it is wired in .goreleaser.yaml); if AUR is also resolved, remove that mention too. If a Windows install section exists elsewhere in README, ensure it lists 'choco install stagecoach' and the 'irm | iex' PowerShell fallback (mirroring spec §21.3).\n4. OUTPUT: 'rg -ni winget docs/cli.md README.md' returns zero hits. The docs match the code and spec.\n5. DOCS: [Mode A] This IS the docs work for cli.md and README.md Phase 1 references."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Phase",
+      "id": "P2",
+      "title": "Model-example consistency cleanup (zai/glm-5.2 → anthropic/claude-haiku)",
+      "status": "Planned",
+      "description": "Sweep all stale zai/glm-5.2, glm-5-turbo, and zai/glm-5-turbo references across the codebase to anthropic/claude-haiku (matching spec §12.3). The v3.3 spec renamed these tokens everywhere; a handful of code comments, user-facing strings, error messages, and test fixtures still carry the old token. CRITICAL: research found 90+ references across 30+ files (the PRD identified only ~4); this phase covers the full scope.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P2.M1",
+          "title": "Sweep stale zai/glm-5.2 references in code, tests, and docs",
+          "status": "Planned",
+          "description": "Refresh all model-example tokens from the fictional zai/glm-5.2 family to the realistic anthropic/claude-haiku, covering user-facing examples, runtime error messages, user-facing docs, and test fixtures.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P2.M1.T1",
+              "title": "User-facing model-example token refresh (comments, strings, error messages, docs)",
+              "status": "Planned",
+              "description": "Update all user-facing references to the old model token in provider manifests, interactive prompts, config code, runtime error messages, and user-facing documentation. These are the examples users see in error messages, config templates, help text, and docs.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T1.S1",
+                  "title": "Provider manifest + config code comments/strings (pi.toml, config_init_interactive.go, default_action.go, config.go, bootstrap.go, builtin.go)",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.59", "h3.31", "h3.33", "h3.82", "h3.83"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/model_cleanup_scope.md (Category A). Files and exact lines: providers/pi.toml (lines 18, 24, 53, 61 — personal-override example comments using glm-5.2/glm-5-turbo/zai); internal/cmd/config_init_interactive.go (lines 184, 200 — wizard prompt strings 'e.g. zai/glm-5.2'); internal/cmd/default_action.go (line 234 — comment 'bare \"glm-5.2\" on pi — FR-R5b'); internal/cmd/config.go (lines 94, 687 — migration example + template comment); internal/config/bootstrap.go (lines 201, 205, 229 — config file template comments written to users' files); internal/provider/builtin.go (lines 34, 59 — comment 'was glm-5-turbo; decoupled' and DefaultModel strPtr(\"\")).\n2. INPUT: No code dependency — these are comment/string/fixture changes. The spec §12.3 (pi manifest) and FR-R5b define the inference-prefix format.\n3. LOGIC: (a) providers/pi.toml: update personal-override example comments from zai/glm-5-turbo and glm-5.2 to anthropic/claude-haiku (matching spec §12.3). Keep the concept of a personal override but use a realistic model. Update line 61's prefix-fold illustration from 'zai/glm-5.2 → --provider zai --model glm-5.2' to 'anthropic/claude-haiku → --provider anthropic --model claude-haiku'. Ensure line 59's backend list does not imply zai is a default (FR-D2: pi ships BLANK). (b) config_init_interactive.go lines 184, 200: change prompt string from 'e.g. zai/glm-5.2' to 'e.g. anthropic/claude-haiku'. (c) default_action.go line 234: change comment from 'bare \"glm-5.2\" on pi' to 'bare \"claude-haiku\" on pi' (matching spec FR-R5b's hard-error example). (d) config.go lines 94, 687: change migration example from glm-5.2/zai to claude-haiku/anthropic. (e) bootstrap.go lines 201, 205, 229: change template comments from 'zai/glm-5.2' to 'anthropic/claude-haiku'. (f) builtin.go line 34: update the historical comment; line 59 is already DefaultModel strPtr(\"\") — the comment 'was glm-5-turbo' should say 'was a personal override model; decoupled' or similar.\n4. OUTPUT: go test ./internal/cmd/... ./internal/config/... ./internal/provider/... green (these are non-behavioral comment/string changes — no assertions change). 'rg -n \"zai/glm|glm-5\\.2|glm-5-turbo\" providers/pi.toml internal/cmd/config_init_interactive.go internal/cmd/default_action.go internal/cmd/config.go internal/config/bootstrap.go internal/provider/builtin.go' returns zero hits.\n5. DOCS: [Mode A] providers/pi.toml comments and bootstrap.go template comments are user-facing config documentation — they ride WITH this work. docs/configuration.md, docs/providers.md, docs/cli.md, README.md are handled in P2.M1.T1.S2."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T1.S2",
+                  "title": "Runtime error messages (manifest.go, render.go, roles.go) + user-facing docs (README.md, docs/cli.md, docs/configuration.md, docs/providers.md)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.59", "h3.67", "h3.31", "h3.75", "h3.77", "h3.80", "h3.82", "h3.106"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/model_cleanup_scope.md (Category A + A-2). Runtime error messages: internal/provider/manifest.go (lines 139, 156 — fmt.Errorf with 'e.g. \"zai/glm-5.2\"'); internal/provider/render.go (lines 127, 249 — same error pattern); internal/decompose/roles.go (lines 163, 169 — same error pattern). User-facing docs: README.md (lines 304, 309, 310, 313 — quickstart git-config examples); docs/cli.md (lines 70, 172 — --model shadowing + config init docs); docs/configuration.md (lines 40, 232 — config auto-detect + example); docs/providers.md (line 72 — multi-backend render example).\n2. INPUT: No code dependency — error messages and docs are independent of test fixtures.\n3. LOGIC: (a) internal/provider/manifest.go lines 139, 156: change error message example from 'e.g. \"zai/glm-5.2\"' to 'e.g. \"anthropic/claude-haiku\"'. (b) internal/provider/render.go lines 127, 249: same change. (c) internal/decompose/roles.go lines 163, 169: same change. These error messages must still illustrate the inference-backend prefix-fold mechanism (FR-R5b) — the replacement 'anthropic/claude-haiku' demonstrates the same backend/model splitting. (d) README.md lines 304, 309, 310, 313: change git-config examples from 'zai/glm-5.2' to 'anthropic/claude-haiku' and 'glm-5.2' to 'claude-haiku'. (e) docs/cli.md lines 70, 172: change config examples from 'glm-5.2'/'zai/glm-5.2' to 'claude-haiku'/'anthropic/claude-haiku'. (f) docs/configuration.md lines 40, 232: change examples from 'zai/glm-5.2'/'glm-5.2' to 'anthropic/claude-haiku'/'claude-haiku'. (g) docs/providers.md line 72: change render example from 'zai/glm-5.2' to 'anthropic/claude-haiku'.\n4. OUTPUT: go test ./internal/provider/... ./internal/decompose/... green (tests that check error type/path are unaffected; tests that assert on exact error MESSAGE text are updated in P2.M1.T2.S1). 'rg -n \"zai/glm|glm-5\\.2\" internal/provider/manifest.go internal/provider/render.go internal/decompose/roles.go README.md docs/cli.md docs/configuration.md docs/providers.md' returns zero hits.\n5. DOCS: [Mode A] docs/cli.md, docs/configuration.md, docs/providers.md, README.md changes ARE the docs work — they ride WITH this task."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P2.M1.T2",
+              "title": "Test fixture consistency refresh (all test files using glm-5.2/glm-5-turbo as data)",
+              "status": "Planned",
+              "description": "Refresh all test fixtures that use zai/glm-5.2 or glm-5-turbo as test input data or assertions to anthropic/claude-haiku. These test the prefix-fold mechanism and migration mechanics where the literal model value is arbitrary but should be consistent with the spec example.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T2.S1",
+                  "title": "Provider subsystem tests (render_test.go, manifest_test.go, merge_test.go, builtin_test.go, registry_test.go, roles_test.go, realagent_test.go, output_test.go, multiturn_test.go)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.59", "h3.67", "h3.31"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/model_cleanup_scope.md (Categories B + D). Files and lines: internal/provider/render_test.go (lines 87,91,152-154,298,306,312-314,478,488,567,572,605,610,641,659,685,726,747 — render fold tests using zai/glm-5.2 and glm-5-turbo); internal/provider/manifest_test.go (lines 18,63,323,325,338,340,350,383 — ValidateModel + manifest parse); internal/provider/merge_test.go (lines 19,42,46,47,325 — manifest merge); internal/provider/builtin_test.go (lines 436,439,884,890 — pi render personal-override using glm-5-turbo); internal/provider/registry_test.go (lines 65,70,71,215,222,315,341 — Registry DefaultModel); internal/decompose/roles_test.go (lines 318,323 — role model validation using glm-5-turbo); internal/generate/realagent_test.go (line 40 — real-agent test table using glm-5-turbo/zai); internal/ui/output_test.go (line 250 — label formatting using zai/glm-5.2); internal/generate/multiturn_test.go (lines 218,244,268,285,306 — multiturn generation using zai/glm-5.2).\n2. INPUT: The error messages from P2.M1.T1.S2 (manifest.go, render.go, roles.go) use the new example token. Tests that assert on error message content must match.\n3. LOGIC: Mechanical rename of test data: zai/glm-5.2 → anthropic/claude-haiku; glm-5.2 → claude-haiku; zai/glm-5-turbo → anthropic/claude-haiku; glm-5-turbo → claude-haiku; zai → anthropic (where it appears as a provider prefix in test data). For each test, the input+assertion pairs must change in lockstep (e.g., render_test.go:152-154: input 'zai/glm-5.2' → asserts --provider zai --model glm-5.2; becomes input 'anthropic/claude-haiku' → asserts --provider anthropic --model claude-haiku). The bare-model error tests (render_test.go:298 uses 'glm-5.2' as an invalid bare model on a multi-backend provider) become 'claude-haiku' as the invalid bare model. The structural assertions (error is non-nil, args contain specific flags) stay identical — only the model token changes.\n4. OUTPUT: go test ./internal/provider/... ./internal/decompose/... ./internal/generate/... ./internal/ui/... green. 'rg -n \"zai/glm|glm-5\\.2|glm-5-turbo\" internal/provider/*_test.go internal/decompose/*_test.go internal/generate/*_test.go internal/ui/*_test.go' returns zero hits.\n5. DOCS: [Mode A] none — no user-facing/config/API surface change. Test fixture hygiene only."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T2.S2",
+                  "title": "Config subsystem tests (config_test.go, migrate_test.go, file_test.go, git_test.go, load_test.go, default_action_test.go, config_init_interactive_test.go, providers_test.go)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h3.31", "h3.33", "h3.80", "h3.82"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/model_cleanup_scope.md (Categories C + D). Files and lines: internal/cmd/config_test.go (lines 1350,1356,1379,1384,1396,1399,1405,1431,1439,1445,1456,1458,1461,1480,1505 — v2→v3 migration fixtures using default_provider='zai' + default_model='glm-5.2' → folded to 'zai/glm-5.2'); internal/config/migrate_test.go (lines 22-196 — migration unit tests, 22+ hits, same zai/glm-5.2 fold pattern); internal/config/file_test.go (lines 59,90,91,786,800,801 — config file parse using glm-5.2); internal/config/git_test.go (lines 76,104,105 — git-config model parse using glm-5.2); internal/config/load_test.go (lines 148,161,162 — config load env var using glm-5.2); internal/cmd/default_action_test.go (lines 1500,1532,1539,1540,1541 — default action dry-run using glm-5.2); internal/cmd/config_init_interactive_test.go (lines 589,593 — interactive wizard test using zai/glm-5.2); internal/cmd/providers_test.go (lines 226,241,242 — providers show output using glm-5.2).\n2. INPUT: No code dependency — these test the migration mechanics and config parsing where the literal model value is arbitrary.\n3. LOGIC: Mechanical rename of test data. The migration fixtures use the v2→v3 fold pattern: v2 input 'default_provider = \"zai\"' + 'default_model = \"glm-5.2\"' → v3 output 'model = \"zai/glm-5.2\"'. Replace with: v2 input 'default_provider = \"anthropic\"' + 'default_model = \"claude-haiku\"' → v3 output 'model = \"anthropic/claude-haiku\"'. All assertions stay structurally identical — only the token changes. The no-fold cases (bare model with no default_provider) stay bare: 'default_model = \"claude-haiku\"' stays 'claude-haiku' (no slash-prefix). For generic test fixtures (git_test.go, load_test.go) using 'glm-5.2' as arbitrary data, change to 'claude-haiku'. For default_action_test.go: the FR51b label '↳ Generating with glm-5.2 in stub…' becomes '↳ Generating with claude-haiku in stub…' (matching the new model token). For config_init_interactive_test.go: the override 'zai/glm-5.2' becomes 'anthropic/claude-haiku'.\n4. OUTPUT: go test ./internal/cmd/... ./internal/config/... green. 'rg -n \"zai/glm|glm-5\\.2|glm-5-turbo\" internal/cmd/config_test.go internal/config/migrate_test.go internal/config/file_test.go internal/config/git_test.go internal/config/load_test.go internal/cmd/default_action_test.go internal/cmd/config_init_interactive_test.go internal/cmd/providers_test.go' returns zero hits.\n5. DOCS: [Mode A] none — no user-facing/config/API surface change. Test fixture hygiene only."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P2.M1.T3",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Final cross-cutting documentation sweep that verifies the entire delta (Chocolatey + PowerShell installer + model-example cleanup) is coherent across README.md, docs/*.md, and the codebase. This is the Mode B catch-all that prevents a coherent delta from shipping with a stale README or inconsistent cross-references.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T3.S1",
+                  "title": "Final README.md + overview coherence sweep across the entire delta",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M2.T1.S1", "P1.M2.T1.S2", "P1.M2.T1.S3", "P1.M3.T1.S1", "P1.M3.T1.S2", "P2.M1.T1.S1", "P2.M1.T1.S2", "P2.M1.T2.S1", "P2.M1.T2.S2"],
+                  "prd_selectors": ["h3.103", "h3.104", "h3.106", "h3.59", "h3.75"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: This is the Mode B final task that depends on ALL implementing subtasks. The individual subtasks (P1.M3.T1.S2 for README Winget→Chocolatey, P2.M1.T1.S2 for README model examples) already handle their specific README sections. This task verifies the WHOLE README is coherent after the full delta.\n2. INPUT: All changes from P1 and P2. The README.md should now say Chocolatey (not Winget), describe the PowerShell installer, and use anthropic/claude-haiku (not zai/glm-5.2) as the pi model example.\n3. LOGIC: (a) Run 'rg -ni winget README.md docs/' — must return zero hits. (b) Run 'rg -n \"zai/glm|glm-5\\.2|glm-5-turbo\" --glob \"!spec/**\" --glob \"!plan/**\"' from the repo root — must return zero hits (the full acceptance criterion from the PRD). (c) Verify README.md distribution sections list Chocolatey + PowerShell installer (not Winget) consistently. (d) Verify any install quickstart in README references 'choco install stagecoach' and/or the 'irm | iex' PowerShell fallback. (e) Verify docs/packaging.md, docs/cli.md, docs/providers.md, docs/configuration.md are internally consistent with each other and with the code. (f) If any cross-references are stale (e.g., a doc pointing to a section that was renamed), fix them. (g) Run 'go test ./...' to confirm all tests pass after the full delta.\n4. OUTPUT: Both grep commands return zero hits. 'go test ./...' is green. The documentation is coherent across the entire delta.\n5. DOCS: [Mode B] This IS the changeset-level documentation sync — the final sweep that ensures the whole delta is coherent."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

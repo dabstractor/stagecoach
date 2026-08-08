@@ -1,0 +1,8 @@
+0b98cd9b445c spec/SPEC.md
+a83b10f28ce5 spec/01-product.md
+cf71cf6d2f44 spec/02-providers.md
+aa68756d3476 spec/03-generation.md
+996b724076b0 spec/04-interface.md
+3755dc43d27a spec/05-prompts.md
+877b3cfe39d3 spec/06-reliability.md
+87dfb7532b07 spec/07-reference.md
