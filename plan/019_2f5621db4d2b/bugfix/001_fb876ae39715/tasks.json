@@ -156,14 +156,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Regression test for BUG-002 (duplicate-subject collision)",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Test runLoopFastPath with >=2 disjoint concepts whose message agent emits the same subject. Assert no two published commits share a subject — one concept must be re-generated with a distinct subject or rescued. This test would fail on the pre-fix code (where both concepts pass the stale dedupe check) and passes on the fixed code (where the incremental cross-concept dedupe catches the collision).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Test fast-path with same-subject collision: no duplicate subjects",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -183,14 +183,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Tighten runLoopFastPath concurrency-safety comment",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Update the concurrency-safety comment in runLoopFastPath (decompose.go ~745-749) to accurately account for EditMessage (now deferred to the serial publish loop, serialized per FR-E4) and cross-concept dedupe (now checked incrementally in the serial publish loop, restoring US7/FR32). The current comment only reasons about the .git/index and is silent on these two hazards — the blind spot that allowed both bugs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Update concurrency-safety comment for EditMessage and dedupe",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S2",
