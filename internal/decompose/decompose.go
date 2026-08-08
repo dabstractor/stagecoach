@@ -437,6 +437,29 @@ func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD st
 // It returns the ordered []CommitResult (oldest first) + the parallel []ChainEntry (for resolveArbiter).
 // On any error it returns the PARTIAL commits that already landed (0..i-1) — they are real and stand.
 //
+// isFileDisjoint reports whether the planner's partition is pairwise file-disjoint: no path appears
+// in more than one concept's Files (FR-M13). When true, the deterministic git-add fast-path applies
+// (no tooled stager); when false (a path is shared — a hunk-split intent), the whole run falls back to
+// the FR-M5 tooled stager for every concept. A concept with empty Files shares no path and does NOT
+// disqualify (it stages nothing — FR-M8 empty-skip downstream). Pure: no I/O, no git, no state
+// mutation; uses only the planner's guidance and a count map.
+//
+// The literal algorithm is an occurrence count with early exit: the moment any path's count exceeds 1
+// (across concepts OR within one concept's Files — intra-concept duplicate ⇒ count 2 ⇒ false) the
+// partition is disqualified. S4's Decompose dispatch calls this gate; S1 just defines it.
+func isFileDisjoint(concepts []prompt.PlannerCommit) bool {
+	seen := make(map[string]int)
+	for _, c := range concepts {
+		for _, p := range c.Files {
+			seen[p]++
+			if seen[p] > 1 {
+				return false // a path is shared (hunk-split intent) ⇒ disqualify the whole run
+			}
+		}
+	}
+	return true
+}
+
 // FR-M1c FREEZE ENFORCEMENT: after each staging step (invokeStagerRetry → freezeSnapshot → tree[i]),
 // runLoop verifies tree[i] is a content-subset of T_start (only paths present in T_start, with T_start's
 // blob content) via verifyFreezeSubset. The orchestrator owns the freeze boundary — the external stager

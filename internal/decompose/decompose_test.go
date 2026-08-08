@@ -856,7 +856,7 @@ func TestDecompose_HunkSplitAcrossConcepts(t *testing.T) {
 
 	dcmWriteFile(t, repo, "store.py", base)
 	dcmStageFile(t, repo, "store.py")
-	dcmCommitRaw(t, repo, "initial") // born repo; HEAD.tree == base
+	dcmCommitRaw(t, repo, "initial")          // born repo; HEAD.tree == base
 	dcmWriteFile(t, repo, "store.py", tStart) // dirty, un-staged → triggers decompose
 
 	// Planner splits store.py across two concepts (FR-M3: "a single file split across two concepts").
@@ -2923,5 +2923,52 @@ func TestDecompose_StagedIndex_Commits1Bypasses(t *testing.T) {
 	}
 	if dcmLogCount(t, repo) != 1 {
 		t.Fatalf("commit count = %d, want 1", dcmLogCount(t, repo))
+	}
+}
+
+// TestIsFileDisjoint covers the FR-M13 set-membership gate (isFileDisjoint). It is PURE — no git, no
+// fixtures, no Deps — just []prompt.PlannerCommit literals and a bool assertion. The matrix pins the
+// exact disjointness contract before the downstream fast-path (S4 dispatch) depends on it: disjoint /
+// empty-Files / single-concept / empty-slice ⇒ true; any shared path (cross-concept) or an
+// intra-concept duplicate (the literal occurrence-count algorithm counts both) ⇒ false.
+func TestIsFileDisjoint(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []prompt.PlannerCommit
+		want bool
+	}{
+		{"empty slice", nil, true}, // vacuous — nothing to share
+		{"single concept", []prompt.PlannerCommit{{Files: []string{"a.go", "b.go"}}}, true},
+		{"pairwise disjoint 3 concepts", []prompt.PlannerCommit{
+			{Files: []string{"a.go"}},
+			{Files: []string{"b.go", "c.go"}},
+			{Files: []string{"d.go"}},
+		}, true},
+		{"empty-Files concept among disjoint", []prompt.PlannerCommit{
+			{Files: []string{"a.go"}},
+			{Files: nil},
+			{Files: []string{"b.go"}},
+		}, true},
+		{"all empty Files", []prompt.PlannerCommit{{Files: nil}, {Files: []string{}}}, true},
+		{"shared path two concepts", []prompt.PlannerCommit{
+			{Files: []string{"a.go", "shared.go"}},
+			{Files: []string{"shared.go", "b.go"}},
+		}, false},
+		{"shared path across three concepts", []prompt.PlannerCommit{
+			{Files: []string{"x.go"}},
+			{Files: []string{"x.go"}},
+			{Files: []string{"x.go"}},
+		}, false},
+		{"intra-concept duplicate disqualifies (literal count)", []prompt.PlannerCommit{
+			{Files: []string{"a.go", "a.go"}},
+		}, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isFileDisjoint(tc.in); got != tc.want {
+				t.Errorf("isFileDisjoint(%+v) = %v; want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
