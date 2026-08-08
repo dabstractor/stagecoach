@@ -231,8 +231,17 @@ stagecoach --single
 
 > [!NOTE]
 > `--reasoning` is provider-dependent: it engages deeper reasoning for **pi** (`--thinking`) and
-> **claude** (`--effort`). Other providers treat it as a graceful no-op (no error) per FR-R6. It
-> applies to any role via `--<role>-reasoning` or `[role.*] reasoning`.
+> **claude** (`--effort`). It is a **no-op** for **agy** and **cursor** — those two bake the reasoning
+> level into the *model name* (agy's `(Low)/(Medium)/(High)` suffix, cursor's `-none/-low/-medium/-high`
+> suffix), so the reasoning dial is the model you pick, not a flag. Other providers treat `--reasoning`
+> as a graceful no-op (no error) per FR-R6. It applies to any role via `--<role>-reasoning` or
+> `[role.*] reasoning`.
+>
+> **Environment variables pass through to the agent.** stagecoach always runs the provider CLI with
+> your shell environment intact (its own `STAGECOACH_*` vars layer on top), so anything the agent reads
+> works unchanged — e.g. point `claude` at a z.ai OpenAI-compatible endpoint:
+> `ANTHROPIC_BASE_URL=https://… stagecoach --provider claude --model sonnet`. The generated config
+> template also lists the `STAGECOACH_*` vars stagecoach itself reads.
 
 See [How Stagecoach works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
 

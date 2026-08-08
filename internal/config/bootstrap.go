@@ -200,6 +200,14 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("# slash-prefix (e.g. model = \"zai/glm-5.2\"). A bare model (no '/') on pi is a config\n")
 		b.WriteString("# error (FR-R5b).\n")
 	}
+	// agy and cursor-agent bake the reasoning level into the MODEL NAME (agy's "(Low)/(Medium)/(High)"
+	// suffix; cursor's "-none/-low/-medium" suffix). For them the `reasoning` setting is a NO-OP — the
+	// only reasoning dial is the model name. Warn the user so they don't expect --reasoning to do anything.
+	if target == "agy" || target == "cursor" {
+		b.WriteString("# NOTE: " + target + " bakes the reasoning level into the MODEL NAME — agy's \"(Low)/(Medium)/(High)\"\n")
+		b.WriteString("# suffix or cursor's \"-none/-low/-medium/-high\" suffix. The `reasoning` setting is a NO-OP for this\n")
+		b.WriteString("# provider: pick the reasoning tier by choosing the model (e.g. gemini-3.6-flash-low).\n")
+	}
 
 	// planner — inherits [defaults] provider
 	writeRoleBlock(&b, "planner", "", models["planner"], "")
@@ -246,6 +254,9 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		if piCommented {
 			b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
 			b.WriteString("# e.g. model = \"zai/gpt-5.4\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
+		}
+		if name == "agy" || name == "cursor" {
+			b.WriteString("# NOTE: " + name + " bakes reasoning into the MODEL NAME (suffix); the `reasoning` setting is a no-op here — pick the tier via the model.\n")
 		}
 		writeCommentedRoleBlock(&b, "planner", name, other["planner"])
 		writeCommentedRoleBlock(&b, "stager", name, other["stager"])
