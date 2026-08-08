@@ -397,6 +397,15 @@ func builtinCodex() Manifest {
 			"--sandbox", "read-only", // read-only, never-mutate profile
 			"--ephemeral", // REVISED #2: run without persisting session files (replaces invalid --ask-for-approval)
 		},
+		// TOOLED (stager) — VERIFIED 2026-07-09 (codex-cli 0.143.0) end-to-end: stages exactly the requested
+		// paths. codex's `workspace-write` sandbox keeps `.git` READ-ONLY (git add can't take the index lock),
+		// so staging requires `danger-full-access`. exec mode defaults approval to "never" (non-interactive).
+		// §12.7.1 UNSCOPED — same model as pi/agy: the §17.6 stager prompt + the HEAD-movement guard +
+		// verifyFreezeSubset are the safety net, not sandbox-scoping. codex auto-uses its cwd as the workdir
+		// (verified: "workdir: <cwd>"), so NO TooledRepoDirFlag.
+		TooledFlags: []string{
+			"--sandbox", "danger-full-access",
+		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
 		// PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent in §12.7).

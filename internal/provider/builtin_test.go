@@ -113,6 +113,7 @@ default_model = ""
 system_prompt_flag = ""
 provider_flag = ""
 bare_flags = ["--sandbox", "read-only", "--ephemeral"]   # REVISED #2: dropped --ask-for-approval; added --ephemeral
+tooled_flags = ["--sandbox", "danger-full-access"]   # stager (verified 2026-07-09, codex-cli 0.143.0); workspace-write blocks .git so full-access is required (unscoped)
 output = "raw"
 strip_code_fence = true
 `

@@ -70,7 +70,8 @@ provider_flag = ""                  # NON-NIL empty: codex has no sub-provider c
 # default_provider is ABSENT (nil) — codex has no sub-provider, so the key is omitted.
 
 # --- bare mode (§12.7.1: read-only constraint) ---
-bare_flags = ["--sandbox", "read-only", "--ephemeral"]  # sandbox forbids writes/network mutations
+bare_flags = ["--sandbox", "read-only", "--ephemeral"]
+tooled_flags = ["--sandbox", "danger-full-access"]   # stager (verified 2026-07-09); workspace-write blocks .git so full-access (unscoped)  # sandbox forbids writes/network mutations
                                     # (read-only, never-mutate). --ephemeral: REV#2 — run without
                                     # persisting session files (replaces invalid --ask-for-approval).
 
