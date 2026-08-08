@@ -194,20 +194,26 @@ func builtinClaude() Manifest {
 //
 // §12.5.1.1 status (2026-07-08, v1.1.0): item 1 (issue #76, non-TTY stdout drop) NO LONGER REPRODUCES —
 // live stdin runs from a non-TTY return stdout correctly (PONG, full commit messages). Items 2 (`--model`)
-// and 3 (no system-prompt flag) CLEARED. Item 4 (tooled/stager flags) remains OPEN, so agy still cannot
-// serve as a stager and stays Experimental=true until it clears.
+// and 3 (no system-prompt flag) CLEARED. Item 4 (tooled/stager flags) is VERIFIED 2026-07-09 (agy
+// v1.1.11): `--mode accept-edits --dangerously-skip-permissions` + stdin stages exactly the requested
+// paths end-to-end. agy is therefore STAGER-CAPABLE (TooledFlags non-nil); it stays Experimental=true
+// pending a full --help re-verification pass.
 //
-// STAGER: TooledFlags is intentionally nil — agy CANNOT serve as a stager until §12.5.1.1 item 4 (the
-// scoped, non-interactive, git-scoped tool combo) is verified. RenderTooled errors on nil tooled_flags.
+// STAGER: TooledFlags = ["--mode","accept-edits","--dangerously-skip-permissions"]. accept-edits is the
+// mutating counterpart of bare's --mode plan; --dangerously-skip-permissions is agy's ONLY non-
+// interactive tool auto-approve knob (no scoped allowlist — §12.7.1 UNSCOPED, same model as pi).
+// TooledRepoDirFlag = "--add-dir": agy does NOT auto-adopt its cwd as the workspace, so the stager
+// appends --add-dir <repo> (stageConcept threads deps.RepoDir).
 //
 // NOTE: (1) PrintFlag="" (NON-NIL empty — agy reads stdin; a bare -p is value-taking and breaks delivery).
 // (2) SystemPromptFlag/ProviderFlag are strPtr("") — §12.5.1 WRITES them "" (NON-NIL empty): no sys flag
 // (sys prepended, §12.2), no sub-provider. (3) DefaultModel="Gemini 3.5 Flash (Low)" (label form; verified
-// 2026-07-08). (4) Experimental=boolPtr(true) (item 4 still open). (5) BareFlags=["--mode","plan"] (the
-// v1.1.0 read-only equivalent of the removed --approval-mode default). (6) Subcommand/PromptFlag/JsonField/
-// RetryInstruction/Env/TooledFlags/ReasoningLevels are nil (absent). agy is a Gemini-CLI-lineage
-// provider (it superseded the EOL'd gemini-cli on 2026-06-18); it differs from codex/cursor in its model
-// flag (--model), delivery (stdin w/o -p), bare flag (--mode plan), default model + Experimental.
+// 2026-07-08). (4) Experimental=boolPtr(true) (full re-verification pending; item 4 is cleared). (5) BareFlags=
+// ["--mode","plan"] (the v1.1.0 read-only equivalent of the removed --approval-mode default). (6) TooledFlags
+// + TooledRepoDirFlag set (stager-capable). (7) Subcommand/PromptFlag/JsonField/RetryInstruction/Env/
+// ReasoningLevels are nil (absent). agy is a Gemini-CLI-lineage provider (it superseded the EOL'd
+// gemini-cli on 2026-06-18); it differs from codex/cursor in its model flag (--model), delivery (stdin w/o
+// -p), bare flag (--mode plan), default model + Experimental.
 //
 // CHROME-DISABLE (FR-C5, §9.28): verified vs `agy --help` (agy v1.1.0, 2026-07-08). agy exposes NO
 // per-surface chrome-disable switch for skills/extensions/context-files/MCP. --mode plan
@@ -229,10 +235,20 @@ func builtinAgy() Manifest {
 		BareFlags: []string{
 			"--mode", "plan", // read-only, never-ask profile. agy v1.1.0 has NO --approval-mode; plan = read-only (verified 2026-07-08).
 		},
-		Output:         strPtr("raw"),
-		StripCodeFence: boolPtr(true),
-		Experimental:   boolPtr(true), // §12.5.1.1 ships experimental (tooled/stager flags, item 4, still open)
-		// TooledFlags: nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
+		// TOOLED (stager) — VERIFIED 2026-07-09 (agy v1.1.11) end-to-end: stdin task + this combo stages
+		// exactly the requested paths and nothing else. `--mode accept-edits` is the mutating counterpart
+		// of `--mode plan`; `--dangerously-skip-permissions` is agy's ONLY non-interactive tool auto-approve
+		// knob (no scoped allowlist exists — §12.7.1 UNSCOPED, same safety model as pi: the §17.6 stager
+		// prompt + the HEAD-movement guard + verifyFreezeSubset are the safety net, not flag-scoping).
+		// TooledRepoDirFlag: agy does NOT auto-adopt its cwd as the workspace — it needs `--add-dir <repo>`.
+		TooledFlags: []string{
+			"--mode", "accept-edits",
+			"--dangerously-skip-permissions",
+		},
+		TooledRepoDirFlag: strPtr("--add-dir"),
+		Output:           strPtr("raw"),
+		StripCodeFence:   boolPtr(true),
+		Experimental:     boolPtr(true), // §12.5.1.1 item 4 (stager) is now VERIFIED; kept experimental pending a full --help re-verification pass.
 		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent).
 	}
 }

@@ -363,10 +363,10 @@ func TestFirstTooledProvider(t *testing.T) {
 	}{
 		{[]string{"pi", "claude"}, "pi"},      // pi is first capable (priority order)
 		{[]string{"claude", "pi"}, "pi"},      // pi still wins regardless of input order
-		{[]string{"claude", "agy"}, "claude"}, // only claude capable; agy is not
-		{[]string{"agy", "qwen-code"}, ""},    // neither agy nor qwen-code is stager-capable
+		{[]string{"claude", "agy"}, "agy"},    // agy precedes claude in preferred order (both capable now)
+		{[]string{"agy", "qwen-code"}, "agy"},  // agy is stager-capable (item 4 verified); qwen-code is not
 		{[]string{"claude"}, "claude"},        // claude alone is capable
-		{[]string{"agy"}, ""},                 // agy is NOT stager-capable (nil TooledFlags)
+		{[]string{"agy"}, "agy"},               // agy IS stager-capable (TooledFlags non-nil, post item-4 verification)
 		{[]string{"myagent"}, ""},             // user-defined never auto-selected
 		{nil, ""},                             // nothing installed
 	}

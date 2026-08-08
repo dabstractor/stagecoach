@@ -43,12 +43,20 @@
 # EXPERIMENTAL (§12.5.1.1): agy still ships experimental. The original blocker —
 #   issue #76, `agy -p` silently dropping stdout from a non-TTY — NO LONGER
 #   REPRODUCES on v1.1.0 (2026-07-08: live stdin runs return stdout correctly), and
-#   items 2 (--model) + 3 (no system-prompt flag) are cleared. agy stays experimental
-#   only because §12.5.1.1 item 4 (the tooled/stager flag combo) is still open.
+#   items 2 (--model) + 3 (no system-prompt flag) are cleared. Item 4 (the
+#   tooled/stager flag combo) is VERIFIED 2026-07-09 (agy v1.1.11): --mode accept-edits
+#   --dangerously-skip-permissions stages correctly end-to-end. agy stays experimental
+#   pending a full --help re-verification pass (item 4 itself is cleared).
 #
-# STAGER: agy cannot serve as a stager — TooledFlags is intentionally nil.
-#   RenderTooled errors on nil tooled_flags. This won't change until §12.5.1.1
-#   item 4 (the scoped, non-interactive, git-scoped tool combo) is verified.
+# STAGER (VERIFIED 2026-07-09, agy v1.1.11): agy CAN serve as a stager. The combo is
+#   --mode accept-edits --dangerously-skip-permissions, delivered via stdin. accept-edits is the
+#   mutating counterpart of bare's --mode plan; --dangerously-skip-permissions is agy's ONLY non-
+#   interactive tool auto-approve knob (there is no scoped allowlist). Verified end-to-end: a stdin
+#   stager task stages exactly the requested paths and leaves the rest alone.
+#   §12.7.1 category: UNSCOPED (same model as pi) — the §17.6 stager prompt + the HEAD-movement guard
+#   + verifyFreezeSubset are the safety net, not flag-scoping.
+#   agy does NOT auto-adopt its cwd as the workspace, so the stager also appends --add-dir <repo>
+#   (tooled_repo_dir_flag); stagecoach threads the run's repo path.
 #
 # TOOLS-DISABLE CATEGORY (§12.7.1): READ-ONLY CONSTRAINT — agy has NO global
 #   tool-disable switch; `--mode plan` constrains it to a read-only, never-ask
@@ -95,6 +103,13 @@ bare_flags = [                   # appended VERBATIM to enforce a read-only, nev
   "--mode", "plan",              # agy v1.1.0 has NO --approval-mode; plan = read-only (verified 2026-07-08).
 ]
 
+# --- tooled mode (§11.5/§12.1: the STAGER role; verified 2026-07-09, agy v1.1.11) ---
+tooled_flags = [                 # appended VERBATIM for the stager (tools on, mutating, non-interactive).
+  "--mode", "accept-edits",      # the mutating counterpart of bare's --mode plan.
+  "--dangerously-skip-permissions", # agy's ONLY non-interactive tool auto-approve knob (no scoped allowlist).
+]
+tooled_repo_dir_flag = "--add-dir"  # agy does NOT auto-adopt cwd; the stager appends --add-dir <repo>.
+
 # --- output ---
 output = "raw"                   # cleaned stdout IS the commit message (DEFAULT).
 strip_code_fence = true          # strip one layer of ``` / ~~~ if the agent wraps the output.
@@ -103,6 +118,5 @@ strip_code_fence = true          # strip one layer of ``` / ~~~ if the agent wra
 experimental = true              # ships experimental (§12.5.1.1; only item 4 — tooled/stager flags — remains open).
 
 # --- absent fields (PRD §12.1) ---
-# tooled_flags, subcommand, prompt_flag, default_provider, json_field, retry_instruction,
-# and [env] are NOT set for agy and therefore omitted above. tooled_flags is intentionally
-# nil — agy cannot serve as a stager until §12.5.1.1 item 4 is verified.
+# subcommand, prompt_flag, default_provider, json_field, retry_instruction,
+# and [env] are NOT set for agy and therefore omitted above.

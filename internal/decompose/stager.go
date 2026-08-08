@@ -108,6 +108,13 @@ func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) 
 		return fmt.Errorf("%w: render: %v", ErrStagerFailed, rerr)
 	}
 
+	// Some tooled agents do not auto-adopt their cwd as the workspace (agy needs `--add-dir <repo>`).
+	// When the stager manifest declares TooledRepoDirFlag, append [flag, deps.RepoDir] so the agent
+	// operates on THIS repo. No-op for providers that auto-adopt cwd (nil flag) and when RepoDir is empty.
+	if rf := deps.Roles.Stager.Resolve().TooledRepoDirFlag; rf != nil && *rf != "" && deps.RepoDir != "" {
+		spec.Args = append(spec.Args, *rf, deps.RepoDir)
+	}
+
 	// 4. Execute once. NO retry (the orchestrator owns FR-M8); NO parse (no JSON contract).
 	if _, _, execErr := provider.Execute(ctx, *spec, stagerTimeout, deps.Verbose); execErr != nil {
 		return fmt.Errorf("%w: %w", ErrStagerFailed, execErr)

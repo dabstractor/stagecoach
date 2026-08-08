@@ -490,6 +490,7 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 		Verbose:  verbose,
 		Out:      stderr, // the loop prints §18.3 rescue + §13.5 CAS here (P3.M4.T1.S2)
 		Excludes: excludes,
+		RepoDir:  repoDir, // tooled providers that don't auto-adopt cwd (agy: --add-dir) need the repo path
 	}
 
 	res, derr := decompose.Decompose(ctx, deps)

@@ -152,6 +152,11 @@ provider_flag = ""
 bare_flags = [
   "--mode", "plan",
 ]
+tooled_flags = [
+  "--mode", "accept-edits",
+  "--dangerously-skip-permissions",
+]
+tooled_repo_dir_flag = "--add-dir"
 output = "raw"
 strip_code_fence = true
 experimental = true
@@ -637,7 +642,7 @@ func TestBuiltinManifests_RenderedCommand_Cursor(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 17: AgyFields — every agy field asserted (experimental=true, nil tooled_flags)
+// Test 17: AgyFields — every agy field asserted (experimental=true; stager-capable post item-4 verification)
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_AgyFields(t *testing.T) {
@@ -655,6 +660,13 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 	if !reflect.DeepEqual(m.BareFlags, wantBare) {
 		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
 	}
+	// TooledFlags: STAGER-CAPABLE (verified 2026-07-09, agy v1.1.11) — accept-edits + auto-approve.
+	wantTooled := []string{"--mode", "accept-edits", "--dangerously-skip-permissions"}
+	if !reflect.DeepEqual(m.TooledFlags, wantTooled) {
+		t.Errorf("TooledFlags = %v, want %v", m.TooledFlags, wantTooled)
+	}
+	// TooledRepoDirFlag: agy does NOT auto-adopt cwd — the stager appends --add-dir <repo>.
+	assertStr(t, "TooledRepoDirFlag", m.TooledRepoDirFlag, "--add-dir")
 	assertStr(t, "Output", m.Output, "raw")
 	if m.StripCodeFence == nil || *m.StripCodeFence != true {
 		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
@@ -662,10 +674,6 @@ func TestBuiltinManifests_AgyFields(t *testing.T) {
 	// Experimental: NON-NIL true (ships experimental per §12.5.1.1)
 	if m.Experimental == nil || *m.Experimental != true {
 		t.Errorf("Experimental = %v, want non-nil true", m.Experimental)
-	}
-	// TooledFlags: nil — agy cannot stager until §12.5.1.1 item 4 is verified
-	if m.TooledFlags != nil {
-		t.Errorf("TooledFlags = %v, want nil", m.TooledFlags)
 	}
 	// Absent → nil
 	if m.Subcommand != nil {

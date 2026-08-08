@@ -135,16 +135,18 @@ func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback(t *testing.T) {
-	// Stager is set to agy (TooledFlags nil → cannot stage); fallback to claude (first tooled-capable
-	// installed after agy). Pi is NOT installed in this fixture (so fallback skips it). Claude is
+	// Stager is set to opencode (TooledFlags nil → cannot stage); fallback to claude (the first
+	// tooled-capable INSTALLED provider — pi/agy are not installed in this fixture). Claude is
 	// single-backend (ProviderFlag="") so the FR-R5b guard does not fire on the fallback model.
-	reg := bogusRegistry(t, []string{"agy", "claude"})
+	// (agy is stager-capable now, so it is deliberately NOT installed — otherwise the fallback would
+	// land on agy, which precedes claude in the preferred order.)
+	reg := bogusRegistry(t, []string{"opencode", "claude"})
 	wantClaude := claudeManifest(t)
 
 	cfg := config.Config{
-		Provider: "agy",
+		Provider: "opencode",
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "agy", Model: "agy-2.5-pro"},
+			"stager": {Provider: "opencode", Model: "oc-model"},
 		},
 	}
 
@@ -172,11 +174,11 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 		t.Error("Stager.TooledFlags is empty after fallback, want non-empty")
 	}
 
-	// Other roles should be agy (global default).
+	// Other roles should be opencode (global default).
 	for _, role := range []string{"planner", "message", "arbiter"} {
 		rc := roleModel(rmodels, role)
-		if rc.Provider != "agy" {
-			t.Errorf("role %q provider = %q, want agy", role, rc.Provider)
+		if rc.Provider != "opencode" {
+			t.Errorf("role %q provider = %q, want opencode", role, rc.Provider)
 		}
 	}
 }
@@ -186,15 +188,15 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback_PiNotInstalled_FallsToClaude(t *testing.T) {
-	// Pi NOT installed; agy is the global (not stager-capable); claude IS installed and capable.
-	// Stager set to agy → fallback should go to claude (pi is not installed).
-	reg := bogusRegistry(t, []string{"agy", "claude"})
+	// Pi NOT installed; opencode is the global (not stager-capable); claude IS installed and capable.
+	// Stager set to opencode → fallback should go to claude (pi + agy are not installed).
+	reg := bogusRegistry(t, []string{"opencode", "claude"})
 	wantClaude := claudeManifest(t)
 
 	cfg := config.Config{
-		Provider: "agy",
+		Provider: "opencode",
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "agy"},
+			"stager": {Provider: "opencode"},
 		},
 	}
 
@@ -220,7 +222,7 @@ func TestResolveRoles_StagerFallback_PiNotInstalled_FallsToClaude(t *testing.T) 
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
-	// Stager is set to agy (TooledFlags nil → cannot stage); fallback to pi (first
+	// Stager is set to opencode (TooledFlags nil → cannot stage); fallback to pi (first
 	// tooled-capable installed). Pi is multi-provider (ProviderFlag="--provider").
 	// Tests two sub-cases via subtests:
 	//   - bare model from the old provider's config → cleared (invalid on pi)
@@ -233,20 +235,20 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 	}{
 		{
 			name:     "bare_model_from_old_provider",
-			stagerRC: config.RoleConfig{Provider: "agy", Model: "agy-2.5-pro"},
+			stagerRC: config.RoleConfig{Provider: "opencode", Model: "oc-model"},
 		},
 		{
 			name:     "no_explicit_model",
-			stagerRC: config.RoleConfig{Provider: "agy"},
+			stagerRC: config.RoleConfig{Provider: "opencode"},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			reg := bogusRegistry(t, []string{"agy", "pi"})
+			reg := bogusRegistry(t, []string{"opencode", "pi"})
 
 			cfg := config.Config{
-				Provider: "agy",
+				Provider: "opencode",
 				Roles: map[string]config.RoleConfig{
 					"stager": tc.stagerRC,
 				},
@@ -271,11 +273,11 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 				t.Errorf("Stager model = %q, want empty string (bare model cleared for multi-provider pi)", rmodels.Stager.Model)
 			}
 
-			// Other roles should remain agy (global default).
+			// Other roles should remain opencode (global default).
 			for _, role := range []string{"planner", "message", "arbiter"} {
 				rc := roleModel(rmodels, role)
-				if rc.Provider != "agy" {
-					t.Errorf("role %q provider = %q, want agy", role, rc.Provider)
+				if rc.Provider != "opencode" {
+					t.Errorf("role %q provider = %q, want opencode", role, rc.Provider)
 				}
 			}
 		})
@@ -287,13 +289,13 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveRoles_NoStagerCapable(t *testing.T) {
-	// Stager set to agy (not capable); pi and claude NOT installed → no fallback possible.
-	// Only agy is installed (via Command="go" override); all others have bogus commands.
-	reg := bogusRegistry(t, []string{"agy"})
+	// Stager set to opencode (not capable); pi, agy, and claude NOT installed → no fallback possible.
+	// Only opencode is installed (via Command="go" override); all others have bogus commands.
+	reg := bogusRegistry(t, []string{"opencode"})
 
 	cfg := config.Config{
 		Roles: map[string]config.RoleConfig{
-			"stager": {Provider: "agy"},
+			"stager": {Provider: "opencode"},
 		},
 	}
 

@@ -75,6 +75,13 @@ type Manifest struct {
 	// BareFlags when mode=="tooled" in Render.
 	TooledFlags []string `toml:"tooled_flags"`
 
+	// TooledRepoDirFlag is the flag a tooled provider needs to add the run's repo as an explicit
+	// workspace dir (non-nil non-empty => the stager appends [flag, repoDir] after the tooled flags).
+	// Most agents auto-adopt their cwd as the workspace (nil here); agy does NOT — it requires
+	// `--add-dir <repo>` to operate on the repo even when its cwd is already the repo. nil => no
+	// repo-dir arg is appended (the default for every provider but agy).
+	TooledRepoDirFlag *string `toml:"tooled_repo_dir_flag"`
+
 	// --- experimental (§12.7.2, §12.5.1) ---
 	// true => provider ships from docs/issue-tracker research, not a verified --help.
 	// `providers list` marks experimental providers distinctly.

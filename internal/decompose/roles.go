@@ -59,6 +59,12 @@ type Deps struct {
 	Roles    RoleManifests
 	Verbose  *ui.Verbose
 
+	// RepoDir is the absolute path of the repo the run operates on. The stager threads it to tooled
+	// providers that do not auto-adopt their cwd as the workspace (agy needs `--add-dir <RepoDir>`);
+	// empty ⇒ no repo-dir arg is appended. Set by the CLI (os.Getwd()); pkg/stagecoach and tests may
+	// leave it empty when the stager seam is injected (no real tooled agent runs).
+	RepoDir string
+
 	Excludes []string // resolved user exclude pathspecs (from exclude.ResolveExcludePathspecs); nil ⇒ none
 
 	// Out is where the loop prints the §18.3 multi-commit rescue + the §13.5 CAS message (stderr in
