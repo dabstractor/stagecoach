@@ -17,27 +17,23 @@ const DefaultModelsVerificationDate = "2026-07-09"
 // FR-D3 rationale: the message tier is the cheapest / free-tier-eligible model (highest-volume role;
 // many users on free tiers).
 //
-// Per-provider status (update on re-verification):
-//   pi       — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — PRD baseline 2026-07 (bare; sub-provider set
-//              separately via --provider; verify pi's OpenAI-routing sub-provider, FR-D4 note).
-//   opencode — openai/gpt-5.4 / -mini / -nano — PRD baseline 2026-07 (provider-prefixed; verify upstream).
-//   cursor   — gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano — UNVERIFIED: PRD gives tier names (flagship/mid/
-//              nano); resolved to best-guess OpenAI tokens (cursor is OpenAI-backed). VERIFY `agent --help`.
-//   agy      — "Gemini 3.5 Flash (High)" / "Gemini 3.5 Flash (Medium)" / "Gemini 3.5 Flash (Low)" —
-//              refreshed 2026-07-03 per FR-D5 vs live `agy models` + -p runs. agy's --model takes the
-//              DISPLAY LABEL verbatim (reasoning baked into the "(Low/Medium/High)" suffix, NOT a separate
-//              flag); API-style ids (gemini-3.5-flash) are silently ignored → fallback to agy's default.
-//   qwen-code — qwen3-coder-plus / "" (cannot stager) / qwen3-coder-flash / qwen3-coder-plus — # TO CONFIRM
-//               per FR-D5 (Alibaba Qwen3-Coder via DashScope; no live CLI lookup this pass).
-//   codex    — gpt-5.1-codex-max / gpt-5.1-codex-mini / gpt-5.4-nano — PRD baseline 2026-07.
-//   claude   — opus / sonnet / haiku — PRD baseline 2026-07 (bare aliases; opus=4.8, sonnet=5 per FR-D4).
+// Per-provider status (fast-by-default; verified 2026-07-09):
+//   pi       — BLANK in the written config (multi-backend; user supplies inference/model prefix, FR-R5b).
+//   opencode — BLANK in the written config (plan-/backend-dependent provider-prefixed models).
+//   claude   — haiku / sonnet(stager) / haiku — bare aliases; fast-by-default, stager mid.
+//   agy      — "Gemini 3.5 Flash (Low)" / "(Medium)"(stager) / "(Low)" — display LABEL verbatim
+//              (reasoning baked into the suffix).
+//   cursor   — composer-2.5-fast / composer-2.5(stager) — composer-2.5* is available on ALL plans
+//              (incl. free); cursor model names are otherwise plan-entitlement-dependent.
+//   codex    — gpt-5.4-nano / gpt-5.1-codex-mini(stager) — fast-by-default, stager mid.
+//   qwen-code — qwen3-coder-flash / ""(stager) — # TO CONFIRM per FR-D5.
 //
 // Stager-capability basis: a provider's stager cell is non-empty IFF its built-in manifest
-// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07-02 that is ONLY pi + claude.
-// agy/opencode/codex/cursor/qwen-code have stager="" (nil TooledFlags ⇒ RenderTooled errors
-// ⇒ cannot be stager). The bootstrap (P1.M4.T2) applies the FR-D4 fallback (next TooledFlags-capable
-// provider) on stager=="". VERIFY the TooledFlags state in builtin.go at implementation — if a provider
-// has since gained TooledFlags, give it the mid-tier stager model.
+// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07-09 that is pi, claude, agy,
+// codex, cursor, AND opencode (all verified stager-capable this revision). ONLY qwen-code has
+// stager="" (nil TooledFlags). pi/opencode ALSO ship a BLANK written stager model (power-user), but
+// their TABLE cell is a non-empty placeholder so StagerFallback's capability lookup treats them as
+// capable; the bootstrap blanks the written [role.*] models.
 
 // RoleModelDefaults is the PRD §9.16 FR-D4 per-provider × per-role default-model table, keyed
 // provider → role → model. The four roles are planner/stager/message/arbiter (FR-R1). A stager value
