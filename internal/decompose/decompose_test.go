@@ -4468,3 +4468,123 @@ func TestRunLoopFastPath_StartOfRunFreezeExcludesSentinel(t *testing.T) {
 		t.Errorf("status = %q, want it to contain 'sentinel.txt' (post-freeze change survives in the worktree)", status)
 	}
 }
+
+// TestRunLoopFastPath_CrossConceptDedupe is the BUG-002 regression test. The file-disjoint fast-path
+// launches all N message generations CONCURRENTLY before any publish, so each generateMessageCore
+// could only see the pre-run history snapshot — two disjoint concepts whose message stub emitted the
+// SAME subject both passed their per-concept dedupe and both published (violating US7/FR30-33). The fix
+// (seenSubjects accumulator in the serial publish loop) closes that gap: the second colliding concept
+// is re-generated (and rescued if it still collides).
+//
+// This test sets up exactly that scenario — two disjoint concepts (a.txt, b.txt) whose stub emits the
+// identical subject — and asserts the no-duplicate-subjects CONTRACT across BOTH valid outcomes:
+//   - rescue: a *DecomposeRescueError is returned with len(Commits)==1 (concept 0 published, concept 1
+//     rescued after the single-response stub keeps emitting the colliding subject).
+//   - success: err==nil with len(commits)==2 AND distinct subjects (a future stateful stub could let
+//     regen produce a distinct subject).
+//
+// Either way, NO two published commits share a subject. cfg.Edit=false isolates BUG-002 from BUG-001.
+func TestRunLoopFastPath_CrossConceptDedupe(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	// Seed a base commit with two disjoint files, then modify both disjointly in the working tree.
+	dcmWriteFile(t, repo, "a.txt", "alpha\n")
+	dcmWriteFile(t, repo, "b.txt", "bravo\n")
+	dcmRunGit(t, repo, "add", "a.txt", "b.txt")
+	dcmCommitRaw(t, repo, "initial") // BORN repo → baseTree = HEAD^{tree}
+	// Disjoint working-tree change set: modify each file independently (the FR-M13 disjoint partition).
+	dcmWriteFile(t, repo, "a.txt", "alpha 2\n")
+	dcmWriteFile(t, repo, "b.txt", "bravo 2\n")
+
+	g := git.New(repo)
+	ctx := context.Background()
+
+	// Mirror what Decompose does internally: capture baseTree (HEAD^{tree}), then FreezeWorkingTree to
+	// capture T_start (the full working-tree change set) AND reset the index back to baseTree so the
+	// per-concept sweep starts clean.
+	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}")
+	tStart, err := g.FreezeWorkingTree(ctx, baseTree)
+	if err != nil {
+		t.Fatalf("FreezeWorkingTree: %v", err)
+	}
+	preRunHEAD := dcmHeadSHA(t, repo)
+
+	// Message stub: BOTH concepts emit the SAME subject ("chore: update thing"). Each concept's diff
+	// names a distinct file, so the input-derived stub routes each to its rule — but the rule's msg is
+	// identical. This is the BUG-002 trigger: two disjoint concepts, same emitted subject.
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{substr: "a.txt", msg: "chore: update thing"},
+		{substr: "b.txt", msg: "chore: update thing"},
+	})
+
+	cfg := config.Defaults()
+	cfg.Edit = false            // isolate BUG-002 from BUG-001 (no EditMessage in the serial loop)
+	cfg.MaxDuplicateRetries = 0 // force immediate rescue on the single-response stub: regen emits the
+	// same subject → generateMessageCore's loop (attempts 0..0) exhausts
+	// without a distinct subject → *RescueError. Simpler/faster; still
+	// fully verifies the no-duplicate-subjects guarantee.
+
+	roles := RoleManifests{Message: messageM}
+	deps := dcmDepsWithConfig(t, repo, roles, cfg)
+
+	concepts := []prompt.PlannerCommit{
+		{Title: "c1", Files: []string{"a.txt"}},
+		{Title: "c2", Files: []string{"b.txt"}},
+	}
+
+	commits, _, err := runLoopFastPath(ctx, deps, concepts, baseTree, tStart, preRunHEAD, false)
+
+	// Collect the published-commit subjects from whichever outcome occurred (rescue → err.Commits;
+	// success → commits). The CONTRACT is invariant across both: no two published commits share a subject.
+	var subjects []string
+	var dre *DecomposeRescueError
+	switch {
+	case errors.As(err, &dre):
+		subjects = commitSubjects(dre.Commits)
+	case err == nil:
+		subjects = commitSubjects(commits)
+	default:
+		t.Fatalf("runLoopFastPath: unexpected error: %v", err)
+	}
+
+	// HARD GATE — the BUG-002 invariant: no two published commits share a subject.
+	seen := map[string]bool{}
+	for _, s := range subjects {
+		if seen[s] {
+			t.Errorf("duplicate published subject %q (US7/FR30-33 violated)", s)
+		}
+		seen[s] = true
+	}
+
+	// Assert exactly ONE of the two valid outcomes.
+	if dre != nil {
+		// Rescue case: concept 0 published, concept 1 rescued (the single-response stub keeps emitting
+		// the colliding subject, so regen can't produce a distinct one).
+		if len(dre.Commits) != 1 {
+			t.Errorf("rescue: len(Commits) = %d, want 1 (concept 0 published, concept 1 rescued)", len(dre.Commits))
+		}
+		if dre.Index == 0 {
+			t.Errorf("rescue: Index = 0, want the COLLIDING concept (concept 1)")
+		}
+	} else {
+		// Success case: both published with DISTINCT subjects (regen produced a distinct subject).
+		if len(commits) != 2 {
+			t.Errorf("success: len(commits) = %d, want 2", len(commits))
+		}
+		if len(commits) == 2 && commits[0].Subject == commits[1].Subject {
+			t.Errorf("success: both published the same subject %q (dedupe should have prevented this)", commits[0].Subject)
+		}
+	}
+}
+
+// commitSubjects extracts the Subject from each CommitResult in order. Used by the BUG-002 regression
+// test to collect published-commit subjects from either the success path (commits) or the rescue path
+// (DecomposeRescueError.Commits) for the no-duplicate-subjects assertion.
+func commitSubjects(cs []CommitResult) []string {
+	out := make([]string, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, c.Subject)
+	}
+	return out
+}

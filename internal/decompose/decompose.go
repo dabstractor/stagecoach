@@ -756,6 +756,16 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 		deps.Verbose.VerboseWarn(fmt.Sprintf("fast-path: launched %d concurrent message generations", len(staged)))
 	}
 
+	// BUG-002: cross-concept dedupe accumulator. The fast-path launches all N message generations
+	// concurrently BEFORE any publish (above), so each goroutine's generateMessageCore could only see
+	// the PRE-RUN history snapshot — two disjoint concepts with the same emitted subject both passed
+	// their per-concept dedupe. This growing set (pre-run history + each accepted concept's subject,
+	// appended in the serial loop below) closes that sibling-collision gap (US7/FR30-33). The history-
+	// fetch error is intentionally ignored: a transient git failure degrades dedupe to "no history"
+	// (only sibling-collision detection weakens; never a false positive), matching each goroutine's
+	// own best-effort fetch.
+	seenSubjects, _ := messageRecentSubjects(ctx, deps.Git, isUnborn)
+
 	// FR-M7: PUBLISH STRICTLY IN CAS ORDER (concept order). The publish loop is the serialization
 	// point: commit[i] parent = prevSHA (preRunHEAD/root for i=0, newSHA[i-1] otherwise); each CAS
 	// requires HEAD == prevSHA. prevSHA is AUTHORITATIVE for the rescue parent (see findings §5 —
@@ -795,6 +805,58 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 			drainMsgs(inflight[i+1:])
 			return commits, nil, res.err // HARD (ErrMessageFailed-wrapped infra) — propagate
 		}
+
+		// BUG-002 fix: cross-concept dedupe. The fast-path generated all N messages concurrently
+		// BEFORE any publish, so the per-concept generateMessageCore could only see pre-run history —
+		// two siblings with the same emitted subject both passed. This serial-loop check judges the
+		// GENERATED subject against a GROWING set (pre-run history + already-decided siblings). On
+		// collision, re-generate via generateMessageCore with seedRejections=seenSubjects so the LLM
+		// is told which subjects to avoid; if regen fails (rescue/hard) the error is handled IDENTICALLY
+		// to res.err above; if it STILL collides, rescue (concept[i] abandoned, commits 0..i-1 stand,
+		// FR-M12). Placed BEFORE EditMessage so it judges the pre-edit subject (FR-E3: edited messages
+		// bypass the re-check).
+		subject := generate.ExtractSubject(res.msg)
+		if generate.IsDuplicate(subject, seenSubjects) {
+			regenerated, regErr := generateMessageCore(ctx, deps, sc.prevTree, sc.tree, seenSubjects)
+			if regErr != nil {
+				// Re-generation failure — mirror the res.err handler EXACTLY (same exit codes + partial-
+				// commit semantics). prevSHA is authoritative at publish time (the concurrent regen may
+				// carry a stale ParentSHA).
+				var re *generate.RescueError
+				if errors.As(regErr, &re) {
+					title := ""
+					if sc.idx < len(concepts) {
+						title = concepts[sc.idx].Title
+					}
+					fixed := *re
+					fixed.ParentSHA = prevSHA
+					if deps.Out != nil {
+						fmt.Fprintln(deps.Out, generate.FormatRescueMulti(fixed.TreeSHA, fixed.ParentSHA, fixed.Candidate, title, sc.idx, len(concepts)))
+					}
+					drainMsgs(inflight[i+1:])
+					return commits, nil, &DecomposeRescueError{Rescue: &fixed, ConceptTitle: title, Index: sc.idx, Count: len(concepts), Commits: commits}
+				}
+				drainMsgs(inflight[i+1:])
+				return commits, nil, regErr
+			}
+			res.msg = regenerated
+			subject = generate.ExtractSubject(res.msg)
+			if generate.IsDuplicate(subject, seenSubjects) {
+				// Still a duplicate after re-generation (generateMessageCore's loop exhausted without a
+				// distinct subject — belt-and-suspenders for a stub/LLM that ignores seedRejections).
+				// Rescue: concept[i] abandoned, commits 0..i-1 stand (FR-M12).
+				title := ""
+				if sc.idx < len(concepts) {
+					title = concepts[sc.idx].Title
+				}
+				drainMsgs(inflight[i+1:])
+				return commits, nil, &DecomposeRescueError{
+					Rescue:       &generate.RescueError{Kind: generate.ErrRescue, TreeSHA: sc.tree, ParentSHA: prevSHA, Candidate: res.msg},
+					ConceptTitle: title, Index: sc.idx, Count: len(concepts), Commits: commits,
+				}
+			}
+		}
+		seenSubjects = append(seenSubjects, subject)
 
 		// BUG-001 fix: apply EditMessage in the SERIAL loop (one editor at a time). After S1 moved
 		// generation to generateMessageCore (no editor in the goroutine), the serial loop is the only

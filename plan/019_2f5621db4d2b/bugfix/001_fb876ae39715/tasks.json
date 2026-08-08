@@ -87,21 +87,21 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Restore cross-concept duplicate-subject detection on fast-path (BUG-002)",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Add an incremental cross-concept dedupe pass to runLoopFastPath's serial publish loop. After receiving each concept's generated message, check its subject against a growing set of seen subjects (initialized from the pre-run recent subjects, accumulating each accepted sibling's subject). On collision, re-generate via generateMessageCore with seedRejections containing the seen subjects. If re-generation still collides (exhausts retries), enter the rescue path. This restores US7/FR32's no-duplicate-subjects guarantee without sacrificing the concurrency win (generation stays concurrent; only the dedupe check + re-generation is serial).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Add incremental cross-concept dedupe to serial publish loop",
-              "status": "Ready",
+              "status": "Complete",
               "description": "In runLoopFastPath's serial publish loop (after receiving each concept's message, before EditMessage and publishCommit), maintain a growing seenSubjects slice. Check each concept's generated subject against it. On collision, re-generate via generateMessageCore with seedRejections=seenSubjects. Handle rescue if re-generation fails. This runs AFTER the BUG-001 fix (EditMessage in serial loop) so the dedupe check operates on the generated (pre-edit) subject, preserving FR-E3's bypass.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Add seenSubjects tracking and cross-concept dedupe with re-generation/rescue",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2"
@@ -129,14 +129,14 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Regression test for BUG-001 (concurrent editor race)",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Test runLoopFastPath with cfg.Edit=true and >=2 disjoint concepts. Assert each concept's published commit carries its OWN generated message (no cross-contamination from the shared STAGECOACH_EDITMSG race). This test would fail on the pre-fix code (where N concurrent editors race on one file) and passes on the fixed code (where EditMessage is serialized in the publish loop).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Test --edit + disjoint fast-path: no cross-contamination",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2"
