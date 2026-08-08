@@ -78,14 +78,14 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, q
 | Provider | Delivery | Print flag | Model flag | Default model | System prompt flag | Tool-disable approach | Chrome-disable | Stager? |
 |----------|----------|-----------|-----------|----------------|-------------------|----------------------|----------------|--------|
 | `pi` | stdin | `-p` | `--model` | "" (user must set) | `--system-prompt` | Explicit `--no-*` flags | extensions/skills/templates/context off (`--no-*`); MCP use suppressed (servers may connect — tracked limitation) | ✓ yes |
-| `claude` | stdin | `-p` | `--model` | `sonnet` | `--system-prompt` | Explicit `--tools ""` + settings flags | via `--tools ""` + `--setting-sources ""` | ✓ yes |
-| `opencode` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | no per-surface switch; read-only by design — documented limitation | — no |
-| `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | no per-surface switch; read-only constraint only — documented limitation | — no |
-| `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | no per-surface switch; read-only constraint only — documented limitation | — no |
-| `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | no per-surface switch; read-only constraint only — documented limitation | — no |
+| `claude` | stdin | `-p` | `--model` | `sonnet` | `--system-prompt` | Explicit `--tools ""` + settings flags | via `--tools ""` + `--setting-sources ""` | ✓ yes (scoped) |
+| `opencode` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`run` subcommand) | no per-surface switch; read-only by design — documented limitation | ✓ yes (unscoped) |
+| `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
+| `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
+| `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
 | `qwen-code` | stdin | `-p` | `-m` | `qwen3-coder-plus` ⚠️ | (prepended) | Read-only constraint (`--approval-mode default`) | no per-surface switch; read-only constraint only — documented limitation | — no ⚠️ |
 
-Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending the remaining §12.5.1.1 checklist items (the non-TTY stdout drop, issue #76, no longer reproduces as of **2026-07-08**) and cannot serve as a stager (empty `tooled_flags`). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
+Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending a full `--help` re-verification pass, and is **stager-capable** via the unscoped `--mode accept-edits --dangerously-skip-permissions` combo (§12.5.1.1 item 4, verified 2026-07-09, agy v1.1.11; the same unscoped model pi uses). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
 
 ## Tools-disable asymmetry
 
@@ -109,7 +109,7 @@ The v2 manifest system has two invocation modes (PRD §11.5):
 
 The stager's safety is enforced by three layers (PRD §12.7.1):
 
-1. **`tooled_flags`** — claude is **structurally** scoped via a staging-only git allowlist (`--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit`) that makes `git commit`/`push`/`update-ref`/`reset`/`rebase` unreachable. pi is **not** flag-scoped — its tooled profile enables tools with chrome stripped (no git-scoped allowlist), so a misbehaving pi stager CAN run arbitrary Bash. pi's safety is therefore **instructional** (the §17.6 stager task prompt) + a **best-effort HEAD-movement guard** (HEAD is snapshotted before each stager call; the run aborts if HEAD moved), not structural.
+1. **`tooled_flags`** — claude is **structurally** scoped via a staging-only git allowlist (`--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit`) that makes `git commit`/`push`/`update-ref`/`reset`/`rebase` unreachable. pi, agy, codex, opencode, and cursor are **not** flag-scoped — their tooled profiles enable tools with no git allowlist (the **UNSCOPED** model, §12.7.1), so a misbehaving unscoped stager CAN run arbitrary Bash. Their safety is therefore **instructional** (the §17.6 stager task prompt) + a **best-effort HEAD-movement guard** (HEAD is snapshotted before each stager call; the run aborts if HEAD moved) + **`verifyFreezeSubset` (FR-M1c)** (every staged tree is verified a content-subset of the frozen `T_start`), not structural. **claude is the ONLY structurally-scoped stager**; the other five stager-capable providers are unscoped.
 2. **Stagecoach's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (§13.6.2/§19). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.
 3. **The stager task prompt** (§17.6) — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.
 
@@ -139,7 +139,7 @@ The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/
 *⚠️ cursor models are PRD tier-names (flagship/mid/nano) resolved to best-guess OpenAI tokens — FR-D5: verify against `agent --help`.*
 *⚠️ qwen-code models are # TO CONFIRM per FR-D5 (Alibaba Qwen3-Coder via DashScope; no live CLI lookup this pass).*
 
-**Stager column:** A value of *(cannot)* means the provider lacks `tooled_flags` in its manifest and cannot serve as the stager. When the detected provider cannot be the stager, the bootstrap falls back to the next stager-capable provider (FR-D4 fallback — currently pi or claude).
+**Stager column:** A value of *(cannot)* reflects the **compiled-in `role_defaults.go` default** (no authored stager model), NOT a capability gap for every such provider — agy, opencode, codex, and cursor ARE stager-capable (per the main table + `builtin.go`); only **qwen-code** genuinely lacks `tooled_flags`. The per-role stager assignment for those four is pending a `role_defaults.go` update (a separate code change — tracked residual risk). When the detected provider cannot be the stager, the bootstrap falls back to the next stager-capable provider (FR-D4 fallback — currently pi, claude, agy, opencode, codex, or cursor).
 
 ## Adding a new agent
 
