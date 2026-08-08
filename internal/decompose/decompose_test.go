@@ -503,7 +503,7 @@ func TestDecompose_AutoMultiCommit_HappyPath(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
@@ -578,7 +578,7 @@ func TestDecompose_AutoMultiCommit_TemplateAppliedUniformly(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
@@ -617,7 +617,7 @@ func TestDecompose_Overlap(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message stub with a small sleep — allows the overlap to be observable via timing.
@@ -684,7 +684,7 @@ func TestDecompose_EmptyConceptSkip(t *testing.T) {
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 	// b.txt is NOT written — the stager seam for "c2" will stage nothing (empty).
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c"})
@@ -726,7 +726,7 @@ func TestDecompose_StagerMovedHEAD(t *testing.T) {
 	dcmCommitRaw(t, repo, "initial")        // BORN repo → HEAD has a real SHA to move away from
 	dcmWriteFile(t, repo, "a.txt", "aaa\n") // untracked → dirty tree (FR-M1 routing satisfied)
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a"})
 	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
@@ -765,7 +765,7 @@ func TestDecompose_StagerFreezeViolation(t *testing.T) {
 	dcmCommitRaw(t, repo, "initial")        // BORN repo
 	dcmWriteFile(t, repo, "a.txt", "aaa\n") // the legit change in T_start
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a"})
 	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
@@ -931,6 +931,131 @@ func TestDecompose_HunkSplitAcrossConcepts(t *testing.T) {
 	}
 }
 
+// TestDecompose_Dispatch_DisjointFastPath proves the FR-M13 dispatch gate end-to-end through
+// Decompose: a pairwise file-disjoint planner partition routes to runLoopFastPath, which stages
+// deterministically with `git add` and NEVER invokes the stager agent (system_context §6 — the
+// deps.stager seam is reachable ONLY via runLoop's invokeStagerRetry). The stager seam is the
+// dispatch oracle: it t.Fatals if called, so a passing run PROVES the fast-path was taken. This is
+// the first test to exercise the gate through Decompose (S3's TestRunLoopFastPath_* call the
+// fast-path DIRECTLY, pre-dispatch).
+func TestDecompose_Dispatch_DisjointFastPath(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// 3 disjoint untracked files (the working-tree change set).
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	// Planner declares DISJOINT files (no path in ≥2 concepts) → isFileDisjoint true → runLoopFastPath.
+	plannerJSON := `{"count":3,"single":false,"commits":[` +
+		`{"title":"c1","description":"a","files":["a.txt"]},` +
+		`{"title":"c2","description":"b","files":["b.txt"]},` +
+		`{"title":"c3","description":"c","files":["c.txt"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageMatchManifest(t, bin, []messageMatchRule{
+		{"a.txt", "feat: add a"},
+		{"b.txt", "feat: add b"},
+		{"c.txt", "feat: add c"},
+	})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+
+	// THE DISPATCH ORACLE: the fast-path must NEVER call the stager (system_context §6). If it is,
+	// the run mis-routed to runLoop. t.Fatal makes this a hard correctness gate.
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		t.Fatalf("fast-path must not invoke the stager (concept %q routed to runLoop)", concept.Title)
+		return nil
+	}
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if len(result.Commits) != 3 {
+		t.Fatalf("Commits len = %d, want 3", len(result.Commits))
+	}
+	if result.Amended != 0 {
+		t.Errorf("Amended = %d, want 0 (disjoint union == T_start ⇒ arbiter naturally skipped)", result.Amended)
+	}
+
+	// CAS order: HEAD advanced 3 times + clean tree (mirror AutoMultiCommit_HappyPath assertions).
+	wantSubjects := []string{"feat: add a", "feat: add b", "feat: add c"}
+	for i, cr := range result.Commits {
+		if cr.Subject != wantSubjects[i] {
+			t.Errorf("Commits[%d].Subject = %q, want %q", i, cr.Subject, wantSubjects[i])
+		}
+	}
+	if dcmLogCount(t, repo) != 3 {
+		t.Fatalf("commit count = %d, want 3", dcmLogCount(t, repo))
+	}
+	if status := dcmStatusPorcelain(t, repo); status != "" {
+		t.Errorf("status = %q, want empty (clean)", status)
+	}
+}
+
+// TestDecompose_Dispatch_SharedFileFallback is the inverse oracle: a shared-file partition (one path
+// in ≥2 concepts) routes to runLoop, which invokes the stager per concept. A flag set inside the
+// injected stager seam PROVES the fallback was taken. Mirrors HunkSplitAcrossConcepts's store.py
+// setup (the canonical shared-file scenario).
+func TestDecompose_Dispatch_SharedFileFallback(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+
+	// One file split across 2 concepts (mirror HunkSplitAcrossConcepts's store.py setup).
+	base := "def get_links():\n    return []\n\ndef sort_items():\n    return []\n"
+	tStart := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return sorted(links, key=lambda c: c.code)\n"
+	basePlusA := "def get_links():\n    return fetch_all_links()\n\ndef sort_items():\n    return []\n" // concept 0's hunk only
+
+	dcmWriteFile(t, repo, "store.py", base)
+	dcmStageFile(t, repo, "store.py")
+	dcmCommitRaw(t, repo, "initial")          // born repo; HEAD.tree == base
+	dcmWriteFile(t, repo, "store.py", tStart) // dirty, un-staged → triggers decompose
+
+	// Planner declares a SHARED file across both concepts → isFileDisjoint false → runLoop.
+	plannerJSON := `{"count":2,"single":false,"commits":[` +
+		`{"title":"feat: add link fetching","description":"the get_links change","files":["store.py"]},` +
+		`{"title":"feat: sort listed links by code","description":"the sort_items change","files":["store.py"]}` +
+		`]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add link fetching", "feat: sort listed links by code"})
+	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
+	roles.Planner = plannerM
+	roles.Message = messageM
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Commits = 2 // forced count overrides the FR-M2b one-file short-circuit so the loop runs
+
+	// THE DISPATCH ORACLE: runLoop MUST call the stager. A flag proves the fallback was taken. The
+	// stager body mirrors HunkSplitAcrossConcepts's per-concept hunk staging verbatim.
+	stagerCalled := false
+	deps.stager = func(ctx context.Context, d Deps, concept prompt.PlannerCommit) error {
+		stagerCalled = true
+		switch concept.Title {
+		case "feat: add link fetching":
+			stagePartialBlob(t, repo, "store.py", basePlusA) // hunk A only — a strict subset of T_start
+		case "feat: sort listed links by code":
+			stagePartialBlob(t, repo, "store.py", tStart) // + hunk B ⇒ index == T_start for store.py
+		}
+		return nil
+	}
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	if !stagerCalled {
+		t.Fatal("shared-file partition must route to runLoop (stager not called)")
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("Commits len = %d, want 2", len(result.Commits))
+	}
+}
+
 // TestDecompose_HunkSplit_RejectsOffTStartContent is the negative sibling: the hunk-aware check still
 // HARD-ABORTS when the stager stages content NOT traceable to T_start (a concurrent change or a rogue
 // stager). Concept 0 stages store.py with a line that appears in neither base nor T_start → the 3-way
@@ -995,7 +1120,7 @@ func TestDecompose_ConcurrentChangeExclusion(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 
 	// Planner returns 2 concepts.
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add a","description":"a.txt"},{"title":"add b","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add a","description":"a.txt","files":["a.txt"]},{"title":"add b","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// LOOP-ONLY message responses: under FR-M1d the arbiter does NOT run (the frozen leftover is
@@ -1092,7 +1217,7 @@ func TestDecompose_ArbiterFoldsOnlyTStart(t *testing.T) {
 	// Planner returns 2 concepts: concept-1 "add b" is SKIPPED by the seam (empty slice ⇒ FR-M8
 	// empty-concept skip, consumes NO message); concept-2 "add a" stages a.go ⇒ the loop makes ONE
 	// commit ({a.go}); tipTree == {a.go}; DiffTreeNames(tipTree, tStart) == {b.go} ⇒ arbiter RUNS.
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add b","description":"b.go"},{"title":"add a","description":"a.go"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add b","description":"b.go","files":["b.go"]},{"title":"add a","description":"a.go","files":["b.go"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message script call order: "add b" is SKIPPED ⇒ no message; concept-2 "add a" ⇒ message[0];
@@ -1161,7 +1286,7 @@ func TestDecompose_TStartCompleteness(t *testing.T) {
 	dcmWriteFile(t, repo, "y.go", "package y\n")
 	baseTree := dcmGitOut(t, repo, "rev-parse", "HEAD^{tree}") // capture BEFORE the run
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add x","description":"x.go"},{"title":"add y","description":"y.go"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"add x","description":"x.go","files":["x.go"]},{"title":"add y","description":"y.go","files":["x.go"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add x", "feat: add y"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
@@ -1221,7 +1346,7 @@ func TestDecompose_StagerGuardHappyPath(t *testing.T) {
 	dcmCommitRaw(t, repo, "initial")
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a"})
 	roles := dcmAllRoles(t, bin, stubtest.Options{Out: ""})
@@ -1327,7 +1452,7 @@ func TestDecompose_ArbiterSkippedOnCleanTree(t *testing.T) {
 	dcmInitRepo(t, repo)
 
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
@@ -1372,7 +1497,7 @@ func TestDecompose_ArbiterWiring(t *testing.T) {
 	// "leftover.txt" will be left un-staged by the stager seam, triggering the arbiter.
 	dcmWriteFile(t, repo, "leftover.txt", "leftover\n")
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
@@ -1429,7 +1554,7 @@ func TestDecompose_ErrorPropagation_Stager(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "a\n")
 	dcmWriteFile(t, repo, "b.txt", "b\n") // 2nd file: bypasses FR-M2b one-file short-circuit (auto mode, count≥2)
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
@@ -1468,7 +1593,7 @@ func TestDecompose_ErrorPropagation_RescueError(t *testing.T) {
 	dcmInitRepo(t, repo)
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message stub exits with a non-zero code (no valid output) — triggers RescueError after retries.
@@ -1499,7 +1624,7 @@ func TestDecompose_UnbornRepo(t *testing.T) {
 
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: initial")
 
@@ -1567,7 +1692,7 @@ func TestDecompose_MessageRescuePartial(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message stub: SleepMS > Timeout for concept 1 (index 1) to trigger timeout.
@@ -1680,7 +1805,7 @@ func TestDecompose_CASAbortPartial(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
 	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "1000" // create timing window for external HEAD move
@@ -1795,7 +1920,7 @@ func TestDecompose_StagerRetryThenEmpty(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c"})
 
@@ -1885,7 +2010,7 @@ func TestDecompose_RescueArbiterSkipped(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message stub: concept 0 succeeds, concept 1 fails (empty output → parse fail → RescueError).
@@ -1940,7 +2065,7 @@ func TestDecompose_StagerRetryThenSuccess(t *testing.T) {
 	dcmInitRepo(t, repo)
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
@@ -2087,7 +2212,7 @@ func TestDecompose_OneFileShortcut_CommitsOverride(t *testing.T) {
 	dcmWriteFile(t, repo, "only.txt", "only\n") // ONE untracked file
 
 	// Planner returns a 2-concept plan (if called, succeeds).
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"only.txt"},{"title":"c2","description":"leftover"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"only.txt","files":["only.txt"]},{"title":"c2","description":"leftover","files":["only.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: c1", "feat: arbiter"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
@@ -2123,7 +2248,7 @@ func TestDecompose_OneFileShortcut_TwoFilesNoBypass(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "b.txt", "bbb\n") // TWO files
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
@@ -2424,7 +2549,7 @@ func TestDecompose_ArbiterTipAmend_RereadsFinalSHA(t *testing.T) {
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 	dcmWriteFile(t, repo, "leftover.txt", "leftover\n")
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// Message stub: 2 entries for the loop (resolveTipAmend reuses messages — no extra call).
@@ -2486,7 +2611,7 @@ func TestDecompose_ArbiterMidChain_AllSHAsResolve(t *testing.T) {
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 	dcmWriteFile(t, repo, "leftover.txt", "leftover\n")
 
-	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"},{"title":"c3","description":"c.txt"}]}`
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 
 	// 3 message entries (resolveMidChain reuses messages).
@@ -2539,7 +2664,7 @@ func TestDecompose_HappyPath_CommitsAccurate(t *testing.T) {
 	dcmInitRepo(t, repo)
 
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
-	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt"}]}`
+	plannerJSON := `{"count":1,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt","a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
@@ -2577,7 +2702,7 @@ func TestDecompose_RoleResolvesSubProvider(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "b.txt", "bbb\n")
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"b.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]}]}`
 	plannerM := stubtest.Manifest(bin, stubtest.Options{Out: plannerJSON})
 	piShape(&plannerM, "--provider")
 
@@ -2634,7 +2759,7 @@ func TestDecompose_SentinelAfterFreezeExcluded(t *testing.T) {
 	dcmWriteFile(t, repo, "a.txt", "aaa\n")
 	dcmWriteFile(t, repo, "c.txt", "ccc\n")
 
-	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt"},{"title":"c2","description":"c.txt"}]}`
+	plannerJSON := `{"count":2,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"c.txt","files":["a.txt"]}]}`
 	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c", "feat: add leftover", "feat: add sentinel", "feat: add sentinel"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})

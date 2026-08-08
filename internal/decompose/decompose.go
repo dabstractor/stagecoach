@@ -233,8 +233,26 @@ func Decompose(ctx context.Context, deps Deps) (DecomposeResult, error) {
 
 	// (5) Safety cap is enforced inside callPlanner (auto mode). Forced mode: user asserted N — no cap.
 
-	// (6) The loop (1-deep overlap, FR-M8 empty-skip, serialized CAS, FR-M12 isolation).
-	commits, chainData, err := runLoop(ctx, deps, out.Commits, baseTree, tStart, preRunHEAD, isUnborn)
+	// (6) The loop. FR-M13: if the planner's partition is pairwise file-disjoint (no path in ≥2
+	// concepts), stage deterministically with the fast-path (no stager agent, concurrent messages —
+	// FR-M14); otherwise the tooled-stager runLoop (1-deep overlap, hunk-split capable — FR-M5/FR-M6,
+	// FR-M8 empty-skip, serialized CAS, FR-M12 isolation). Both return (commits, chainData, err) in
+	// identical shapes, so the error block + arbiter phase below run unchanged on either branch.
+	var (
+		commits   []CommitResult
+		chainData []ChainEntry
+	)
+	if isFileDisjoint(out.Commits) {
+		if deps.Verbose != nil {
+			deps.Verbose.VerboseWarn("decompose: file-disjoint partition → fast-path (FR-M13/FR-M14)")
+		}
+		commits, chainData, err = runLoopFastPath(ctx, deps, out.Commits, baseTree, tStart, preRunHEAD, isUnborn)
+	} else {
+		if deps.Verbose != nil {
+			deps.Verbose.VerboseWarn("decompose: shared-file partition → tooled-stager loop (FR-M5)")
+		}
+		commits, chainData, err = runLoop(ctx, deps, out.Commits, baseTree, tStart, preRunHEAD, isUnborn)
+	}
 	if err != nil {
 		// FR-M12: partial failures (rescue/CAS) AND hard failures return the partial commits that
 		// already landed (0..i-1). The arbiter does NOT run on a loop abort (§18.3).
