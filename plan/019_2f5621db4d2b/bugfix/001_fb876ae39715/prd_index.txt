@@ -1,0 +1,11 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+  h3.0 Issue 1: --edit on the file-disjoint fast-path runs N concurrent editors on one shared .git/STAGECOACH_EDITMSG file, silently attaching the wrong message to a commit
+ h2.2 Major Issues (Should Fix)
+  h3.1 Issue 1: File-disjoint fast-path loses cross-concept duplicate-subject detection: a single run can publish two commits with the identical subject
+ h2.3 Minor Issues (Nice to Fix)
+ h2.4 Testing Summary
+ h2.5 Recommendations
+---
+para:11 list:4
