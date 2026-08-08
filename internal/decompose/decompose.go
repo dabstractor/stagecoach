@@ -733,13 +733,17 @@ func runLoopFastPath(ctx context.Context, deps Deps, concepts []prompt.PlannerCo
 		return commits, chainData, nil
 	}
 
-	// FR-M14: launch ALL N (non-skipped) message generations CONCURRENTLY. Safe: each goroutine calls
-	// generateMessage, which reasons over a tree-to-tree diff (read-only tree reads) and never touches
-	// the live .git/index (git_primitives.md). No cap (FR-M14; max_commits default 12 bounds N).
+	// FR-M14: launch ALL N (non-skipped) message generations CONCURRENTLY. Each goroutine calls
+	// generateMessageCore — the bare generate/dedupe core (tree-to-tree diff, read-only tree reads, never
+	// touches the live .git/index; git_primitives.md). seedRejections is nil here (cross-concept dedupe is
+	// applied in the serial publish loop — P1.M2). EditMessage is DELIBERATELY NOT called in the goroutine:
+	// it writes/opens a single shared .git/STAGECOACH_EDITMSG and is not concurrency-safe, so it is deferred
+	// to the serial publish loop (one editor at a time, FR-E4 serialized publication; P1.M1.T2.S2).
+	// No cap (FR-M14; max_commits default 12 bounds N).
 	launch := func(i int, treeA, treeB string) chan msgOut {
 		ch := make(chan msgOut, 1) // buffered(1) — goroutine sends once + exits; never blocks
 		go func() {
-			m, e := generateMessage(ctx, deps, treeA, treeB)
+			m, e := generateMessageCore(ctx, deps, treeA, treeB, nil) // BUG-001: Core (no EditMessage) — editor deferred to the serial loop (S2/FR-E4)
 			ch <- msgOut{conceptIdx: i, treeA: treeA, treeB: treeB, msg: m, err: e}
 		}()
 		return ch

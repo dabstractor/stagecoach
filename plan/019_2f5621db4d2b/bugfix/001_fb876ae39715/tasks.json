@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Fix concurrent editor race on fast-path (BUG-001)",
-          "status": "Researching",
+          "status": "Ready",
           "description": "Eliminate the shared STAGECOACH_EDITMSG race by deferring EditMessage out of the concurrent generateMessage goroutine and performing it in runLoopFastPath's serial publish loop. This serializes the editor (one at a time, in CAS order) while preserving the concurrency win for message generation (the LLM call stays concurrent). Involves extracting generateMessageCore from generateMessage so the fast-path goroutines can generate messages without invoking the interactive editor.",
           "tasks": [
             {
@@ -42,14 +42,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Move EditMessage to serial publish loop in runLoopFastPath",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Change runLoopFastPath (internal/decompose/decompose.go:680-828) so that concurrent goroutines call generateMessageCore (no editor) instead of generateMessage, and EditMessage is applied in the strictly-serial CAS publish loop after receiving each concept's message and before publishCommit. This eliminates the shared-file race because only one EditMessage runs at a time.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Switch fast-path launch closure to generateMessageCore",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -66,7 +66,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S2",
                   "title": "Apply EditMessage in the serial publish loop before publishCommit",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
