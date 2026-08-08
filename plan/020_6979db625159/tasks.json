@@ -77,7 +77,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": ".goreleaser.yaml: add chocolateys: pipe section + scrub 4 WinGet comments",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S2"
