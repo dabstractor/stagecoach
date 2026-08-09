@@ -181,14 +181,14 @@
       "type": "Phase",
       "id": "P2",
       "title": "Model-example consistency cleanup (zai/glm-5.2 → anthropic/claude-haiku)",
-      "status": "Researching",
+      "status": "Ready",
       "description": "Sweep all stale zai/glm-5.2, glm-5-turbo, and zai/glm-5-turbo references across the codebase to anthropic/claude-haiku (matching spec §12.3). The v3.3 spec renamed these tokens everywhere; a handful of code comments, user-facing strings, error messages, and test fixtures still carry the old token. CRITICAL: research found 90+ references across 30+ files (the PRD identified only ~4); this phase covers the full scope.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Sweep stale zai/glm-5.2 references in code, tests, and docs",
-          "status": "Researching",
+          "status": "Ready",
           "description": "Refresh all model-example tokens from the fictional zai/glm-5.2 family to the realistic anthropic/claude-haiku, covering user-facing examples, runtime error messages, user-facing docs, and test fixtures.",
           "tasks": [
             {
@@ -277,14 +277,14 @@
               "type": "Task",
               "id": "P2.M1.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Ready",
               "description": "Final cross-cutting documentation sweep that verifies the entire delta (Chocolatey + PowerShell installer + model-example cleanup) is coherent across README.md, docs/*.md, and the codebase. This is the Mode B catch-all that prevents a coherent delta from shipping with a stale README or inconsistent cross-references.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T3.S1",
                   "title": "Final README.md + overview coherence sweep across the entire delta",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
