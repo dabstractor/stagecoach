@@ -15,13 +15,13 @@
 #   Change only the fields you want; fields you omit inherit the built-in's value.
 #       # ~/.config/stagecoach/config.toml  (or a repo-local .stagecoach.toml)
 #       [provider.pi]
-#       default_model = "glm-5.2"          # e.g. override only the model
+#       default_model = "anthropic/claude-haiku"   # e.g. override only the model
 #
 # RENDERED COMMAND (external_deps.md §pi; byte-for-byte with explicit overrides)
 #   pi --provider <backend> --model <m> --system-prompt "<sys>" \
 #      --no-tools --no-extensions --no-skills --no-prompt-templates \
 #      --no-context-files --no-session -p   < <user payload via stdin>
-#   (Personal-override example, NOT the shipped default: <backend>=zai, <m>=glm-5-turbo = commit-pi.)
+#   (Personal-override example, NOT the shipped default: <backend>=anthropic, <m>=claude-haiku.)
 #
 # TOOLS-DISABLE CATEGORY (§12.7.1): EXPLICIT switch — pi offers literal --no-* flags,
 #   so the call is a pure text-in/text-out with NO agent loop (the "bare" ideal).
@@ -50,15 +50,15 @@ print_flag = "-p"                   # -p / --print: process the prompt and exit 
 # --- model ---
 model_flag = "--model"              # the model-selection flag.
 default_model = ""                     # FR-D2: empty in the shipped default; config init fills per-role (§9.16 FR-D4).
-                                    # The zai/glm-5-turbo setup is a personal override (NOT the shipped default).
+                                    # An override like "anthropic/claude-haiku" is a personal choice (NOT the shipped default).
 
 # --- system prompt ---
 system_prompt_flag = "--system-prompt"  # pi supports a first-class system prompt (delivered via flag).
 
 # --- sub-provider ---
-provider_flag = "--provider"        # pi routes to backends: zai | anthropic | google | ...
+provider_flag = "--provider"        # pi routes to backends: anthropic | google | zai | ...
 # default_provider removed in v3: the inference backend is now the slash-prefix on the model
-# (e.g. "zai/glm-5.2" → --provider zai --model glm-5.2). FR-R5b enforces this at Render.
+# (e.g. "anthropic/claude-haiku" → --provider anthropic --model claude-haiku). FR-R5b enforces this at Render.
 
 # --- session continuation (multi-turn fallback, §9.24) ---
 session_mode = "append"             # VERIFIED 2026-07-05; FR-T9. pi re-invoking the SAME --session-id

@@ -231,7 +231,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		}
 	}
 	// Finding 2: validate the message role's model format BEFORE the progress label so a
-	// misconfiguration (e.g. bare "glm-5.2" on pi — FR-R5b) is rejected up front instead of
+	// misconfiguration (e.g. bare "claude-haiku" on pi — FR-R5b) is rejected up front instead of
 	// printing a misleading "↳ Generating…" line and then failing inside Render. Uses the same
 	// manifest Render will resolve; autodetect (labelProvider from DefaultProvider) is covered.
 	if labelProvider != "" {

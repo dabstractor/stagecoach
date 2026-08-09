@@ -31,7 +31,7 @@ func BuiltinManifests() map[string]Manifest {
 // Per FR-D2 (PRD §9.16/§12.3), the shipped pi default is DECOUPLED from any one subscription:
 // default_model AND default_provider are both "" (NON-NIL empty). config init fills per-role models
 // from the FR-D4 table; the user/config picks the backend. The original commit-pi setup
-// (provider=zai, model=glm-5-turbo) is a documented PERSONAL OVERRIDE, not the shipped default —
+// (e.g. provider=anthropic, model=claude-haiku) is a documented PERSONAL OVERRIDE, not the shipped default —
 // see TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride.
 //
 // NOTE: ReasoningLevels is populated — pi `--thinking` high/medium/low (verified `pi --help`,
@@ -56,7 +56,7 @@ func builtinPi() Manifest {
 		PromptDelivery:    strPtr("stdin"),
 		PrintFlag:         strPtr("-p"),
 		ModelFlag:         strPtr("--model"),
-		DefaultModel:      strPtr(""), // FR-D2: was glm-5-turbo; decoupled from any one subscription
+		DefaultModel:      strPtr(""), // FR-D2: was a personal-override model; decoupled from any one subscription
 		SystemPromptFlag:  strPtr("--system-prompt"),
 		ProviderFlag:      strPtr("--provider"),
 		SessionMode:       strPtr("append"), // VERIFIED 2026-07-05 via `pi --session-id X <isolation-flags-minus-no-session> -p "remember BANANA"` then recall returns BANANA; FR-T9.

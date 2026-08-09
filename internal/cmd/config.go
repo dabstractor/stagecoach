@@ -91,7 +91,7 @@ current schema version (` + fmt.Sprintf("`config_version = %d`", config.CurrentC
 
 For files older than v3 this is more than a version bump: the removed ` + "`default_provider`" + ` field is
 folded into a slash-PREFIX on the affected ` + "`model`" + ` values for multi-backend providers (e.g.
-` + "`model = \"glm-5.2\"`" + ` + ` + "`default_provider = \"zai\"`" + ` becomes ` + "`model = \"zai/glm-5.2\"`" + `),
+` + "`model = \"claude-haiku\"`" + ` + ` + "`default_provider = \"anthropic\"`" + ` becomes ` + "`model = \"anthropic/claude-haiku\"`" + `),
 the ` + "`default_provider`" + ` line is commented out with a note, and any abandoned ` + "`[agent.*]`" + `
 tables are renamed to ` + "`[provider.*]`" + `. Single-backend providers are left alone (their
 default_provider, if any, is just commented out). Every other line (your values, comments, ordering) is
@@ -684,8 +684,8 @@ const exampleConfigTemplate = `# Stagecoach configuration file (PRD §16.2).
 #
 # Override a built-in (e.g. pin pi to a different model/provider):
 # [provider.pi]
-# default_model    = "glm-5.2"
-# default_provider = "zai"
+# default_model    = "claude-haiku"
+# default_provider = "anthropic"
 #
 # Define a brand-new provider (PRD §12.8):
 # [provider.myagent]

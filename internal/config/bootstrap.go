@@ -198,11 +198,11 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("# model/backend your plan provides. opencode is a power-user provider.\n")
 	} else if piBlanked && !piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
-		b.WriteString("# e.g. model = \"zai/glm-5.2\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
+		b.WriteString("# e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
 		b.WriteString("# The shipped per-role models are empty so you can supply your own backend/model.\n")
 	} else if piBlanked && piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — each model carries the inference backend as a\n")
-		b.WriteString("# slash-prefix (e.g. model = \"zai/glm-5.2\"). A bare model (no '/') on pi is a config\n")
+		b.WriteString("# slash-prefix (e.g. model = \"anthropic/claude-haiku\"). A bare model (no '/') on pi is a config\n")
 		b.WriteString("# error (FR-R5b).\n")
 	}
 	// agy and cursor-agent bake the reasoning level into the MODEL NAME (agy's "(Low)/(Medium)/(High)"
@@ -226,7 +226,7 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	// blanked — append the multi-backend guidance (same wording as the target==pi NOTE at 187-188)
 	// so the user knows to prefix their inference backend.
 	if stagerName == "pi" && stagerName != target && stagerModel == "" {
-		stagerAnnotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"zai/glm-5.2\". A bare model (no '/') on pi is a config error (FR-R5b)."
+		stagerAnnotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b)."
 	}
 	writeRoleBlock(&b, "stager", stagerName, stagerModel, stagerAnnotation)
 

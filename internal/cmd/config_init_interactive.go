@@ -181,7 +181,7 @@ func runInteractiveWizard(r io.Reader, w io.Writer, reg *provider.Registry, inst
 
 		prompt := fmt.Sprintf("%s model [%s]: ", role, display)
 		if multi {
-			prompt = fmt.Sprintf("%s model [%s]; include the inference/ prefix, e.g. zai/glm-5.2: ",
+			prompt = fmt.Sprintf("%s model [%s]; include the inference/ prefix, e.g. anthropic/claude-haiku: ",
 				role, display)
 		}
 
@@ -197,7 +197,7 @@ func runInteractiveWizard(r io.Reader, w io.Writer, reg *provider.Registry, inst
 			}
 			// Multi-backend: reject bare edited models (no "/").
 			if multi && !strings.Contains(value, "/") {
-				fmt.Fprintf(w, "multi-backend provider: include the inference backend as a prefix, e.g. zai/glm-5.2\n")
+				fmt.Fprintf(w, "multi-backend provider: include the inference backend as a prefix, e.g. anthropic/claude-haiku\n")
 				continue
 			}
 			overrides[role] = value
