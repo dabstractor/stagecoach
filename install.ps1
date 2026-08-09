@@ -115,6 +115,11 @@ if ($DryRun) {
 # the finally block (abort-before-write invariant).
 [Console]::Error.WriteLine("stagecoach: installing $verNoV (windows/$arch)")
 $tmp = Join-Path $env:TEMP "stagecoach-install-$(New-Guid)"
+# Materialize the temp dir FIRST: Invoke-WebRequest -OutFile does NOT create parent directories,
+# so writing $zipPath/$sumsPath under $tmp below would throw DirectoryNotFoundException unless $tmp
+# already exists (mirrors step 7's explicit New-Item for $destDir). The AST-parse + -DryRun checks
+# both exit before this point, so this download path was never exercised until a real install.
+New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 try {
   # (4) Download the zip + checksums (Invoke-WebRequest -OutFile is binary-safe and follows the
   #     302 redirect to objects.githubusercontent.com by default).
