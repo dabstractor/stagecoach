@@ -41,13 +41,8 @@ out to your agent rather than calling an API.
   reachable over the public API.
 - **Antigravity** — strict (and newly arriving). Quota is reserved for the harness.
 - **Cursor** — has explicit policies against use outside its own harness.
-- **Z.ai** — permissive in principle, but actively pro-harness: it hands subscribers free tokens
-  for using the Z.ai harness, steering (rewarding) harness use rather than locking it.
-- **Opencode (Opencode Go plan)** — permissive; the notable exception that doesn't gate quota to
-  a harness.
 
-Net: almost every provider cares about keeping you on their harness, whether by lock (Anthropic,
-Antigravity, Cursor) or by incentive (Z.ai). Opencode is the outlier.
+Net: Most providers cares about keeping you on their harness. Opencode and Pi are the outliers.
 
 </details>
 
