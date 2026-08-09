@@ -25,7 +25,7 @@ name="${STAGECOACH_REPO_NAME:-stagecoach}"
 base="${STAGECOACH_DOWNLOAD_BASE:-https://github.com/${owner}/${name}/releases/download}"
 
 # (2) uname -> goreleaser GOOS/GOARCH (asdf/mise are Unix-only → windows/zip is out of scope;
-# Windows users use Scoop/Winget per PRD §21.3). Reject anything else with a clear error.
+# Windows users use Scoop/Chocolatey/PowerShell per PRD §21.3). Reject anything else with a clear error.
 case "$(uname -s)" in
   Darwin) os=darwin ;;
   Linux)  os=linux ;;

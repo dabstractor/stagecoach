@@ -36,13 +36,13 @@ git_repo="${STAGECOACH_GIT_REPO:-https://github.com/${owner}/${name}.git}"
 err() { printf 'stagecoach: %s\n' "$*" >&2; }
 
 # (1) Platform detect: uname -> goreleaser GOOS/GOARCH. Windows is intentionally unsupported here —
-# Windows users use Scoop/Winget (PRD §21.3). Reject anything else with a clear, actionable error.
+# Windows users use Scoop/Chocolatey/PowerShell (PRD §21.3). Reject anything else with a clear, actionable error.
 case "$(uname -s)" in
   Darwin) os=darwin ;;
   Linux)  os=linux ;;
   *)
     err "unsupported OS: $(uname -s). This installer supports macOS + Linux."
-    err "Windows users: see https://github.com/${owner}/${name}#install (Scoop or Winget)."
+    err "Windows users: see https://github.com/${owner}/${name}#install (Scoop, Chocolatey, or the PowerShell installer)."
     exit 1
     ;;
 esac

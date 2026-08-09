@@ -86,8 +86,9 @@ stagecoach = "1.2.3"
 - **Linux** — amd64, arm64
 
 Windows is **not** supported via this plugin (asdf/mise are Unix-only). Windows
-users should use [Scoop](https://scoop.sh/) or
-[Winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) —
+users should use [Scoop](https://scoop.sh/),
+[Chocolatey](https://chocolatey.org/docs/installation), or the
+[PowerShell installer](https://github.com/dabstractor/stagecoach#install) —
 see the [stagecoach install guide](https://github.com/dabstractor/stagecoach#install).
 
 ## How it works
