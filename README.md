@@ -11,7 +11,9 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.
 
 ## 30-second demo
 
-<!-- TODO: record asciinema demo; for now see the snapshot workflow diagram below -->
+
+https://github.com/user-attachments/assets/89dd318d-5f75-4d25-af7d-4623fe8cfe23
+
 
 > [!NOTE]
 > A recorded walkthrough is coming soon. See the [snapshot workflow](#the-snapshot-workflow) below for what you'll see.
@@ -205,6 +207,10 @@ stagecoach --exclude '*.snap'     # hide snapshot diffs from the model (still co
 See [Features](#features) above and the [CLI reference](docs/cli.md) for the rest.
 
 ### Multi-commit decomposition
+
+
+https://github.com/user-attachments/assets/fbd9429d-99d2-4be9-99c8-cd01ac9c0504
+
 
 With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). As defense-in-depth, decompose also re-asserts its empty-index precondition at entry (FR-M1e), so a stale trigger that reaches it with a staged index fails loudly rather than silently folding that hand-staged content into the run. The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
 
