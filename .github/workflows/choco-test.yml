@@ -1,0 +1,106 @@
+# .github/workflows/choco-test.yml — ISOLATED Chocolatey pack+push test (PRD §21.2/G27).
+#
+# WHY THIS EXISTS: goreleaser's `chocolateys:` pipe shells out to the `choco` CLI to pack the
+# `.nupkg`, and `choco` is NOT installed on ubuntu-latest (the release.yml runner) — nor is there a
+# clean Linux install. This workflow runs the pack+push on windows-latest, where `choco` IS
+# preinstalled, so we can PROVE the Chocolatey publish path end-to-end WITHOUT touching the
+# validated ubuntu release pipeline (Homebrew/Scoop/APT/nix) and WITHOUT depending on the
+# currently-down AUR.
+#
+# ISOLATION: runs the REAL `.goreleaser.yaml` with `--snapshot --skip=publish` (builds + packs the
+# nupkg, publishes NOTHING — no GitHub Release, no tap/bucket/AUR push), then does a standalone
+# `choco push` of the packed nupkg. That push is functionally identical to goreleaser's own
+# (goreleaser runs `choco push <nupkg> -s <source_repo> -k <key>` under the hood). No git tag is
+# cut and no `v*` tag is pushed, so release.yml never fires and no other channel is touched.
+#
+# TEMPORARY: once the choco path is proven, fold Chocolatey into release.yml (move the goreleaser
+# job to windows-latest, or keep choco as its own permanent windows job) and delete this file.
+#
+# USAGE: Actions tab → "choco-test" → Run workflow.
+#   push=false (default): PACK ONLY — proves the nupkg builds on windows without burning a version
+#                         on chocolatey.org. RUN THIS FIRST.
+#   push=true:            PACK + `choco push` to push.chocolatey.org using CHOCOLATEY_API_KEY.
+#
+# PREREQUISITE: the nuspec `<owners>dabstractor</owners>` MUST equal your chocolatey.org account
+# username, or `choco push` rejects the FIRST push of the `stagecoach` package id with an
+# owner-mismatch error. Confirm that before setting push=true.
+name: choco-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Pack AND push to push.chocolatey.org (false = pack-only dry run; run this first)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  choco:
+    name: Chocolatey pack${{ inputs.push && ' + push' || '' }}
+    runs-on: windows-latest      # choco is preinstalled here — the whole reason this job exists.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # goreleaser needs full history for version detection.
+
+      - name: Set up Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'      # matches release.yml (macOS 26 LC_UUID fix needs >=1.24).
+          cache: true
+
+      - name: Verify choco is present
+        shell: pwsh
+        run: choco --version
+
+      - name: Pack the .nupkg (snapshot, publishes nothing)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --snapshot --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+
+      - name: Locate packed nupkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          NUPKG="$(find dist -name '*.nupkg' | head -n1)"
+          test -n "$NUPKG"
+          echo "nupkg=$NUPKG" >> "$GITHUB_ENV"
+          echo "Packed nupkg: $NUPKG"
+          echo "--- embedded nuspec (sanity: id/owners/version) ---"
+          unzip -p "$NUPKG" '*.nuspec' 2>/dev/null || true
+
+      - name: Push to push.chocolatey.org
+        if: ${{ inputs.push == true }}
+        shell: bash
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        run: |
+          set -euo pipefail
+          choco push "$nupkg" --source 'https://push.chocolatey.org/' --api-key "$CHOCOLATEY_API_KEY"
+
+      - name: Dry-run summary (nothing published)
+        if: ${{ inputs.push != true }}
+        shell: bash
+        run: |
+          echo "OK: nupkg packed successfully on windows-latest (choco was available)."
+          echo "Nothing was pushed to chocolatey.org."
+          echo "To publish, re-run this workflow with push=true."
+          echo "Note: the FIRST push requires <owners>dabstractor</owners> == your chocolatey.org username."
+
+      - name: Push summary
+        if: ${{ inputs.push == true }}
+        shell: bash
+        run: |
+          echo "OK: pushed $nupkg to push.chocolatey.org."
+          echo "New packages enter moderation: installable via 'choco install stagecoach --pre'"
+          echo "(snapshot version) until a moderator approves. chocolatey.org versions are unlistable,"
+          echo "not deletable."
