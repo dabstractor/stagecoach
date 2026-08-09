@@ -1,9 +1,9 @@
 # Packaging notes (maintainer)
 
 Distribution-surface decisions and one-time bootstraps that are NOT code. This file covers
-Chocolatey (PRD §21.2/§21.3); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew/Scoop/AUR
-are pending their target repos (release.yml runs goreleaser with `--skip=homebrew,scoop,aur` until
-those exist).
+Chocolatey (PRD §21.2/§21.3); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew (tap `dabstractor/homebrew-stagecoach`), Scoop (bucket `dabstractor/stagecoach-bucket`),
+and AUR (`stagecoach-bin`) are all wired into `release.yml` with **no `--skip` flags** — each pushes to its target repo on tag. (AUR publish is currently disabled: its `git_url` is commented out in
+`.goreleaser.yaml` while aur.archlinux.org recovers.)
 
 ## Chocolatey
 

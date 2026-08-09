@@ -68,6 +68,22 @@ func validChannel(s string) bool {
 	return false
 }
 
+// ValidateInstallMethod returns a wrapped ErrUnknownChannel when s is a non-empty string that is not
+// one of the 12 known channel identifiers; nil otherwise (including the empty override). It lets the
+// command layer validate the --install-method override EARLY — before the FR-U2 detection cascade —
+// so a typo is a hard error on EVERY dispatch path (--check / --rollback included), not only the
+// normal detect path that runs Detect internally. The message mirrors detectOverride's so every
+// "unknown override" failure reads identically regardless of where it fires.
+func ValidateInstallMethod(s string) error {
+	if s == "" {
+		return nil
+	}
+	if !validChannel(s) {
+		return fmt.Errorf("unknown --install-method %q (want one of %s): %w", s, knownChannelList(), ErrUnknownChannel)
+	}
+	return nil
+}
+
 // Runner is the injectable subprocess seam for the tier-(b) package-manager DB queries. Production
 // code uses an *osRunner (exec.CommandContext + per-query timeout); tests inject a canned fakeRunner.
 //

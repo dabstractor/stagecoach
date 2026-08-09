@@ -200,6 +200,12 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 func dispatchUpgrade(ctx context.Context, cmd *cobra.Command, effChannel, effSourceRepo string) error {
 	log := verboseLog(cmd.ErrOrStderr())
 
+	// FR-U2: validate the --install-method override EARLY so a typo is a hard error on EVERY path
+	// (--check / --rollback included), not only the normal detect path that runs Detect internally.
+	if err := upgrade.ValidateInstallMethod(flagInstallMethod); err != nil {
+		return exitcode.New(exitcode.Error, err)
+	}
+
 	// --rollback path (FR-U8): one-step undo of a prior direct-binary upgrade.
 	if flagRollback {
 		ver, err := upgradeRollback(ctx)

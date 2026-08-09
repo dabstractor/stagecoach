@@ -407,6 +407,21 @@ func TestUpgradeDelegation_ChocolateyPrintNoPrompt(t *testing.T) {
 	}
 }
 
+// TestUpgradeCheck_InvalidInstallMethodErrors is the FR-U2 guard: an unknown --install-method is a
+// HARD error on every path, including --check. Previously --check branched before Detect, so a typo
+// like "bogus" silently exited 0 and was only surfaced when --check was dropped. dispatchUpgrade now
+// validates the override before branching.
+func TestUpgradeCheck_InvalidInstallMethodErrors(t *testing.T) {
+	outBuf, errBuf, err := runUpgradeArgs(t, "--check", "--install-method", "bogus")
+	if got := exitcode.For(err); got != exitcode.Error {
+		t.Fatalf("exit = %d, want %d (Error — FR-U2: unknown --install-method is a hard error); stdout=%q stderr=%q",
+			got, exitcode.Error, outBuf.String(), errBuf.String())
+	}
+	if err == nil || !strings.Contains(err.Error(), "unknown --install-method") {
+		t.Errorf("err must report 'unknown --install-method'; got %v", err)
+	}
+}
+
 func TestUpgradeDelegation_ForceOverride(t *testing.T) {
 	// BUILD + PACK + SERVE the VALID v0.2.0 payload (the happy-path payload, as in S2).
 	newStub := buildStubVersion(t, "v0.2.0")

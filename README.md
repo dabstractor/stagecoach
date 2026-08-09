@@ -5,7 +5,7 @@
 
 A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Chocolatey, PowerShell installer, npm, Nix, mise/asdf) — see [Features](#features) below.
 
-<!-- TODO: add LICENSE file and badge -->
+
 
 ![CI](https://github.com/dabstractor/stagecoach/actions/workflows/ci.yml/badge.svg)
 
