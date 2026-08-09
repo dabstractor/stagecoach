@@ -220,10 +220,11 @@ func TestDetect_PMProbesConfirm(t *testing.T) {
 		{
 			name: "chocolatey installed (windows)", goos: "windows",
 			canned: func(n string, _ []string) (string, int, error) {
-				// choco uses exit0Confirm (exit code ONLY); stdout is irrelevant. choco list --local-only
-				// stagecoach exits 0 iff installed.
+				// choco uses grepConfirm: `choco list` ALWAYS exits 0 (even on a zero-match listing —
+				// chocolatey/choco#2118), so ownership is proven by finding "stagecoach" in the listing,
+				// not by the exit code. A real `choco list --local-only stagecoach` prints the package line.
 				if n == "choco" {
-					return "", 0, nil
+					return "stagecoach 1.0.0", 0, nil
 				}
 				return "", 1, nil
 			},
@@ -302,6 +303,35 @@ func TestDetect_PMAbsent_StartErrorSkips(t *testing.T) {
 	}
 	if ch != ChannelDirect {
 		t.Errorf("channel = %q, want direct (all PMs absent)", ch)
+	}
+}
+
+// TestDetect_ChocoListZeroMatch_NoFalsePositive is the FR-U2 BUG guard: `choco list` exits 0 even
+// when 0 packages match (chocolatey/choco#2118 — "0 packages found. … Exiting with 0."), so a probe
+// that keys on the EXIT CODE (the old exit0Confirm) false-positives on every Windows box that merely
+// HAS choco installed, misrouting a non-choco (e.g. PowerShell/direct) install to the chocolatey PRINT
+// path. The fix keys on the listing CONTENT (grepConfirm("stagecoach")); this test simulates real
+// choco v2 on a box WITHOUT stagecoach and asserts detection falls through to direct.
+func TestDetect_ChocoListZeroMatch_NoFalsePositive(t *testing.T) {
+	// Real choco v2 on a box without stagecoach: "0 packages found." + EXIT 0. scoop (which probes
+	// first on windows) also misses → exit 1.
+	canned := func(n string, _ []string) (string, int, error) {
+		if n == "choco" {
+			return "0 packages found.", 0, nil
+		}
+		return "", 1, nil
+	}
+	d := &Detector{
+		Exec:    &fakeRunner{canned: canned},
+		GOOS:    "windows",
+		ExePath: `C:\Users\me\bin\stagecoach.exe`, // a direct/PowerShell install (NOT ProgramData\chocolatey)
+	}
+	ch, _, err := d.Detect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ch != ChannelDirect {
+		t.Errorf("zero-match choco list must NOT detect chocolatey (FR-U2 false-positive); got %q, want direct", ch)
 	}
 }
 

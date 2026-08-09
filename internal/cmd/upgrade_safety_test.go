@@ -365,6 +365,48 @@ func TestUpgradeDelegation_ManagerOwnedNoForce(t *testing.T) {
 // to runDirectSwap (the mini-swap runs — a real swap happens): installed exe → v0.2.0,
 // backup → v0.1.0 (FR-U8 one-deep). exit 0. upgradeExecRunner is LEFT at its nil default (runDirectSwap
 // does NOT use it — only runDelegate does).
+// TestUpgradeDelegation_ChocolateyPrintNoPrompt is the FR-U3/U4/U9 BUG guard: Chocolatey is a PRINT
+// channel (FR-U3: "print choco upgrade stagecoach -y; do NOT run it" — needs admin, FR-U4), so like
+// AUR/Nix/deb/rpm it MUST NEVER prompt (FR-U9: "a pure PRINT never prompt") and a printed command
+// exits 0 (FR-U4/FR-U12). The bug: runDelegate's isRun gate omitted ChannelChocolatey, so on a non-TTY
+// without --yes it prompted → refused → exit 1, never printing the command. This drives exactly that
+// path (non-TTY, no --yes) and asserts exit 0 + the command printed + no exec + no swap.
+func TestUpgradeDelegation_ChocolateyPrintNoPrompt(t *testing.T) {
+	setTTY(t, false) // BUG repro: non-interactive stdin, no --yes
+
+	origDetect := upgradeDetect
+	upgradeDetect = func(context.Context, string, func(string)) (upgrade.Channel, string, error) {
+		return upgrade.ChannelChocolatey, "choco", nil
+	}
+	t.Cleanup(func() { upgradeDetect = origDetect })
+
+	rec := &recordingExecRunner{code: 0, err: nil}
+	origExec := upgradeExecRunner
+	upgradeExecRunner = rec // PRINT path never execs; recording proves it (and guards a RUN-routing regression)
+	t.Cleanup(func() { upgradeExecRunner = origExec })
+
+	origSwap := upgradeSwap
+	upgradeSwap = failingSwap(t) // PROVES the PRINT path never swaps
+	t.Cleanup(func() { upgradeSwap = origSwap })
+
+	// DRIVE: NO --yes, non-TTY (the exact BUG #1 repro). Before the fix this exited 1.
+	outBuf, errBuf, err := runUpgradeArgs(t)
+
+	if got := exitcode.For(err); got != exitcode.Success {
+		t.Fatalf("exit = %d, want %d (Success — FR-U4/FR-U12: a printed command exits 0); stdout=%q stderr=%q",
+			got, exitcode.Success, outBuf.String(), errBuf.String())
+	}
+	if got := rec.joinedCalls(); got != "" {
+		t.Errorf("Chocolatey (PRINT) must never exec the updater; recorded %q", got)
+	}
+	if !strings.Contains(outBuf.String(), "choco upgrade stagecoach -y") {
+		t.Errorf("stdout must print the choco update command; got:\n%s", outBuf.String())
+	}
+	if strings.Contains(outBuf.String(), "Proceed?") || strings.Contains(errBuf.String(), "Proceed?") {
+		t.Errorf("Chocolatey (PRINT) must never prompt (FR-U9); stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+}
+
 func TestUpgradeDelegation_ForceOverride(t *testing.T) {
 	// BUILD + PACK + SERVE the VALID v0.2.0 payload (the happy-path payload, as in S2).
 	newStub := buildStubVersion(t, "v0.2.0")

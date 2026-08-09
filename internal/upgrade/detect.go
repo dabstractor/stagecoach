@@ -261,15 +261,18 @@ type pmProbe struct {
 // probes run first. nix and go-install are deliberately ABSENT: neither has an ownership query (a
 // nix profile / a `go install`ed binary cannot be distinguished from a manual copy via a DB lookup),
 // so they are detected by the tier-(c) path heuristics instead. Each confirm predicate is tuned per
-// PM exit/listing semantics: brew/scoop/pacman/choco exit 0 iff the package is installed (exit0Confirm);
-// npm/mise/asdf list everything and we grep the listing for "stagecoach" (grepConfirm).
+// PM exit/listing semantics: brew/scoop/pacman/dpkg/rpm exit NON-zero when the package is not installed
+// (exit0Confirm — a 0 exit proves ownership); npm/mise/asdf/choco always exit 0 and print a listing, so
+// ownership is proven by finding "stagecoach" in it (grepConfirm). choco is in the grep set because
+// `choco list` exits 0 even on a zero-match listing (chocolatey/choco#2118), so exit0Confirm would
+// false-positive on every Windows box that merely has choco installed (FR-U2: "confirms ownership").
 var pmProbes = []pmProbe{
 	{channel: ChannelBrew, goos: []string{"darwin", "linux"}, name: "brew", args: []string{"list", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelAUR, goos: []string{"linux"}, name: "pacman", args: []string{"-Q", "stagecoach-bin"}, confirm: exit0Confirm},
 	{channel: ChannelDeb, goos: []string{"linux"}, name: "dpkg", args: []string{"-s", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelRpm, goos: []string{"linux"}, name: "rpm", args: []string{"-q", "stagecoach"}, confirm: exit0Confirm},
 	{channel: ChannelScoop, goos: []string{"windows"}, name: "scoop", args: []string{"prefix", "stagecoach"}, confirm: exit0Confirm},
-	{channel: ChannelChocolatey, goos: []string{"windows"}, name: "choco", args: []string{"list", "--local-only", "stagecoach"}, confirm: exit0Confirm},
+	{channel: ChannelChocolatey, goos: []string{"windows"}, name: "choco", args: []string{"list", "--local-only", "stagecoach"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelNpm, goos: nil, name: "npm", args: []string{"ls", "-g", "--depth=0"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelMise, goos: nil, name: "mise", args: []string{"ls"}, confirm: grepConfirm("stagecoach")},
 	{channel: ChannelAsdf, goos: nil, name: "asdf", args: []string{"list"}, confirm: grepConfirm("stagecoach")},
