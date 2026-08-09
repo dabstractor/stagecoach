@@ -9,14 +9,11 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.
 
 ![CI](https://github.com/dabstractor/stagecoach/actions/workflows/ci.yml/badge.svg)
 
-## 30-second demo
+## Lazygit Demo
 
 
 https://github.com/user-attachments/assets/89dd318d-5f75-4d25-af7d-4623fe8cfe23
 
-
-> [!NOTE]
-> A recorded walkthrough is coming soon. See the [snapshot workflow](#the-snapshot-workflow) below for what you'll see.
 
 ## Why not opencommit/aicommits?
 
