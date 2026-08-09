@@ -159,7 +159,10 @@ aurs:
     conflicts:
       - stagecoach                 # conflicts with a hypothetical from-source `stagecoach` package
     private_key: '{{ .Env.AUR_SSH_PRIVATE_KEY }}'   # SSH private key whose pubkey is on the AUR account
-    git_url: ssh://aur@aur.archlinux.org/stagecoach-bin.git   # REQUIRED AUR git SSH push target — without it goreleaser skips the publish ("url is empty")
+    # TEMPORARY (2026-08): aur.archlinux.org is down (malware incident). git_url commented out so
+    # goreleaser SKIPS the AUR publish ("url is empty") instead of failing the release job on a
+    # dead host. REVERT (uncomment the line below) once AUR is back.
+    # git_url: ssh://aur@aur.archlinux.org/stagecoach-bin.git   # REQUIRED AUR git SSH push target — without it goreleaser skips the publish ("url is empty")
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
