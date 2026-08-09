@@ -124,7 +124,7 @@ func (m Manifest) Render(model, sysPrompt, userPayload, reasoning string, mode .
 			modelToUse = modelToUse[i+1:]
 		} else {
 			return nil, fmt.Errorf(
-				"provider render %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"",
+				"provider render %q: model %q on %s must be inference/model, e.g. \"anthropic/claude-haiku\"",
 				m.Name, modelToUse, m.Name)
 		}
 	}
@@ -246,7 +246,7 @@ func (m Manifest) RenderMultiTurn(model, sysPrompt, userPayload, reasoning, sess
 			modelToUse = modelToUse[i+1:]
 		} else {
 			return nil, fmt.Errorf(
-				"provider render %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"",
+				"provider render %q: model %q on %s must be inference/model, e.g. \"anthropic/claude-haiku\"",
 				m.Name, modelToUse, m.Name)
 		}
 	}

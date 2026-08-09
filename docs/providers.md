@@ -69,7 +69,7 @@ When `system_prompt_flag` is empty, the system prompt is **prepended** to the pa
 
 In **tooled mode** (the stager role), `tooled_flags` replaces `bare_flags`; tooled mode with empty `tooled_flags` errors — that provider cannot serve as a stager.
 
-For a multi-backend provider (one whose manifest sets `provider_flag` — pi today), the model is `inference/model` (e.g. `zai/glm-5.2`): Render splits it on the first `/` and emits `--provider <prefix> --model <rest>` (FR-R5b). A model with no `/` on such a provider is a HARD configuration error, never a silent bare `--model`. Single-backend providers take the model verbatim. When a `reasoning` level resolves to a non-empty token list in `reasoning_levels`, those tokens are appended after the model flag (FR-R6); absent/empty ⇒ silent no-op.
+For a multi-backend provider (one whose manifest sets `provider_flag` — pi today), the model is `inference/model` (e.g. `anthropic/claude-haiku`): Render splits it on the first `/` and emits `--provider <prefix> --model <rest>` (FR-R5b). A model with no `/` on such a provider is a HARD configuration error, never a silent bare `--model`. Single-backend providers take the model verbatim. When a `reasoning` level resolves to a non-empty token list in `reasoning_levels`, those tokens are appended after the model flag (FR-R6); absent/empty ⇒ silent no-op.
 
 ## The 7 built-in providers
 

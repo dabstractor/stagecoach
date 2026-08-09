@@ -160,13 +160,13 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 
 		// FR-R5b (role-named early check; Render re-enforces at the chokepoint for ALL paths). A model PINNED on a
 		// multi-provider (provider_flag set, e.g. pi) MUST carry its inference backend as a slash-prefix
-		// ("zai/glm-5.2"); a bare model is an unroutable config error, never a silent bare --model. Mirrors
+		// ("anthropic/claude-haiku"); a bare model is an unroutable config error, never a silent bare --model. Mirrors
 		// Render's guard (render.go) but fires earlier with the role name. mdl=="" is NOT pinned ⇒ no guard
 		// (Render uses the manifest DefaultModel + its own guard). Single-backend providers (ProviderFlag=="")
 		// are never guarded.
 		if isMultiProvider(m) && mdl != "" && !strings.Contains(mdl, "/") {
 			return RoleManifests{}, RoleModels{}, fmt.Errorf(
-				"role %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"", role, mdl, m.Name)
+				"role %q: model %q on %s must be inference/model, e.g. \"anthropic/claude-haiku\"", role, mdl, m.Name)
 		}
 
 		setRole(&rm, &rmodels, role, m, prov, mdl, rsn)

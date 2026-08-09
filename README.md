@@ -304,16 +304,16 @@ git config stagecoach.model sonnet
 
 # For pi (multi-backend), prefix the model with the inference backend:
 git config stagecoach.provider pi
-git config stagecoach.model zai/glm-5.2
+git config stagecoach.model anthropic/claude-haiku
 ```
 
 > [!NOTE]
 > `pi` is a multi-backend provider: the inference backend is a slash-prefix on the model
-> (`zai/glm-5.2`). A bare model (no `/`) on pi is a config error (FR-R5b). Set
-> `git config stagecoach.model zai/glm-5.2` (or `[defaults] model = "zai/glm-5.2"` in your config).
+> (`anthropic/claude-haiku`). A bare model (no `/`) on pi is a config error (FR-R5b). Set
+> `git config stagecoach.model anthropic/claude-haiku` (or `[defaults] model = "anthropic/claude-haiku"` in your config).
 > See [Provider manifests](docs/providers.md) for the full schema.
 
-Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are left empty so you can supply your own inference-backend/model prefix; set `model = "zai/glm-5.2"` to pin a specific backend):
+Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are left empty so you can supply your own inference-backend/model prefix; set `model = "anthropic/claude-haiku"` to pin a specific backend):
 
 ```bash
 stagecoach config init

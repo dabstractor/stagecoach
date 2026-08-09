@@ -136,7 +136,7 @@ func (m Manifest) Validate() error {
 
 // ValidateModel performs the model-format checks Render would run, WITHOUT building the full
 // CmdSpec. It exists so callers can surface FR-R5b errors (a bare model on a provider_flag provider,
-// e.g. "glm-5.2" on pi instead of "zai/glm-5.2") BEFORE emitting an optimistic "↳ Generating…" label
+// e.g. "claude-haiku" on pi instead of "anthropic/claude-haiku") BEFORE emitting an optimistic "↳ Generating…" label
 // — otherwise the user sees "started then failed" instead of a clean up-front rejection (Finding 2).
 // Empty model is allowed here (Render falls back to DefaultModel; a missing default surfaces as a
 // downstream Execute error, not a render error). Byte-for-byte mirrors Render's slash check.
@@ -153,7 +153,7 @@ func (m Manifest) ValidateModel(model string) error {
 	if *r.ProviderFlag != "" && modelToUse != "" {
 		if i := strings.Index(modelToUse, "/"); i < 0 {
 			return fmt.Errorf(
-				"provider render %q: model %q on %s must be inference/model, e.g. \"zai/glm-5.2\"",
+				"provider render %q: model %q on %s must be inference/model, e.g. \"anthropic/claude-haiku\"",
 				m.Name, modelToUse, m.Name)
 		}
 	}
