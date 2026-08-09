@@ -62,13 +62,13 @@ func TestNewRegistry_NoOverrides_HasAllBuiltins(t *testing.T) {
 
 func TestNewRegistry_OverrideExisting_OnlyTouchedFieldChanges(t *testing.T) {
 	base, _ := NewRegistry(nil).Get("pi") // the built-in pi
-	r := NewRegistry(map[string]Manifest{"pi": {DefaultModel: strPtr("glm-5.2")}})
+	r := NewRegistry(map[string]Manifest{"pi": {DefaultModel: strPtr("claude-haiku")}})
 	got, ok := r.Get("pi")
 	if !ok {
 		t.Fatal("pi missing")
 	}
-	if got.DefaultModel == nil || *got.DefaultModel != "glm-5.2" {
-		t.Errorf("DefaultModel = %v, want glm-5.2", got.DefaultModel)
+	if got.DefaultModel == nil || *got.DefaultModel != "claude-haiku" {
+		t.Errorf("DefaultModel = %v, want claude-haiku", got.DefaultModel)
 	}
 	// Untouched fields survive from the built-in:
 	if *got.Command != *base.Command {
@@ -212,14 +212,14 @@ func TestMarshalTOML_UnknownErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMarshalTOML_ReflectsMerge(t *testing.T) {
-	r := NewRegistry(map[string]Manifest{"pi": {DefaultModel: strPtr("glm-5.2")}})
+	r := NewRegistry(map[string]Manifest{"pi": {DefaultModel: strPtr("claude-haiku")}})
 	s, _ := r.MarshalTOML("pi")
 	// Decode and check the overridden field instead of string search (avoids strings import).
 	var decoded Manifest
 	if err := toml.Unmarshal([]byte(s), &decoded); err != nil {
 		t.Fatalf("re-decode: %v", err)
 	}
-	if decoded.DefaultModel == nil || *decoded.DefaultModel != "glm-5.2" {
+	if decoded.DefaultModel == nil || *decoded.DefaultModel != "claude-haiku" {
 		t.Errorf("merged default_model missing from TOML: got %v", decoded.DefaultModel)
 	}
 }
@@ -312,7 +312,7 @@ func TestDefaultProvider(t *testing.T) {
 func TestDecodeUserOverrides(t *testing.T) {
 	raw := map[string]map[string]any{
 		"myagent": {"command": "/opt/agent", "prompt_delivery": "stdin", "bare_flags": []any{"--no-mcp"}, "default_model": "m1"},
-		"pi":      {"default_model": "glm-5.2"}, // override a built-in name
+		"pi":      {"default_model": "claude-haiku"}, // override a built-in name
 	}
 	got, err := DecodeUserOverrides(raw)
 	if err != nil {
@@ -338,7 +338,7 @@ func TestDecodeUserOverrides(t *testing.T) {
 		t.Errorf("StripCodeFence = %v, want nil (absent)", my.StripCodeFence)
 	}
 	pi := got["pi"]
-	if *pi.DefaultModel != "glm-5.2" {
+	if *pi.DefaultModel != "claude-haiku" {
 		t.Errorf("pi.DefaultModel = %q", *pi.DefaultModel)
 	}
 	if pi.Command != nil {
@@ -364,9 +364,9 @@ func TestFirstTooledProvider(t *testing.T) {
 		{[]string{"pi", "claude"}, "pi"},      // pi is first capable (priority order)
 		{[]string{"claude", "pi"}, "pi"},      // pi still wins regardless of input order
 		{[]string{"claude", "agy"}, "agy"},    // agy precedes claude in preferred order (both capable now)
-		{[]string{"agy", "qwen-code"}, "agy"},  // agy is stager-capable (item 4 verified); qwen-code is not
+		{[]string{"agy", "qwen-code"}, "agy"}, // agy is stager-capable (item 4 verified); qwen-code is not
 		{[]string{"claude"}, "claude"},        // claude alone is capable
-		{[]string{"agy"}, "agy"},               // agy IS stager-capable (TooledFlags non-nil, post item-4 verification)
+		{[]string{"agy"}, "agy"},              // agy IS stager-capable (TooledFlags non-nil, post item-4 verification)
 		{[]string{"myagent"}, ""},             // user-defined never auto-selected
 		{nil, ""},                             // nothing installed
 	}

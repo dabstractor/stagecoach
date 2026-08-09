@@ -16,7 +16,7 @@ func sampleBase() Manifest {
 		PromptFlag:       strPtr(""),
 		PrintFlag:        strPtr("-p"),
 		ModelFlag:        strPtr("--model"),
-		DefaultModel:     strPtr("glm-5-turbo"),
+		DefaultModel:     strPtr("claude-haiku"),
 		SystemPromptFlag: strPtr("--system-prompt"),
 		ProviderFlag:     strPtr("--provider"),
 		SessionMode:      strPtr("append"), // pi is the FR-T8 "append" provider — realistic non-nil for merge tests
@@ -39,12 +39,12 @@ func sampleBase() Manifest {
 
 func TestMergeManifest_PartialOverride_OnlyTouchedFieldChanges(t *testing.T) {
 	base := sampleBase()
-	override := Manifest{DefaultModel: strPtr("glm-5.2")}
+	override := Manifest{DefaultModel: strPtr("claude-haiku")}
 	merged := MergeManifest(base, override)
 
 	// The one overridden field changed.
-	if merged.DefaultModel == nil || *merged.DefaultModel != "glm-5.2" {
-		t.Errorf("DefaultModel = %v, want \"glm-5.2\"", merged.DefaultModel)
+	if merged.DefaultModel == nil || *merged.DefaultModel != "claude-haiku" {
+		t.Errorf("DefaultModel = %v, want \"claude-haiku\"", merged.DefaultModel)
 	}
 
 	// Every OTHER scalar pointer field must match base exactly.
@@ -322,7 +322,7 @@ func TestMergeManifest_MergedResultValidates(t *testing.T) {
 	}
 
 	// Merged result with a partial override must still validate.
-	merged := MergeManifest(base, Manifest{DefaultModel: strPtr("glm-5.2")})
+	merged := MergeManifest(base, Manifest{DefaultModel: strPtr("claude-haiku")})
 	if err := merged.Validate(); err != nil {
 		t.Errorf("merged manifest should validate: %v", err)
 	}

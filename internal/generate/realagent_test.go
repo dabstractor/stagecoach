@@ -37,7 +37,7 @@ type realDefault struct {
 // to the manifest DefaultModel / emit no flag. Sourced from architecture/external_deps.md.
 // Override per-run via STAGECOACH_REAL_MODEL_<NAME> / STAGECOACH_REAL_INFERENCE_<NAME>.
 var realDefaults = map[string]realDefault{
-	"pi":       {"glm-5-turbo", "zai"},            // explicit personal override (commit-pi); manifest default empty (FR-D2)
+	"pi":       {"claude-haiku", "anthropic"},     // explicit personal override (commit-pi); manifest default empty (FR-D2)
 	"claude":   {"", ""},                          // sonnet from manifest default
 	"opencode": {"anthropic/claude-sonnet-4", ""}, // manifest default is "" → MUST supply a model
 	"codex":    {"", ""},                          // model from ~/.codex/config.toml

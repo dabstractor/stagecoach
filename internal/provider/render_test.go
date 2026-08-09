@@ -84,11 +84,11 @@ func TestRender_GoldenPerProvider(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRender_Pi_ByteForByteCommitPi(t *testing.T) {
-	spec, err := builtinPi().Render("zai/glm-5-turbo", "<sys>", "<user>", "off") // model-prefix fold: "zai/glm-5-turbo" → --provider zai --model glm-5-turbo
+	spec, err := builtinPi().Render("anthropic/claude-haiku", "<sys>", "<user>", "off") // model-prefix fold: "anthropic/claude-haiku" → --provider anthropic --model claude-haiku
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	wantArgs := []string{"--provider", "zai", "--model", "glm-5-turbo", "--system-prompt", "<sys>",
+	wantArgs := []string{"--provider", "anthropic", "--model", "claude-haiku", "--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates",
 		"--no-context-files", "--no-session", "-p"}
 	if spec.Command != "pi" || !reflect.DeepEqual(spec.Args, wantArgs) || spec.Stdin != "<user>" {
@@ -149,9 +149,9 @@ func TestRender_ModelDefaultFallback(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRender_ModelPrefixFold(t *testing.T) {
-	// pi + "zai/glm-5.2" (provider_flag="--provider") → fold to --provider zai --model glm-5.2
-	s, _ := builtinPi().Render("zai/glm-5.2", "<sys>", "<user>", "off")
-	if !containsPair(s.Args, "--provider", "zai") || !containsPair(s.Args, "--model", "glm-5.2") || containsToken(s.Args, "zai/glm-5.2") {
+	// pi + "anthropic/claude-haiku" (provider_flag="--provider") → fold to --provider anthropic --model claude-haiku
+	s, _ := builtinPi().Render("anthropic/claude-haiku", "<sys>", "<user>", "off")
+	if !containsPair(s.Args, "--provider", "anthropic") || !containsPair(s.Args, "--model", "claude-haiku") || containsToken(s.Args, "anthropic/claude-haiku") {
 		t.Errorf("fold: %v", s.Args)
 	}
 	// opencode (no provider_flag) + "openai/gpt-5.4" → VERBATIM, NOT split
@@ -295,7 +295,7 @@ func TestRender_FR5b_RejectsBareModelOnMultiProvider(t *testing.T) {
 	pi := builtinPi() // ProviderFlag="--provider"
 
 	// (1) bare model, no slash → ERROR
-	if _, err := pi.Render("glm-5.2", "<sys>", "<user>", "off"); err == nil {
+	if _, err := pi.Render("claude-haiku", "<sys>", "<user>", "off"); err == nil {
 		t.Fatal("want no-slash error")
 	}
 
@@ -303,15 +303,15 @@ func TestRender_FR5b_RejectsBareModelOnMultiProvider(t *testing.T) {
 	m := Manifest{
 		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
 		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
-		DefaultModel: strPtr("glm-5.2"),
+		DefaultModel: strPtr("claude-haiku"),
 	}
 	if _, err := m.Render("", "<sys>", "<user>", "off"); err == nil {
 		t.Fatal("want no-slash error on default_model")
 	}
 
-	// (3) fold success: "zai/glm-5.2" → --provider zai --model glm-5.2
-	s, err := pi.Render("zai/glm-5.2", "<sys>", "<user>", "off")
-	if err != nil || !containsPair(s.Args, "--provider", "zai") || !containsPair(s.Args, "--model", "glm-5.2") {
+	// (3) fold success: "anthropic/claude-haiku" → --provider anthropic --model claude-haiku
+	s, err := pi.Render("anthropic/claude-haiku", "<sys>", "<user>", "off")
+	if err != nil || !containsPair(s.Args, "--provider", "anthropic") || !containsPair(s.Args, "--model", "claude-haiku") {
 		t.Errorf("fold: err=%v args=%v", err, s.Args)
 	}
 
@@ -475,7 +475,7 @@ func TestRender_PiReasoningThinkingTokens(t *testing.T) {
 	m := builtinPi() // the REAL built-in (not synthetic)
 	// high/medium/low → --thinking <level> appended after the model flag (FR-R5b fold first)
 	for _, lvl := range []string{"high", "medium", "low"} {
-		s, err := m.Render("zai/glm-5.2", "", "", lvl) // folds to --provider zai --model glm-5.2
+		s, err := m.Render("anthropic/claude-haiku", "", "", lvl) // folds to --provider anthropic --model claude-haiku
 		if err != nil {
 			t.Fatalf("%s: %v", lvl, err)
 		}
@@ -485,7 +485,7 @@ func TestRender_PiReasoningThinkingTokens(t *testing.T) {
 	}
 	// off / "" → no --thinking token, never an error (FR-R6 no-op)
 	for _, lvl := range []string{"off", ""} {
-		s, err := m.Render("zai/glm-5.2", "", "", lvl)
+		s, err := m.Render("anthropic/claude-haiku", "", "", lvl)
 		if err != nil {
 			t.Fatalf("%q: %v", lvl, err)
 		}
@@ -564,12 +564,12 @@ func mtPiManifest() Manifest {
 // TestRenderMultiTurn_PiTurn1_Golden is the byte-for-byte FR-T9 pin: --no-session dropped, --session-id
 // <id> added (before -p), --system-prompt <sys> present on turn 1, Stdin = payload only.
 func TestRenderMultiTurn_PiTurn1_Golden(t *testing.T) {
-	spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagecoach-test", 1)
+	spec, err := mtPiManifest().RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<payload>", "", "stagecoach-test", 1)
 	if err != nil {
 		t.Fatalf("RenderMultiTurn: %v", err)
 	}
 	wantArgs := []string{
-		"--provider", "zai", "--model", "glm-5.2",
+		"--provider", "anthropic", "--model", "claude-haiku",
 		"--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files",
 		// NOTE: "--no-session" is ABSENT (filtered).
@@ -602,12 +602,12 @@ func TestRenderMultiTurn_PiTurn1_Golden(t *testing.T) {
 // sys prepend — even though sysPrompt is passed non-empty. The single turnSys local makes both guards
 // turn-correct; this is the load-bearing turn-1-only assertion.
 func TestRenderMultiTurn_PiTurn2_NoSysPromptFlag_NoPrepend(t *testing.T) {
-	spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagecoach-test", 2)
+	spec, err := mtPiManifest().RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<payload>", "", "stagecoach-test", 2)
 	if err != nil {
 		t.Fatalf("RenderMultiTurn: %v", err)
 	}
 	wantArgs := []string{
-		"--provider", "zai", "--model", "glm-5.2",
+		"--provider", "anthropic", "--model", "claude-haiku",
 		// NOTE: NO "--system-prompt","<sys>" (turn>1 ⇒ turnSys="" ⇒ flag suppressed).
 		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files",
 		"--session-id", "stagecoach-test",
@@ -638,7 +638,7 @@ func TestRenderMultiTurn_NonAppendProviderErrors(t *testing.T) {
 		SessionMode:      strPtr(""), // explicit "" (non-append) — gate must fire
 		BareFlags:        []string{"--no-session"},
 	}
-	spec, err := m.RenderMultiTurn("zai/glm-5.2", "<sys>", "<p>", "", "id", 1)
+	spec, err := m.RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<p>", "", "id", 1)
 	if err == nil {
 		t.Fatal("want error for non-append provider, got nil")
 	}
@@ -656,7 +656,7 @@ func TestRenderMultiTurn_NonAppendProviderErrors(t *testing.T) {
 func TestRenderMultiTurn_DoesNotMutateManifest(t *testing.T) {
 	m := mtPiManifest()
 	wantBare := append([]string(nil), m.BareFlags...)
-	_, _ = m.RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", "stagecoach-test", 1)
+	_, _ = m.RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<payload>", "", "stagecoach-test", 1)
 	if !reflect.DeepEqual(m.BareFlags, wantBare) {
 		t.Errorf("BareFlags mutated:\n got %v\nwant %v", m.BareFlags, wantBare)
 	}
@@ -682,7 +682,7 @@ func TestRenderMultiTurn_GoldenTable(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", tc.sessionID, tc.turn)
+			spec, err := mtPiManifest().RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<payload>", "", tc.sessionID, tc.turn)
 			if err != nil {
 				t.Fatalf("turn %d: %v", tc.turn, err)
 			}
@@ -723,7 +723,7 @@ func TestRenderMultiTurn_PositionalAndFlag_PayloadBytes(t *testing.T) {
 			m := mtPiManifest()
 			m.PromptDelivery = strPtr(tc.delivery)
 			m.PromptFlag = strPtr(tc.flag)
-			spec, err := m.RenderMultiTurn("zai/glm-5.2", "<sys>", payload, "", "sid", 1)
+			spec, err := m.RenderMultiTurn("anthropic/claude-haiku", "<sys>", payload, "", "sid", 1)
 			if err != nil {
 				t.Fatalf("RenderMultiTurn: %v", err)
 			}
@@ -744,7 +744,7 @@ func TestRenderMultiTurn_PositionalAndFlag_PayloadBytes(t *testing.T) {
 func TestRenderMultiTurn_SessionIDStableAcrossTurns(t *testing.T) {
 	const sid = "stagecoach-stability-probe"
 	for turn := 1; turn <= 3; turn++ {
-		spec, err := mtPiManifest().RenderMultiTurn("zai/glm-5.2", "<sys>", "<payload>", "", sid, turn)
+		spec, err := mtPiManifest().RenderMultiTurn("anthropic/claude-haiku", "<sys>", "<payload>", "", sid, turn)
 		if err != nil {
 			t.Fatalf("turn %d: %v", turn, err)
 		}

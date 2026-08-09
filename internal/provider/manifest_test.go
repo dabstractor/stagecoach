@@ -15,7 +15,7 @@ command = "pi"
 prompt_delivery = "stdin"
 print_flag = "-p"
 model_flag = "--model"
-default_model = "glm-5-turbo"
+default_model = "claude-haiku"
 system_prompt_flag = "--system-prompt"
 provider_flag = "--provider"
 bare_flags = ["--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session"]
@@ -60,7 +60,7 @@ func TestUnmarshal_FullManifest(t *testing.T) {
 
 	// Model
 	assertStr(t, "ModelFlag", m.ModelFlag, "--model")
-	assertStr(t, "DefaultModel", m.DefaultModel, "glm-5-turbo")
+	assertStr(t, "DefaultModel", m.DefaultModel, "claude-haiku")
 
 	// System prompt
 	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "--system-prompt")
@@ -320,9 +320,9 @@ func TestValidateModel_BareModelOnProviderFlagProvider_Errors(t *testing.T) {
 	m := Manifest{
 		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
 		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
-		DefaultModel: strPtr("zai/glm-5.2"),
+		DefaultModel: strPtr("anthropic/claude-haiku"),
 	}
-	err := m.ValidateModel("glm-5.2")
+	err := m.ValidateModel("claude-haiku")
 	if err == nil {
 		t.Fatal("ValidateModel err = nil, want no-slash error")
 	}
@@ -335,9 +335,9 @@ func TestValidateModel_SlashModelOnProviderFlagProvider_OK(t *testing.T) {
 	m := Manifest{
 		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
 		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
-		DefaultModel: strPtr("zai/glm-5.2"),
+		DefaultModel: strPtr("anthropic/claude-haiku"),
 	}
-	if err := m.ValidateModel("zai/glm-5.2"); err != nil {
+	if err := m.ValidateModel("anthropic/claude-haiku"); err != nil {
 		t.Errorf("slash model should be OK: %v", err)
 	}
 }
@@ -347,7 +347,7 @@ func TestValidateModel_DefaultModelNoSlash_Errors(t *testing.T) {
 	m := Manifest{
 		Name: "pi", Command: strPtr("pi"), PromptDelivery: strPtr("stdin"),
 		ProviderFlag: strPtr("--provider"), ModelFlag: strPtr("--model"),
-		DefaultModel: strPtr("glm-5.2"),
+		DefaultModel: strPtr("claude-haiku"),
 	}
 	if err := m.ValidateModel(""); err == nil {
 		t.Fatal("want no-slash error on default_model fallback")
@@ -380,7 +380,7 @@ func TestValidateModel_NoModelOnProviderFlagProvider_OK(t *testing.T) {
 func TestValidateModel_InvalidManifest_Errors(t *testing.T) {
 	// Validate is still run; a nameless manifest errors.
 	m := Manifest{Command: strPtr("x"), ProviderFlag: strPtr("--provider")}
-	if err := m.ValidateModel("zai/glm-5.2"); err == nil {
+	if err := m.ValidateModel("anthropic/claude-haiku"); err == nil {
 		t.Fatal("want Validate error for nameless manifest")
 	}
 }

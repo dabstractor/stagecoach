@@ -433,10 +433,10 @@ func TestBuiltinManifests_RenderedCommand_Pi_ShippedDefault(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride(t *testing.T) {
-	argv := renderArgs(builtinPi(), "zai", "glm-5-turbo", "<sys>") // explicit personal override
+	argv := renderArgs(builtinPi(), "anthropic", "claude-haiku", "<sys>") // explicit personal override
 	want := []string{
-		"pi", "--provider", "zai",
-		"--model", "glm-5-turbo",
+		"pi", "--provider", "anthropic",
+		"--model", "claude-haiku",
 		"--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",
@@ -881,13 +881,13 @@ func TestBuiltinManifests_RenderedCommand_QwenCode(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_RenderedCommand_Pi_Tooled(t *testing.T) {
-	spec, err := builtinPi().Render("zai/glm-5-turbo", "<sys>", "<user>", "off", RenderTooled)
+	spec, err := builtinPi().Render("anthropic/claude-haiku", "<sys>", "<user>", "off", RenderTooled)
 	if err != nil {
 		t.Fatalf("pi tooled render error: %v", err)
 	}
 	want := []string{
-		"--provider", "zai",
-		"--model", "glm-5-turbo",
+		"--provider", "anthropic",
+		"--model", "claude-haiku",
 		"--system-prompt", "<sys>",
 		"--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",

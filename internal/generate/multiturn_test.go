@@ -215,7 +215,7 @@ func TestRun_HappyPath(t *testing.T) {
 	cfg.MultiTurnChunkTokens = 1 // ⇒ runesPerWindow=4 ⇒ "aaaa\nbbbb\n" splits into 2 chunks ⇒ 3 turns
 
 	msg, ok, cause := Run(context.Background(), Deps{}, cfg, m, "you are a commit writer",
-		"aaaa\nbbbb\n", "zai/glm-5.2", "")
+		"aaaa\nbbbb\n", "anthropic/claude-haiku", "")
 	if cause != nil {
 		t.Fatalf("Run cause = %v, want nil (happy path)", cause)
 	}
@@ -241,7 +241,7 @@ func TestRun_TurnError(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.MultiTurnChunkTokens = 1
-	_, _, cause := Run(context.Background(), Deps{}, cfg, sm, "sys", "aaaa\nbbbb\n", "zai/glm-5.2", "")
+	_, _, cause := Run(context.Background(), Deps{}, cfg, sm, "sys", "aaaa\nbbbb\n", "anthropic/claude-haiku", "")
 	if cause == nil {
 		t.Fatal("Run cause = nil, want non-nil (turn-1 non-zero exit ⇒ FR-T7 abort)")
 	}
@@ -265,7 +265,7 @@ func TestRun_MessageRoleTimeoutBoundsTurn(t *testing.T) {
 	cfg.Timeout = 30 * time.Second                                                         // LARGE global (would NOT time out)
 	cfg.Roles = map[string]config.RoleConfig{"message": {Timeout: 150 * time.Millisecond}} // SMALL role → times out
 
-	_, _, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "zai/glm-5.2", "")
+	_, _, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "anthropic/claude-haiku", "")
 	if cause == nil {
 		t.Fatal("Run cause = nil, want non-nil (message-role 150ms should bound turn-1 Execute, not the 30s global)")
 	}
@@ -282,7 +282,7 @@ func TestRun_FinalParseEmpty(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.MultiTurnChunkTokens = 1
 
-	msg, ok, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "zai/glm-5.2", "")
+	msg, ok, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "anthropic/claude-haiku", "")
 	if cause != nil {
 		t.Fatalf("Run cause = %v, want nil (empty final stdout is a parse-fail, not a turn error)", cause)
 	}
@@ -303,7 +303,7 @@ func TestRun_NonAppendManifest(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.MultiTurnChunkTokens = 1
 
-	_, _, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "zai/glm-5.2", "")
+	_, _, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "anthropic/claude-haiku", "")
 	if cause == nil {
 		t.Fatal("Run cause = nil, want non-nil (non-append manifest ⇒ RenderMultiTurn session_mode gate)")
 	}

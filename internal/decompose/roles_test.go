@@ -315,12 +315,12 @@ func TestResolveRoles_NoStagerCapable(t *testing.T) {
 
 func TestResolveRoles_FR5b_BareModelOnPi(t *testing.T) {
 	// Planner has a model set but NO provider; auto-detect picks pi (multi-provider) → FR-R5b error
-	// because "glm-5-turbo" has no slash-prefix.
+	// because "claude-haiku" has no slash-prefix.
 	reg := bogusRegistry(t, []string{"pi"})
 
 	cfg := config.Config{
 		Roles: map[string]config.RoleConfig{
-			"planner": {Model: "glm-5-turbo"},
+			"planner": {Model: "claude-haiku"},
 		},
 	}
 

@@ -247,7 +247,7 @@ func TestProgressLabel(t *testing.T) {
 		want                  string
 	}{
 		{"model+provider", "Generating", "sonnet", "claude", "Generating with sonnet in claude…"},
-		{"slash-prefixed model", "Generating", "zai/glm-5.2", "pi", "Generating with zai/glm-5.2 in pi…"},
+		{"slash-prefixed model", "Generating", "anthropic/claude-haiku", "pi", "Generating with anthropic/claude-haiku in pi…"},
 		{"model empty → provider alone", "Generating", "", "claude", "Generating with claude…"},
 		{"provider empty → minimal", "Generating", "sonnet", "", "Generating…"},
 		{"both empty", "Generating", "", "", "Generating…"},
