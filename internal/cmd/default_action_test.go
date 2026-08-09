@@ -1497,7 +1497,7 @@ tooled_flags = ["--yes"]
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
 	// Bare model on a provider_flag provider — FR-R5b violation.
-	rootCmd.SetArgs([]string{"--provider", "pi", "--model", "glm-5.2", "--dry-run"})
+	rootCmd.SetArgs([]string{"--provider", "pi", "--model", "claude-haiku", "--dry-run"})
 
 	err := Execute(context.Background())
 	if err == nil {
@@ -1529,16 +1529,16 @@ func TestProgressLabel_GenerateVisible(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
-	rootCmd.SetArgs([]string{"--provider", "stub", "--model", "glm-5.2"})
+	rootCmd.SetArgs([]string{"--provider", "stub", "--model", "claude-haiku"})
 
 	err := Execute(context.Background())
 	if err != nil {
 		t.Fatalf("Execute err=%v, want nil", err)
 	}
 
-	// FR51b: stderr shows "↳ Generating with glm-5.2 in stub…"
-	if !strings.Contains(errBuf.String(), "↳ Generating with glm-5.2 in stub…") {
-		t.Errorf("stderr = %q, want to contain FR51b label '↳ Generating with glm-5.2 in stub…'", errBuf.String())
+	// FR51b: stderr shows "↳ Generating with claude-haiku in stub…"
+	if !strings.Contains(errBuf.String(), "↳ Generating with claude-haiku in stub…") {
+		t.Errorf("stderr = %q, want to contain FR51b label '↳ Generating with claude-haiku in stub…'", errBuf.String())
 	}
 	// stdout must not contain the progress prefix.
 	if strings.Contains(outBuf.String(), "↳ ") {

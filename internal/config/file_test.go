@@ -56,7 +56,7 @@ max_diff_bytes = 12345
 output = "json"
 
 [provider.pi]
-default_model = "glm-5.2"
+default_model = "claude-haiku"
 
 [provider.myagent]
 command = "/opt/myagent/bin/agent"
@@ -87,8 +87,8 @@ bare_flags = ["--no-mcp", "--ephemeral"]
 	}
 	if m, ok := cfg.Providers["pi"]; !ok {
 		t.Errorf("Providers[\"pi\"] missing")
-	} else if m["default_model"] != "glm-5.2" {
-		t.Errorf("pi.default_model=%v want glm-5.2", m["default_model"])
+	} else if m["default_model"] != "claude-haiku" {
+		t.Errorf("pi.default_model=%v want claude-haiku", m["default_model"])
 	}
 	if _, ok := cfg.Providers["myagent"]; !ok {
 		t.Errorf("Providers[\"myagent\"] missing")
@@ -783,7 +783,7 @@ config_version = 2
 agent = "pi"
 
 [agent.pi]
-default_model = "glm-5.2"
+default_model = "claude-haiku"
 `
 	path := writeTempTOML(t, body)
 	cfg, err := loadTOML(path)
@@ -797,8 +797,8 @@ default_model = "glm-5.2"
 	if !ok {
 		t.Fatalf("Providers[\"pi\"] missing (agent→provider remap lost the [agent.pi] block)")
 	}
-	if m["default_model"] != "glm-5.2" {
-		t.Errorf("pi.default_model=%v want glm-5.2", m["default_model"])
+	if m["default_model"] != "claude-haiku" {
+		t.Errorf("pi.default_model=%v want claude-haiku", m["default_model"])
 	}
 }
 

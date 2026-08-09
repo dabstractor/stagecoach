@@ -19,12 +19,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "global pi model folded",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
-				Providers: map[string]map[string]any{"pi": {"default_provider": "zai"}},
+				Model:     "claude-haiku",
+				Providers: map[string]map[string]any{"pi": {"default_provider": "anthropic"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "zai/glm-5.2" {
-					t.Errorf("Model=%q want zai/glm-5.2", cfg.Model)
+				if cfg.Model != "anthropic/claude-haiku" {
+					t.Errorf("Model=%q want anthropic/claude-haiku", cfg.Model)
 				}
 				if _, ok := cfg.Providers["pi"]["default_provider"]; ok {
 					t.Error("default_provider should be deleted")
@@ -36,13 +36,13 @@ func TestMigrateV2ToV3(t *testing.T) {
 			cfg: Config{
 				Provider: "claude",
 				Roles: map[string]RoleConfig{
-					"planner": {Provider: "pi", Model: "glm-5.2"},
+					"planner": {Provider: "pi", Model: "claude-haiku"},
 				},
-				Providers: map[string]map[string]any{"pi": {"default_provider": "zai"}},
+				Providers: map[string]map[string]any{"pi": {"default_provider": "anthropic"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if rc := cfg.Roles["planner"]; rc.Model != "zai/glm-5.2" {
-					t.Errorf("Roles[planner].Model=%q want zai/glm-5.2", rc.Model)
+				if rc := cfg.Roles["planner"]; rc.Model != "anthropic/claude-haiku" {
+					t.Errorf("Roles[planner].Model=%q want anthropic/claude-haiku", rc.Model)
 				}
 			},
 		},
@@ -51,13 +51,13 @@ func TestMigrateV2ToV3(t *testing.T) {
 			cfg: Config{
 				Provider: "pi",
 				Roles: map[string]RoleConfig{
-					"message": {Model: "glm-5.2"}, // no Provider — inherits global "pi"
+					"message": {Model: "claude-haiku"}, // no Provider — inherits global "pi"
 				},
-				Providers: map[string]map[string]any{"pi": {"default_provider": "zai"}},
+				Providers: map[string]map[string]any{"pi": {"default_provider": "anthropic"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if rc := cfg.Roles["message"]; rc.Model != "zai/glm-5.2" {
-					t.Errorf("Roles[message].Model=%q want zai/glm-5.2", rc.Model)
+				if rc := cfg.Roles["message"]; rc.Model != "anthropic/claude-haiku" {
+					t.Errorf("Roles[message].Model=%q want anthropic/claude-haiku", rc.Model)
 				}
 			},
 		},
@@ -66,12 +66,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			cfg: Config{
 				Provider: "pi",
 				Providers: map[string]map[string]any{
-					"pi": {"default_provider": "zai", "default_model": "glm-5.2"},
+					"pi": {"default_provider": "anthropic", "default_model": "claude-haiku"},
 				},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Providers["pi"]["default_model"] != "zai/glm-5.2" {
-					t.Errorf("pi.default_model=%q want zai/glm-5.2", cfg.Providers["pi"]["default_model"])
+				if cfg.Providers["pi"]["default_model"] != "anthropic/claude-haiku" {
+					t.Errorf("pi.default_model=%q want anthropic/claude-haiku", cfg.Providers["pi"]["default_model"])
 				}
 				if _, ok := cfg.Providers["pi"]["default_provider"]; ok {
 					t.Error("default_provider should be deleted")
@@ -82,15 +82,15 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "idempotent — already prefixed model untouched",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "zai/glm-5.2",
-				Providers: map[string]map[string]any{"pi": {"default_provider": "zai", "default_model": "zai/glm-5.2"}},
+				Model:     "anthropic/claude-haiku",
+				Providers: map[string]map[string]any{"pi": {"default_provider": "anthropic", "default_model": "anthropic/claude-haiku"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "zai/glm-5.2" {
-					t.Errorf("Model=%q want zai/glm-5.2 (unchanged)", cfg.Model)
+				if cfg.Model != "anthropic/claude-haiku" {
+					t.Errorf("Model=%q want anthropic/claude-haiku (unchanged)", cfg.Model)
 				}
-				if cfg.Providers["pi"]["default_model"] != "zai/glm-5.2" {
-					t.Errorf("pi.default_model=%q want zai/glm-5.2 (unchanged)", cfg.Providers["pi"]["default_model"])
+				if cfg.Providers["pi"]["default_model"] != "anthropic/claude-haiku" {
+					t.Errorf("pi.default_model=%q want anthropic/claude-haiku (unchanged)", cfg.Providers["pi"]["default_model"])
 				}
 			},
 		},
@@ -119,12 +119,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "empty default_provider — key dropped, no fold",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
+				Model:     "claude-haiku",
 				Providers: map[string]map[string]any{"pi": {"default_provider": ""}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "glm-5.2" {
-					t.Errorf("Model=%q want glm-5.2 (no fold for empty default_provider)", cfg.Model)
+				if cfg.Model != "claude-haiku" {
+					t.Errorf("Model=%q want claude-haiku (no fold for empty default_provider)", cfg.Model)
 				}
 				if _, ok := cfg.Providers["pi"]["default_provider"]; ok {
 					t.Error("default_provider should be deleted")
@@ -135,12 +135,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "bare pi model with NO default_provider — stays bare (no-invent)",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
-				Providers: map[string]map[string]any{"pi": {"default_model": "glm-5.2"}},
+				Model:     "claude-haiku",
+				Providers: map[string]map[string]any{"pi": {"default_model": "claude-haiku"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "glm-5.2" {
-					t.Errorf("Model=%q want glm-5.2 (no-invent: no default_provider, stays bare)", cfg.Model)
+				if cfg.Model != "claude-haiku" {
+					t.Errorf("Model=%q want claude-haiku (no-invent: no default_provider, stays bare)", cfg.Model)
 				}
 			},
 		},
@@ -148,12 +148,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "nil Providers — no panic",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
+				Model:     "claude-haiku",
 				Providers: nil,
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "glm-5.2" {
-					t.Errorf("Model=%q want glm-5.2 (nil Providers — no-op)", cfg.Model)
+				if cfg.Model != "claude-haiku" {
+					t.Errorf("Model=%q want claude-haiku (nil Providers — no-op)", cfg.Model)
 				}
 			},
 		},
@@ -161,13 +161,13 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "nil Roles — no panic",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
+				Model:     "claude-haiku",
 				Roles:     nil,
-				Providers: map[string]map[string]any{"pi": {"default_provider": "zai"}},
+				Providers: map[string]map[string]any{"pi": {"default_provider": "anthropic"}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "zai/glm-5.2" {
-					t.Errorf("Model=%q want zai/glm-5.2 (global folded, nil Roles OK)", cfg.Model)
+				if cfg.Model != "anthropic/claude-haiku" {
+					t.Errorf("Model=%q want anthropic/claude-haiku (global folded, nil Roles OK)", cfg.Model)
 				}
 			},
 		},
@@ -175,12 +175,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "no providers at all — no panic",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
+				Model:     "claude-haiku",
 				Providers: map[string]map[string]any{},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "glm-5.2" {
-					t.Errorf("Model=%q want glm-5.2 (empty Providers — no-op)", cfg.Model)
+				if cfg.Model != "claude-haiku" {
+					t.Errorf("Model=%q want claude-haiku (empty Providers — no-op)", cfg.Model)
 				}
 			},
 		},
@@ -188,12 +188,12 @@ func TestMigrateV2ToV3(t *testing.T) {
 			name: "non-string default_provider — key dropped, no fold",
 			cfg: Config{
 				Provider:  "pi",
-				Model:     "glm-5.2",
+				Model:     "claude-haiku",
 				Providers: map[string]map[string]any{"pi": {"default_provider": 42}},
 			},
 			wantFn: func(t *testing.T, cfg *Config) {
-				if cfg.Model != "glm-5.2" {
-					t.Errorf("Model=%q want glm-5.2 (non-string dp — no fold)", cfg.Model)
+				if cfg.Model != "claude-haiku" {
+					t.Errorf("Model=%q want claude-haiku (non-string dp — no fold)", cfg.Model)
 				}
 				if _, ok := cfg.Providers["pi"]["default_provider"]; ok {
 					t.Error("default_provider should be deleted even for non-string")

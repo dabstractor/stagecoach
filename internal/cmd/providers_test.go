@@ -223,7 +223,7 @@ func TestProvidersShow_OverrideMerged(t *testing.T) {
 	repo := setupRepo(t)
 	writeConfigFile(t, repo, ".stagecoach.toml", `
 [provider.pi]
-default_model = "glm-5.2"
+default_model = "claude-haiku"
 `)
 
 	var out bytes.Buffer
@@ -238,8 +238,8 @@ default_model = "glm-5.2"
 
 	got := out.String()
 	// The override should be reflected
-	if !strings.Contains(got, "default_model = 'glm-5.2'") {
-		t.Error(`show pi output missing overridden "default_model = 'glm-5.2'"`)
+	if !strings.Contains(got, "default_model = 'claude-haiku'") {
+		t.Error(`show pi output missing overridden "default_model = 'claude-haiku'"`)
 	}
 	// Untouched built-in field should survive
 	if !strings.Contains(got, "command = 'pi'") {

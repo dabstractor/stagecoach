@@ -1346,20 +1346,20 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 		input := "config_version = 2\n" +
 			"\n" +
 			"[provider.pi]\n" +
-			"default_provider = \"zai\"\n" +
-			"default_model = \"glm-5.2\"\n" +
+			"default_provider = \"anthropic\"\n" +
+			"default_model = \"claude-haiku\"\n" +
 			"provider_flag = \"--provider\"\n"
 		got, changed := upgradeConfigVersion(input, 3)
 		if !changed {
 			t.Fatal("changed=false, want true (v2 → v3 rewrite)")
 		}
-		if !strings.Contains(got, "default_model = \"zai/glm-5.2\"") {
+		if !strings.Contains(got, "default_model = \"anthropic/claude-haiku\"") {
 			t.Errorf("default_model not folded:\n%s", got)
 		}
-		if strings.Contains(got, "\ndefault_provider = \"zai\"\n") {
+		if strings.Contains(got, "\ndefault_provider = \"anthropic\"\n") {
 			t.Errorf("default_provider still active (should be commented out):\n%s", got)
 		}
-		if !strings.Contains(got, "# default_provider = \"zai\"") {
+		if !strings.Contains(got, "# default_provider = \"anthropic\"") {
 			t.Errorf("default_provider not commented out with note:\n%s", got)
 		}
 		if !strings.HasPrefix(got, "config_version = 3\n") {
@@ -1376,12 +1376,12 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 		input := "config_version = 2\n" +
 			"[defaults]\n" +
 			"provider = \"pi\"\n" +
-			"model = \"glm-5.2\"\n" +
+			"model = \"claude-haiku\"\n" +
 			"\n" +
 			"[provider.pi]\n" +
-			"default_provider = \"zai\"\n"
+			"default_provider = \"anthropic\"\n"
 		got, _ := upgradeConfigVersion(input, 3)
-		if !strings.Contains(got, "model = \"zai/glm-5.2\"") {
+		if !strings.Contains(got, "model = \"anthropic/claude-haiku\"") {
 			t.Errorf("global model not folded:\n%s", got)
 		}
 	})
@@ -1393,16 +1393,16 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 			"\n" +
 			"[role.planner]\n" +
 			"provider = \"pi\"\n" +
-			"model = \"glm-5.2\"\n" +
+			"model = \"claude-haiku\"\n" +
 			"\n" +
 			"[role.message]\n" + // no provider → inherits global pi
-			"model = \"glm-5.2\"\n" +
+			"model = \"claude-haiku\"\n" +
 			"\n" +
 			"[provider.pi]\n" +
-			"default_provider = \"zai\"\n"
+			"default_provider = \"anthropic\"\n"
 		got, _ := upgradeConfigVersion(input, 3)
 		// Both role models must be prefixed (one explicit provider, one inherited).
-		if c := strings.Count(got, "model = \"zai/glm-5.2\""); c != 2 {
+		if c := strings.Count(got, "model = \"anthropic/claude-haiku\""); c != 2 {
 			t.Errorf("expected 2 folded role models, got %d:\n%s", c, got)
 		}
 	})
@@ -1427,8 +1427,8 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 	t.Run("agent table header renamed to provider", func(t *testing.T) {
 		input := "config_version = 2\n" +
 			"[agent.pi]\n" +
-			"default_provider = \"zai\"\n" +
-			"default_model = \"glm-5.2\"\n"
+			"default_provider = \"anthropic\"\n" +
+			"default_model = \"claude-haiku\"\n"
 		got, _ := upgradeConfigVersion(input, 3)
 		if strings.Contains(got, "[agent.pi]") {
 			t.Errorf("[agent.pi] not renamed:\n%s", got)
@@ -1436,13 +1436,13 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 		if !strings.Contains(got, "[provider.pi]") {
 			t.Errorf("missing [provider.pi]:\n%s", got)
 		}
-		if !strings.Contains(got, "default_model = \"zai/glm-5.2\"") {
+		if !strings.Contains(got, "default_model = \"anthropic/claude-haiku\"") {
 			t.Errorf("default_model not folded after rename:\n%s", got)
 		}
 	})
 
 	t.Run("idempotent: a v3 file is a no-op", func(t *testing.T) {
-		v3 := "config_version = 3\n[provider.pi]\ndefault_model = \"zai/glm-5.2\"\n"
+		v3 := "config_version = 3\n[provider.pi]\ndefault_model = \"anthropic/claude-haiku\"\n"
 		got, changed := upgradeConfigVersion(v3, 3)
 		if changed {
 			t.Errorf("a v3 file must be a no-op; got changed=true:\n%s", got)
@@ -1453,12 +1453,12 @@ func TestUpgradeConfigVersion_V3Rewrite(t *testing.T) {
 	})
 
 	t.Run("bare pi model with NO default_provider stays bare (no-invent)", func(t *testing.T) {
-		input := "config_version = 2\n[provider.pi]\ndefault_model = \"glm-5.2\"\n"
+		input := "config_version = 2\n[provider.pi]\ndefault_model = \"claude-haiku\"\n"
 		got, _ := upgradeConfigVersion(input, 3)
-		if !strings.Contains(got, "default_model = \"glm-5.2\"") {
+		if !strings.Contains(got, "default_model = \"claude-haiku\"") {
 			t.Errorf("a bare model with no default_provider must stay bare:\n%s", got)
 		}
-		if strings.Contains(got, "/glm-5.2\"") {
+		if strings.Contains(got, "/claude-haiku\"") {
 			t.Errorf("a prefix was invented (no default_provider to fold):\n%s", got)
 		}
 	})
@@ -1477,10 +1477,10 @@ func TestConfigUpgrade_V2ToV3Rewrite(t *testing.T) {
 		"\n" +
 		"[defaults]\n" +
 		"provider = \"pi\"\n" +
-		"model = \"glm-5.2\"\n" +
+		"model = \"claude-haiku\"\n" +
 		"\n" +
 		"[provider.pi]\n" +
-		"default_provider = \"zai\"\n" +
+		"default_provider = \"anthropic\"\n" +
 		"provider_flag = \"--provider\"\n"
 	writeConfigFile(t, globalDir, "config.toml", v2)
 
@@ -1502,10 +1502,10 @@ func TestConfigUpgrade_V2ToV3Rewrite(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	upgraded := string(data)
-	if !strings.Contains(upgraded, "model = \"zai/glm-5.2\"") {
+	if !strings.Contains(upgraded, "model = \"anthropic/claude-haiku\"") {
 		t.Errorf("on-disk global model not folded:\n%s", upgraded)
 	}
-	if !strings.Contains(upgraded, "# default_provider = \"zai\"") {
+	if !strings.Contains(upgraded, "# default_provider = \"anthropic\"") {
 		t.Errorf("on-disk default_provider not commented out:\n%s", upgraded)
 	}
 	if !strings.Contains(upgraded, "config_version = 3") {

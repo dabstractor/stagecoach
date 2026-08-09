@@ -73,7 +73,7 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	repo := t.TempDir()
 	initRepo(t, repo)
 	setGitConfig(t, repo, "stagecoach.provider", "pi")
-	setGitConfig(t, repo, "stagecoach.model", "glm-5.2")
+	setGitConfig(t, repo, "stagecoach.model", "claude-haiku")
 	setGitConfig(t, repo, "stagecoach.timeout", "90")
 	setGitConfig(t, repo, "stagecoach.autoStageAll", "on") // --bool normalizes "on" -> true
 	setGitConfig(t, repo, "stagecoach.verbose", "yes")     // "yes" -> true
@@ -101,8 +101,8 @@ func TestLoadGitConfig_ReadsValues(t *testing.T) {
 	if cfg.Provider != "pi" {
 		t.Errorf("Provider=%q want pi", cfg.Provider)
 	}
-	if cfg.Model != "glm-5.2" {
-		t.Errorf("Model=%q want glm-5.2", cfg.Model)
+	if cfg.Model != "claude-haiku" {
+		t.Errorf("Model=%q want claude-haiku", cfg.Model)
 	}
 	if cfg.Timeout != 90*time.Second {
 		t.Errorf("Timeout=%v want 90s", cfg.Timeout)

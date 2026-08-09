@@ -586,11 +586,11 @@ func TestGenerateBootstrapConfigWithOverrides_EmptyOverrides_IsIdentity(t *testi
 }
 
 func TestGenerateBootstrapConfigWithOverrides_PiEditsModel(t *testing.T) {
-	overrides := map[string]string{"planner": "zai/glm-5.2"}
+	overrides := map[string]string{"planner": "anthropic/claude-haiku"}
 	content := config.GenerateBootstrapConfigWithOverrides("pi", overrides)
 
 	// Must contain the override.
-	if !strings.Contains(content, `model = "zai/glm-5.2"`) {
+	if !strings.Contains(content, `model = "anthropic/claude-haiku"`) {
 		t.Error("missing planner override in pi config")
 	}
 	// Must have the format-focused note (NOT the "empty" note).

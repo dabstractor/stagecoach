@@ -145,7 +145,7 @@ func TestParseTimeout_Invalid(t *testing.T) {
 func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	cfg := Defaults()
 	t.Setenv("STAGECOACH_PROVIDER", "pi")
-	t.Setenv("STAGECOACH_MODEL", "glm-5.2")
+	t.Setenv("STAGECOACH_MODEL", "claude-haiku")
 	t.Setenv("STAGECOACH_TIMEOUT", "60s")
 	t.Setenv("STAGECOACH_VERBOSE", "true")
 	t.Setenv("STAGECOACH_NO_COLOR", "true")
@@ -158,8 +158,8 @@ func TestLoadEnv_StringsTimeoutBools(t *testing.T) {
 	if cfg.Provider != "pi" {
 		t.Errorf("Provider=%q want pi", cfg.Provider)
 	}
-	if cfg.Model != "glm-5.2" {
-		t.Errorf("Model=%q want glm-5.2", cfg.Model)
+	if cfg.Model != "claude-haiku" {
+		t.Errorf("Model=%q want claude-haiku", cfg.Model)
 	}
 	if cfg.Timeout != 60*time.Second {
 		t.Errorf("Timeout=%v want 60s", cfg.Timeout)

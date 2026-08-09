@@ -181,14 +181,14 @@
       "type": "Phase",
       "id": "P2",
       "title": "Model-example consistency cleanup (zai/glm-5.2 → anthropic/claude-haiku)",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Sweep all stale zai/glm-5.2, glm-5-turbo, and zai/glm-5-turbo references across the codebase to anthropic/claude-haiku (matching spec §12.3). The v3.3 spec renamed these tokens everywhere; a handful of code comments, user-facing strings, error messages, and test fixtures still carry the old token. CRITICAL: research found 90+ references across 30+ files (the PRD identified only ~4); this phase covers the full scope.",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Sweep stale zai/glm-5.2 references in code, tests, and docs",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Refresh all model-example tokens from the fictional zai/glm-5.2 family to the realistic anthropic/claude-haiku, covering user-facing examples, runtime error messages, user-facing docs, and test fixtures.",
           "tasks": [
             {
@@ -239,7 +239,7 @@
               "type": "Task",
               "id": "P2.M1.T2",
               "title": "Test fixture consistency refresh (all test files using glm-5.2/glm-5-turbo as data)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Refresh all test fixtures that use zai/glm-5.2 or glm-5-turbo as test input data or assertions to anthropic/claude-haiku. These test the prefix-fold mechanism and migration mechanics where the literal model value is arbitrary but should be consistent with the spec example.",
               "subtasks": [
                 {
@@ -260,7 +260,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T2.S2",
                   "title": "Config subsystem tests (config_test.go, migrate_test.go, file_test.go, git_test.go, load_test.go, default_action_test.go, config_init_interactive_test.go, providers_test.go)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/020_6979db625159/architecture/model_cleanup_scope.md (Categories C + D). Files and lines: internal/cmd/config_test.go (lines 1350,1356,1379,1384,1396,1399,1405,1431,1439,1445,1456,1458,1461,1480,1505 — v2→v3 migration fixtures using default_provider='zai' + default_model='glm-5.2' → folded to 'zai/glm-5.2'); internal/config/migrate_test.go (lines 22-196 — migration unit tests, 22+ hits, same zai/glm-5.2 fold pattern); internal/config/file_test.go (lines 59,90,91,786,800,801 — config file parse using glm-5.2); internal/config/git_test.go (lines 76,104,105 — git-config model parse using glm-5.2); internal/config/load_test.go (lines 148,161,162 — config load env var using glm-5.2); internal/cmd/default_action_test.go (lines 1500,1532,1539,1540,1541 — default action dry-run using glm-5.2); internal/cmd/config_init_interactive_test.go (lines 589,593 — interactive wizard test using zai/glm-5.2); internal/cmd/providers_test.go (lines 226,241,242 — providers show output using glm-5.2).\n2. INPUT: No code dependency — these test the migration mechanics and config parsing where the literal model value is arbitrary.\n3. LOGIC: Mechanical rename of test data. The migration fixtures use the v2→v3 fold pattern: v2 input 'default_provider = \"zai\"' + 'default_model = \"glm-5.2\"' → v3 output 'model = \"zai/glm-5.2\"'. Replace with: v2 input 'default_provider = \"anthropic\"' + 'default_model = \"claude-haiku\"' → v3 output 'model = \"anthropic/claude-haiku\"'. All assertions stay structurally identical — only the token changes. The no-fold cases (bare model with no default_provider) stay bare: 'default_model = \"claude-haiku\"' stays 'claude-haiku' (no slash-prefix). For generic test fixtures (git_test.go, load_test.go) using 'glm-5.2' as arbitrary data, change to 'claude-haiku'. For default_action_test.go: the FR51b label '↳ Generating with glm-5.2 in stub…' becomes '↳ Generating with claude-haiku in stub…' (matching the new model token). For config_init_interactive_test.go: the override 'zai/glm-5.2' becomes 'anthropic/claude-haiku'.\n4. OUTPUT: go test ./internal/cmd/... ./internal/config/... green. 'rg -n \"zai/glm|glm-5\\.2|glm-5-turbo\" internal/cmd/config_test.go internal/config/migrate_test.go internal/config/file_test.go internal/config/git_test.go internal/config/load_test.go internal/cmd/default_action_test.go internal/cmd/config_init_interactive_test.go internal/cmd/providers_test.go' returns zero hits.\n5. DOCS: [Mode A] none — no user-facing/config/API surface change. Test fixture hygiene only.",
@@ -277,14 +277,14 @@
               "type": "Task",
               "id": "P2.M1.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Final cross-cutting documentation sweep that verifies the entire delta (Chocolatey + PowerShell installer + model-example cleanup) is coherent across README.md, docs/*.md, and the codebase. This is the Mode B catch-all that prevents a coherent delta from shipping with a stale README or inconsistent cross-references.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T3.S1",
                   "title": "Final README.md + overview coherence sweep across the entire delta",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
