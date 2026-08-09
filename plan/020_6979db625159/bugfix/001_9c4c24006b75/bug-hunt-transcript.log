@@ -1,0 +1,109 @@
+Both bugs are confirmed with failing repros, the working tree is clean (the `plan/020.../bugfix/` dir is pre-existing, not mine), and the suite is green. Here is my comprehensive report.
+
+---
+
+# Creative Bug-Finding Report — Stagecoach v3.3 (Chocolatey + PowerShell installer)
+
+**Baseline:** `7f67935` (HEAD). **Scope:** end-to-end PRD validation with emphasis on the freshest code. I drove the real `runDelegate`/`Detect` paths with purpose-built repros (all cleaned up; suite green). **Two new, confirmed bugs found** — both in the Chocolatey migration (`a3f3349` / `6e01dbb`), both missed by the prior validation suite, and they *compound* on real Windows machines. Plus I re-verified the prior report's three findings remain unfixed, and flag two lower-confidence concerns.
+
+---
+
+## 🔴 BUG #1 (CONFIRMED) — Chocolatey is a PRINT channel, but `runDelegate` spuriously prompts for it (and fails in CI)
+
+**Files:** `internal/cmd/upgrade_run.go:279` (`runDelegate` `isRun`) vs. `internal/upgrade/delegate.go:215`.
+
+**Root cause:** Commit `a3f3349 fix(upgrade): move chocolatey to PRINT channel` correctly moved `ChannelChocolatey` from `runArgv` (RUN) to `printCommand` (PRINT) in `delegate.go`, but in `upgrade_run.go` it only changed the **word** `winget→chocolatey` in the doc comment. It did **not** add `ChannelChocolatey` to the `isRun` exclusion. So `runDelegate` still treats Chocolatey as a RUN channel for the confirmation gate:
+
+```go
+// upgrade_run.go:279 — Chocolatey is MISSING from the exclusion
+isRun := ch != upgrade.ChannelAUR && ch != upgrade.ChannelNix && ch != upgrade.ChannelDeb && ch != upgrade.ChannelRpm
+```
+
+while `delegate.go` routes it to PRINT:
+```go
+case ChannelAUR, ChannelNix, ChannelDeb, ChannelRpm, ChannelChocolatey:  // PRINT
+```
+
+**Proof (failing repro, now removed):** Ran `runDelegate(ctx, cmd, ChannelChocolatey)` for all five PRINT channels on a non-TTY without `--yes`:
+
+| Channel | Result |
+|---|---|
+| aur | exit **0** ✓ |
+| nix | exit **0** ✓ |
+| deb | exit **0** ✓ |
+| rpm | exit **0** ✓ |
+| **chocolatey** | **exit 1** ✗ `non-interactive stdin — refusing to upgrade without confirmation; re-run with --yes` |
+
+**User-facing impact:**
+- **CI / scripts / non-TTY (no `--yes`):** `stagecoach upgrade` for a Chocolatey-detected install **aborts with exit 1 and never prints the command** — directly violating FR-U4 ("a printed command exits 0") and FR-U3. The prior validation's claim #11 ("prints `choco upgrade stagecoach -y` … exits 0") only held because it was tested with `--yes`, which short-circuits the broken gate.
+- **Real TTY:** the user is prompted *"stagecoach X → latest / Update via chocolatey's updater. / Proceed?"* — and after confirming, it just **prints** the command instead of running it. Misleading.
+
+**Recommended fix (one line, provably out-of-spec vs FR-U4):**
+```go
+isRun := ch != upgrade.ChannelAUR && ch != upgrade.ChannelNix && ch != upgrade.ChannelDeb && ch != upgrade.ChannelRpm && ch != upgrade.ChannelChocolatey
+```
+(and update the stale comment, which still lists chocolatey under "RUN").
+
+---
+
+## 🔴 BUG #2 (CONFIRMED) — The Chocolatey detection probe false-positives: `choco list` always exits 0
+
+**File:** `internal/upgrade/detect.go` — `pmProbes` table.
+
+**Root cause:** The probe uses `exit0Confirm`:
+```go
+{channel: ChannelChocolatey, goos: []string{"windows"}, name: "choco", args: []string{"list", "--local-only", "stagecoach"}, confirm: exit0Confirm},
+```
+But unlike `brew list stagecoach` / `scoop prefix stagecoach` (which exit 0 **iff** installed, non-zero otherwise), **`choco list` always exits 0** — even when 0 packages match. This is documented by Chocolatey itself: issue chocolatey/choco#2118's log shows *"0 packages found. … Exiting with 0."*, and the List/Find command docs confirm exit 0 = "operation was successful" regardless of match count. So `exit0Confirm` is the wrong predicate for choco (it's the right one for brew/scoop/pacman/dpkg/rpm, which uniquely exit non-zero on a miss). npm/mise/asdf correctly use `grepConfirm("stagecoach")` precisely because they always exit 0.
+
+**Proof (failing repro, now removed):** A `Detector` on `GOOS=windows` with a fake runner simulating real choco v2 (`choco list --local-only stagecoach` → stdout `"0 packages found."`, **exit 0**) and a PowerShell-installed direct exe path:
+```
+commands run: [scoop prefix stagecoach  choco list --local-only stagecoach]
+detected channel=chocolatey  evidence="choco list --local-only stagecoach (exit 0)"   ← FALSE POSITIVE
+```
+Expected: `ChannelDirect` (it's a PowerShell/direct install, not a choco install).
+
+**User-facing impact:** Any Windows machine that has Chocolatey installed **and** stagecoach installed via a non-choco method *without the `STAGECOACH_INSTALL_METHOD` env tag* (e.g. a manual copy, a cleared User env var, or a Scoop install where the scoop probe happened to miss) is misrouted to the Chocolatey PRINT path — and then hits BUG #1 (exit 1 in CI). The impact is narrowed in practice because `install.ps1` tags `STAGECOACH_INSTALL_METHOD=direct` (which short-circuits detection in tier (a) before the probe) and the scoop probe runs first — but the **logic bug is real and latent**: the moment the tag is absent, detection silently lies.
+
+**Recommended fix (provably out-of-spec vs FR-U2 — "queries never false-positive"):**
+```go
+{channel: ChannelChocolatey, goos: []string{"windows"}, name: "choco", args: []string{"list", "--local-only", "stagecoach"}, confirm: grepConfirm("stagecoach")},
+```
+
+---
+
+## 🟠 Compound effect
+
+BUG #2 + BUG #1 stack: a misdetected-Chocolatey user runs `stagecoach upgrade` in CI → BUG #2 misroutes to `runDelegate(ChannelChocolatey)` → BUG #1 prompts+refuses → **exit 1, no command printed, no upgrade**. Fixing both is required for a working Chocolatey story.
+
+---
+
+## 🟡 Lower-confidence concerns (flag for verification, not confirmed code bugs)
+
+1. **`choco list --local-only` is deprecated in Chocolatey v2.0** (local is now the default; `--local-only`/`-l` show a deprecation warning and are slated for removal — chocolatey/choco#3177). It still functions today (exit 0), so BUG #2's `grepConfirm` fix keeps it working *and* survives the flag's eventual removal. Consider switching the probe to plain `choco list stagecoach` to avoid the deprecation noise on stderr.
+
+2. **goreleaser `chocolateys:` multi-arch behavior unverified at release time.** `goreleaser check` passes (schema-valid) but the `url_template: '.../{{ .ArtifactName }}'` with two windows archives (amd64 + arm64) — confirm at the first real release that the generated `.nupkg`'s `chocolateyInstall.ps1` picks the right arch per `$env:PROCESSOR_ARCHITECTURE`. Release-plumbing concern, not a code bug; can't be exercised without a release.
+
+---
+
+## 🟡 Re-confirmed: the prior validation's three findings remain **unfixed**
+
+These were documented in `plan/020.../validation_report.md` but no code change landed for any of them:
+
+1. **`docs/packaging.md:5`** still says Homebrew/Scoop/AUR are `--skip`'d in `release.yml` — factually wrong (`release.yml:56` runs `release --clean`, no `--skip`). Maintainer-facing.
+2. **`README.md:8`** still has `<!-- TODO: add LICENSE file and badge -->` though `LICENSE` exists.
+3. **`--install-method` not validated on `upgrade --check`** (FR-U2 gap): `stagecoach upgrade --check --install-method bogus` silently exits 0; a typo isn't surfaced until `--check` is dropped. Trivial early-validation fix in `dispatchUpgrade`.
+
+---
+
+## What I verified is *correct* (so the fixes are surgical)
+
+- Semver `Compare` (semver §11 incl. prerelease precedence) — correct.
+- `closedLoopGate` FR3j "prompt never exceeds token_limit" invariant — correct, bounded.
+- Hooks runner ordering / `--no-verify` scope (pre-commit+commit-msg skipped; prepare-commit-msg+post-commit always) — correct git parity.
+- Decompose fast-path concurrency (BUG-001/002 fixes) — EditMessage + cross-concept dedupe correctly serialized; signal armed with authoritative `prevSHA`.
+- `SelectAsset`/`assetName`/checksum verification — correct, exact-match (no `1.2.3`↔`1.2.30` substring trap).
+- `install.ps1` — PATH/env handling, abort-before-write, arch gate, SHA256 gate all correct.
+- All other PM probes (brew/scoop/pacman/dpkg/rpm `exit0Confirm`; npm/mise/asdf `grepConfirm`) — correct.
+
+**Bottom line:** Two real, reproducible correctness bugs in the just-shipped Chocolatey work, both one-line fixes, both out-of-spec against FR-U2/FR-U3/FR-U4, and both invisible to the prior validation because it exercised the path with `--yes` and didn't probe the `choco list` exit-code contract. I did **not** modify any code (per AGENTS.md these need a PRP, and the task is to find, not fix) — I'm ready to write the PRP(s) and apply the two fixes if you'd like.
