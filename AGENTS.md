@@ -6,19 +6,26 @@
 
 ## Hard rules
 
-1. **Never modify `spec/SPEC.md` outside of an interactive session.** The PRD is the product's
+1. **A direct instruction from the human always wins.** These rules govern *autonomous* work —
+   what an agent may do without asking. An explicit, specific instruction from the human in chat
+   ("fix this bug", "run the release", "change X") overrides every rule below, including the PRP
+   requirement. Do not refuse or stall a direct request by citing this file — note any genuine
+   risk and proceed. The rules below still apply to work an agent takes on without being asked.
+
+2. **Never modify `spec/SPEC.md` outside of an interactive session.** The PRD is the product's
    source of truth; spec changes are design decisions, not code edits, and require the human
    in the loop. If you find a spec gap or contradiction while working, surface it (open an
    issue / raise it in chat) and stop — do not edit `spec/SPEC.md` to "fix" it on your own.
 
-2. **Never modify code without a PRP document — unless the code is provably out-of-spec
-   against the PRD.** Implementation work is driven by a PRP (under
-   `plan/.../<task>/PRP.md`); stay within its scope. If no PRP exists, you may edit code
-   *only* to bring it into conformance with an explicit PRD requirement you can cite
-   (FR/G/section), and you must cite that requirement in the commit message. Otherwise: stop
-   and ask for a PRP.
+3. **Bug fixes don't need a PRP; new feature scope does.** A PRP (under
+   `plan/.../<task>/PRP.md`) scopes *net-new* product capability — a new FR, a new surface.
+   Fixing a bug is the opposite: it brings wrong / out-of-spec / factually-incorrect code INTO
+   line with the spec (or reality) that already exists, so it needs no PRP. Just fix it, add or
+   adjust tests, and name the requirement it was violating (FR/G/section, or the reality it
+   contradicted) in the commit message. If you are adding *new* scope and no PRP exists, stop
+   and ask for one — unless the human told you to do it (rule 1).
 
-3. **Commit as the user, never as "stagecoach" or any agent identity (PRD §9.9 FR-39a).**
+4. **Commit as the user, never as "stagecoach" or any agent identity (PRD §9.9 FR-39a).**
    Never run `git config user.name`/`user.email` to set an identity, and never set
    `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars. Commits must be authored and committed as
    whatever git resolves from the user's own config — stagecoach and its agents are invisible
