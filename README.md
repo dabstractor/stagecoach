@@ -73,7 +73,7 @@ Stagecoach does one thing — commit messages — and a few things around them.
      is an anti-misconception note (one message/commit, not N), accurate on all three paths. Do not
      narrow this row. (P1.M4.T1.S2.) -->
 
-## Install
+## Installation
 
 **Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, opencode, Codex, Cursor, agy, or qwen-code).
 
