@@ -27,7 +27,13 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    # windows-latest, NOT ubuntu: goreleaser's `chocolateys:` pipe shells out to the `choco` CLI to
+    # pack the .nupkg, and choco is Windows-only (absent on ubuntu → "exec: choco: executable file not
+    # found in $PATH"). choco-test.yml already proved goreleaser runs the full release (builds +
+    # archives + checksums + nfpm + chocolatey pack) on windows-latest. The downstream jobs below
+    # (npm wrapper, asdf mirror, apt/dnf repo) stay on ubuntu — they only need the GitHub Release this
+    # job publishes, not choco.
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
