@@ -3,7 +3,7 @@
 > **Stagecoach writes your commit messages using the AI agent you already pay for.**
 > No API key. No per-token billing. It shells out to Claude Code, Codex, pi, opencode, agy, qwen-code, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
-A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Winget, npm, Nix, mise/asdf) — see [Features](#features) below.
+A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Chocolatey, PowerShell installer, npm, Nix, mise/asdf) — see [Features](#features) below.
 
 <!-- TODO: add LICENSE file and badge -->
 
@@ -97,6 +97,12 @@ brew install dabstractor/stagecoach/stagecoach
 scoop bucket add stagecoach https://github.com/dabstractor/stagecoach-bucket
 scoop install stagecoach/stagecoach
 
+# Windows (Chocolatey)
+choco install stagecoach
+
+# Windows (PowerShell installer — no package manager needed)
+irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex
+
 # npm (zero-install trial: npx stagecoach-ai; or global install)
 npm install -g stagecoach-ai
 
@@ -127,12 +133,6 @@ go install github.com/dabstractor/stagecoach/cmd/stagecoach@latest
 # Direct binary (curl|sh one-liner from GitHub Releases)
 curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/install.sh | bash
 ```
-
-> **Not yet available:** Windows WinGet and Arch AUR (`stagecoach-bin`) are wired up
-> in CI but aren't installable today — WinGet is pending acceptance into the
-> `microsoft/winget-pkgs` repository, and the AUR publish is waiting on the AUR
-> service. Windows users: use **Scoop** or **npm** in the meantime; Arch users: use
-> `go install`, the curl\|sh one-liner, or the npm wrapper.
 
 Verify:
 

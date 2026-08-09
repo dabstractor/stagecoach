@@ -401,7 +401,7 @@ stagecoach lock --help          # the `lock` command group (bare `lock` prints h
 
 ### `upgrade`
 
-Update the stagecoach **binary** to the latest release (PRD §9.29 FR-U1). stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, winget, npm, mise, asdf, Nix, AUR, go install), self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.
+Update the stagecoach **binary** to the latest release (PRD §9.29 FR-U1). stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, Chocolatey, npm, mise, asdf, Nix, AUR, go install) — printing the command where it needs privileges (Chocolatey, AUR) or is declarative (Nix) — self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.
 
 **Distinct from `config upgrade`** (run as `stagecoach config upgrade`): `config upgrade` is a config-schema migration that rewrites an existing config file to the current schema version in place. `stagecoach upgrade` updates the **binary**. Two different commands — do not confuse them.
 
