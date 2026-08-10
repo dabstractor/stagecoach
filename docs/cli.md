@@ -184,6 +184,9 @@ stagecoach config init --force
 # Write the inert all-commented reference (v1 behavior):
 stagecoach config init --template
 
+# Write a repo-local config (./.stagecoach.toml) that overrides the global file:
+stagecoach config init --local
+
 # Guided TTY wizard — pick a provider, accept or edit per-role models:
 stagecoach config init --interactive
 
@@ -196,11 +199,14 @@ stagecoach config init --interactive --provider pi
 | `--provider <name>` | Target a specific built-in provider instead of auto-detecting |
 | `--force` | Overwrite an existing config file |
 | `--template` | Write the inert all-commented reference config (v1 behavior) |
+| `--local` | Write to the repo-local `./.stagecoach.toml` instead of the global config (it overrides the global file; mutually exclusive with `--config`). Composes with `--force`, `--template`, `--provider`, and `--interactive`. |
 | `--interactive` | Guided TTY wizard: pick a detected provider, accept or edit per-role models; prompts for the inference/ prefix on multi-backend providers (pi, opencode). Writes the same file as plain `config init`. Non-TTY → exit 1 (use plain `config init`). |
 
 With `--force` and no `--provider`, the regenerated template is **re-targeted to the preserved `[defaults] provider`** rather than auto-detecting pi — so the generated `[role.*]` blocks stay consistent with the default you kept (e.g. preserving `provider = "claude"` regenerates claude's role models, not pi's). An explicit `--provider <name>` always overrides this; a preserved custom/unknown provider falls back to auto-detection.
 
 `--interactive` runs a three-step wizard: (1) pick a provider from the detected set (default highlighted), (2) accept or edit each per-role model default, (3) for multi-backend providers (pi, opencode), prompts for the `inference/model` prefix on any edited model. Writes the **same** file as plain `config init` — the wizard is a TTY front-end. Composes with `--force` (overwrites) and `--provider <name>` (pre-selects, skipping the provider prompt). Mutually exclusive with `--template` (exit 1). Non-TTY stdin exits 1 pointing at plain `config init`.
+
+`--local` writes the config to the repo-local `./.stagecoach.toml` (the §16.1 layer-3 file the loader reads from the current directory) instead of the global path. It overrides the global config file and is overridden by repo git config (`stagecoach.*`), `STAGECOACH_*` env vars, and CLI flags. The generated file's header scope is rewritten to repo-local framing so it does not claim to be the global file. Mutually exclusive with `--config` (exit 1). Composes with `--template` (writes the inert reference into the repo file), `--force` (refreshes an existing `.stagecoach.toml`, preserving active settings and backing up the prior file), `--provider`, and `--interactive`.
 
 ### `config upgrade`
 

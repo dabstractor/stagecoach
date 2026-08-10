@@ -354,3 +354,55 @@ func assertContains(t *testing.T, content string, substrs ...string) {
 		}
 	}
 }
+
+// TestRewriteHeaderForLocalScope covers config.RewriteHeaderForLocalScope — the header-scope
+// transform `config init --local` applies so a repo-local .stagecoach.toml does not claim to be the
+// GLOBAL file. It rewrites exactly the two scope-sensitive passages (the precedence line + the
+// "This is the GLOBAL file" note), preserves everything else, and is idempotent.
+func TestRewriteHeaderForLocalScope(t *testing.T) {
+	global := GenerateBootstrapConfig("pi") // carries bootstrapHeader (GLOBAL framing)
+
+	// Fixture sanity: the source sentences are present.
+	if !strings.Contains(global, "This is the GLOBAL file") {
+		t.Fatalf("test fixture: global config missing the GLOBAL scope note")
+	}
+	if !strings.Contains(global, "repo-local .stagecoach.toml  >  THIS global file") {
+		t.Fatalf("test fixture: global config missing the GLOBAL precedence line")
+	}
+
+	local := RewriteHeaderForLocalScope(global)
+
+	// Source scope sentences gone; target sentences present.
+	if strings.Contains(local, "This is the GLOBAL file") {
+		t.Errorf("GLOBAL scope note not rewritten to REPO-LOCAL")
+	}
+	if !strings.Contains(local, "This is the REPO-LOCAL config") {
+		t.Errorf("REPO-LOCAL scope note not present after rewrite")
+	}
+	if !strings.Contains(local, "THIS file (.stagecoach.toml)") {
+		t.Errorf("precedence line not rewritten to local framing")
+	}
+	if strings.Contains(local, "THIS global file") {
+		t.Errorf("precedence line still says \"THIS global file\"")
+	}
+
+	// Idempotent: reapplying is a no-op (the source substrings are gone).
+	if RewriteHeaderForLocalScope(local) != local {
+		t.Errorf("RewriteHeaderForLocalScope is not idempotent")
+	}
+
+	// Only the two scope passages change: the body (config_version, [defaults], roles, [generation]
+	// keys) is byte-identical. Prove it by checking the rewritten content still carries everything
+	// and that the ONLY deltas are the two known substitutions.
+	for _, mustKeep := range []string{"config_version = 3", "[defaults]", "[generation]", "[role.message]", "# format"} {
+		if !strings.Contains(local, mustKeep) {
+			t.Errorf("rewrite dropped non-scope content %q", mustKeep)
+		}
+	}
+	// Reverse-engineer the delta: global vs local differ ONLY by the two substitutions.
+	restored := strings.Replace(local, "THIS file (.stagecoach.toml)  >  the global config file", "repo-local .stagecoach.toml  >  THIS global file", 1)
+	restored = strings.Replace(restored, "This is the REPO-LOCAL config (./.stagecoach.toml). It overrides the global config file;\n# repo git config (stagecoach.*), STAGECOACH_* env vars, and CLI flags override it.", "This is the GLOBAL file. A repo-local file (./.stagecoach.toml) and repo git config (stagecoach.*)\n# both override it; CLI flags and env vars override those.", 1)
+	if restored != global {
+		t.Errorf("rewrite touched more than the two scope passages; diff remains after restoring them")
+	}
+}

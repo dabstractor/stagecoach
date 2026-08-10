@@ -84,14 +84,12 @@ func runConfigInitInteractive(cmd *cobra.Command, _ []string) error {
 
 	content := config.GenerateBootstrapConfigWithOverrides(res.provider, res.overrides)
 
-	path := config.ResolveConfigPath(flagConfig)
-	force, _ := cmd.Flags().GetBool("force")
-	if err := writeBootstrapFile(cmd, path, content, force); err != nil {
+	path, isLocal, err := resolveInitTarget(cmd)
+	if err != nil {
 		return err
 	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "Wrote config to %s\n", path)
-	return nil
+	force, _ := cmd.Flags().GetBool("force")
+	return writeInitConfig(cmd, path, content, isLocal, false, force)
 }
 
 // runInteractiveWizard is the PURE interactive wizard: reads answers from r, writes prompts to w.

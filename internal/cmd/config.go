@@ -41,7 +41,7 @@ var configCmd = &cobra.Command{
 var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Bootstrap a working config (auto-detects your agent)",
-	Long: `Bootstrap a populated, working config to Stagecoach's global config path.
+	Long: `Bootstrap a populated, working config to the resolved config path (the global config by default; the repo-local ./.stagecoach.toml with --local).
 
 By DEFAULT, detects the highest-priority installed built-in agent (order: pi, opencode,
 cursor, agy, qwen-code, codex, claude) and writes a config with that provider's per-role
@@ -53,6 +53,7 @@ Flags:
   --provider <name>  Target a specific built-in provider instead of auto-detecting.
   --force            Overwrite an existing config file.
   --template         Write the inert all-commented reference config (v1 behavior).
+  --local            Write to the repo-local ./.stagecoach.toml instead of the global config.
 
 Parent directories are created as needed. If a config file already exists, it is NOT
 overwritten unless --force is passed (exit code 1).
@@ -136,6 +137,7 @@ func init() {
 	configInitCmd.Flags().String("provider", "", "Target a specific provider instead of auto-detecting")
 	configInitCmd.Flags().Bool("force", false, "Overwrite an existing config file")
 	configInitCmd.Flags().Bool("template", false, "Write the inert all-commented reference config (v1 behavior)")
+	configInitCmd.Flags().Bool("local", false, "Write to the repo-local ./.stagecoach.toml instead of the global config (mutually exclusive with --config)")
 	configInitCmd.Flags().Bool("interactive", false, "Guided TTY wizard: pick a detected provider, accept or edit per-role models (prompts for the inference/ prefix on multi-backend providers); writes the same config as plain 'config init'")
 
 	configCmd.AddCommand(configInitCmd)
@@ -495,7 +497,10 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 		return runConfigInitInteractive(cmd, args)
 	}
 
-	path := config.ResolveConfigPath(flagConfig)
+	path, isLocal, err := resolveInitTarget(cmd)
+	if err != nil {
+		return err
+	}
 	tmpl, _ := cmd.Flags().GetBool("template")
 	force, _ := cmd.Flags().GetBool("force")
 	var content string
@@ -532,15 +537,48 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 	if force {
 		content = mergeExistingActiveSettings(path, content)
 	}
+	return writeInitConfig(cmd, path, content, isLocal, tmpl, force)
+}
+
+// resolveInitTarget resolves the config-init write target, honoring --local (repo-local
+// ./.stagecoach.toml) over --config (explicit path) over the discovered global path. --local and
+// --config are mutually exclusive: --local fixes the target to the repo-local file while --config sets
+// an arbitrary path, so combining them is ambiguous. Returns the resolved path and whether it is the
+// repo-local target (so the caller rewrites the header scope and labels the success message).
+func resolveInitTarget(cmd *cobra.Command) (path string, isLocal bool, err error) {
+	local, _ := cmd.Flags().GetBool("local")
+	if local && flagConfig != "" {
+		return "", false, exitcode.New(exitcode.Error,
+			fmt.Errorf("--local writes ./.stagecoach.toml and --config sets an explicit path — use one or the other"))
+	}
+	if local {
+		return config.RepoLocalConfigPath(), true, nil
+	}
+	return config.ResolveConfigPath(flagConfig), false, nil
+}
+
+// writeInitConfig finalizes generated config content for the init target and writes it. For a
+// repo-local target it rewrites the header scope sentences (GLOBAL → REPO-LOCAL) via
+// config.RewriteHeaderForLocalScope, then delegates to writeBootstrapFile (force gate + MkdirAll +
+// WriteFile + the FR-B8 timestamped backup). Prints a scope-aware confirmation such as "Wrote
+// repo-local config to .stagecoach.toml". tmpl selects the "example config" wording (the --template
+// inert reference).
+func writeInitConfig(cmd *cobra.Command, path, content string, isLocal, tmpl, force bool) error {
+	if isLocal {
+		content = config.RewriteHeaderForLocalScope(content)
+	}
 	if err := writeBootstrapFile(cmd, path, content, force); err != nil {
 		return err
 	}
-
-	if tmpl {
-		fmt.Fprintf(cmd.OutOrStdout(), "Wrote example config to %s\n", path)
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "Wrote config to %s\n", path)
+	scope := ""
+	if isLocal {
+		scope = "repo-local "
 	}
+	kind := "config"
+	if tmpl {
+		kind = "example config"
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s%s to %s\n", scope, kind, path)
 	return nil
 }
 
@@ -656,26 +694,7 @@ const exampleConfigTemplate = `# Stagecoach configuration file (PRD §16.2).
 # timeout        = "120s"   # generation timeout (Go duration string, e.g. "2m", or bare seconds)
 # auto_stage_all = true     # run ` + "`git add -A`" + ` when nothing is staged
 # verbose        = false    # print the resolved command, raw agent output, and retries
-
-# ---------------------------------------------------------------------------
-# [generation] — diff capture & output tuning (PRD §16.2)
-# ---------------------------------------------------------------------------
-# [generation]
-# max_diff_bytes        = 300000  # byte cap on the non-markdown diff section
-# max_md_lines          = 100     # per-file line cap for markdown diffs
-# max_duplicate_retries = 3       # re-generation attempts when the subject duplicates a recent commit
-# subject_target_chars  = 50      # target subject-line length for truncation
-# output                = "raw"   # agent output mode: "raw" | "json" — applies to parsing across ALL providers
-# strip_code_fence      = true    # strip ` + "`" + ` fences from agent output (all providers)
-# max_commits           = 12      # safety cap on auto-decompose (PRD §9.14 FR-M4); default 12
-# binary_extensions     = []      # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
-# exclude               = []      # gitignore-style globs; UNION across global+repo+flag (§9.18 FR-X1)
-# format                = "auto"  # auto|conventional|gitmoji|plain; unknown = hard error (exit 1) (§9.19 FR-F1)
-# locale                = ""      # free-form language name or BCP-47 tag; never validated (§9.19 FR-F6)
-# template              = ""      # wrap every message; must contain literal $msg, e.g. "$msg (#205)" (§9.19 FR-F8)
-# push                  = false   # run ` + "`git push`" + ` after a fully-successful run; on failure commits stand (§9.22 FR-P1)
-# NOTE: [generation] output/strip_code_fence override any per-provider [provider.<name>] values.
-
+` + config.GenerationSection + `
 # ---------------------------------------------------------------------------
 # [provider.<name>] — override a built-in or define a new provider (PRD §16.2, §12.8)
 # ---------------------------------------------------------------------------

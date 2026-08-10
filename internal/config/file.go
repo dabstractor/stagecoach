@@ -140,6 +140,11 @@ func ResolveConfigPath(flagConfig string) string {
 // (Contract + PRD §16.1; NOT arch §2.8's .stagecoach/config.toml directory.)
 func repoLocalConfigPath() string { return ".stagecoach.toml" }
 
+// RepoLocalConfigPath returns the repo-local config path (./.stagecoach.toml) — the file `config
+// init --local` targets. It mirrors the unexported repoLocalConfigPath the loader reads from CWD;
+// exported as a thin wrapper for the command surface so the literal lives in one place.
+func RepoLocalConfigPath() string { return repoLocalConfigPath() }
+
 // ---------------------------------------------------------------------------
 // Defense-in-depth agent→provider textual remap (PRD §9.17 FR-B7 "first")
 // ---------------------------------------------------------------------------

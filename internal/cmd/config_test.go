@@ -460,11 +460,23 @@ func TestConfigInit_TemplateIsInert(t *testing.T) {
 
 	content := string(data)
 
-	// NO line should be an un-commented TOML table header: ^[[a-z]
+	// The template must be FUNCTIONALLY inert: zero active key=value settings (config.IsInert).
+	// [generation] is an intentional exception — an ACTIVE empty table (no uncommented keys) that makes
+	// uncommenting a single key land in the right table instead of silently attaching to the preceding
+	// section (see config.GenerationSection's doc comment). It holds no settings, so the file is still
+	// inert and `config upgrade` on it is a no-op.
+	if !config.IsInert(content) {
+		t.Errorf("template is not inert (has active key=value settings)")
+	}
+	// Every table header EXCEPT [generation] must stay commented (documentation style): the inert
+	// reference documents options without activating anything. [generation] is the sole active header.
 	uncommentedSection := regexp.MustCompile(`^[[a-z]`)
 	for i, line := range strings.Split(content, "\n") {
+		if line == "[generation]" {
+			continue // the one intentional active empty table (foot-gun-safe key attachment)
+		}
 		if uncommentedSection.MatchString(line) {
-			t.Errorf("line %d is an uncommented TOML header: %q (template must be inert)", i+1, line)
+			t.Errorf("line %d is an uncommented TOML header: %q (only [generation] may be active)", i+1, line)
 		}
 	}
 
@@ -1587,5 +1599,186 @@ func TestPreservedDefaultProvider(t *testing.T) {
 				t.Errorf("preservedDefaultProvider(%q) = %q; want %q", tc.body, got, tc.want)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// config init --local — repo-local config generation (./.stagecoach.toml)
+// ---------------------------------------------------------------------------
+
+// TestTemplates_SharedGenerationSection proves the [generation] documentation is UNIFIED: BOTH the
+// populated bootstrap config and the inert --template reference embed the SAME config.GenerationSection
+// block, so neither can drift to a different key subset (the original bug: the populated template
+// lacked format/template/locale/push/exclude while the inert one lacked token_limit/diff_context/
+// multi_turn_*/no_parent_watchdog).
+func TestTemplates_SharedGenerationSection(t *testing.T) {
+	populated := config.GenerateBootstrapConfig("pi")
+	if !strings.Contains(populated, config.GenerationSection) {
+		t.Errorf("populated bootstrap config does not embed config.GenerationSection (drift)")
+	}
+	if !strings.Contains(exampleConfigTemplate, config.GenerationSection) {
+		t.Errorf("inert --template reference does not embed config.GenerationSection (drift)")
+	}
+	// Every [generation] key is documented in BOTH (the unified union).
+	for _, key := range []string{
+		"max_diff_bytes", "max_md_lines", "token_limit", "diff_context",
+		"max_duplicate_retries", "subject_target_chars", "output", "strip_code_fence",
+		"max_commits", "binary_extensions", "exclude", "multi_turn_fallback",
+		"multi_turn_chunk_tokens", "no_parent_watchdog", "format", "locale", "template", "push",
+	} {
+		needle := "# " + key
+		if !strings.Contains(populated, needle) {
+			t.Errorf("populated config [generation] missing documented key %q", key)
+		}
+		if !strings.Contains(exampleConfigTemplate, needle) {
+			t.Errorf("inert template [generation] missing documented key %q", key)
+		}
+	}
+}
+
+// TestConfigInit_Local_WritesRepoLocalConfig: `config init --local` writes a POPULATED config to
+// ./.stagecoach.toml in CWD (not the global path), with the header scope rewritten to REPO-LOCAL
+// framing and the same body as the global populated config.
+func TestConfigInit_Local_WritesRepoLocalConfig(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	_, plainDir, globalDir := setupNoRepo(t)
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--local"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+
+	localPath := filepath.Join(plainDir, ".stagecoach.toml")
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("repo-local config not written to %s: %v", localPath, err)
+	}
+	if !strings.Contains(out.String(), "Wrote repo-local config to .stagecoach.toml") {
+		t.Errorf("stdout = %q, want to contain 'Wrote repo-local config to .stagecoach.toml'", out.String())
+	}
+
+	content := string(data)
+	// Header scope rewritten to REPO-LOCAL framing.
+	if !strings.Contains(content, "This is the REPO-LOCAL config") {
+		t.Errorf("repo-local config header not rewritten (still GLOBAL framing)")
+	}
+	if strings.Contains(content, "This is the GLOBAL file") {
+		t.Errorf("repo-local config header still says \"This is the GLOBAL file\"")
+	}
+	// Still a valid populated config.
+	if !strings.Contains(content, "config_version = 3") {
+		t.Errorf("repo-local config missing config_version = 3")
+	}
+	var m map[string]any
+	if err := toml.Unmarshal([]byte(content), &m); err != nil {
+		t.Errorf("repo-local config is not valid TOML: %v", err)
+	}
+
+	// The GLOBAL config must NOT have been created (--local targets the repo file only).
+	globalPath := filepath.Join(globalDir, "config.toml")
+	if _, err := os.Stat(globalPath); !os.IsNotExist(err) {
+		t.Errorf("global config %s must NOT exist (--local targets the repo file only)", globalPath)
+	}
+}
+
+// TestConfigInit_Local_Template_WritesRepoLocalExample: `config init --local --template` writes the
+// inert reference to ./.stagecoach.toml (still inert, scope-rewritten, documents the unified keys).
+func TestConfigInit_Local_Template_WritesRepoLocalExample(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	_, plainDir, _ := setupNoRepo(t)
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--template", "--local"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	localPath := filepath.Join(plainDir, ".stagecoach.toml")
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("repo-local example config not written: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(out.String(), "Wrote repo-local example config to .stagecoach.toml") {
+		t.Errorf("stdout = %q, want 'Wrote repo-local example config to .stagecoach.toml'", out.String())
+	}
+	if !strings.Contains(content, "This is the REPO-LOCAL config") {
+		t.Errorf("repo-local example config header not rewritten")
+	}
+	if !config.IsInert(content) {
+		t.Errorf("repo-local example config is not inert (config.IsInert)")
+	}
+	// Both v2.1 keys (format/template/locale/push/exclude) AND the v2 tuning keys are documented now.
+	for _, key := range []string{"format", "template", "locale", "push", "exclude", "token_limit", "diff_context"} {
+		if !strings.Contains(content, "# "+key) {
+			t.Errorf("repo-local example config missing documented key %q", key)
+		}
+	}
+}
+
+// TestConfigInit_Local_ConfigFlag_MutuallyExclusive: --local and --config are mutually exclusive
+// (--local fixes the target to ./.stagecoach.toml; --config sets an arbitrary path).
+func TestConfigInit_Local_ConfigFlag_MutuallyExclusive(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	setupNoRepo(t)
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"--config", filepath.Join(t.TempDir(), "x.toml"), "config", "init", "--local"})
+
+	err := Execute(context.Background())
+	if err == nil {
+		t.Fatal("Execute err=nil, want error (--local + --config mutually exclusive)")
+	}
+	code := exitcode.For(err)
+	if code != exitcode.Error {
+		t.Errorf("exitcode = %d, want %d (Error)", code, exitcode.Error)
+	}
+	if !strings.Contains(err.Error(), "one or the other") {
+		t.Errorf("error %q should explain the mutual exclusion", err.Error())
+	}
+}
+
+// TestConfigInit_Local_Force_PreservesAndBacksUp: --force refresh of a repo-local config preserves
+// the user's active settings (FR-B8 merge), backs up the prior file, AND rewrites the header scope.
+func TestConfigInit_Local_Force_PreservesAndBacksUp(t *testing.T) {
+	_, origOut, origErr, origRunE := saveRootState(t)
+	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
+
+	_, plainDir, _ := setupNoRepo(t)
+	preExisting := "config_version = 3\n[defaults]\nprovider = \"claude\"\n"
+	if err := os.WriteFile(filepath.Join(plainDir, ".stagecoach.toml"), []byte(preExisting), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{"config", "init", "--local", "--force", "--provider", "pi"})
+
+	if err := Execute(context.Background()); err != nil {
+		t.Fatalf("Execute err=%v, want nil", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(plainDir, ".stagecoach.toml"))
+	content := string(data)
+	// FR-B8: the user's active setting survives the --force refresh.
+	if !strings.Contains(content, `provider = "claude"`) {
+		t.Errorf("repo-local active setting provider=claude dropped by --force (FR-B8)\n%s", content)
+	}
+	// FR-B8: a timestamped backup of the prior repo-local config exists in CWD.
+	matches, _ := filepath.Glob(filepath.Join(plainDir, ".stagecoach.toml.bak.*"))
+	if len(matches) == 0 {
+		t.Errorf("no timestamped backup of prior repo-local config (FR-B8 reversible-write guarantee)")
+	}
+	// Header scope rewritten even after the merge.
+	if !strings.Contains(content, "This is the REPO-LOCAL config") {
+		t.Errorf("repo-local --force header not rewritten to local scope")
 	}
 }

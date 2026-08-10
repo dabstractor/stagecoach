@@ -28,7 +28,7 @@ When a `[provider.<name>]` section appears in a config file, its fields are **me
 | Scope | Path | Notes |
 |-------|------|-------|
 | Global | `$XDG_CONFIG_HOME/stagecoach/config.toml` (default `~/.config/stagecoach/config.toml`) | Written by `stagecoach config init`; read as Layer 3. |
-| Repo-local | `./.stagecoach.toml` | Gitignored; read as Layer 4; overrides global. |
+| Repo-local | `./.stagecoach.toml` | Gitignored; read as Layer 4; overrides global. Written by `config init --local`. |
 
 Use `stagecoach config path` to print the resolved config path (override-aware: honors `--config` / `STAGECOACH_CONFIG`, else the global path).
 
@@ -48,12 +48,15 @@ The written path is always printed on success.
 | `--provider <name>` | Target a specific built-in provider instead of auto-detecting. Unknown names exit 1. |
 | `--force` | Overwrite an existing config file. |
 | `--template` | Write the inert all-commented reference config (v1 behavior) instead of a populated bootstrap. |
+| `--local` | Write to the repo-local `./.stagecoach.toml` instead of the global config (it overrides the global file; mutually exclusive with `--config`). Composes with `--force`, `--template`, `--provider`, and `--interactive`. |
 
 If a config file already exists, it is NOT overwritten unless `--force` is passed (exit code 1). Parent directories are created as needed.
 
 With `--force` and no `--provider`, the regenerated template is re-targeted to the preserved `[defaults] provider` (rather than auto-detecting pi), keeping the generated `[role.*]` blocks consistent with the preserved default. An explicit `--provider <name>` always overrides this.
 
 `config init --interactive` runs a TTY-gated wizard: it lists detected providers (FR-D1 default highlighted), shows each role's curated default (FR-D4) for accept-or-edit, and — for multi-backend providers (pi, opencode) — prompts for the `inference/model` prefix on edited models (FR-D2/FR-R5b) rather than guessing. It writes the **same file** as plain `config init`. Non-TTY stdin exits 1 pointing at plain `config init` (which stays non-interactive for post-install/first-run use, FR-B3). Composes with `--force` (overwrites) and `--provider <name>` (pre-selects); mutually exclusive with `--template`.
+
+`config init --local` writes to the repo-local `./.stagecoach.toml` (Layer 4) instead of the global path. The generated file overrides the global config and is overridden by repo git config (`stagecoach.*`), `STAGECOACH_*` env vars, and CLI flags; its header scope is rewritten to repo-local framing so it does not claim to be the global file. Mutually exclusive with `--config`. Composes with `--template` (inert reference into the repo file), `--force` (refreshes an existing `.stagecoach.toml`, preserving active settings and backing up the prior file), `--provider`, and `--interactive`.
 
 ### Schema versioning (`config upgrade`)
 
@@ -74,7 +77,7 @@ At load time, if `config_version` is missing or older, stagecoach prints an advi
 
 ## File format
 
-The config file uses TOML with several section groups. By default, `config init` writes a **populated config** with the detected provider and per-role models UNCOMMENTED so the tool works immediately. Use `config init --template` to get the inert all-commented reference (every line commented out).
+The config file uses TOML with several section groups. By default, `config init` writes a **populated config** with the detected provider and per-role models UNCOMMENTED so the tool works immediately. Use `config init --template` to get the inert all-commented reference (every option commented out).
 
 **Populated config** (default `config init` output):
 
@@ -126,7 +129,7 @@ model = "sonnet"
 # ...
 ```
 
-**Inert template** (`config init --template`): all lines commented out, including `[defaults]`, `[generation]`, `[provider.*]`, and `[role.*]` sections — documents every available option without changing any defaults.
+**Inert template** (`config init --template`): every line is commented out EXCEPT the `[generation]` table header (kept active so uncommenting a single generation key lands in the right table — it holds no keys, so the file is still functionally inert / `IsInert` is true). `[defaults]`, `[provider.*]`, and `[role.*]` sections are fully commented — documents every available option without changing any defaults.
 
 ## Built-in defaults
 
