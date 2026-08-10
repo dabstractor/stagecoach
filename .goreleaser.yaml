@@ -184,10 +184,22 @@ chocolateys:
     title: Stagecoach
     authors: dabstractor
     project_url: https://github.com/dabstractor/stagecoach
+    # Chocolatey moderation metadata (validator: package-validator / CPMR rules).
+    package_source_url: 'https://github.com/dabstractor/stagecoach'
+    docs_url: 'https://github.com/dabstractor/stagecoach#readme'
+    bug_tracker_url: 'https://github.com/dabstractor/stagecoach/issues'
+    project_source_url: 'https://github.com/dabstractor/stagecoach'
+    # icon_url: add when a 128–256px PNG is hosted (e.g. a raw.githubusercontent.com permalink).
+    #   Uncomment to satisfy the iconUrl guideline; until then it's an exempt quality nit.
+    #   icon_url: 'https://raw.githubusercontent.com/dabstractor/stagecoach/main/assets/icon.png'
     url_template: 'https://github.com/dabstractor/stagecoach/releases/download/{{ .Tag }}/{{ .ArtifactName }}'
     license_url: 'https://github.com/dabstractor/stagecoach/blob/main/LICENSE'
     copyright: 'Copyright 2026 dabstractor'
     description: 'Snapshot-based AI commit message generator that uses YOUR local CLI agent'
+    summary: 'Generate AI commit messages from your staged snapshot using your own local CLI agent.'
+    # tags is a chocolatey REQUIREMENT (CPMR package-validator): a version without it fails
+    # automated validation and cannot be approved. Space-separated per the nuspec spec.
+    tags: 'ai cli git commit developer-tools'
     release_notes: 'https://github.com/dabstractor/stagecoach/releases/tag/{{ .Tag }}'
     api_key: '{{ .Env.CHOCOLATEY_API_KEY }}'
     source_repo: 'https://push.chocolatey.org/'
