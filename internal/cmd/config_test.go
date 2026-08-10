@@ -1610,18 +1610,37 @@ func TestPreservedDefaultProvider(t *testing.T) {
 // populated bootstrap config and the inert --template reference embed the SAME config.GenerationSection
 // block, so neither can drift to a different key subset (the original bug: the populated template
 // lacked format/template/locale/push/exclude while the inert one lacked token_limit/diff_context/
-// multi_turn_*/no_parent_watchdog).
+// multi_turn_*/no_parent_watchdog). The ONE intentional difference: token_limit is UNCOMMENTED
+// (active, = 50000) in the populated config and COMMENTED in the inert reference (which stays inert).
 func TestTemplates_SharedGenerationSection(t *testing.T) {
 	populated := config.GenerateBootstrapConfig("pi")
-	if !strings.Contains(populated, config.GenerationSection) {
-		t.Errorf("populated bootstrap config does not embed config.GenerationSection (drift)")
-	}
+
+	// The inert reference embeds GenerationSection VERBATIM (every key commented ⇒ inert). The populated
+	// config embeds the SAME block with exactly one line flipped: token_limit is uncommented.
 	if !strings.Contains(exampleConfigTemplate, config.GenerationSection) {
 		t.Errorf("inert --template reference does not embed config.GenerationSection (drift)")
 	}
-	// Every [generation] key is documented in BOTH (the unified union).
+	populatedGen := strings.Replace(config.GenerationSection, "\n# token_limit", "\ntoken_limit", 1)
+	if !strings.Contains(populated, populatedGen) {
+		t.Errorf("populated config does not embed GenerationSection (with token_limit uncommented)")
+	}
+
+	// token_limit: ACTIVE (= 50000) in the populated config; COMMENTED in the inert reference.
+	activeTL := regexp.MustCompile(`(?m)^token_limit\s*=\s*50000\b`)
+	if !activeTL.MatchString(populated) {
+		t.Errorf("populated config missing ACTIVE token_limit = 50000 (should be uncommented)")
+	}
+	commentedTL := regexp.MustCompile(`(?m)^#\s*token_limit\s*=\s*50000\b`)
+	if !commentedTL.MatchString(exampleConfigTemplate) {
+		t.Errorf("inert template missing commented token_limit = 50000")
+	}
+	if regexp.MustCompile(`(?m)^token_limit\s*=`).MatchString(exampleConfigTemplate) {
+		t.Errorf("inert template must NOT have an active token_limit (would break inertness)")
+	}
+
+	// Every OTHER [generation] key is documented (commented) in BOTH (token_limit is handled above).
 	for _, key := range []string{
-		"max_diff_bytes", "max_md_lines", "token_limit", "diff_context",
+		"max_diff_bytes", "max_md_lines", "diff_context",
 		"max_duplicate_retries", "subject_target_chars", "output", "strip_code_fence",
 		"max_commits", "binary_extensions", "exclude", "multi_turn_fallback",
 		"multi_turn_chunk_tokens", "no_parent_watchdog", "format", "locale", "template", "push",

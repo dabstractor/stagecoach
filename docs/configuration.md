@@ -77,7 +77,7 @@ At load time, if `config_version` is missing or older, stagecoach prints an advi
 
 ## File format
 
-The config file uses TOML with several section groups. By default, `config init` writes a **populated config** with the detected provider and per-role models UNCOMMENTED so the tool works immediately. Use `config init --template` to get the inert all-commented reference (every option commented out).
+The config file uses TOML with several section groups. By default, `config init` writes a **populated config**: an active `[defaults] provider = "<detected>"` (every role inherits it), the per-role `[role.*]` blocks COMMENTED with the shipped defaults (uncomment one to pin a role beyond the default), and `[generation]` with `token_limit = 50000` active. Use `config init --template` to get the inert all-commented reference.
 
 **Populated config** (default `config init` output):
 

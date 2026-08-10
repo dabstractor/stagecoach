@@ -95,23 +95,19 @@ func isInstalledName(name string, installed []string) bool {
 	return false
 }
 
-// writeRoleBlock writes an UNCOMMENTED [role.<r>] block. provider is omitted when "" (role inherits
-// [defaults]); annotation is printed as a comment before the key=value lines when non-empty.
-func writeRoleBlock(b *strings.Builder, role, prov, model, annotation string) {
-	fmt.Fprintf(b, "\n[role.%s]\n", role)
-	if annotation != "" {
-		fmt.Fprintf(b, "# %s\n", annotation)
-	}
-	if prov != "" {
-		fmt.Fprintf(b, "provider = %q\n", prov)
-	}
-	fmt.Fprintf(b, "model = %q\n", model)
-}
-
-// writeCommentedRoleBlock writes a fully-commented [role.<r>] block for an alternate provider.
+// writeCommentedRoleBlock writes a fully-commented [role.<r>] block with NO separator — consecutive
+// blocks form one solid commented run (the caller emits any leading blank line). The provider line is
+// OMITTED when prov is empty — the role then inherits [defaults].provider; it is emitted only when the
+// role routes to a DIFFERENT provider than [defaults] (e.g. a stager that fell back to pi), never as a
+// redundant echo of [defaults]. model is always written: blank "" when no good default exists (the
+// multi-backend pi/opencode, which the user must supply), or the shipped smallest/fastest tier for
+// every other provider. Used for BOTH the target provider's own per-role blocks and the
+// alternate-installed-provider blocks, so the two never drift in shape.
 func writeCommentedRoleBlock(b *strings.Builder, role, prov, model string) {
 	fmt.Fprintf(b, "# [role.%s]\n", role)
-	fmt.Fprintf(b, "# provider = %q\n", prov)
+	if prov != "" {
+		fmt.Fprintf(b, "# provider = %q\n", prov)
+	}
 	fmt.Fprintf(b, "# model = %q\n", model)
 }
 
@@ -135,9 +131,10 @@ func applyOverrides(models map[string]string, stagerModel *string, overrides map
 // buildBootstrapConfig is the PURE populated-config generator (PRD §9.17 FR-B1). NO detection, NO I/O —
 // takes an already-resolved target + the installed list + optional per-role model overrides, returns the
 // exact TOML. Deterministic ⇒ unit-testable. Writes: header docs, config_version (uncommented),
-// [defaults] provider=<target> (uncommented), four [role.*] blocks for target (models from
-// DefaultModelsForProvider, overridden by overrides; stager routed to the fallback when target can't
-// stage, annotated), each OTHER installed provider as a commented [role.*] group, then a commented
+// [defaults] provider=<target> (uncommented), four COMMENTED [role.*] blocks for target (models from
+// DefaultModelsForProvider, overridden by overrides — blank for the multi-backend pi/opencode, the
+// smallest/fastest shipped default otherwise; stager routed to the fallback when target can't stage,
+// annotated), each OTHER installed provider as a commented [role.*] group, then a commented
 // [generation] section. overrides is applied AFTER pi-blank + stagerFallback (structural routing
 // preserved; only MODEL values change). nil/empty overrides ⇒ no edits.
 func buildBootstrapConfig(target string, installed []string, overrides map[string]string) string {
@@ -192,6 +189,8 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	applyOverrides(models, &stagerModel, overrides)
 
 	fmt.Fprintf(&b, "\n# --- per-role models for the default provider %q (PRD §16.4, §9.15) ---\n", target)
+	fmt.Fprintf(&b, "# All commented — a role with no uncommented [role.*] inherits [defaults]. Uncomment a block\n")
+	fmt.Fprintf(&b, "# to pin that role's model (pi/opencode ship blank; others ship the smallest/fastest default).\n")
 	if opencodeBlanked {
 		b.WriteString("# NOTE: opencode's models are plan-/backend-dependent (provider-prefixed, e.g. openai/gpt-5.4).\n")
 		b.WriteString("# The shipped per-role models are EMPTY so you supply your own — opencode then uses whatever\n")
@@ -214,27 +213,34 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("# provider: pick the reasoning tier by choosing the model (e.g. gemini-3.6-flash-low).\n")
 	}
 
-	// planner — inherits [defaults] provider
-	writeRoleBlock(&b, "planner", "", models["planner"], "")
+	// Blank line separates the explanatory notes above from the solid commented role block below.
+	b.WriteString("\n")
 
-	// stager — may fall back to a different provider
-	var stagerAnnotation string
+	// planner — inherits [defaults] provider (provider line omitted; uncomment to pin its model)
+	writeCommentedRoleBlock(&b, "planner", "", models["planner"])
+
+	// stager — may fall back to a different provider. Emit the provider line ONLY when the stager
+	// routes somewhere other than [defaults] (a real fallback); otherwise the role inherits [defaults]
+	// and a redundant provider line would just echo it. The fallback note prints as a comment before
+	// the block so an uncommenting user sees why the stager is routed elsewhere.
+	stagerProv := ""
 	if stagerName != target {
-		stagerAnnotation = target + " cannot serve as the stager (no tooled_flags); routed to " + stagerName + " (the first stager-capable provider)."
+		stagerProv = stagerName
+		annotation := target + " cannot serve as the stager (no tooled_flags); routed to " + stagerName + " (the first stager-capable provider)."
+		// When the stager fell back to pi and no override supplied a model, the bare fallback was
+		// blanked — append the multi-backend guidance so the user knows to prefix their inference backend.
+		if stagerName == "pi" && stagerModel == "" {
+			annotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b)."
+		}
+		fmt.Fprintf(&b, "# %s\n", annotation)
 	}
-	// When the stager fell back to pi and no override supplied a model, the bare fallback was
-	// blanked — append the multi-backend guidance (same wording as the target==pi NOTE at 187-188)
-	// so the user knows to prefix their inference backend.
-	if stagerName == "pi" && stagerName != target && stagerModel == "" {
-		stagerAnnotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b)."
-	}
-	writeRoleBlock(&b, "stager", stagerName, stagerModel, stagerAnnotation)
+	writeCommentedRoleBlock(&b, "stager", stagerProv, stagerModel)
 
 	// message — inherits [defaults] provider
-	writeRoleBlock(&b, "message", "", models["message"], "")
+	writeCommentedRoleBlock(&b, "message", "", models["message"])
 
 	// arbiter — inherits [defaults] provider
-	writeRoleBlock(&b, "arbiter", "", models["arbiter"], "")
+	writeCommentedRoleBlock(&b, "arbiter", "", models["arbiter"])
 
 	// other installed providers as COMMENTED [role.*] groups
 	for _, name := range preferredBuiltins {
@@ -269,9 +275,12 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		writeCommentedRoleBlock(&b, "arbiter", name, other["arbiter"])
 	}
 
-	// shared commented [generation] defaults (GenerationSection — the SAME block the inert
-	// --template reference emits, so the documented key set never drifts between the two).
-	b.WriteString(GenerationSection)
+	// shared [generation] defaults (GenerationSection — the SAME block the inert --template reference
+	// emits, so the documented key set never drifts), with token_limit UNCOMMENTED so the populated
+	// config ships an active 50000-token budget. Generated-file affordance only: Defaults() itself
+	// stays 0 (no config ⇒ no holistic cap), so a user who deletes the line or sets 0 gets no limit.
+	// The inert reference keeps token_limit commented (it stays functionally inert).
+	b.WriteString(strings.Replace(GenerationSection, "\n# token_limit", "\ntoken_limit", 1))
 
 	return b.String()
 }
@@ -351,7 +360,7 @@ const GenerationSection = `
 [generation]
 # max_diff_bytes          = 300000   # byte cap on the non-markdown diff section; ignored when token_limit is set (§9.1 FR3d)
 # max_md_lines            = 100      # per-file line cap for markdown diffs; ignored when token_limit is set (§9.1 FR3d)
-# token_limit             = 0        # holistic token budget for the WHOLE payload (prompt+examples+diff); 0 = unset ⇒ use the legacy caps above (FR3d)
+# token_limit             = 50000    # holistic token budget for the WHOLE payload (prompt+examples+diff); the populated config ships 50000 active — set 0 (or delete the line) for no holistic cap (legacy per-section caps above) (FR3d)
 # diff_context            = 1        # unchanged context lines around each hunk: 0 = changed lines only, 1 = one anchor line (default), 3 = git's default (§9.1 FR3f); valid 0–3
 # max_duplicate_retries   = 3        # re-generation attempts when the subject duplicates a recent commit
 # subject_target_chars    = 50       # target subject-line length for truncation

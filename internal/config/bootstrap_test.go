@@ -143,11 +143,13 @@ func TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel(t *testing.T
 func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
 	content := buildBootstrapConfig("pi", []string{"pi", "claude"}, nil)
 
-	// UNCOMMENTED role blocks are pi's (blanked — no sub-provider in bootstrap)
-	assertContains(t, content, "[role.planner]", `model = ""`)
-	assertContains(t, content, "[role.message]", `model = ""`)
+	// The TARGET's (pi) per-role blocks are COMMENTED with blank models (pi is multi-backend — no
+	// good default; the user supplies the inference/model prefix). No provider line: the roles inherit
+	// [defaults].provider = "pi".
+	assertContains(t, content, "# [role.planner]", `# model = ""`)
+	assertContains(t, content, "# [role.message]", `# model = ""`)
 
-	// claude appears as commented block
+	// claude (other installed) appears as a commented block too, with its real default models.
 	if !strings.Contains(content, "=== claude (installed)") {
 		t.Error("missing claude commented block header")
 	}
@@ -158,11 +160,10 @@ func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
 		t.Error("missing commented claude haiku model")
 	}
 
-	// claude's uncommented role blocks should NOT appear (only pi is the target)
-	// Count uncommented [role.message] — should be exactly 1 (pi's)
-	count := strings.Count(content, "\n[role.message]")
-	if count != 1 {
-		t.Errorf("expected exactly 1 uncommented [role.message], got %d", count)
+	// NO uncommented [role.*] blocks anywhere: every role block is commented (a role with no
+	// uncommented [role.*] inherits [defaults]). Guards against regressing back to active target blocks.
+	if got := strings.Count(content, "\n[role."); got != 0 {
+		t.Errorf("expected 0 uncommented [role.*] blocks (all commented); got %d", got)
 	}
 }
 
@@ -405,4 +406,92 @@ func TestRewriteHeaderForLocalScope(t *testing.T) {
 	if restored != global {
 		t.Errorf("rewrite touched more than the two scope passages; diff remains after restoring them")
 	}
+}
+
+// TestBuildBootstrapConfig_RoleBlocksAllCommented locks in the bootstrap shape (the FR-B1 amendment
+// the user directed): the target's four [role.*] blocks are ALWAYS commented — a role with no
+// uncommented [role.*] inherits [defaults], so the config works with just [defaults] above. The
+// multi-backend pi/opencode ship BLANK commented models (no good default; the user supplies the
+// inference/model prefix); every other provider ships the smallest/fastest appropriate default,
+// ready to uncomment. The stager emits a provider line ONLY on a real fallback (a different provider
+// than [defaults]) — never a redundant echo of [defaults] (the original complaint).
+func TestBuildBootstrapConfig_RoleBlocksAllCommented(t *testing.T) {
+	t.Run("pi: commented, BLANK, no provider line (multi-backend — no default)", func(t *testing.T) {
+		content := buildBootstrapConfig("pi", []string{"pi"}, nil)
+		for _, role := range []string{"planner", "stager", "message", "arbiter"} {
+			blk := extractCommentedTargetRoleBlock(content, role)
+			if !strings.Contains(blk, "# [role."+role+"]") {
+				t.Errorf("[role.%s] is not a commented block; got:\n%s", role, blk)
+			}
+			if !strings.Contains(blk, `# model = ""`) {
+				t.Errorf("[role.%s] should ship a BLANK model (pi multi-backend); block:\n%s", role, blk)
+			}
+			if strings.Contains(blk, "# provider =") {
+				t.Errorf("[role.%s] must NOT carry a provider line (inherits [defaults]=pi); block:\n%s", role, blk)
+			}
+		}
+	})
+	t.Run("claude: commented, filled with the smallest/fastest default, no provider line", func(t *testing.T) {
+		content := buildBootstrapConfig("claude", []string{"claude"}, nil)
+		// claude's shipped defaults (FR-D4): planner/message/arbiter = haiku, stager = sonnet.
+		want := map[string]string{"planner": "haiku", "stager": "sonnet", "message": "haiku", "arbiter": "haiku"}
+		for role, model := range want {
+			blk := extractCommentedTargetRoleBlock(content, role)
+			if !strings.Contains(blk, "# [role."+role+"]") {
+				t.Errorf("[role.%s] missing", role)
+			}
+			if !strings.Contains(blk, `# model = "`+model+`"`) {
+				t.Errorf("[role.%s] should ship default model %q (commented); block:\n%s", role, model, blk)
+			}
+			if strings.Contains(blk, "# provider =") {
+				t.Errorf("[role.%s] must NOT carry a provider line (inherits [defaults]=claude); block:\n%s", role, blk)
+			}
+		}
+	})
+	t.Run("qwen-code: stager falls back to pi and is the ONLY role with a provider line", func(t *testing.T) {
+		content := buildBootstrapConfig("qwen-code", nil, nil)
+		// planner/message/arbiter inherit [defaults]=qwen-code → no provider line.
+		for _, role := range []string{"planner", "message", "arbiter"} {
+			blk := extractCommentedTargetRoleBlock(content, role)
+			if strings.Contains(blk, "# provider =") {
+				t.Errorf("[role.%s] must NOT carry a provider line; block:\n%s", role, blk)
+			}
+		}
+		// stager routed to pi → it carries `# provider = "pi"` + a blank model + a fallback note.
+		stager := extractCommentedTargetRoleBlock(content, "stager")
+		if !strings.Contains(stager, `# provider = "pi"`) {
+			t.Errorf("stager fallback should carry # provider = \"pi\"; block:\n%s", stager)
+		}
+		if !strings.Contains(stager, `# model = ""`) {
+			t.Errorf("stager fallback model should be blank (pi multi-backend); block:\n%s", stager)
+		}
+		if !strings.Contains(content, "cannot serve as the stager") || !strings.Contains(content, "routed to pi") {
+			t.Errorf("missing the stager-fallback annotation")
+		}
+	})
+}
+
+// extractCommentedTargetRoleBlock returns the commented [role.<role>] block that belongs to the
+// TARGET provider — the one under the "# --- per-role models for the default provider" header, BEFORE
+// any "# === <other> (installed)" alternate-provider section — so assertions are not confused by the
+// alternate-provider commented blocks further down. Boundaries: from "# [role.<role>]" up to the next
+// "# [role." or "[generation]" line, capped at the first alternate-provider header.
+func extractCommentedTargetRoleBlock(content, role string) string {
+	header := "# [role." + role + "]"
+	start := strings.Index(content, header)
+	if start < 0 {
+		return ""
+	}
+	end := len(content)
+	if cut := strings.Index(content, "\n# === "); cut >= 0 && cut > start {
+		end = cut // the target's role blocks precede the first alternate-provider header
+	}
+	rest := content[start:end]
+	nextIdx := len(rest)
+	for _, marker := range []string{"\n# [role.", "\n[generation"} {
+		if i := strings.Index(rest[1:], marker); i >= 0 && i+1 < nextIdx {
+			nextIdx = i + 1
+		}
+	}
+	return rest[:nextIdx]
 }
