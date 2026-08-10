@@ -1,0 +1,32 @@
+/*
+ * Muted burnt-orange primary (#B25A1F) — DARK (slate) scheme only.
+ *
+ * Why this file exists: Material for MkDocs ships only *named* color palettes.
+ * Setting `primary: "#B25A1F"` in mkdocs.yml writes that hex into the page's
+ * data-md-color-primary attribute but emits no matching CSS rule, so the custom
+ * shade is silently ignored (no --md-primary-* override is generated). Instead
+ * we load the `deep orange` named palette and re-point its primary shades here,
+ * scoped to the dark scheme via [data-md-color-scheme="slate"].
+ *
+ * Specificity tie-break: [data-md-color-scheme="slate"] (0,1,0) vs Material's
+ * [data-md-color-primary="deep-orange"] (0,1,0) — equal specificity, so source
+ * order decides. This stylesheet loads after the theme, so it wins in dark mode.
+ * In light/default mode the selector doesn't match, so deep orange stands.
+ */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #b25a1f;
+  --md-primary-fg-color--light: #c06a2e;
+  --md-primary-fg-color--dark: #9c4f1b;
+  /* Deliberately do NOT override the --md-primary-bg-color variable. It is the TEXT color on
+     the primary bar (white, set globally for every palette). Overriding it to the bar color
+     made the header/nav text the same color as the background — invisible. */
+}
+
+/* Widen the main content column. Material hard-codes .md-grid { max-width: 61rem } (~976px);
+ * the CLI reference and provider tables have long rows that overflow it. 80rem (~1280px) gives
+ * wide tables/code room to breathe without making body prose lines stretch too far to read.
+ * Override is global (both schemes) on purpose — the constraint is content-driven, not cosmetic.
+ */
+.md-grid {
+  max-width: 80rem;
+}

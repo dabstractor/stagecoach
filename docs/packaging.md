@@ -114,3 +114,24 @@ into `vendorHash` in `flake.nix` and commit the fix. Likewise, the first CI run 
 > FR-D5 (verify at impl): re-confirm the `cachix/install-nix-action` major version pin, that the
 > locked nixpkgs provides Go >= 1.22, and that `nix flake check` defaults to the current system
 > (modern Nix 2.21+) — building the x86_64-linux package on the ubuntu runner.
+
+## Documentation site (GitHub Pages)
+
+The public docs site at `https://dabstractor.github.io/stagecoach/` is built from `docs/*.md` with
+[mkdocs-material](https://squidfunk.github.io/mkdocs-material/) (`mkdocs.yml`, `requirements-docs.txt`)
+and deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). It lives on the
+**same `gh-pages` branch** as the apt/dnf repos above (PRD §21.6).
+
+Coexistence contract — two workflows, one branch:
+
+- The docs job deploys with `keep_files: true` → it only touches site files at the branch root and
+  never deletes `apt/` or `rpm/`.
+- The `apt-dnf-repo` release job clones `gh-pages` first (carrying the site files through) before
+  its force-push, so a release does not wipe the docs site.
+
+Local preview:
+
+```bash
+pip install -r requirements-docs.txt
+mkdocs serve      # http://127.0.0.1:8000
+```

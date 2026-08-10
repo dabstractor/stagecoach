@@ -2,7 +2,7 @@
 
 Stagecoach writes your commit messages using the AI agent you already have installed. It auto-detects pi, Claude Code, opencode, Codex, Cursor, agy, or qwen-code, snapshots your staged changes atomically via git plumbing, and commits only what was staged when it started — so you can keep staging while it thinks.
 
-See the [README](../README.md) for the quick start, feature overview, and FAQ.
+See the [README](https://github.com/dabstractor/stagecoach/blob/main/README.md) for the quick start, feature overview, and FAQ.
 
 > [!NOTE]
 > The `docs/` directory tracks the shipped binary. If anything here disagrees with `stagecoach --help`, the binary is authoritative — open an issue.
@@ -57,10 +57,10 @@ Each v2.1 capability maps to a specific doc anchor:
 
 ## Product specification
 
-The [PRD](../spec/SPEC.md) is the authoritative product and technical specification (read-only). These docs are derived from it and from the shipped binary — refer to the PRD for the canonical requirements and design rationale.
+The [PRD](https://github.com/dabstractor/stagecoach/blob/main/spec/SPEC.md) is the authoritative product and technical specification (read-only). These docs are derived from it and from the shipped binary — refer to the PRD for the canonical requirements and design rationale.
 
-The [FUTURE_SPEC.md](../spec/FUTURE_SPEC.md) lists deferred and rejected ideas — each with its reason.
+The [FUTURE_SPEC.md](https://github.com/dabstractor/stagecoach/blob/main/spec/FUTURE_SPEC.md) lists deferred and rejected ideas — each with its reason.
 
 ## Contributing
 
-See the [README](../README.md#contributing) for build instructions. For the manifest format, see [providers/*.toml](../providers/) in the repo root — `providers/pi.toml` is the cleanest template.
+See the [README](https://github.com/dabstractor/stagecoach/blob/main/README.md#contributing) for build instructions. For the manifest format, see [providers/*.toml](https://github.com/dabstractor/stagecoach/tree/main/providers/) in the repo root — `providers/pi.toml` is the cleanest template.

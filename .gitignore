@@ -49,3 +49,6 @@ coverage.out
 result
 result-*
 .direnv
+
+# mkdocs local build output (CI builds in a fresh checkout, not here)
+/site/

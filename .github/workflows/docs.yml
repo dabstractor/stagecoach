@@ -1,0 +1,64 @@
+# Build the mkdocs-material docs site and deploy it to the gh-pages branch.
+#
+# gh-pages COEXISTENCE (spec §21.6): the gh-pages branch hosts TWO independent things —
+#   1. THIS docs site, at the branch root (index.html + assets/), published by this workflow.
+#   2. The signed apt + dnf package repos under apt/ and rpm/, published by release.yml's
+#      `apt-dnf-repo` job (which clones gh-pages, adds new .deb/.rpm, and force-pushes).
+# This workflow deploys with `keep_files: true`, so it ONLY adds/updates docs files and never
+# deletes the apt/ or rpm/ trees. Reciprocally, release.yml clones gh-pages (carrying the docs
+# files through) before its force-push, so a release does not wipe the docs site. Neither job
+# touches the other's files in the normal case.
+#
+# Pages is configured (repo Settings → Pages) as "Deploy from a branch" → branch `gh-pages` / root,
+# build_type "legacy". No Pages setting change is needed for the docs site: committing docs files
+# to the gh-pages root makes them appear at https://dabstractor.github.io/stagecoach/ immediately.
+
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - mkdocs.yml
+      - requirements-docs.txt
+      - README.md
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install mkdocs + plugins
+        run: pip install -r requirements-docs.txt
+
+      - name: Build site
+        run: mkdocs build --strict
+        # --strict turns broken-link/anchor warnings into errors, so a docs edit with a
+        # dangling link fails the deploy rather than shipping a dead link.
+
+      - name: Deploy to gh-pages (keep_files preserves apt/ + rpm/)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          keep_files: true
+          # Match the release job's gh-pages commit identity (release plumbing, not source).
+          user_name: 'github-actions[bot]'
+          user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+          commit_message: 'docs: rebuild site'

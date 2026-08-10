@@ -239,6 +239,16 @@ Semantic versioning. v1.0.0 = feature-complete against this PRD's P0/P1 set. Pro
 9. Adding a new agent (§12.8) — the contributor hook.
 10. FAQ / "Stagecoach is not for you if…"
 
+### 21.6 Documentation website (GitHub Pages)
+
+The `gh-pages` branch hosts the public documentation site at `https://dabstractor.github.io/stagecoach/` **in addition to** the apt/dnf package repos (§21.2/§21.3) that live under `apt/` and `rpm/` on the same branch. The site is built from `docs/*.md` with [mkdocs-material](https://squidfunk.github.io/mkdocs-material/) (`mkdocs.yml`, `requirements-docs.txt`) and deployed by `.github/workflows/docs.yml`; the apt/dnf repos are built and deployed by `release.yml`'s `apt-dnf-repo` job. Two workflows commit to one branch, so coexistence is by contract, not by partition:
+
+- The docs deploy uses `keep_files: true`, so it only adds/updates site files at the branch root and **never deletes** `apt/` or `rpm/`.
+- The release deploy clones `gh-pages` (carrying the site files through) before its force-push, so a release does not wipe the docs site.
+- The docs deploy writes a `.nojekyll` so GitHub serves the tree as raw static — required for mkdocs output and harmless (strictly safer) for the apt/dnf repo.
+
+This is presentation infrastructure over the derived docs (`docs/`, which track the shipped binary — §17), **not a product requirement or a commit-path FR surface**. It carries no `stagecoach` runtime behavior, no config, and no provider surface; it is documented here only so a future agent does not mistake the docs files on `gh-pages` for orphans and remove them.
+
 ---
 
 ## 22. Risks, assumptions, dependencies

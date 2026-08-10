@@ -78,8 +78,8 @@ Install stagecoach's `prepare-commit-msg` hook in the current repo. Writes an ex
 The hook script calls `stagecoach hook exec "$@"` (runtime lands in P1.M3.T2.S1 — not yet shipped).
 
 ```bash
-stagecoach hook install              # write the hook
-stagecoach hook install              # → "Updated stagecoach prepare-commit-msg hook." (idempotent)
+stagecoach hook install             # write the hook
+stagecoach hook install             # → "Updated stagecoach prepare-commit-msg hook." (idempotent)
 stagecoach hook install --strict    # bake --strict into the script body
 stagecoach hook install --print     # print the script to stdout, no disk write (works outside a repo)
 ```
@@ -129,9 +129,9 @@ Generate a commit message into git's `prepare-commit-msg` file. Called by stagec
 **Per-role precedence gotcha (FR-R3):** on the single-commit path `--model`/`--provider` set the GLOBAL default only; a `[role.message]` `model`/`provider` in config (or a `--message-model`/`--message-provider` flag) takes precedence for the message role. A populated config can therefore silently shadow `--model`/`--provider`. Run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint (and the `--provider` analog) when this happens. Advisory only — precedence and exit codes are unchanged.
 
 ```bash
-stagecoach hook exec <msg-file>                    # normal invocation (source absent → proceed)
-stagecoach hook exec <msg-file> message              # source=message → no-op (exit 0)
-stagecoach hook exec --strict <msg-file>             # abort on failure (exit 1)
+stagecoach hook exec <msg-file>                # normal invocation (source absent → proceed)
+stagecoach hook exec <msg-file> message        # source=message → no-op (exit 0)
+stagecoach hook exec --strict <msg-file>       # abort on failure (exit 1)
 ```
 
 | Arg | Description |
@@ -262,7 +262,7 @@ Detection gating (FR-I2): if a named target's tool is not on `$PATH`, the target
 Decline and no-change outcomes (user answered N, or the integration is already applied) are reported on stdout and are NOT errors (exit 0).
 
 ```bash
-stagecoach integrate install git-alias lazygit    # install both
+stagecoach integrate install git-alias lazygit   # install both
 stagecoach integrate install --yes git-alias     # skip confirmation
 ```
 
@@ -297,10 +297,10 @@ The `.gitconfig` write is delegated to `git config` itself (FR-I4), so the no-ma
 - **CONFIG:** the resolved global gitconfig path (`$GIT_CONFIG_GLOBAL` if set, else `$HOME/.gitconfig`)
 
 ```bash
-stagecoach integrate install git-alias        # install `git stagecoach`
-stagecoach integrate install git-alias --yes   # skip confirmation
-stagecoach integrate install git-alias --alias-name ci   # install as `git ci`
-stagecoach integrate remove git-alias         # remove the alias
+stagecoach integrate install git-alias                       # install `git stagecoach`
+stagecoach integrate install git-alias --yes                 # skip confirmation
+stagecoach integrate install git-alias --alias-name ci       # install as `git ci`
+stagecoach integrate remove git-alias                        # remove the alias
 stagecoach integrate remove git-alias --yes --alias-name ci  # remove `git ci`
 ```
 
@@ -314,7 +314,7 @@ Adds a `customCommands` entry to lazygit's `config.yml` via a **comment-preservi
 
 ```yaml
 customCommands:
-  - key: '<c-a>'                       # stagecoach-integration
+  - key: '<c-a>'   # stagecoach-integration
     context: 'files'
     command: 'stagecoach'
     loadingText: 'Generating commit message…'
@@ -353,10 +353,10 @@ customCommands:
 - **CONFIG:** the resolved `config.yml` path
 
 ```bash
-stagecoach integrate install lazygit              # install with default key (<c-a>)
-stagecoach integrate install lazygit --yes        # skip confirmation
+stagecoach integrate install lazygit               # install with default key (<c-a>)
+stagecoach integrate install lazygit --yes         # skip confirmation
 stagecoach integrate install lazygit --key '<c-s>' # custom binding
-stagecoach integrate remove lazygit               # remove stagecoach entry
+stagecoach integrate remove lazygit                # remove stagecoach entry
 stagecoach integrate remove lazygit --yes          # skip confirmation
 ```
 
@@ -372,10 +372,10 @@ Stagecoach never makes an HTTP call to list models (§6.2 N2) — the agent CLI 
 With no argument, the **resolved default provider** is shown. With `--all`, every **detected** provider (command on `$PATH`) is shown, one block at a time. An unknown or undetected named provider exits 1.
 
 ```bash
-stagecoach models                # show the default provider's models
-stagecoach models claude         # show claude's models
-stagecoach models --all          # show all detected providers
-stagecoach models --help          # see the models-scoped --all text
+stagecoach models           # show the default provider's models
+stagecoach models claude    # show claude's models
+stagecoach models --all     # show all detected providers
+stagecoach models --help    # see the models-scoped --all text
 ```
 
 | Flag | Description |
@@ -400,9 +400,9 @@ Lock: /home/you/.cache/stagecoach/locks/<hash>.lock
 The `orphaned:` line has three outcomes: `true (holder reparented — launcher has exited)` (Unix; the holder's parent pid changed — its launcher closed without killing it), `false` (alive and not reparented — Windows always lands here), or `unknown (holder is dead)` (the holder process is no longer alive). With no lock held, the output is `no run lock for <repo>` (exit 0). Exit is **0 in all cases** — even when the holder is dead or orphaned — the read is the help; the action (kill/rm) is yours.
 
 ```bash
-stagecoach lock status          # → "no run lock for <cwd>" (exit 0) when nothing holds it
-stagecoach lock status          # → the block above when a holder exists
-stagecoach lock --help          # the `lock` command group (bare `lock` prints help)
+stagecoach lock status    # → "no run lock for <cwd>" (exit 0) when nothing holds it
+stagecoach lock status    # → the block above when a holder exists
+stagecoach lock --help    # the `lock` command group (bare `lock` prints help)
 ```
 
 ### `upgrade`
@@ -430,9 +430,9 @@ Flag-contract rules: `--version` and `--prerelease` are mutually exclusive; `--r
 **Repo-independent (FR-U12).** `upgrade` acquires no run lock, reads no repo, invokes no provider, and runs outside a git repo. Its no-op pre-run hook overrides the default config load, so it never bootstraps a config file on first run. **Network:** `upgrade` is the one named exception to the no-network-calls commit path — it fetches **only** this project's own GitHub release artifacts and checksums (never an arbitrary URL, never the agent APIs).
 
 ```bash
-stagecoach upgrade                     # detect→delegate (or self-swap), confirm, swap in the new binary
-stagecoach upgrade --check             # exit 6 if a newer release exists, 0 if up to date (CI/cron gate)
-stagecoach upgrade --rollback          # restore the most recent backup (one-step undo)
+stagecoach upgrade               # detect→delegate (or self-swap), confirm, swap in the new binary
+stagecoach upgrade --check       # exit 6 if a newer release exists, 0 if up to date (CI/cron gate)
+stagecoach upgrade --rollback    # restore the most recent backup (one-step undo)
 stagecoach upgrade --channel prerelease
 stagecoach upgrade --version 1.2.3
 ```

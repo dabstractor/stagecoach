@@ -1,0 +1,87 @@
+# Stagecoach documentation site — built by .github/workflows/docs.yml and deployed to the
+# gh-pages branch (which ALSO hosts the apt/dnf package repos under apt/ and rpm/).
+# The deploy workflow uses keep_files so it never touches apt/ or rpm/. See spec §21.6.
+
+site_name: Stagecoach
+site_description: >-
+  Stagecoach writes your commit messages using the AI agent you already pay for. No API key, no
+  per-token billing — it shells out to your installed CLI agent and spends your existing
+  coding-plan quota.
+site_url: https://dabstractor.github.io/stagecoach/
+repo_url: https://github.com/dabstractor/stagecoach
+repo_name: dabstractor/stagecoach
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+# Repo-only pages: maintainer/internal notes that are not part of the public docs site.
+exclude_docs: |
+  packaging.md
+  ci-validation.md
+  windows-test-support.md
+
+theme:
+  name: material
+  language: en
+  favicon: assets/favicon.svg
+  features:
+    - navigation.top
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Overview: overview.md
+  - CLI reference: cli.md
+  - Configuration: configuration.md
+  - Providers: providers.md
+  - How it works: how-it-works.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+
+plugins:
+  - search
+  - callouts   # renders GitHub-style "> [!NOTE]" callouts as material admonitions (no content change)
+
+# Muted burnt-orange (#B25A1F) primary for the DARK scheme only. Material ships only named
+# palettes, so a hex in `primary:` is ignored; we load `deep orange` and override its shades
+# scoped to the slate scheme in docs/stylesheets/extra.css. Light mode stays deep orange.
+extra_css:
+  - stylesheets/extra.css

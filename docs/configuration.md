@@ -94,24 +94,20 @@ reasoning = "off"   # off|low|medium|high; off by default for every role (FR-R6)
 
 # --- per-role models for the default provider "claude" (PRD §16.4, §9.15) ---
 
-[role.planner]
-model = "opus"
+# [role.planner]
+# model = "haiku"
 # timeout = "600s"   # per-role generation timeout (FR-R7); overrides the planner's 480s built-in
+# [role.stager]
+# model = "sonnet"
+# [role.message]
+# model = "haiku"
+# [role.arbiter]
+# model = "haiku"
 
-[role.stager]
-model = "sonnet"
-
-[role.message]
-model = "haiku"
-
-[role.arbiter]
-model = "sonnet"
-
-# [generation] — diff capture and output tuning (commented defaults)
-# [generation]
+[generation]
 # max_diff_bytes        = 300000  # ignored when token_limit is set (FR3d)
 # max_md_lines          = 100     # ignored when token_limit is set (FR3d)
-# token_limit           = 0       # holistic token budget (0 = unset ⇒ use the caps above); FR3d
+token_limit           = 50000   # holistic token budget; the populated config ships 50000 active — set 0 (or delete) for no cap (FR3d)
 # diff_context          = 1       # 0 = changed-lines-only, 1 = one anchor (default), 3 = git default; FR3f; valid range 0–3 — out-of-range rejected at config load
 # multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion (§9.24 FR-T1c); set false to DISABLE (now honored via file/git-config — see "Multi-turn fallback" below)
 # multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens (§9.24 FR-T3); does NOT interact with token_limit (FR-T12)

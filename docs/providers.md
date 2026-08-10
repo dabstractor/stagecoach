@@ -6,7 +6,7 @@ Full reference for Stagecoach's provider manifest system: the 22-field schema, c
 
 A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Seven providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via `[provider.<name>]` sections in their config file.
 
-See the [shipped `providers/*.toml` files](../providers/) for human-readable reference manifests — `providers/pi.toml` is the cleanest template.
+See the [shipped `providers/*.toml` files](https://github.com/dabstractor/stagecoach/tree/main/providers/) for human-readable reference manifests — `providers/pi.toml` is the cleanest template.
 
 ## The schema
 

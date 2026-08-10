@@ -65,37 +65,72 @@ Decompose activates when **nothing is staged**, **auto-stage-all is on** (the de
 
 ### Pipeline flow
 
+The common case — files already staged — is the fast path: stagecoach snapshots the staged
+tree (**T_start**), asks the **message** role for a commit message, and commits it. Only one
+of the four roles runs; the planner, stager, and arbiter are skipped entirely. Decomposition
+is the exception, taken only when nothing is staged and the working tree is dirty.
+
 ```text
-                 nothing staged + dirty working tree
-                              │
-                              ▼
-            ┌────────────┐   T_start diff (binary placeholders)
-            │  planner   │◀──── + style examples
-            │ (bare)     │
-            └─────┬──────┘   JSON: {count, single, commits:[…], message?}
-                  │ single? ──yes──▶ commit T_start (planner's message) → done
-                  ▼ no (N concepts)
-         for i in 0..N-1:
-            ┌────────────┐  concept[i] description        ┌────────────┐
-            │  stager[i] │──────────────────────▶ index   │            │
-            │ (tooled)   │   (mutates index; no commit)   │            │
-            └─────┬──────┘                                │            │
-                  ▼ tree[i]=write-tree (FROZEN)            │            │
-            ┌────────────┐  diff(tree[i-1],tree[i])  ═══▶ │  message[i]│ (bare)
-            │            │                                │ (overlaps) │
-            │            │  ‖ stager[i+1] runs here       │            │
-            └─────┬──────┘                                └─────┬──────┘
-                  ▼ msg[i]                                      │
-            commit-tree -p newSHA[i-1] tree[i] msg[i] ◀──────────┘
-            update-ref HEAD newSHA[i] newSHA[i-1]   (serialized)
-                  ▼
-     frozen leftover empty? ──yes──▶ done
-              │ no
-              ▼
-            ┌────────────┐  commits made + leftover diff   target SHA or null
-            │  arbiter   │◀───────────────────────────▶  (stagecoach does all git)
-            │ (bare)     │
-            └────────────┘
+                    run stagecoach
+                            │
+                            ▼
+               ┌─────────────────────────┐   ◀── frozen at run start (the atomic core)
+               │    snapshot T_start     │
+               └─────────────────────────┘
+                            │
+                            │   staged files?  ──no──▶  decompose pipeline (detailed below)
+                            ▼
+               ┌─────────────────────────┐   ◀── diff(tip, T_start) → commit message
+               │         message         │
+               │         (bare)          │
+               └─────────────────────────┘
+                            │   msg
+                            ▼
+commit-tree  -p HEAD  T_start  msg   →  newSHA
+update-ref HEAD newSHA              (serialized CAS)
+                            │
+                            ▼
+                          done    ◀── decompose lands here too
+```
+
+When nothing is staged (and auto-stage-all is on, not opted out), the full decompose pipeline runs:
+
+
+```text
+           nothing staged + dirty working tree
+                            │
+                            ▼
+               ┌─────────────────────────┐   ◀── T_start diff + style examples
+               │         planner         │
+               │         (bare)          │
+               └─────────────────────────┘
+                            │   {count, single, commits:[…], message?}
+                            │   (if single: commit T_start with the planner’s
+                            │    message and stop — the loop below is skipped)
+                            ▼
+               ┌─────────────────────────┐   ── mutates index (stages concept[i])
+               │        stager[i]        │
+               │        (tooled)         │
+               └─────────────────────────┘
+                            │   tree[i] = write-tree  (FROZEN)
+                            ▼
+               ┌─────────────────────────┐   ◀── diff(tree[i-1], tree[i])   ‖ overlaps stager[i+1]
+               │       message[i]        │
+               │         (bare)          │
+               └─────────────────────────┘
+                            │   msg[i]
+                            ▼
+commit-tree  -p newSHA[i-1]  tree[i]  msg[i]   →  newSHA[i]
+update-ref HEAD newSHA[i]                   (serialized CAS)
+                            │   (repeat for each concept i = 0..N-1)
+                            ▼
+                            │   frozen leftover empty?  ──yes──▶  done
+                            │   no
+                            ▼
+               ┌─────────────────────────┐   ── commits made + leftover (stagecoach does all git)
+               │         arbiter         │
+               │         (bare)          │
+               └─────────────────────────┘
 ```
 
 ### Key design points
