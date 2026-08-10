@@ -1,7 +1,7 @@
 # Stagecoach
 
 > **Stagecoach writes your commit messages using the AI agent you already pay for.**
-> No API key. No per-token billing. It shells out to Claude Code, Codex, pi, opencode, agy, qwen-code, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
+> No API key. No per-token billing. It shells out to Claude Code, Codex, pi, opencode, agy, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
 A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Chocolatey, PowerShell installer, npm, Nix, mise/asdf) — see [Features](#features) below.
 
@@ -46,9 +46,6 @@ Net: Most providers cares about keeping you on their harness. Opencode and Pi ar
 
 </details>
 
-> [!NOTE]
-> What we deliberately didn't build is tracked in [FUTURE_SPEC.md](spec/FUTURE_SPEC.md).
-
 ## Features
 
 Stagecoach does one thing — commit messages — and a few things around them.
@@ -75,14 +72,14 @@ Stagecoach does one thing — commit messages — and a few things around them.
 
 ## Installation
 
-**Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, opencode, Codex, Cursor, agy, or qwen-code).
+**Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, opencode, Codex, Cursor, or agy).
 
 > [!NOTE]
 > Stagecoach ships via the package-managed channels below, and `stagecoach upgrade` keeps any of them current — see [Updating](#updating) below.
 
 ### Package managers
 
-Pick whichever channel matches your platform or workflow (commands per [PRD §21.3](spec/SPEC.md)):
+Pick whichever channel matches your platform or workflow:
 
 ```bash
 # Homebrew (macOS / Linuxbrew)
@@ -156,7 +153,7 @@ stagecoach --version   # stagecoach version dev
 
 ### Updating
 
-Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider. (PRD §9.29.)
+Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider.
 
 ```bash
 stagecoach upgrade             # detect → delegate (or self-swap), confirm, apply
@@ -204,7 +201,7 @@ See [Features](#features) above and the [CLI reference](docs/cli.md) for the res
 https://github.com/user-attachments/assets/fbd9429d-99d2-4be9-99c8-cd01ac9c0504
 
 
-With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). As defense-in-depth, decompose also re-asserts its empty-index precondition at entry (FR-M1e), so a stale trigger that reaches it with a staged index fails loudly rather than silently folding that hand-staged content into the run. The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
+With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). As defense-in-depth, decompose also re-asserts its empty-index precondition at entry, so a stale trigger that reaches it with a staged index fails loudly rather than silently folding that hand-staged content into the run. The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
 
 ```bash
 # Auto-decompose — planner decides the count and grouping
@@ -224,7 +221,7 @@ stagecoach --single
 # [role.planner]
 # provider = "claude"
 # model = "opus"
-# timeout = "600s"   # per-role generation timeout (FR-R7); the planner defaults to 480s
+# timeout = "600s"   # per-role generation timeout; the planner defaults to 480s
 ```
 
 > [!NOTE]
@@ -232,7 +229,7 @@ stagecoach --single
 > **claude** (`--effort`). It is a **no-op** for **agy** and **cursor** — those two bake the reasoning
 > level into the *model name* (agy's `(Low)/(Medium)/(High)` suffix, cursor's `-none/-low/-medium/-high`
 > suffix), so the reasoning dial is the model you pick, not a flag. Other providers treat `--reasoning`
-> as a graceful no-op (no error) per FR-R6. It applies to any role via `--<role>-reasoning` or
+> as a graceful no-op (no error) per. It applies to any role via `--<role>-reasoning` or
 > `[role.*] reasoning`.
 >
 > **Environment variables pass through to the agent.** stagecoach always runs the provider CLI with
@@ -252,7 +249,7 @@ stagecoach integrate list                  # see what's installed / detected
 ```
 
 > [!NOTE]
-> gitui isn't supported — see [FUTURE_SPEC.md](spec/FUTURE_SPEC.md) §1.2.
+> gitui isn't supported.
 
 <details>
 <summary><em>Manual install (no <code>stagecoach integrate</code>)</em></summary>
@@ -273,7 +270,7 @@ customCommands:
 
 ## Configure your agent
 
-Stagecoach auto-detects which agents are installed and uses the first one it finds (in preference order: pi, opencode, cursor, agy, qwen-code, codex, claude). To see what's detected:
+Stagecoach auto-detects which agents are installed and uses the first one it finds (in preference order: pi, opencode, cursor, agy, codex, claude). To see what's detected:
 
 ```bash
 $ stagecoach providers list
@@ -284,7 +281,6 @@ codex      ✓
 cursor     ✓
 opencode   ✓
 pi         ✓         (default)
-qwen-code  ✗
 ```
 
 > [!NOTE]
@@ -304,7 +300,7 @@ git config stagecoach.model anthropic/claude-haiku
 
 > [!NOTE]
 > `pi` is a multi-backend provider: the inference backend is a slash-prefix on the model
-> (`anthropic/claude-haiku`). A bare model (no `/`) on pi is a config error (FR-R5b). Set
+> (`anthropic/claude-haiku`). A bare model (no `/`) on pi is a config error. Set
 > `git config stagecoach.model anthropic/claude-haiku` (or `[defaults] model = "anthropic/claude-haiku"` in your config).
 > See [Provider manifests](docs/providers.md) for the full schema.
 
@@ -405,7 +401,7 @@ No. Stagecoach uses `git write-tree` + `git commit-tree` + `git update-ref` (ato
 
 **Safe to run twice.** A per-repo run lock prevents two concurrent commit-producing runs from racing on HEAD. On the **single-commit path** (changes staged), an accidental double-invoke exits `0` if nothing new has been staged since the in-progress run began (*nothing to do — an in-progress run already covers your staged changes*), or exits `5` (Busy) if genuinely new work is staged (your changes stay staged to re-run). On the **decompose path** (nothing staged, dirty working tree), an accidental double-run exits `5` (Busy) rather than `0` — the in-progress run publishes a working-tree snapshot a contender can't reproduce without the lock, so it conservatively refuses and leaves your working tree untouched. (On a shared filesystem across hosts the lock can't help — the atomic `update-ref` CAS is the never-clobber-HEAD guarantee there.)
 
-If the launcher closed without killing stagecoach — you closed the lazygit TUI, quit your IDE, or detached the terminal mid-run — the orphaned run **self-exits** via a parent-death watchdog (FR-K1) and releases the lock, so it never strands. `stagecoach lock status` (FR-K4) shows the holder's path and liveness so you can decide whether to `kill`/`rm` yourself; it never force-breaks a live lock.
+If the launcher closed without killing stagecoach — you closed the lazygit TUI, quit your IDE, or detached the terminal mid-run — the orphaned run **self-exits** via a parent-death watchdog and releases the lock, so it never strands. `stagecoach lock status` shows the holder's path and liveness so you can decide whether to `kill`/`rm` yourself; it never force-breaks a live lock.
 
 And the commit-message call itself is **chrome-less** where the agent allows it — skills, extensions, context files, and MCP servers are switched off (pi, claude), so nothing loads, spawns, or injects around the call; providers that expose no such switch document the gap instead ([docs/providers.md](docs/providers.md#tools-disable-asymmetry)).
 
@@ -415,7 +411,7 @@ No. It shells out to *your* agent under *your* existing auth and billing. On the
 
 ### Does stagecoach make network calls?
 
-On the commit path (writing commit messages), **no** — stagecoach makes no network calls itself; it shells out to your agent, and your agent makes the connection. The one named exception is `stagecoach upgrade` (see [Updating](#updating)), which fetches **only** this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never your repo data. (PRD §19, scoped to the commit path in v3.0; §9.29 is the exception.) See [docs/cli.md#upgrade](docs/cli.md#upgrade).
+On the commit path (writing commit messages), **no** — stagecoach makes no network calls itself; it shells out to your agent, and your agent makes the connection. The one named exception is `stagecoach upgrade` (see [Updating](#updating)), which fetches **only** this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never your repo data. See [docs/cli.md#upgrade](docs/cli.md#upgrade).
 
 ### Can it write multiple commits?
 
@@ -427,9 +423,9 @@ It learns from the last 20 commits in your repo, with a prohibition on reusing t
 
 ### Which agents are supported?
 
-Seven built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **qwen-code** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
+Six built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
 
-**End-to-end verification status** (this build): **pi**, **agy**, **codex**, **opencode**, and **claude** have each been driven through a real commit-generation run. **cursor is NOT yet verified end-to-end** — its manifest is assembled from `agent --help` and ships untested here. If you're a paying **Cursor** subscriber and would be willing to spend a few `agent` runs helping confirm the cursor path (the `--mode ask --trust -p` read-only combo), please open an issue — cursor is the one provider the maintainer can't validate without an account.
+**End-to-end verification status** (this build): all six providers — **pi**, **opencode**, **cursor**, **agy**, **codex**, and **claude** — have each been driven through a real commit-generation run.
 
 ### How do I see what command it runs?
 
@@ -441,11 +437,11 @@ This prints the resolved provider command, raw agent output, and retry attempts.
 
 ### Does it run my pre-commit hooks?
 
-Yes. As of v2.4, the default `stagecoach` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot — so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagecoach hook install`) remains for when you commit via plain `git commit` from an IDE — the two compose (§9.25 covers `stagecoach`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
+Yes. As of v2.4, the default `stagecoach` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot — so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagecoach hook install`) remains for when you commit via plain `git commit` from an IDE — the two compose (covers `stagecoach`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason — live in [FUTURE_SPEC.md](spec/FUTURE_SPEC.md). (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
+Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason. (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
 
 ---
 

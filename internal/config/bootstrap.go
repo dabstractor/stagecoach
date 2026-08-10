@@ -12,7 +12,7 @@ import (
 // preferredBuiltins is the FR-D1 cascading provider priority order (local copy — mirrors
 // internal/provider/registry.go's unexported preferredBuiltins). Used by stagerFallback + commented-block
 // ordering. (Moved from internal/cmd/config.go; P1.M4.T4.S1.)
-var preferredBuiltins = []string{"pi", "opencode", "cursor", "agy", "qwen-code", "codex", "claude"}
+var preferredBuiltins = []string{"pi", "opencode", "cursor", "agy", "codex", "claude"}
 
 // GenerateBootstrapConfig returns the populated bootstrap TOML (PRD §9.17 FR-B1/B3). provider != "" is
 // used directly (caller validates); "" ⇒ cascading auto-detect (FR-D1) ⇒ "pi" fallback. NO I/O; $PATH
@@ -147,14 +147,14 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	fmt.Fprintf(&b, "config_version = %d\n", CurrentConfigVersion)
 
 	// [defaults] — provider uncommented, rest commented
-	b.WriteString("\n# [defaults] — top-level Stagecoach behavior (PRD §16.2)\n")
+	b.WriteString("\n# [defaults] — top-level Stagecoach behavior\n")
 	b.WriteString("[defaults]\n")
 	fmt.Fprintf(&b, "provider = %q", target)
 	if !isInstalledName(target, installed) {
 		b.WriteString("  # no built-in agent detected on $PATH; defaulted to \"pi\" — edit if you use a different agent")
 	}
 	b.WriteString("\n")
-	b.WriteString("reasoning = \"off\"   # off|low|medium|high; off by default for every role (FR-R6) — opt in per role below\n")
+	b.WriteString("reasoning = \"off\"   # off|low|medium|high; off by default for every role — opt in per role below\n")
 	b.WriteString("# model          = \"\"\n# timeout        = \"120s\"\n# auto_stage_all = true\n# verbose        = false\n")
 
 	// [role.*] for the target (UNCOMMENTED), canonical order: planner, stager, message, arbiter
@@ -175,8 +175,9 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		// it blank so all four roles stay empty. pi remains the stager (stager-capable).
 		stagerModel = ""
 	}
-	// Stager fell back to pi for a non-pi target (agy/opencode/qwen-code/codex/cursor have empty
-	// tooled_flags). pi is a multi-backend provider: a bare fallback model (gpt-5.4-mini) is a
+	// Stager fell back to pi for a non-pi target whose manifest had empty tooled_flags. As of
+	// 2026-07-09 all six built-ins are stager-capable, so this path is for user-defined providers;
+	// pi is a multi-backend provider: a bare fallback model (gpt-5.4-mini) is a
 	// hard FR-R5b error. Blank it so the user supplies their own backend/model. pi REMAINS the
 	// stager (stager-capable) — only the MODEL is blanked. Placed before applyOverrides so an
 	// explicit override can still set a model (mirrors the pi-target path's blank-then-override).
@@ -188,7 +189,7 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	piHasOverrides := piBlanked && len(overrides) > 0
 	applyOverrides(models, &stagerModel, overrides)
 
-	fmt.Fprintf(&b, "\n# --- per-role models for the default provider %q (PRD §16.4, §9.15) ---\n", target)
+	fmt.Fprintf(&b, "\n# --- per-role models for the default provider %q ---\n", target)
 	fmt.Fprintf(&b, "# All commented — a role with no uncommented [role.*] inherits [defaults]. Uncomment a block\n")
 	fmt.Fprintf(&b, "# to pin that role's model (pi/opencode ship blank; others ship the smallest/fastest default).\n")
 	if opencodeBlanked {
@@ -197,12 +198,12 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("# model/backend your plan provides. opencode is a power-user provider.\n")
 	} else if piBlanked && !piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
-		b.WriteString("# e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
+		b.WriteString("# e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error.\n")
 		b.WriteString("# The shipped per-role models are empty so you can supply your own backend/model.\n")
 	} else if piBlanked && piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — each model carries the inference backend as a\n")
 		b.WriteString("# slash-prefix (e.g. model = \"anthropic/claude-haiku\"). A bare model (no '/') on pi is a config\n")
-		b.WriteString("# error (FR-R5b).\n")
+		b.WriteString("# error.\n")
 	}
 	// agy and cursor-agent bake the reasoning level into the MODEL NAME (agy's "(Low)/(Medium)/(High)"
 	// suffix; cursor's "-none/-low/-medium" suffix). For them the `reasoning` setting is a NO-OP — the
@@ -230,7 +231,7 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		// When the stager fell back to pi and no override supplied a model, the bare fallback was
 		// blanked — append the multi-backend guidance so the user knows to prefix their inference backend.
 		if stagerName == "pi" && stagerModel == "" {
-			annotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error (FR-R5b)."
+			annotation += " pi is a multi-backend provider — prefix the model with your inference backend, e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error."
 		}
 		fmt.Fprintf(&b, "# %s\n", annotation)
 	}
@@ -264,7 +265,7 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("\n# === " + name + " (installed) — uncomment a [role.*] block to route that role to " + name + " ===\n")
 		if piCommented {
 			b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
-			b.WriteString("# e.g. model = \"zai/gpt-5.4\". A bare model (no '/') on pi is a config error (FR-R5b).\n")
+			b.WriteString("# e.g. model = \"openai/gpt-5.4\". A bare model (no '/') on pi is a config error.\n")
 		}
 		if name == "agy" || name == "cursor" {
 			b.WriteString("# NOTE: " + name + " bakes reasoning into the MODEL NAME (suffix); the `reasoning` setting is a no-op here — pick the tier via the model.\n")
@@ -296,30 +297,30 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 # a detected (or --provider-pinned) agent and per-role model defaults UNCOMMENTED.
 # Edit freely; uncomment any commented section to activate it.
 #
-# Resolution precedence (highest -> lowest), PRD §9.8 FR34 / §16.1:
+# Resolution precedence (highest -> lowest):
 #   CLI flags  >  STAGECOACH_* env vars  >  repo git config (stagecoach.*)  >
 #   repo-local .stagecoach.toml  >  THIS global file  >  provider defaults  >  built-in defaults
 #
 # This is the GLOBAL file. A repo-local file (./.stagecoach.toml) and repo git config (stagecoach.*)
 # both override it; CLI flags and env vars override those.
 #
-# Environment variables (PRD §9.8 FR35) — override this file, are overridden by CLI flags:
+# Environment variables — override this file, are overridden by CLI flags:
 #   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "agy")
 #   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
 #   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
 #   STAGECOACH_CONFIG     path to a config file, overrides discovery
 #   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
 #   STAGECOACH_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
-#   STAGECOACH_NO_PARENT_WATCHDOG=1   # opt out of the parent-death lock watchdog (§9.27 FR-K6)
-#   STAGECOACH_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner (PRD §16.4, §9.15)
+#   STAGECOACH_NO_PARENT_WATCHDOG=1   # opt out of the parent-death lock watchdog
+#   STAGECOACH_PLANNER_PROVIDER / _MODEL   per-role override: decomposition planner
 #   STAGECOACH_STAGER_PROVIDER  / _MODEL   per-role override: (tooled) staging agent
 #   STAGECOACH_MESSAGE_PROVIDER / _MODEL   per-role override: bare commit-message agent
 #   STAGECOACH_ARBITER_PROVIDER / _MODEL   per-role override: leftover arbiter
-#   STAGECOACH_REASONING                  global reasoning effort: off|low|medium|high (PRD §9.8 FR35, §16.2)
+#   STAGECOACH_REASONING                  global reasoning effort: off|low|medium|high
 #   STAGECOACH_<ROLE>_REASONING           per-role reasoning override (role = planner|stager|message|arbiter)
-#   STAGECOACH_COMMITS                    force exactly N commits when nothing is staged (PRD §9.14); 1 == --single
+#   STAGECOACH_COMMITS                    force exactly N commits when nothing is staged; 1 == --single
 #
-# Git config keys (PRD §9.8 FR36 / §16.3) — alternative to this file, scoped to one repo:
+# Git config keys — alternative to this file, scoped to one repo:
 #   git config stagecoach.provider pi
 #   git config stagecoach.model ""
 #   git config stagecoach.timeout 120s
@@ -327,13 +328,13 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 #   (read via ` + "`git config --get stagecoach.<key>`" + `)
 #
 # ---------------------------------------------------------------------------
-# CLI flags (PRD §15.2) — highest precedence; only an EXPLICITLY-passed flag overrides lower layers
+# CLI flags — highest precedence; only an EXPLICITLY-passed flag overrides lower layers
 # ---------------------------------------------------------------------------
-# --provider / --model                       global default for ALL roles (§16.4)
+# --provider / --model                       global default for ALL roles
 # --<role>-provider / --<role>-model         per-role override (role = planner|stager|message|arbiter)
-# --commits <N>                              force exactly N commits (N>=2); --commits 1 == --single (§9.14)
-# --single / --no-decompose                  bypass decomposition; force the single-commit path (§9.14)
-# --max-commits <N>                          safety cap on auto-decompose (default 12; §9.14 FR-M4)
+# --commits <N>                              force exactly N commits (N>=2); --commits 1 == --single
+# --single / --no-decompose                  bypass decomposition; force the single-commit path
+# --max-commits <N>                          safety cap on auto-decompose (default 12)
 
 `
 
@@ -352,30 +353,30 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 // only when a real (keyed) setting predates the current schema.
 const GenerationSection = `
 # ---------------------------------------------------------------------------
-# [generation] — diff capture & output tuning (PRD §16.2)
+# [generation] — diff capture & output tuning
 # ---------------------------------------------------------------------------
 # The [generation] header below is intentionally UNCOMMENTED while every key stays commented
-# (see GenerationSection's doc comment): uncommenting any one key lands it in the right table,
+#: uncommenting any one key lands it in the right table,
 # and an all-commented-keys section is an inert empty table — built-in defaults still apply.
 [generation]
-# max_diff_bytes          = 300000   # byte cap on the non-markdown diff section; ignored when token_limit is set (§9.1 FR3d)
-# max_md_lines            = 100      # per-file line cap for markdown diffs; ignored when token_limit is set (§9.1 FR3d)
-# token_limit             = 50000    # holistic token budget for the WHOLE payload (prompt+examples+diff); the populated config ships 50000 active — set 0 (or delete the line) for no holistic cap (legacy per-section caps above) (FR3d)
-# diff_context            = 1        # unchanged context lines around each hunk: 0 = changed lines only, 1 = one anchor line (default), 3 = git's default (§9.1 FR3f); valid 0–3
+# max_diff_bytes          = 300000   # byte cap on the non-markdown diff section; ignored when token_limit is set
+# max_md_lines            = 100      # per-file line cap for markdown diffs; ignored when token_limit is set
+# token_limit             = 50000    # holistic token budget for the WHOLE payload (prompt+examples+diff); the populated config ships 50000 active — set 0 (or delete the line) for no holistic cap (legacy per-section caps above)
+# diff_context            = 1        # unchanged context lines around each hunk: 0 = changed lines only, 1 = one anchor line (default), 3 = git's default; valid 0–3
 # max_duplicate_retries   = 3        # re-generation attempts when the subject duplicates a recent commit
 # subject_target_chars    = 50       # target subject-line length for truncation
 # output                  = "raw"    # agent output mode: raw | json — applies to parsing across ALL providers
 # strip_code_fence        = true     # strip ` + "`" + ` fences from agent output (all providers)
-# max_commits             = 12       # safety cap on auto-decompose (§9.14 FR-M4); default 12
-# binary_extensions       = []       # extra non-text extensions to filter beyond the built-in denylist (§9.1 FR3a)
-# exclude                 = []       # gitignore-style globs; UNION across global+repo+flag (§9.18 FR-X1)
-# multi_turn_fallback     = true     # lossless multi-turn fallback on one-shot exhaustion (§9.24 FR-T1c); set false to DISABLE
-# multi_turn_chunk_tokens = 32000    # per-turn chunk budget in tokens for multi-turn (§9.24 FR-T3); does NOT interact with token_limit (FR-T12)
-# no_parent_watchdog      = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run (§9.27 FR-K6)
-# format                  = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1) (§9.19 FR-F1)
-# locale                  = ""       # free-form language name or BCP-47 tag; never validated (§9.19 FR-F6)
-# template                = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)" (§9.19 FR-F8)
-# push                    = false    # run ` + "`" + `git push` + "`" + ` after a fully-successful run; on failure commits stand (§9.22 FR-P1)
+# max_commits             = 12       # safety cap on auto-decompose; default 12
+# binary_extensions       = []       # extra non-text extensions to filter beyond the built-in denylist
+# exclude                 = []       # gitignore-style globs; UNION across global+repo+flag
+# multi_turn_fallback     = true     # lossless multi-turn fallback on one-shot exhaustion; set false to DISABLE
+# multi_turn_chunk_tokens = 32000    # per-turn chunk budget in tokens for multi-turn; does NOT interact with token_limit
+# no_parent_watchdog      = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run
+# format                  = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
+# locale                  = ""       # free-form language name or BCP-47 tag; never validated
+# template                = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"
+# push                    = false    # run ` + "`" + `git push` + "`" + ` after a fully-successful run; on failure commits stand
 # NOTE: [generation] output/strip_code_fence override any per-provider [provider.<name>] values.
 `
 

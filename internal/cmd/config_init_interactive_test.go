@@ -541,7 +541,7 @@ func TestPreferredBuiltins_ContainsKnownProviders(t *testing.T) {
 		t.Fatal("PreferredBuiltins returned empty slice")
 	}
 	// Must contain the known built-in names.
-	expected := []string{"pi", "opencode", "cursor", "agy", "qwen-code", "codex", "claude"}
+	expected := []string{"pi", "opencode", "cursor", "agy", "codex", "claude"}
 	for _, name := range expected {
 		found := false
 		for _, b := range builtins {

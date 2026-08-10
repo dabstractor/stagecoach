@@ -22,7 +22,7 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | Flag | Type | Default | Env var | Git config | Description |
 |------|------|---------|---------|------------|-------------|
 | `--provider <name>` | string | "" (auto-detect) | `STAGECOACH_PROVIDER` | `stagecoach.provider` | Provider/agent to use |
-| `--model <name>` | string | "" (manifest default) | `STAGECOACH_MODEL` | `stagecoach.model` | Model override. Sets the GLOBAL default — a `[role.<role>]` model in config (or a `--<role>-model` flag) takes precedence for that role (FR-R3), so a populated config can silently shadow `--model`; use `--message-model` to override the message role, or run with `--verbose` to see a note when `--model`/`--provider` is shadowed |
+| `--model <name>` | string | "" (manifest default) | `STAGECOACH_MODEL` | `stagecoach.model` | Model override. Sets the GLOBAL default — a `[role.<role>]` model in config (or a `--<role>-model` flag) takes precedence for that role, so a populated config can silently shadow `--model`; use `--message-model` to override the message role, or run with `--verbose` to see a note when `--model`/`--provider` is shadowed |
 | `--config <path>` | string | "" | `STAGECOACH_CONFIG` | — | Path to a config file, overrides discovery. A path pointing at a **missing** file fails fast with exit 1 (like a malformed or directory path), rather than falling back to discovery. |
 | `--timeout <dur>` | string | "120s" | `STAGECOACH_TIMEOUT` | `stagecoach.timeout` | Generation timeout (e.g. `"120s"` or `120`) |
 | `--verbose`, `-v` | bool | false | `STAGECOACH_VERBOSE` | — | Print resolved command, raw output, retries (`STAGECOACH_VERBOSE` accepts `true`/`false`/`1`/`0`; `2` is documented but not yet implemented and is rejected with a clear message) |
@@ -39,18 +39,18 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--locale <lang>` | string | "" | `STAGECOACH_LOCALE` | `stagecoach.locale` | Write the message in this language (free-form name or BCP-47 tag; never validated). Also `[generation].locale`. |
 | `--template <tpl>` | string | "" | `STAGECOACH_TEMPLATE` | `stagecoach.template` | Wrap every commit message: `$msg` is replaced with the generated message, e.g. `"$msg (#205)"`. Must contain the literal `$msg` (else hard error, exit 1). Applies to every commit in a run. Also `[generation].template`. Distinct from `config init --template`. |
 | `--context <text>` | string | "" | — | — | Extra authoritative context appended to the message and planner payloads (e.g. `"hotfix for #812"`). Flag only — per-invocation; no env var, git-config, or config-file key. |
-| `--edit` | bool | false | — | — | Open your editor (`$GIT_EDITOR` via `git var GIT_EDITOR`) on the generated message before committing. The EDITMSG file includes the tree SHA + a diff-tree name-status summary; comment lines (`#`) are stripped on close. An empty result aborts (exit 1, not a rescue). The edited message bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored with `--dry-run`; not valid with `hook exec`. (§9.22 FR-E1) |
-| `--push` | bool | false | `STAGECOACH_PUSH` | `stagecoach.push` | Run plain `git push` (no arguments, streaming its output) after a fully-successful run. Never prompts. On push failure the commits stand — git's stderr is shown verbatim (including the no-upstream hint; stagecoach does NOT auto-`--set-upstream`), "commits created; push failed" prints, and stagecoach exits 1. Skipped on `--dry-run`, the nothing-to-commit exit, and any rescue/CAS abort. Also `[generation].push`. (§9.22 FR-P1) |
-| `--no-verify` | bool | false | `STAGECOACH_NO_VERIFY` | `stagecoach.noVerify` | Bypass `pre-commit` and `commit-msg` hooks for this commit (mirrors `git commit --no-verify`; `prepare-commit-msg` and `post-commit` still run). §9.25, FR-V5. |
-| `--work-description <text>` | string | "" | `STAGECOACH_WORK_DESCRIPTION` | — | Activate work-description mode: lead the prompt with this description of the work + the file skeleton, and let the model read staged file diffs on demand via `READ <path>` (message role only; never the default). Flag/env only — per-invocation; no git-config or config-file key. §9.26, FR-W1. |
-| `--work-description-file <path>` | string | "" | — | — | Activate work-description mode with the description read from this file (wins over `--work-description` when both are set). §9.26, FR-W1. |
+| `--edit` | bool | false | — | — | Open your editor (`$GIT_EDITOR` via `git var GIT_EDITOR`) on the generated message before committing. The EDITMSG file includes the tree SHA + a diff-tree name-status summary; comment lines (`#`) are stripped on close. An empty result aborts (exit 1, not a rescue). The edited message bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored with `--dry-run`; not valid with `hook exec`. |
+| `--push` | bool | false | `STAGECOACH_PUSH` | `stagecoach.push` | Run plain `git push` (no arguments, streaming its output) after a fully-successful run. Never prompts. On push failure the commits stand — git's stderr is shown verbatim (including the no-upstream hint; stagecoach does NOT auto-`--set-upstream`), "commits created; push failed" prints, and stagecoach exits 1. Skipped on `--dry-run`, the nothing-to-commit exit, and any rescue/CAS abort. Also `[generation].push`. |
+| `--no-verify` | bool | false | `STAGECOACH_NO_VERIFY` | `stagecoach.noVerify` | Bypass `pre-commit` and `commit-msg` hooks for this commit (mirrors `git commit --no-verify`; `prepare-commit-msg` and `post-commit` still run).,. |
+| `--work-description <text>` | string | "" | `STAGECOACH_WORK_DESCRIPTION` | — | Activate work-description mode: lead the prompt with this description of the work + the file skeleton, and let the model read staged file diffs on demand via `READ <path>` (message role only; never the default). Flag/env only — per-invocation; no git-config or config-file key.,. |
+| `--work-description-file <path>` | string | "" | — | — | Activate work-description mode with the description read from this file (wins over `--work-description` when both are set).,. |
 | `--planner-provider <name>` | string | "" | `STAGECOACH_PLANNER_PROVIDER` | — | Per-role provider override for the decomposition planner |
 | `--planner-model <name>` | string | "" | `STAGECOACH_PLANNER_MODEL` | — | Per-role model override for the decomposition planner |
 | `--stager-provider <name>` | string | "" | `STAGECOACH_STAGER_PROVIDER` | — | Per-role provider override for the (tooled) staging agent |
 | `--stager-model <name>` | string | "" | `STAGECOACH_STAGER_MODEL` | — | Per-role model override for the (tooled) staging agent |
 | `--arbiter-provider <name>` | string | "" | `STAGECOACH_ARBITER_PROVIDER` | — | Per-role provider override for the leftover arbiter |
 | `--arbiter-model <name>` | string | "" | `STAGECOACH_ARBITER_MODEL` | — | Per-role model override for the leftover arbiter |
-| `--reasoning <level>` | string | "" (off) | `STAGECOACH_REASONING` | `stagecoach.reasoning` | Global reasoning effort: off\|low\|medium\|high. Provider-dependent: engages for pi (`--thinking`) and claude (`--effort`); other providers are a graceful no-op (FR-R6). |
+| `--reasoning <level>` | string | "" (off) | `STAGECOACH_REASONING` | `stagecoach.reasoning` | Global reasoning effort: off\|low\|medium\|high. Provider-dependent: engages for pi (`--thinking`) and claude (`--effort`); other providers are a graceful no-op. |
 | `--planner-reasoning <level>` | string | "" | `STAGECOACH_PLANNER_REASONING` | — | Per-role reasoning for the planner |
 | `--stager-reasoning <level>` | string | "" | `STAGECOACH_STAGER_REASONING` | — | Per-role reasoning for the stager |
 | `--message-provider <name>` | string | "" | `STAGECOACH_MESSAGE_PROVIDER` | — | Per-role provider override for the message composer |
@@ -67,7 +67,7 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 The `--config` flag is a path override for config-file discovery — it is not itself a `Config` field. An explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file errors with `config: config file not found: <path>` (exit 1) instead of silently falling back to provider auto-detection. Only the discovery default (no `--config` or `STAGECOACH_CONFIG`) tolerates a missing global file. The behavioral flags `--all` and `--dry-run` have no env-var or git-config analogs. (`--no-auto-stage` does: it mirrors `STAGECOACH_AUTO_STAGE_ALL` and `stagecoach.autoStageAll` in the positive sense — true=enable, false=disable.) `--config` is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a user-defined provider declared under `[provider.<name>]` in that file is usable with `--provider <name>` on `stagecoach` directly.
 
 > [!IMPORTANT]
-> **`--model` / `--provider` set the GLOBAL default only (FR-R3 gotcha).** A `[role.<role>]` `model`/`provider` in config (or a `--<role>-model`/`--<role>-provider` flag) takes precedence for that role. So a populated config can silently shadow an explicit `--model`/`--provider` — e.g. `stagecoach --model claude-haiku` against a `[role.message] model = "…"` config uses the config's model for the commit, and the bare `--model` value is never even validated. Use the per-role flag (e.g. `--message-model`) to override a specific role, or run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint (and the `--provider` analog) when shadowing is active. This is advisory only — precedence and exit codes are unchanged.
+> **`--model` / `--provider` set the GLOBAL default only (gotcha).** A `[role.<role>]` `model`/`provider` in config (or a `--<role>-model`/`--<role>-provider` flag) takes precedence for that role. So a populated config can silently shadow an explicit `--model`/`--provider` — e.g. `stagecoach --model claude-haiku` against a `[role.message] model = "…"` config uses the config's model for the commit, and the bare `--model` value is never even validated. Use the per-role flag (e.g. `--message-model`) to override a specific role, or run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint (and the `--provider` analog) when shadowing is active. This is advisory only — precedence and exit codes are unchanged.
 
 ## Subcommands
 
@@ -89,7 +89,7 @@ stagecoach hook install --print     # print the script to stdout, no disk write 
 | `--strict` | Bake `--strict` into the hook so generation failures abort the commit (default: never block) |
 | `--print` | Write the hook script to stdout instead of installing it |
 
-**Foreign-hook policy (never-clobber, FR-H2):** If a `prepare-commit-msg` already exists WITHOUT stagecoach's marker, `install` refuses (exit 1) and prints the one-line manual invocation you can add to your existing hook. There is **no `--force`** — this is by design. Stagecoach will never overwrite someone else's hook.
+**Foreign-hook policy (never-clobber,):** If a `prepare-commit-msg` already exists WITHOUT stagecoach's marker, `install` refuses (exit 1) and prints the one-line manual invocation you can add to your existing hook. There is **no `--force`** — this is by design. Stagecoach will never overwrite someone else's hook.
 
 ### `hook uninstall`
 
@@ -120,13 +120,13 @@ stagecoach hook status              # → "stagecoach (v1)"
 
 Generate a commit message into git's `prepare-commit-msg` file. Called by stagecoach's installed hook — not by users directly. When `git commit` fires the hook, stagecoach generates a message for the staged diff and writes it at the **top** of `<msg-file>`, preserving git's comment block beneath.
 
-**Source-gated no-op (FR-H4):** exits 0 having done nothing when a message source is present (`message`/`template`/`merge`/`squash`/`commit`) or nothing is staged. This means `git commit -m "x"`, `git commit -t template`, merge commits, squash commits, and `--amend` all pass through unchanged — the explicit message wins.
+**Source-gated no-op:** exits 0 having done nothing when a message source is present (`message`/`template`/`merge`/`squash`/`commit`) or nothing is staged. This means `git commit -m "x"`, `git commit -t template`, merge commits, squash commits, and `--amend` all pass through unchanged — the explicit message wins.
 
-**Never-block (FR-H5):** any generation failure (agent missing, timeout, parse failure, duplicate exhaustion) leaves `<msg-file>` byte-identical to before and exits 0 (so the commit proceeds to an empty editor). With `--strict` (baked into the script by `hook install --strict`), the same failure exits non-zero (aborts the commit).
+**Never-block:** any generation failure (agent missing, timeout, parse failure, duplicate exhaustion) leaves `<msg-file>` byte-identical to before and exits 0 (so the commit proceeds to an empty editor). With `--strict` (baked into the script by `hook install --strict`), the same failure exits non-zero (aborts the commit).
 
-**Message-role resolution (FR-H6):** resolves provider/model/reasoning exactly like the single-commit path (`--message-*` flags, `[role.message]` config, env vars). Never decomposes.
+**Message-role resolution:** resolves provider/model/reasoning exactly like the single-commit path (`--message-*` flags, `[role.message]` config, env vars). Never decomposes.
 
-**Per-role precedence gotcha (FR-R3):** on the single-commit path `--model`/`--provider` set the GLOBAL default only; a `[role.message]` `model`/`provider` in config (or a `--message-model`/`--message-provider` flag) takes precedence for the message role. A populated config can therefore silently shadow `--model`/`--provider`. Run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint (and the `--provider` analog) when this happens. Advisory only — precedence and exit codes are unchanged.
+**Per-role precedence gotcha:** on the single-commit path `--model`/`--provider` set the GLOBAL default only; a `[role.message]` `model`/`provider` in config (or a `--message-model`/`--message-provider` flag) takes precedence for the message role. A populated config can therefore silently shadow `--model`/`--provider`. Run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint (and the `--provider` analog) when this happens. Advisory only — precedence and exit codes are unchanged.
 
 ```bash
 stagecoach hook exec <msg-file>                # normal invocation (source absent → proceed)
@@ -157,7 +157,7 @@ opencode  ✓
 pi        ✓         (default)
 ```
 
-`✓` = the provider's command is found on `$PATH`. `(default)` marks the provider selected by auto-detection (first installed built-in in preference order: pi, opencode, cursor, agy, qwen-code, codex, claude).
+`✓` = the provider's command is found on `$PATH`. `(default)` marks the provider selected by auto-detection (first installed built-in in preference order: pi, opencode, cursor, agy, codex, claude).
 
 ### `providers show <name>`
 
@@ -169,7 +169,7 @@ stagecoach providers show pi
 
 ### `config init`
 
-Bootstrap a **populated, working config** to the resolved config path (override-aware: honors `--config` / `STAGECOACH_CONFIG`, defaulting to the global path). Auto-detects the highest-priority installed built-in agent (order: pi, opencode, cursor, agy, qwen-code, codex, claude) and writes `config_version = 3`, `[defaults] provider = "<detected>"`, and that provider's per-role model defaults — EXCEPT for **pi** (the default), whose per-role models are left EMPTY so pi picks its own backend model (set the model with an inference-provider prefix (e.g. model = "anthropic/claude-haiku") to pin a backend (FR-R5b)). Other detected providers get their per-role models UNCOMMENTED. Other installed providers appear as commented-out `[role.*]` blocks. If no agent is detected, defaults to `"pi"`. Creates parent directories as needed. **Refuses to overwrite** an existing file (exit 1) unless `--force` is passed:
+Bootstrap a **populated, working config** to the resolved config path (override-aware: honors `--config` / `STAGECOACH_CONFIG`, defaulting to the global path). Auto-detects the highest-priority installed built-in agent (order: pi, opencode, cursor, agy, codex, claude) and writes `config_version = 3`, `[defaults] provider = "<detected>"`, and that provider's per-role model defaults — EXCEPT for **pi** (the default), whose per-role models are left EMPTY so pi picks its own backend model (set the model with an inference-provider prefix (e.g. model = "anthropic/claude-haiku") to pin a backend). Other detected providers get their per-role models UNCOMMENTED. Other installed providers appear as commented-out `[role.*]` blocks. If no agent is detected, defaults to `"pi"`. Creates parent directories as needed. **Refuses to overwrite** an existing file (exit 1) unless `--force` is passed:
 
 ```bash
 stagecoach config init
@@ -206,7 +206,7 @@ With `--force` and no `--provider`, the regenerated template is **re-targeted to
 
 `--interactive` runs a three-step wizard: (1) pick a provider from the detected set (default highlighted), (2) accept or edit each per-role model default, (3) for multi-backend providers (pi, opencode), prompts for the `inference/model` prefix on any edited model. Writes the **same** file as plain `config init` — the wizard is a TTY front-end. Composes with `--force` (overwrites) and `--provider <name>` (pre-selects, skipping the provider prompt). Mutually exclusive with `--template` (exit 1). Non-TTY stdin exits 1 pointing at plain `config init`.
 
-`--local` writes the config to the repo-local `./.stagecoach.toml` (the §16.1 layer-3 file the loader reads from the current directory) instead of the global path. It overrides the global config file and is overridden by repo git config (`stagecoach.*`), `STAGECOACH_*` env vars, and CLI flags. The generated file's header scope is rewritten to repo-local framing so it does not claim to be the global file. Mutually exclusive with `--config` (exit 1). Composes with `--template` (writes the inert reference into the repo file), `--force` (refreshes an existing `.stagecoach.toml`, preserving active settings and backing up the prior file), `--provider`, and `--interactive`.
+`--local` writes the config to the repo-local `./.stagecoach.toml` (the layer-3 file the loader reads from the current directory) instead of the global path. It overrides the global config file and is overridden by repo git config (`stagecoach.*`), `STAGECOACH_*` env vars, and CLI flags. The generated file's header scope is rewritten to repo-local framing so it does not claim to be the global file. Mutually exclusive with `--config` (exit 1). Composes with `--template` (writes the inert reference into the repo file), `--force` (refreshes an existing `.stagecoach.toml`, preserving active settings and backing up the prior file), `--provider`, and `--interactive`.
 
 ### `config upgrade`
 
@@ -219,7 +219,7 @@ stagecoach config upgrade
 # No file          →  "no config file at <path> (run 'stagecoach config init' first)"  (exit 1)
 ```
 
-At load time, a missing or outdated `config_version` triggers an advisory pointing at `config upgrade`; a **newer-than-binary** `config_version` triggers an advisory to **upgrade stagecoach**. The advisory never suggests `config init --force` — that would regenerate at the older binary's schema and destroy a config the binary cannot read (FR-B4).
+At load time, a missing or outdated `config_version` triggers an advisory pointing at `config upgrade`; a **newer-than-binary** `config_version` triggers an advisory to **upgrade stagecoach**. The advisory never suggests `config init --force` — that would regenerate at the older binary's schema and destroy a config the binary cannot read.
 
 ### `config path`
 
@@ -245,9 +245,9 @@ lazygit     ✓         not installed  —
 - **STATUS**: `not installed`, `installed`, or `foreign` (a conflicting entry exists)
 - **CONFIG**: the resolved config file path the integration edits (— if the tool is absent or the path cannot be determined)
 
-Supported targets are `git-alias` and `lazygit`. (gitui is blocked upstream — see spec/FUTURE_SPEC.md.)
+Supported targets are `git-alias` and `lazygit`. (gitui is blocked upstream.)
 
-Detection gating (FR-I2): a target whose tool is absent is still listed (DETECTED=✗) but `install`/`remove` for it prints a note and exits 1.
+Detection gating: a target whose tool is absent is still listed (DETECTED=✗) but `install`/`remove` for it prints a note and exits 1.
 
 ### `integrate install <target>…`
 
@@ -257,7 +257,7 @@ Install one or more stagecoach integrations. Targets are explicit (at least one 
 |------|-------------|
 | `--yes` | Skip the y/N confirmation prompt and apply changes directly (for scripts and CI) |
 
-Detection gating (FR-I2): if a named target's tool is not on `$PATH`, the target is skipped with a note to stderr and marked as failed. `git-alias` requires only `git` (always present for stagecoach); `lazygit` requires `lazygit` on `$PATH`.
+Detection gating: if a named target's tool is not on `$PATH`, the target is skipped with a note to stderr and marked as failed. `git-alias` requires only `git` (always present for stagecoach); `lazygit` requires `lazygit` on `$PATH`.
 
 Decline and no-change outcomes (user answered N, or the integration is already applied) are reported on stdout and are NOT errors (exit 0).
 
@@ -279,7 +279,7 @@ stagecoach integrate remove --yes git-alias lazygit
 
 Registers `git stagecoach` as a git alias in the **global** gitconfig (`git config --global alias.stagecoach '!stagecoach'`). After installation, `git stagecoach` runs stagecoach from any git repo — no PATH configuration needed.
 
-The `.gitconfig` write is delegated to `git config` itself (FR-I4), so the no-mangle protocol (unified-diff preview, backup, re-parse validation) does **not** apply. Instead, git-alias shows the exact command and resulting usage, then asks for confirmation (same `y/N` / `--yes` mechanics).
+The `.gitconfig` write is delegated to `git config` itself, so the no-mangle protocol (unified-diff preview, backup, re-parse validation) does **not** apply. Instead, git-alias shows the exact command and resulting usage, then asks for confirmation (same `y/N` / `--yes` mechanics).
 
 | Flag | On | Description |
 |------|----|-------------|
@@ -306,7 +306,7 @@ stagecoach integrate remove git-alias --yes --alias-name ci  # remove `git ci`
 
 #### No-mangle protocol
 
-Every file edit by an integration runs the no-mangle protocol (PRD §9.21 FR-I3): a unified-diff preview is shown, the user is asked to confirm (`y/N`; use `--yes` to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently. The `git-alias` target does **not** use this protocol (it delegates the write to `git config`). The `lazygit` target uses it for all edits.
+Every file edit by an integration runs the no-mangle protocol: a unified-diff preview is shown, the user is asked to confirm (`y/N`; use `--yes` to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently. The `git-alias` target does **not** use this protocol (it delegates the write to `git config`). The `lazygit` target uses it for all edits.
 
 #### `lazygit` target
 
@@ -365,9 +365,9 @@ stagecoach integrate remove lazygit --yes          # skip confirmation
 List the models reachable by a provider's CLI. Source of truth, in order:
 
 1. **(a) Live list** — if the provider manifest defines a `list_models_command`, it is run as a subprocess (inherited env, bounded timeout) and its stdout is printed under a provider heading.
-2. **(b) Curated table** — if the `list_models_command` is absent **or** the command fails (non-zero exit, timeout, or not found), Stagecoach's curated per-role tier table (FR-D4) is printed, annotated with its verification date and a "consult `<command> --help`" hint.
+2. **(b) Curated table** — if the `list_models_command` is absent **or** the command fails (non-zero exit, timeout, or not found), Stagecoach's curated per-role tier table is printed, annotated with its verification date and a "consult `<command> --help`" hint.
 
-Stagecoach never makes an HTTP call to list models (§6.2 N2) — the agent CLI is the only model authority.
+Stagecoach never makes an HTTP call to list models — the agent CLI is the only model authority.
 
 With no argument, the **resolved default provider** is shown. With `--all`, every **detected** provider (command on `$PATH`) is shown, one block at a time. An unknown or undetected named provider exits 1.
 
@@ -384,7 +384,7 @@ stagecoach models --help    # see the models-scoped --all text
 
 ### `lock status`
 
-Read-only diagnostic for this repo's run lock (§9.27, FR-K4). Prints the lock path, the holder's pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). With no lock held, prints `no run lock for <repo>` and exits 0. It acquires no `flock` and never breaks/removes a lock (FR52 preserved); you decide whether to `kill <pid>` or `rm <path>`. Works outside a git repo.
+Read-only diagnostic for this repo's run lock (,). Prints the lock path, the holder's pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). With no lock held, prints `no run lock for <repo>` and exits 0. It acquires no `flock` and never breaks/removes a lock (preserved); you decide whether to `kill <pid>` or `rm <path>`. Works outside a git repo.
 
 ```text
 Lock: /home/you/.cache/stagecoach/locks/<hash>.lock
@@ -407,7 +407,7 @@ stagecoach lock --help    # the `lock` command group (bare `lock` prints help)
 
 ### `upgrade`
 
-Update the stagecoach **binary** to the latest release (PRD §9.29 FR-U1). stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, Chocolatey, npm, mise, asdf, Nix, AUR, go install) — printing the command where it needs privileges (Chocolatey, AUR) or is declarative (Nix) — self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.
+Update the stagecoach **binary** to the latest release. stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, Chocolatey, npm, mise, asdf, Nix, AUR, go install) — printing the command where it needs privileges (Chocolatey, AUR) or is declarative (Nix) — self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.
 
 **Distinct from `config upgrade`** (run as `stagecoach config upgrade`): `config upgrade` is a config-schema migration that rewrites an existing config file to the current schema version in place. `stagecoach upgrade` updates the **binary**. Two different commands — do not confuse them.
 
@@ -415,19 +415,19 @@ Flags (all LOCAL to `upgrade`; they do **not** appear on the commit path):
 
 | Flag | Description |
 |------|-------------|
-| `--check`, `-c` | Check for an update without applying it (exit 6 if behind, 0 if up to date) (FR-U6) |
-| `--version <v>` | Pin a target version to install (default: latest in the channel) (FR-U5) |
-| `--prerelease` | Admit pre-release tags (shorthand for `--channel prerelease`) (FR-U10) |
-| `--force` | Override a detected package-manager install and self-swap (FR-U1) |
-| `--rollback` | Restore the most recent backup (one-step undo) (FR-U8) |
-| `--install-method <m>` | Override install-method detection (env `STAGECOACH_INSTALL_METHOD`) (FR-U2) |
-| `--yes`, `-y` | Skip the confirmation prompt (for scripting) (FR-U9) |
-| `--channel <stable\|prerelease>` | Release channel (default `stable`; also `[upgrade].channel`; FR-U10) |
-| `--source-repo <owner/repo>` | `owner/repo` to fetch releases from (default `dabstractor/stagecoach`; also `[upgrade].source_repo`; for forks) (FR-U10) |
+| `--check`, `-c` | Check for an update without applying it (exit 6 if behind, 0 if up to date) |
+| `--version <v>` | Pin a target version to install (default: latest in the channel) |
+| `--prerelease` | Admit pre-release tags (shorthand for `--channel prerelease`) |
+| `--force` | Override a detected package-manager install and self-swap |
+| `--rollback` | Restore the most recent backup (one-step undo) |
+| `--install-method <m>` | Override install-method detection (env `STAGECOACH_INSTALL_METHOD`) |
+| `--yes`, `-y` | Skip the confirmation prompt (for scripting) |
+| `--channel <stable\|prerelease>` | Release channel (default `stable`; also `[upgrade].channel`) |
+| `--source-repo <owner/repo>` | `owner/repo` to fetch releases from (default `dabstractor/stagecoach`; also `[upgrade].source_repo`; for forks) |
 
 Flag-contract rules: `--version` and `--prerelease` are mutually exclusive; `--rollback` cannot be combined with `--check` or `--version`; `--channel` rejects unknown values.
 
-**Repo-independent (FR-U12).** `upgrade` acquires no run lock, reads no repo, invokes no provider, and runs outside a git repo. Its no-op pre-run hook overrides the default config load, so it never bootstraps a config file on first run. **Network:** `upgrade` is the one named exception to the no-network-calls commit path — it fetches **only** this project's own GitHub release artifacts and checksums (never an arbitrary URL, never the agent APIs).
+**Repo-independent.** `upgrade` acquires no run lock, reads no repo, invokes no provider, and runs outside a git repo. Its no-op pre-run hook overrides the default config load, so it never bootstraps a config file on first run. **Network:** `upgrade` is the one named exception to the no-network-calls commit path — it fetches **only** this project's own GitHub release artifacts and checksums (never an arbitrary URL, never the agent APIs).
 
 ```bash
 stagecoach upgrade               # detect→delegate (or self-swap), confirm, swap in the new binary
@@ -451,9 +451,9 @@ Exit codes: `0` (up to date, upgraded, or `--check` found nothing newer), `1` (f
 | `6` | Update available (`stagecoach upgrade --check` found a newer release); upgrade-path only — never returned by the commit path. |
 | `124` | Timeout (generation exceeded `--timeout`). |
 
-Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code `6` is upgrade-path only (FR-U12): it is produced solely by `stagecoach upgrade --check` and is walled off from the commit path, so a commit run never exits 6.
+Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code `6` is upgrade-path only: it is produced solely by `stagecoach upgrade --check` and is walled off from the commit path, so a commit run never exits 6.
 
-Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock (FR52) has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.
+Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.
 
 `SIGHUP` (Unix) and the parent-death watchdog route through the **rescue path** (exit `3` when a snapshot is armed) rather than introducing signal-specific exit codes — see [how-it-works.md — Per-repo run lock](how-it-works.md#per-repo-run-lock-fr52).
 

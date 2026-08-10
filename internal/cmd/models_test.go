@@ -46,26 +46,6 @@ func TestModels_CuratedGolden(t *testing.T) {
 	}
 }
 
-func TestModels_CuratedGolden_NonStagerProvider(t *testing.T) {
-	reg := provider.NewRegistry(nil)
-	m, ok := reg.Get("qwen-code") // qwen-code is the only provider still NOT stager-capable
-	if !ok {
-		t.Fatal("qwen-code not found in registry")
-	}
-
-	var buf bytes.Buffer
-	printCuratedTable(&buf, modelTarget{name: "qwen-code", manifest: m})
-
-	got := buf.String()
-	// Stager should be "—" for non-stager-capable providers (only qwen-code as of 2026-07-09)
-	if !strings.Contains(got, "  stager   —") { // %-8s: 6-char + 2 pad + 1 literal = 3 spaces
-		t.Errorf("expected stager to be '—' for qwen-code\nGot:\n%s", got)
-	}
-	if !strings.Contains(got, "verified 2026-07-09") {
-		t.Errorf("curated table missing verification date\nGot:\n%s", got)
-	}
-}
-
 func TestModels_CuratedGolden_UserDefined(t *testing.T) {
 	// A user-defined provider has no FR-D4 column — prints informational message
 	m := provider.Manifest{
@@ -286,19 +266,26 @@ func TestModels_UndetectedNamedProvider(t *testing.T) {
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer restoreRootState(t, nil, origOut, origErr, origRunE)
 
-	setupRepo(t)
-	// qwen-code is a known built-in, but is unlikely to be on any developer's PATH.
+	repo := setupRepo(t)
+	// Register a KNOWN provider whose command is not on $PATH so `models <name>` errors with
+	// "not detected" (not "unknown provider"). Override a built-in's command+detect to a nonexistent
+	// absolute path — robust regardless of what is installed on this machine.
+	writeConfigFile(t, repo, ".stagecoach.toml", `config_version = 3
+[provider.codex]
+command = "/nonexistent/codex"
+detect = "/nonexistent/codex"
+`)
 	// Prepend empty tmpDir so we still have git from the real PATH.
 	tmpDir := t.TempDir()
 	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
-	rootCmd.SetArgs([]string{"models", "qwen-code"})
+	rootCmd.SetArgs([]string{"models", "codex"})
 
 	err := Execute(context.Background())
 	if err == nil {
-		t.Fatal("Execute err=nil, want error (qwen-code not detected)")
+		t.Fatal("Execute err=nil, want error (codex not detected)")
 	}
 	code := exitcode.For(err)
 	if code != exitcode.Error {
@@ -338,8 +325,6 @@ command = "/nonexistent/codex"
 command = "/nonexistent/cursor"
 [provider.agy]
 command = "/nonexistent/agy"
-[provider.qwen-code]
-command = "/nonexistent/qwen-code"
 `)
 	// Also write the global config to prevent bootstrap from creating one with provider="pi"
 	writeConfigFile(t, globalDir, "config.toml", `config_version = 3
@@ -425,8 +410,6 @@ command = "/nonexistent/codex"
 command = "/nonexistent/cursor"
 [provider.agy]
 command = "/nonexistent/agy"
-[provider.qwen-code]
-command = "/nonexistent/qwen-code"
 `)
 
 	rootCmd.SetOut(io.Discard)

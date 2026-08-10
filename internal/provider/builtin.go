@@ -1,7 +1,7 @@
 package provider
 
 // BuiltinManifests returns the compiled-in default provider manifests (PRD §12.3 pi, §12.4 claude,
-// §12.6 opencode, §12.7 codex + cursor, §12.5.1 agy, §12.5.2 qwen-code), keyed by manifest name. These are
+// §12.6 opencode, §12.7 codex + cursor, §12.5.1 agy), keyed by manifest name. These are
 // the zero-config defaults a user override (config [provider.<name>]) merges onto via MergeManifest (S2) in
 // the registry (P1.M2.T3).
 //
@@ -12,18 +12,17 @@ package provider
 //
 // The full set: pi + claude (the "explicit tool-disable switch" pair, S1), opencode (read-only constraint,
 // S2 — `run` is already a read-only one-shot; delivery revised to stdin), codex + cursor (read-only
-// constraint, S3 — codex's two revisions resolve the external_deps.md §codex discrepancy), §12.5.1 agy
-// (experimental — the Gemini-CLI successor; gemini-cli itself is EOL and no longer shipped), and §12.5.2
-// qwen-code (experimental). Seven providers: pi, claude, opencode, codex, cursor, agy, qwen-code.
+// constraint, S3 — codex's two revisions resolve the external_deps.md §codex discrepancy), and §12.5.1 agy
+// (experimental — the Gemini-CLI successor; gemini-cli itself is EOL and no longer shipped). Six providers:
+// pi, claude, opencode, codex, cursor, agy.
 func BuiltinManifests() map[string]Manifest {
 	return map[string]Manifest{
-		"pi":        builtinPi(),
-		"claude":    builtinClaude(),
-		"opencode":  builtinOpenCode(),
-		"codex":     builtinCodex(),
-		"cursor":    builtinCursor(),
-		"agy":       builtinAgy(),
-		"qwen-code": builtinQwenCode(),
+		"pi":       builtinPi(),
+		"claude":   builtinClaude(),
+		"opencode": builtinOpenCode(),
+		"codex":    builtinCodex(),
+		"cursor":   builtinCursor(),
+		"agy":      builtinAgy(),
 	}
 }
 
@@ -246,62 +245,10 @@ func builtinAgy() Manifest {
 			"--dangerously-skip-permissions",
 		},
 		TooledRepoDirFlag: strPtr("--add-dir"),
-		Output:           strPtr("raw"),
-		StripCodeFence:   boolPtr(true),
-		Experimental:     boolPtr(true), // §12.5.1.1 item 4 (stager) is now VERIFIED; kept experimental pending a full --help re-verification pass.
+		Output:            strPtr("raw"),
+		StripCodeFence:    boolPtr(true),
+		Experimental:      boolPtr(true), // §12.5.1.1 item 4 (stager) is now VERIFIED; kept experimental pending a full --help re-verification pass.
 		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent).
-	}
-}
-
-// builtinQwenCode returns the qwen-code (Alibaba/Qwen) manifest per PRD §12.5.2. qwen-code
-// (npm @qwen-code/qwen-code; GitHub QwenLM/qwen-code) is a FORK of Google's Gemini CLI tuned for the
-// Qwen3-Coder family, reached via Alibaba Cloud Model Studio / DashScope (DASHSCOPE_API_KEY, or
-// `qwen-code login` for the free coding-plan quota). It is SINGLE-BACKEND (Qwen/DashScope), so
-// provider_flag is empty and a bare model is used. Its flag surface mirrors the gemini-cli lineage (the
-// surface the former, now-removed gemini provider used) — a Gemini-CLI fork keeps that lineage's flags:
-// stdin delivery, -m model, --approval-mode default (read-only),
-// no first-class system-prompt flag → sys is PREPENDED to the payload (§12.2). NOTE: agy (§12.5.1) DIVERGED
-// from this lineage in v1.1.0 (--model, --mode plan, value-taking -p) and no longer matches; do NOT treat
-// agy and qwen-code as identical.
-//
-// Flag surface assembled from qwen-code's docs (NOT yet `--help`-verified) → ships Experimental=true
-// (§12.7.2) until a real end-to-end run clears it. Marked `# TO CONFIRM` per FR-D5: the exact default
-// model token (qwen3-coder-plus et al.), the model-flag token, the reasoning_levels mapping, and the
-// gemini-equivalent approval mode. The FR-D5 token refresh + the per-role FR-D4 tier row are S2
-// (P2.M1.T1.S2); this manifest ships a correct, documented, experimental PLACEHOLDER.
-//
-// STAGER: TooledFlags is intentionally nil — qwen-code CANNOT serve as a stager until the scoped,
-// non-interactive, git-scoped tool combo is verified (FR-D4 fallback). RenderTooled errors on nil tooled_flags.
-//
-// NOTE: (1) PrintFlag="-p" (NON-NIL). (2) SystemPromptFlag/ProviderFlag are strPtr("") — NON-NIL empty:
-// no sys flag (sys prepended, §12.2), single-backend (no sub-provider). (3) Experimental=boolPtr(true).
-// (4) DefaultModel="qwen3-coder-plus" (# TO CONFIRM FR-D5). (5) Subcommand/PromptFlag/JsonField/
-// RetryInstruction/Env/TooledFlags/ReasoningLevels are nil (absent, like agy). qwen-code is the
-// gemini-lineage twin of agy, differing in Name/Detect/Command + DefaultModel + the Qwen/DashScope context.
-//
-// CHROME-DISABLE (FR-C5, §9.28): flag surface assembled from docs (NOT yet --help-verified; # TO
-// CONFIRM per FR-D5). qwen-code exposes NO known per-surface chrome-disable switch. --approval-mode
-// default (bare_flags) is the read-only CONSTRAINT, not chrome. Chrome surface is unverified —
-// documented LIMITATION (FR-C4). Re-verify at the FR-D5 token refresh (S2).
-func builtinQwenCode() Manifest {
-	return Manifest{
-		Name:             "qwen-code",
-		Detect:           strPtr("qwen-code"),
-		Command:          strPtr("qwen-code"),
-		PromptDelivery:   strPtr("stdin"),
-		PrintFlag:        strPtr("-p"),
-		ModelFlag:        strPtr("-m"),
-		DefaultModel:     strPtr("qwen3-coder-plus"), // # TO CONFIRM per FR-D5 (S2 owns the refresh)
-		SystemPromptFlag: strPtr(""),                 // NON-NIL empty — no sys flag; sys prepended to payload (§12.2)
-		ProviderFlag:     strPtr(""),                 // NON-NIL empty — single-backend (Qwen/DashScope)
-		BareFlags: []string{
-			"--approval-mode", "default", // read-only, never-ask profile (don't auto-run tools). # TO CONFIRM gemini-equivalent
-		},
-		Output:         strPtr("raw"),
-		StripCodeFence: boolPtr(true),
-		Experimental:   boolPtr(true), // §12.5.2/§12.7.2 ships experimental (docs-sourced, not --help-verified)
-		// TooledFlags: nil — qwen-code cannot stager until the scoped tool combo is verified (FR-D4 fallback).
-		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent, like agy).
 	}
 }
 
@@ -353,8 +300,8 @@ func builtinOpenCode() Manifest {
 		TooledFlags: []string{
 			"--agent", "build",
 		},
-		Output:            strPtr("raw"),
-		StripCodeFence:    boolPtr(true),
+		Output:         strPtr("raw"),
+		StripCodeFence: boolPtr(true),
 		// PromptFlag, JsonField, RetryInstruction, Env, ReasoningLevels: nil (absent in §12.6).
 	}
 }

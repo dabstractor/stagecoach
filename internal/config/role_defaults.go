@@ -26,25 +26,26 @@ const DefaultModelsVerificationDate = "2026-07-09"
 //   cursor   — composer-2.5-fast / composer-2.5(stager) — composer-2.5* is available on ALL plans
 //              (incl. free); cursor model names are otherwise plan-entitlement-dependent.
 //   codex    — gpt-5.4-nano / gpt-5.1-codex-mini(stager) — fast-by-default, stager mid.
-//   qwen-code — qwen3-coder-flash / ""(stager) — # TO CONFIRM per FR-D5.
 //
 // Stager-capability basis: a provider's stager cell is non-empty IFF its built-in manifest
-// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07-09 that is pi, claude, agy,
-// codex, cursor, AND opencode (all verified stager-capable this revision). ONLY qwen-code has
-// stager="" (nil TooledFlags). pi/opencode ALSO ship a BLANK written stager model (power-user), but
-// their TABLE cell is a non-empty placeholder so StagerFallback's capability lookup treats them as
-// capable; the bootstrap blanks the written [role.*] models.
+// (internal/provider/builtin.go) has non-empty TooledFlags. As of 2026-07-09 all six built-in providers
+// (pi, claude, agy, codex, cursor, opencode) are stager-capable — none has an empty stager cell.
+// pi/opencode ALSO ship a BLANK written stager model (power-user, multi-backend), but their TABLE cell
+// is a non-empty placeholder so StagerFallback's capability lookup treats them as capable; the bootstrap
+// blanks the written [role.*] models.
 
 // RoleModelDefaults is the PRD §9.16 FR-D4 per-provider × per-role default-model table, keyed
 // provider → role → model. The four roles are planner/stager/message/arbiter (FR-R1). A stager value
 // of "" means the provider cannot serve as the stager (its built-in manifest has nil/empty TooledFlags
-// — only pi and claude are stager-capable); the bootstrap (P1.M4.T2) applies the FR-D4 fallback on
-// that signal. See the FR-D5 block above for model-name provenance + the re-verification mandate.
+// As of 2026-07-09 no built-in hits this — all six are stager-capable; the fallback exists for
+// user-defined providers without TooledFlags. See the FR-D5 block above for model-name provenance + the
+// re-verification mandate.
 type RoleModelDefaults map[string]map[string]string
 
 // roleDefaults is the compiled-in FR-D4 table (unexported; access via DefaultModelsForProvider, which
-// returns copies). Stager cells: non-empty IFF the provider's manifest has non-empty TooledFlags
-// (pi, claude); "" otherwise (agy, opencode, codex, cursor, qwen-code) — the bootstrap applies the fallback.
+// returns copies). Stager cells: non-empty IFF the provider's manifest has non-empty TooledFlags.
+// As of 2026-07-09 all six built-ins are stager-capable (non-empty cells); the "" → fallback path is
+// for user-defined providers without TooledFlags.
 var roleDefaults = RoleModelDefaults{
 	"pi": {
 		// multi-backend (FR-R5b): placeholders — the bootstrap BLANKS pi's written [role.*] models so the
@@ -62,16 +63,10 @@ var roleDefaults = RoleModelDefaults{
 	},
 	"agy": {
 		// agy --model takes the `agy models` display label VERBATIM (reasoning baked into the suffix).
-		"planner": "Gemini 3.5 Flash (Low)",   // fast tier
+		"planner": "Gemini 3.5 Flash (Low)",    // fast tier
 		"stager":  "Gemini 3.5 Flash (Medium)", // mid tier (stager-capable, §12.5.1.1 item 4)
 		"message": "Gemini 3.5 Flash (Low)",    // fast tier
 		"arbiter": "Gemini 3.5 Flash (Low)",    // fast tier
-	},
-	"qwen-code": {
-		"planner": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
-		"stager":  "",                  // NOT stager-capable (TooledFlags nil) — bootstrap applies FR-D4 fallback
-		"message": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
-		"arbiter": "qwen3-coder-flash", // fast tier. # TO CONFIRM per FR-D5
 	},
 	"opencode": {
 		// plan-/backend-dependent (provider-prefixed) — the bootstrap BLANKS opencode's written [role.*]
@@ -82,10 +77,10 @@ var roleDefaults = RoleModelDefaults{
 		"arbiter": "openai/gpt-5.4-nano",
 	},
 	"codex": {
-		"planner": "gpt-5.4-nano",      // fast tier
+		"planner": "gpt-5.4-nano",       // fast tier
 		"stager":  "gpt-5.1-codex-mini", // mid tier (stager-capable)
-		"message": "gpt-5.4-nano",      // fast tier
-		"arbiter": "gpt-5.4-nano",      // fast tier
+		"message": "gpt-5.4-nano",       // fast tier
+		"arbiter": "gpt-5.4-nano",       // fast tier
 	},
 	"cursor": {
 		// cursor model names are plan-entitlement-dependent; composer-2.5* is available on ALL plans

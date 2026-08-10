@@ -4373,7 +4373,7 @@ func TestDecompose_FastPath_FreezeGuardWired(t *testing.T) {
 // Case 8 — TestDecompose_FastPath_TooledFlagsLessProvider
 //
 // G29 side effect (FR-D4): a TooledFlags-less provider (BARE manifest — nil TooledFlags, the
-// opencode/qwen-code shape) DECOMPOSES a disjoint tree via the fast-path (stager bypassed ⇒
+// opencode shape) DECOMPOSES a disjoint tree via the fast-path (stager bypassed ⇒
 // RenderTooled never called) but CANNOT serve as a stager on a shared-file tree: runLoop invokes the
 // real stageConcept → RenderTooled → 'tooled mode requires non-empty tooled_flags', which FR-M12d's
 // retry-once-then-empty SWALLOWS into an empty-skip for BOTH concepts (the error is ErrStagerFailed,

@@ -94,7 +94,7 @@ The CI jobs (every one must pass):
 | `build-test`       | build + race-enabled tests across the os × Go matrix    |
 | `lint`             | `golangci-lint`                                         |
 | `vulncheck`        | `govulncheck`                                           |
-| `coverage`         | test coverage gate (PRD §20.3)                          |
+| `coverage`         | test coverage gate                          |
 | `npm-smoke`        | npm wrapper smoke test across os                        |
 | `nix-flake-check`  | `nix flake check`                                       |
 | `asdf-plugin-smoke`| asdf plugin install smoke                               |
@@ -116,5 +116,5 @@ and always run to completion.
 ## Outcome
 
 - **All green** → validation passes. Report the run URL
-  (`gh run view <run-id> --json url -q .url`).
+ (`gh run view <run-id> --json url -q.url`).
 - **Any red** → read the failure (step 6), surface it, and stop. The change is not complete.

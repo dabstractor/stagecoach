@@ -19,12 +19,12 @@ goreleaser has no native npm pipe, so an `npm-publish` job (in `release.yml`) ru
 `goreleaser` job:
 
 1. Syncs `package.json` `version` to the tag (`v1.2.0` → `1.2.0`; the committed `version` stays
-   `0.0.0`, a dev placeholder).
+ `0.0.0`, a dev placeholder).
 2. `npm install --ignore-scripts --no-package-lock` — validates the `tar` / `extract-zip` deps
-   resolve WITHOUT running `postinstall` (the native binary is fetched at *user* install time, not
-   publish time) and WITHOUT writing a lockfile into the tarball.
+ resolve WITHOUT running `postinstall` (the native binary is fetched at *user* install time, not
+ publish time) and WITHOUT writing a lockfile into the tarball.
 3. `npm publish` — the package is **unscoped** (`stagecoach-ai`), so it is public by default; no
-   `--access` flag is needed (that flag is scoped-packages-only).
+ `--access` flag is needed (that flag is scoped-packages-only).
 
 **Required secret:** `NPM_TOKEN` — an npm **automation** token (npmjs.com → Access Tokens →
 "Automation"), which bypasses publish 2FA for non-interactive CI. Add it under the repo's

@@ -18,7 +18,7 @@ Instead, Stagecoach uses three low-level git plumbing commands:
 
 ### Snapshot invariants
 
-These four invariants hold for every run (PRD §13.3):
+These four invariants hold for every run:
 
 1. **Frozen content** — the committed content is exactly what was staged at `write-tree` time. Nothing added afterward can affect it.
 2. **Later-staged files stay staged** — the index is never reset. Files staged during generation remain staged for the next run.
@@ -52,7 +52,7 @@ v2.0's headline feature: run `stagecoach` with a dirty working tree and nothing 
 
 Decompose activates when **nothing is staged**, **auto-stage-all is on** (the default), and the user has **not opted out** (`--single`, `--no-decompose`, or `--commits 1`). If something is already staged, the single-commit path runs unchanged. `--dry-run` also forces the single-commit preview (decompose commits, so dry-run honors the single preview).
 
-**Defense-in-depth (FR-M1e).** Decompose re-asserts the empty-index precondition at its entry: if a stale or buggy trigger ever routes to it with a non-empty index, it fails loudly — naming the offending staged paths and pointing to `git reset` (unstage, then re-run) or `stagecoach --single` (commit the hand-staged index as one) — instead of silently sweeping them into the start-of-run freeze. The single-commit escape hatch (`--single`, `--commits 1`) is checked first and is unaffected, since it handles a hand-staged index normally.
+**Defense-in-depth.** Decompose re-asserts the empty-index precondition at its entry: if a stale or buggy trigger ever routes to it with a non-empty index, it fails loudly — naming the offending staged paths and pointing to `git reset` (unstage, then re-run) or `stagecoach --single` (commit the hand-staged index as one) — instead of silently sweeping them into the start-of-run freeze. The single-commit escape hatch (`--single`, `--commits 1`) is checked first and is unaffected, since it handles a hand-staged index normally.
 
 ### The four roles
 
@@ -137,9 +137,9 @@ update-ref HEAD newSHA[i]                   (serialized CAS)
 
 **Overlapped staging and generation.** `stager[i+1]` runs in parallel with `message[i]` — the stager prepares the next concept's index while the message agent generates the current commit message. This 1-deep overlap keeps latency low.
 
-**File-disjoint fast-path (FR-M13/FR-M14).** The stager is the pipeline's only tooled role and its only inherently serial step — every stager mutates the same live index, which is why the loop above can overlap staging and generation only 1-deep. But the stager exists solely to hunk-split a file shared across concepts; the planner already declares a file-level partition (`files` per concept). When that partition is **pairwise file-disjoint** — no path appears in two concepts' `files` — stagecoach stages each concept **deterministically** with `git add` (adds, modifications, and deletions for those whole paths), under the unchanged accumulate-never-reset index model, **invoking no stager agent at all**; `write-tree` then freezes `tree[i]` just as above. With every `tree[i]` frozen before any message starts, the N message generations run **concurrently** and publish in CAS order (serialized `update-ref`, same as the loop), collapsing a disjoint run's critical path from "planner + ~N sequential steps" to "planner + one message latency." `verifyFreezeSubset` (FR-M1c) still guards every fast-path tree; paths the planner declared for no concept still flow to the arbiter as leftovers; and the tree-to-tree-diff and serialized-CAS invariants are unchanged. Any shared file — a path in two or more concepts' `files` — falls back transparently to the tooled-stager loop above, for the whole run rather than per concept. This is why the disjoint-files case is both the most robust and the fastest path (no stager model in the loop), and it lets a provider with no `tooled_flags` (opencode, qwen-code) decompose a disjoint tree it otherwise could not serve.
+**File-disjoint fast-path (/).** The stager is the pipeline's only tooled role and its only inherently serial step — every stager mutates the same live index, which is why the loop above can overlap staging and generation only 1-deep. But the stager exists solely to hunk-split a file shared across concepts; the planner already declares a file-level partition (`files` per concept). When that partition is **pairwise file-disjoint** — no path appears in two concepts' `files` — stagecoach stages each concept **deterministically** with `git add` (adds, modifications, and deletions for those whole paths), under the unchanged accumulate-never-reset index model, **invoking no stager agent at all**; `write-tree` then freezes `tree[i]` just as above. With every `tree[i]` frozen before any message starts, the N message generations run **concurrently** and publish in CAS order (serialized `update-ref`, same as the loop), collapsing a disjoint run's critical path from "planner + ~N sequential steps" to "planner + one message latency." `verifyFreezeSubset` still guards every fast-path tree; paths the planner declared for no concept still flow to the arbiter as leftovers; and the tree-to-tree-diff and serialized-CAS invariants are unchanged. Any shared file — a path in two or more concepts' `files` — falls back transparently to the tooled-stager loop above, for the whole run rather than per concept. This is why the disjoint-files case is both the most robust and the fastest path (no stager model in the loop), and it lets a provider with no `tooled_flags` (e.g. a user-defined provider) decompose a disjoint tree it otherwise could not serve.
 
-**Stage-while-editing (FR-E2).** With `--edit`, the snapshot is frozen *before* the editor opens. You can `git add` in another pane during the edit session — the in-flight commit is unaffected. This is the same stage-while-generating property, extended through the editor. This is the one thing `git commit -e`-style flows cannot offer on top of generation.
+**Stage-while-editing.** With `--edit`, the snapshot is frozen *before* the editor opens. You can `git add` in another pane during the edit session — the in-flight commit is unaffected. This is the same stage-while-generating property, extended through the editor. This is the one thing `git commit -e`-style flows cannot offer on top of generation.
 
 **Frozen tree snapshots.** After each stager returns, `write-tree` freezes the accumulated index into an immutable tree object (`tree[i]`). This is the SAME snapshot mechanism as the single-commit path, composed N times.
 
@@ -149,9 +149,9 @@ update-ref HEAD newSHA[i]                   (serialized CAS)
 
 **Start-of-run freeze (T_start).** The instant decomposition activates, the entire working-tree change set (every modified/added/deleted/untracked path and its byte content) is captured as an immutable tree object T_start. The planner partitions T_start's diff (never a fresh re-read of the live tree); every stager, the arbiter (its gate, its diff, and its leftover staging), and the one-file/single shortcuts draw strictly from T_start. A file created or modified after T_start is captured is invisible to the run.
 
-**Freeze enforcement (defense-in-depth).** The freeze boundary is guarded at two layers, neither trusting its caller nor the external stager. At entry, decompose re-asserts its empty-index precondition (FR-M1e) — a stale or buggy trigger that routes here with a non-empty index fails loudly, naming the offending staged paths, instead of silently folding them into T_start (see [Trigger](#trigger)). Then, because the stager is an external agent running `git` against the live tree, after each staging step stagecoach verifies the resulting tree is a content-subset of T_start (only T_start paths, T_start content). Any deviation — a concurrent change swept in, or a stager that ran a bare `git add -A` — is a hard abort (non-rescue; already-landed commits stand per FR-M12), with an error that names the concept by title and explains the cause in plain language (concurrent working-tree changes were picked up by the stager; the abort is intentional freeze-boundary protection), so the user knows the run was protected and can re-run from a clean tree.
+**Freeze enforcement (defense-in-depth).** The freeze boundary is guarded at two layers, neither trusting its caller nor the external stager. At entry, decompose re-asserts its empty-index precondition — a stale or buggy trigger that routes here with a non-empty index fails loudly, naming the offending staged paths, instead of silently folding them into T_start (see [Trigger](#trigger)). Then, because the stager is an external agent running `git` against the live tree, after each staging step stagecoach verifies the resulting tree is a content-subset of T_start (only T_start paths, T_start content). Any deviation — a concurrent change swept in, or a stager that ran a bare `git add -A` — is a hard abort (non-rescue; already-landed commits stand per), with an error that names the concept by title and explains the cause in plain language (concurrent working-tree changes were picked up by the stager; the abort is intentional freeze-boundary protection), so the user knows the run was protected and can re-run from a clean tree.
 
-**One-file short-circuit.** In auto-decompose, if exactly one path changed, the planner is bypassed entirely: stage that file's T_start content, generate one message, create one commit (FR-M2b). Deterministic, not model judgment. `--commits N` (N≥2) overrides this shortcut.
+**One-file short-circuit.** In auto-decompose, if exactly one path changed, the planner is bypassed entirely: stage that file's T_start content, generate one message, create one commit. Deterministic, not model judgment. `--commits N` (N≥2) overrides this shortcut.
 
 **Mode-conditional planner rules.** The planner's `Rules:` block is mode-conditional. In auto-decompose (the default) it leans toward splitting unrelated changes — *lean toward SEVERAL* — tempered by a soft target of `max_commits / 2` (default 6) so an ordinary mixed tree lands at or below it rather than fanning into micro-commits; only the hard cap (`max_commits`, default 12) ever errors. Forced-count (`--commits N`) treats the count as fixed and omits the soft target. Every concept carries a `files` list naming each path it touches — a single file split across two concepts is named in both, with the description saying which part belongs where — so each stager knows where to look. After the planner returns, a deterministic coverage check logs (but never errors on) any changed path no concept claimed; the arbiter reconciles those leftovers.
 
@@ -166,23 +166,23 @@ The same snapshot-based safety invariants from the single-commit path apply to e
 - **Atomic and safe** — `update-ref CAS` is the only ref mutation per commit; stagecoach owns all `commit-tree`, `update-ref`, and `push` operations. The stager is the ONE role that touches the index. Its scoping differs by provider: claude is structurally constrained to a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi is constrained instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. See [providers.md](providers.md#tooled-mode-and-the-stager-role).
 - **Frozen content** — `tree[i]` captures exactly what was staged at `write-tree` time. Nothing added afterward can affect it.
 - **No index resets** — the index accumulates across concepts. After the final commit, HEAD.tree == tree[N-1] == full accumulated index, so the index is clean relative to HEAD.
-- **Start-of-run freeze** — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. The freeze boundary is held at three layers: the empty-index precondition is re-asserted at entry (FR-M1e); the stager is verified as a content-subset of T_start after each staging step (FR-M1c); and the arbiter — the third freeze surface — derives its gate, its diff, and every tree it commits strictly from T_start and tipTree, never a live re-read (FR-M1d).
+- **Start-of-run freeze** — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. The freeze boundary is held at three layers: the empty-index precondition is re-asserted at entry; the stager is verified as a content-subset of T_start after each staging step; and the arbiter — the third freeze surface — derives its gate, its diff, and every tree it commits strictly from T_start and tipTree, never a live re-read.
 
-See [configuration.md](configuration.md) for per-role provider/model/reasoning/**timeout** configuration and [cli.md](cli.md) for the decompose and per-role flags. Each role resolves its own generation timeout (FR-R7): the **planner defaults to 480s** (the heavy role), while stager/message/arbiter inherit the global `120s`; override with `--<role>-timeout`.
+See [configuration.md](configuration.md) for per-role provider/model/reasoning/**timeout** configuration and [cli.md](cli.md) for the decompose and per-role flags. Each role resolves its own generation timeout: the **planner defaults to 480s** (the heavy role), while stager/message/arbiter inherit the global `120s`; override with `--<role>-timeout`.
 
 ### Diff capture pipeline
 
 Every diff payload Stagecoach builds — the staged diff, the multi-commit working-tree snapshot, and the per-concept tree-to-tree diff — goes through the same capture pipeline before it reaches the agent. Five transforms run, in order, in every path, alongside the binary/exclusion filtering described below:
 
-1. **Compact change skeleton (FR3g).** A `git diff --numstat` summary is prepended to every payload, under a `Change summary (numstat: …)` header — one `added → deleted → path` line per changed file (binary files show as `-  -  <path>`). This is the completeness floor: the agent always sees the full shape of the change — every file, its add/delete magnitude, and its kind — even when individual bodies are truncated later. A file whose body is fully truncated still appears in the skeleton, so truncation never silently drops a file from view.
+1. **Compact change skeleton.** A `git diff --numstat` summary is prepended to every payload, under a `Change summary (numstat: …)` header — one `added → deleted → path` line per changed file (binary files show as `- - <path>`). This is the completeness floor: the agent always sees the full shape of the change — every file, its add/delete magnitude, and its kind — even when individual bodies are truncated later. A file whose body is fully truncated still appears in the skeleton, so truncation never silently drops a file from view.
 
-2. **Deterministic rename detection (FR3e).** Every `git diff` passes `-M`, so a rename (or a near-rename above the similarity threshold) is emitted compactly — a `rename from` / `rename to` pair plus any residual edit — instead of as a delete + add that duplicates the full file content. This is deterministic regardless of your `diff.renames` config or git version. (Copy detection `-C` is intentionally not enabled — it is expensive and adds little for message generation.)
+2. **Deterministic rename detection.** Every `git diff` passes `-M`, so a rename (or a near-rename above the similarity threshold) is emitted compactly — a `rename from` / `rename to` pair plus any residual edit — instead of as a delete + add that duplicates the full file content. This is deterministic regardless of your `diff.renames` config or git version. (Copy detection `-C` is intentionally not enabled — it is expensive and adds little for message generation.)
 
-3. **Reduced diff context (FR3f).** Diffs are captured with `-U1` by default — one anchor line per hunk — instead of git's `-U3` default, since unchanged surrounding lines are noise for message generation. Tune it with `diff_context`: `0` = changed lines only (maximal savings), `1` = one anchor line (the default), `3` = git's default.
+3. **Reduced diff context.** Diffs are captured with `-U1` by default — one anchor line per hunk — instead of git's `-U3` default, since unchanged surrounding lines are noise for message generation. Tune it with `diff_context`: `0` = changed lines only (maximal savings), `1` = one anchor line (the default), `3` = git's default.
 
-4. **Index-line stripping (FR3h).** The `index <oid>..<oid> <mode>` line is stripped from each file diff — the blob OIDs are useless to the model and cost roughly 30 bytes per file. The `diff --git`, `---`, `+++`, and `@@` lines are retained (they carry file identity and hunk location).
+4. **Index-line stripping.** The `index <oid>..<oid> <mode>` line is stripped from each file diff — the blob OIDs are useless to the model and cost roughly 30 bytes per file. The `diff --git`, `---`, `+++`, and `@@` lines are retained (they carry file identity and hunk location).
 
-5. **Size budget (FR3d / FR3i).** Two mutually-exclusive modes govern how large the payload is:
+5. **Size budget (/).** Two mutually-exclusive modes govern how large the payload is:
    - **Legacy caps (the default).** With `token_limit` unset (`0`), the markdown section is capped at `max_md_lines` per file (default 100) and the non-markdown aggregate at `max_diff_bytes` (default 300000); over-cap sections are marked `... [diff truncated at N bytes]` / `... [diff truncated at N lines]`.
    - **Holistic token budget.** Set `token_limit` (for example `120000`) to cap the *whole* payload — system prompt + style examples + the concatenated diff — to a token budget. Stagecoach reserves room for the prompt and examples, then allocates the remainder to the diff bodies with a **dynamic water-fill**: it sizes every file's body up front, and if they exceed the budget it finds a single water level `L` such that every file *smaller* than `L` is included whole and untouched, and every file *larger* than `L` is truncated to `L` (with a `... [truncated]` marker that ends the file's section on its own line, so the next file's `diff --git` begins fresh). Small files are never penalized for their size; large, substantive files receive the bulk of the budget; no single file can monopolize it; and nothing is wasted. The common case — a commit that fits — is left untouched. A non-zero `token_limit` **supersedes** both legacy caps for that run (they are mutually exclusive).
 
@@ -196,42 +196,42 @@ Binary files, lock files, snapshots, sourcemaps, and vendor directories are **ex
 
 Exclusion patterns from `.stagecoachignore`, the `[generation] exclude` config key, or the `--exclude`/`-x` CLI flag hide a file's **diff body** from every payload while still committing the file exactly as it stands. Excluded files emit a `<status>\t[excluded] <path>` placeholder (same shape as the `[binary]` placeholder, distinguishable by tag) so the agent sees *that* the file changed without its contents.
 
-**Payload-only guarantee (FR-X5):** Exclusion is payload-only — it never alters staging or commit content. The excluded file is committed exactly as staged, and `git diff-tree` of the resulting commit includes it. Only what the agent *sees* is affected.
+**Payload-only guarantee:** Exclusion is payload-only — it never alters staging or commit content. The excluded file is committed exactly as staged, and `git diff-tree` of the resulting commit includes it. Only what the agent *sees* is affected.
 
 The built-in noise denylist (lock files, snapshots, sourcemaps, vendor directories) always applies alongside any user exclusions — the two sets are unioned, never replaced. See [configuration.md](configuration.md) for `.stagecoachignore` syntax.
 
 ## Safety and the rescue protocol
 
-### Per-repo run lock (FR52)
+### Per-repo run lock
 
 Stagecoach uses a **two-stage defense** against concurrent runs on the same repo:
 
 1. **Per-repo run lock** (advisory `flock(LOCK_EX|LOCK_NB)`) — prevents the common local double-run (two terminals in the same repo). The lock is held on a file descriptor and **auto-releases on process death** (SIGKILL, crash, power loss) — the LOCK never goes stale. Orphaned lock FILES (left by exits that bypass the deferred cleanup) are reaped by pid-liveness on the next Acquire, and the signal path releases the file before exiting.
-2. **§13.5 CAS** (`git update-ref HEAD` compare-and-swap) — the second, never-clobber-HEAD guarantee. Even if the lock somehow fails (shared/network FS, cross-host), the CAS ensures only one commit lands per run.
+2. ** CAS** (`git update-ref HEAD` compare-and-swap) — the second, never-clobber-HEAD guarantee. Even if the lock somehow fails (shared/network FS, cross-host), the CAS ensures only one commit lands per run.
 
 **Per-host limit.** The lock is a per-process advisory flock — it works on a single host. Cross-host contention (shared NFS, etc.) is the CAS's job.
 
 **Never-in-repo location.** The lock file lives in a per-user runtime/cache directory (resolved via `XDG_RUNTIME_DIR` → `XDG_CACHE_HOME` → `~/.cache/stagecoach/locks`), keyed by a sha256 hash of the repo's canonical absolute path. It is **never inside the repo** — an in-repo lock would pollute `git status`, be committable, be ambiguous across worktrees, and be lost on clone.
 
-**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot()`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.
+**No-op fast path.** On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via `SetSnapshot`, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits **5 (Busy)** instead — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.
 
-**Auto-release + file reaping.** The lock uses POSIX `flock` — it releases when the file descriptor or process closes, so the LOCK is never stale. The lock FILE, however, is orphaned by exits that bypass the deferred cleanup (SIGKILL, crash, signal-rescue `os.Exit`); on the next Acquire, stagecoach reaps every `*.lock` whose recorded pid is dead (`kill(pid,0)`→`ESRCH`), and the signal path releases the file before exiting. On Windows, `flock` is a no-op stub, reaping is a no-op too, and the §13.5 CAS is the guarantee there.
+**Auto-release + file reaping.** The lock uses POSIX `flock` — it releases when the file descriptor or process closes, so the LOCK is never stale. The lock FILE, however, is orphaned by exits that bypass the deferred cleanup (SIGKILL, crash, signal-rescue `os.Exit`); on the next Acquire, stagecoach reaps every `*.lock` whose recorded pid is dead (`kill(pid,0)`→`ESRCH`), and the signal path releases the file before exiting. On Windows, `flock` is a no-op stub, reaping is a no-op too, and the CAS is the guarantee there.
 
-**Orphaned-but-alive — the launcher-closed case (FR-K1–K7).** The two states above (dead holder, file reaped; live holder, never touched) miss a third that arises from stagecoach's primary launch path (§9.21): a parent process — the lazygit TUI, an IDE, a detaching terminal — that **closes without killing its child**. The child is reparented to init (or a subreaper) and **keeps running**: it still holds the `flock`, its pid is still alive (so stale-file reaping never fires), and it is generating a commit nobody will see. Because the signal handler catches only delivered signals and the orphaning parent delivers none of them, the run never reaches the exit path — the lock file outlives the launcher until the orphan finishes (or forever, if its provider subprocess is wedged by the vanished terminal). This is the "the lock stays forever" report.
+**Orphaned-but-alive — the launcher-closed case (–K7).** The two states above (dead holder, file reaped; live holder, never touched) miss a third that arises from stagecoach's primary launch path: a parent process — the lazygit TUI, an IDE, a detaching terminal — that **closes without killing its child**. The child is reparented to init (or a subreaper) and **keeps running**: it still holds the `flock`, its pid is still alive (so stale-file reaping never fires), and it is generating a commit nobody will see. Because the signal handler catches only delivered signals and the orphaning parent delivers none of them, the run never reaches the exit path — the lock file outlives the launcher until the orphan finishes (or forever, if its provider subprocess is wedged by the vanished terminal). This is the "the lock stays forever" report.
 
-The remedy is **self-termination, never contender-side force-breaking** (FR-K1): on startup stagecoach records its parent pid and arms a parent-death watchdog that, on parent death, routes the process through the same rescue + lock-release exit path the signal handler uses — abandoning the in-flight commit is always safe (HEAD moves only at the final `update-ref`; the snapshot is a gc'able orphan whose SHA the rescue recipe prints). Detection is by **parent-pid change** (reparenting), not the brittle `getppid()==1` test (FR-K2) — subreaper-safe; Linux uses `prctl(PR_SET_PDEATHSIG)` as a best-effort fast path plus a ~1s `getppid()` poll, Darwin/other Unix poll only. The watchdog is **Unix-only** (FR-K7); on Windows `flock` is already a no-op and the §13.5 CAS is the guarantee.
+The remedy is **self-termination, never contender-side force-breaking**: on startup stagecoach records its parent pid and arms a parent-death watchdog that, on parent death, routes the process through the same rescue + lock-release exit path the signal handler uses — abandoning the in-flight commit is always safe (HEAD moves only at the final `update-ref`; the snapshot is a gc'able orphan whose SHA the rescue recipe prints). Detection is by **parent-pid change** (reparenting), not the brittle `getppid==1` test — subreaper-safe; Linux uses `prctl(PR_SET_PDEATHSIG)` as a best-effort fast path plus a ~1s `getppid` poll, Darwin/other Unix poll only. The watchdog is **Unix-only**; on Windows `flock` is already a no-op and the CAS is the guarantee.
 
-`SIGHUP` joins the caught signals `{SIGINT, SIGTERM, SIGHUP}` (Unix; FR-K3): when the controlling terminal closes and the kernel hangs up the process group, stagecoach routes it through the rescue path (clean exit + lock-file removal) instead of Go's default disposition (terminate, skipping the deferred release and leaving the file for the next run's reaper). `SIGHUP` covers the terminal-hangup case where the signal *is* delivered; the parent-death watchdog covers the detach/orphan case where it is *not*. (Windows omits `SIGHUP`.)
+`SIGHUP` joins the caught signals `{SIGINT, SIGTERM, SIGHUP}` (Unix): when the controlling terminal closes and the kernel hangs up the process group, stagecoach routes it through the rescue path (clean exit + lock-file removal) instead of Go's default disposition (terminate, skipping the deferred release and leaving the file for the next run's reaper). `SIGHUP` covers the terminal-hangup case where the signal *is* delivered; the parent-death watchdog covers the detach/orphan case where it is *not*. (Windows omits `SIGHUP`.)
 
-`stagecoach lock status` (FR-K4) prints the holder's path/pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). It is **read-only**: it acquires no `flock` and never breaks/removes a lock; the **user** decides whether to `kill <pid>` or `rm <path>`. It never auto-breaks.
+`stagecoach lock status` prints the holder's path/pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). It is **read-only**: it acquires no `flock` and never breaks/removes a lock; the **user** decides whether to `kill <pid>` or `rm <path>`. It never auto-breaks.
 
-The opt-out `no_parent_watchdog` (FR-K6; default **off** — the watchdog runs by default) disables the parent-death watchdog for intentional-detach workflows (`nohup`/`setsid`/`systemd-run`, a service manager) that would otherwise trip it the moment the short-lived launcher exits. `SIGHUP` handling (FR-K3) and `lock status` (FR-K4) are independent of this flag and always on. FR52's "never force-break" guarantee is preserved unchanged: the guarantee is that *another* process never breaks a live lock, and the watchdog is the *same* process abandoning its own unwanted work.
+The opt-out `no_parent_watchdog` (; default **off** — the watchdog runs by default) disables the parent-death watchdog for intentional-detach workflows (`nohup`/`setsid`/`systemd-run`, a service manager) that would otherwise trip it the moment the short-lived launcher exits. `SIGHUP` handling and `lock status` are independent of this flag and always on. 's "never force-break" guarantee is preserved unchanged: the guarantee is that *another* process never breaks a live lock, and the watchdog is the *same* process abandoning its own unwanted work.
 
 See [CLI reference — lock status](cli.md#lock-status) and [Configuration — environment variables](configuration.md#environment-variables) (the opt-out keys).
 
 ### Safety invariant
 
-No provider mutates the repository (PRD §18.1). Every built-in manifest constrains the agent to a read-only mode — either via explicit tool-disable flags (pi, claude) or read-only constraint flags (codex, cursor, agy, qwen-code; opencode's `run` is read-only by design). The agent receives the diff via stdin/argv and writes the commit message to stdout — it never runs `git add`, `git commit`, or any write command. Every provider also renders chrome-less — skills, extensions, context files, and MCP servers are disabled wherever the agent CLI exposes a switch for them (pi and claude today); surfaces a provider cannot switch off are documented as tracked limitations rather than hidden assumptions. The commit-generation path (§9.1–§9.28) makes no network calls itself; the single named exception is `stagecoach upgrade` (§9.29), which fetches only this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never repo data. See [providers.md](providers.md#tools-disable-asymmetry) for the per-provider chrome-disable details.
+No provider mutates the repository. Every built-in manifest constrains the agent to a read-only mode — either via explicit tool-disable flags (pi, claude) or read-only constraint flags (codex, cursor, agy; opencode's `run` is read-only by design). The agent receives the diff via stdin/argv and writes the commit message to stdout — it never runs `git add`, `git commit`, or any write command. Every provider also renders chrome-less — skills, extensions, context files, and MCP servers are disabled wherever the agent CLI exposes a switch for them (pi and claude today); surfaces a provider cannot switch off are documented as tracked limitations rather than hidden assumptions. The commit-generation path (–) makes no network calls itself; the single named exception is `stagecoach upgrade`, which fetches only this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never repo data. See [providers.md](providers.md#tools-disable-asymmetry) for the per-provider chrome-disable details.
 
 ### Failure modes and exit codes
 
@@ -284,7 +284,7 @@ For repos with more than one commit, Stagecoach builds a system prompt from the 
 
 ### System prompt (new repos)
 
-For repos with zero or one commit (including unborn repos), Stagecoach falls back to a **conventional-commit** system prompt (PRD §17.2): "Use Conventional Commits format (type: description)."
+For repos with zero or one commit (including unborn repos), Stagecoach falls back to a **conventional-commit** system prompt: "Use Conventional Commits format (type: description)."
 
 ### Format modes and locale
 
@@ -305,7 +305,7 @@ The user payload combines the staged diff with the rejection list (previously re
 
 ### Why raw output, not JSON
 
-Stagecoach requests raw text output from agents (`output = "raw"`) rather than structured JSON (PRD §17.4). Reasons:
+Stagecoach requests raw text output from agents (`output = "raw"`) rather than structured JSON. Reasons:
 
 - Agents that produce raw text are easier to invoke — no need to negotiate a JSON schema.
 - A raw contract is more robust across different agent versions and providers.
@@ -315,7 +315,7 @@ Stagecoach requests raw text output from agents (`output = "raw"`) rather than s
 ## Multi-turn generation fallback
 
 For diffs too large for a single reliable request, stagecoach has an optional **multi-turn** generation
-path (PRD §9.24). It exists because a provider's *per-request* reliability ceiling can lie well below its
+path. It exists because a provider's *per-request* reliability ceiling can lie well below its
 advertised context window: a huge one-shot request may return empty or unparseable output even though the
 model can handle the same content delivered in smaller pieces. Multi-turn runs on
 every generation path — the snapshot commit flow, `--dry-run`, and hook mode (where
@@ -339,14 +339,14 @@ the entire diff in its session history — then writes one message at the end:
 - **Turn N+1:** "Now write the commit message for the diff above." This turn's output runs through the
   normal parse + duplicate-rejection pipeline, then commits like any other message.
 
-Each turn is a separate provider invocation bounded by the **message role's** resolved timeout (FR-R7/FR-T5); total wall-clock ≈ `message-timeout × (N+1)`,
-surfaced on the progress line at fallback time. That progress line also reports the per-chunk token budget each chunk targets; with `--verbose`, each turn additionally prints its payload size and raw agent output (FR-T11).
+Each turn is a separate provider invocation bounded by the **message role's** resolved timeout (/); total wall-clock ≈ `message-timeout × (N+1)`,
+surfaced on the progress line at fallback time. That progress line also reports the per-chunk token budget each chunk targets; with `--verbose`, each turn additionally prints its payload size and raw agent output.
 
 **Failure handling.** If any turn errors, times out, or the final output fails to parse/dedupe, the
 multi-turn attempt aborts and control passes to the standard rescue protocol — the snapshot is safe and
 the run is no worse off than a one-shot failure.
 
-**`token_limit` does not apply (FR-T12).** `token_limit` governs only the one-shot path (it truncates the
+**`token_limit` does not apply.** `token_limit` governs only the one-shot path (it truncates the
 payload to fit one request). Multi-turn deliberately ignores it: the whole point is lossless delivery of a
 large payload. So when `token_limit` is set, the multi-turn path re-captures the diff with `token_limit`
 disabled and delivers the **untruncated** diff across the N+1 turns — the chunking itself never consults
@@ -359,7 +359,7 @@ When you already have a description of the work (e.g. a task system that breaks 
 commits each one), the default diff-first path makes the model reverse-engineer intent you already wrote.
 **Work-description mode** inverts that: you supply the description, stagecoach leads the prompt with it
 plus the file-change skeleton (the list of changed files), and the model pulls specific file diffs on
-demand by writing `READ <path>` on its own line (PRD §9.26). It needs no tool-calling support and runs in
+demand by writing `READ <path>` on its own line. It needs no tool-calling support and runs in
 bare mode on every provider, because the only action is reading a staged file's diff.
 
 Activate it with `--work-description "..."` (or `--work-description-file <path>`, which wins when both
@@ -368,9 +368,9 @@ are set; env `STAGECOACH_WORK_DESCRIPTION`). Message role only; never the defaul
 *what*, `--context` is the *how*.
 
 The read/answer exchange accumulates in one provider session via `session_mode = "append"` (the same
-machinery multi-turn uses, §9.24), so provider support is identical (pi ships `"append"`; others ship
+machinery multi-turn uses), so provider support is identical (pi ships `"append"`; others ship
 `""` until verified). The model has at most `work_desc_read_rounds` rounds (default 5) of READ requests;
-after that, stagecoach refuses further reads and demands the commit message (FR-W6 guarantees
+after that, stagecoach refuses further reads and demands the commit message (guarantees
 termination). A response with no `READ` line is the commit message, parsed through the normal
 parse + duplicate-rejection pipeline (so `--format`, `--locale`, `--template`, `--edit` all apply).
 
@@ -382,7 +382,7 @@ a user who wants that degradation runs without `--work-description`.
 ## Commit hooks on the plumbing path
 
 As of v2.4, the snapshot-based flow runs your repository's standard commit hooks itself — you no longer
-need hook mode (§9.20) just to get `pre-commit`, `commit-msg`, or `post-commit` to fire on a `stagecoach`
+need hook mode just to get `pre-commit`, `commit-msg`, or `post-commit` to fire on a `stagecoach`
 commit. Hooks run in git's documented order around every commit produced by the plumbing path:
 `pre-commit` → `prepare-commit-msg` → `commit-msg` before the commit object is created, and `post-commit`
 after it is published.
@@ -408,11 +408,11 @@ empty-result abort (exit 1, not a rescue). HEAD and the index are untouched at t
 `update-ref` has run). `post-commit` is best-effort: its exit code is logged as a
 warning but cannot undo an already-landed commit (git itself disregards it).
 
-See PRD §9.25 (FR-V1–V8) for the full specification, and [Hook mode vs the snapshot-based flow](#hook-mode-vs-the-snapshot-based-flow) below for how the two modes compose.
+See (–V8) for the full specification, and [Hook mode vs the snapshot-based flow](#hook-mode-vs-the-snapshot-based-flow) below for how the two modes compose.
 
 ## Hook mode vs the snapshot-based flow
 
-### Trade-off inversion (FR-H7)
+### Trade-off inversion
 
 Stagecoach offers two ways to generate commit messages, each with different trade-offs:
 
@@ -430,10 +430,10 @@ Stagecoach offers two ways to generate commit messages, each with different trad
 - **Never-block contract**: any failure leaves the message file untouched and exits 0, so the commit proceeds to an empty editor — the commit is never aborted by a model hiccup (unless `--strict` opts in).
 - **No rescue protocol**: there is no frozen tree to recover — the commit simply proceeds without an AI message.
 
-**Multi-turn fallback in hook mode.** The [multi-turn fallback](#multi-turn-generation-fallback) is available in hook mode too: on a large diff with an append-mode provider, the hook tries it as one extra attempt before the never-block exit. On success the generated message is written to the commit-message file; on any failure — a turn error, an empty final parse, or a duplicate subject — the hook still exits 0 with the message file untouched (FR-H5 preserved).
+**Multi-turn fallback in hook mode.** The [multi-turn fallback](#multi-turn-generation-fallback) is available in hook mode too: on a large diff with an append-mode provider, the hook tries it as one extra attempt before the never-block exit. On success the generated message is written to the commit-message file; on any failure — a turn error, an empty final parse, or a duplicate subject — the hook still exits 0 with the message file untouched (preserved).
 
 ### When to use which
 
 - Use **`stagecoach` directly** (the snapshot flow) for day-to-day commits: it's atomic, stage-while-generating, and — as of v2.4 — honors your repository's hooks (`--no-verify` for a one-off skip).
 - Install **hook mode** only if you commit via plain `git commit` from an IDE or lazygit instead of invoking `stagecoach` — it fills the message without blocking, with hooks honored but no snapshot guarantees.
-- The two **compose**: [Commit hooks on the plumbing path](#commit-hooks-on-the-plumbing-path) (§9.25) covers `stagecoach` commits; hook mode covers `git commit` commits.
+- The two **compose**: [Commit hooks on the plumbing path](#commit-hooks-on-the-plumbing-path) covers `stagecoach` commits; hook mode covers `git commit` commits.

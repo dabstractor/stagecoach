@@ -105,10 +105,10 @@ Stagecoach's provider system is the heart of its agent-agnosticism: given a logi
 
 | Concept      | What it is                                        | Examples                                                    | Config field | Flag         | Env                   | Git key               |
 | ------------ | ------------------------------------------------- | ----------------------------------------------------------- | ------------ | ------------ | --------------------- | --------------------- |
-| **provider** | the agent platform / CLI stagecoach shells out to | pi, opencode, claude, codex, cursor, agy, qwen-code | `provider`   | `--provider` | `stagecoach_PROVIDER` | `stagecoach.provider` |
+| **provider** | the agent platform / CLI stagecoach shells out to | pi, opencode, claude, codex, cursor, agy | `provider`   | `--provider` | `stagecoach_PROVIDER` | `stagecoach.provider` |
 | **model**    | the model identifier                              | `anthropic/claude-haiku`, `openai/gpt-5.4`, `sonnet`, `gemini-3.1-pro` | `model`      | `--model`    | `stagecoach_MODEL`    | `stagecoach.model`    |
 
-**The inference provider lives in the model string, not a separate field.** Some providers route to a choice of upstream inference backend — **pi** (via a separate `--provider <backend>` flag) and **opencode** (via a `backend/model` token like `openai/gpt-5.4`). For these, the model string carries the inference provider as a **slash-prefixed namespace**: `anthropic/claude-haiku`, `openai/gpt-5.4`. Providers with a fixed backend (claude, codex, cursor, agy, qwen-code) take a bare model (`sonnet`, `gemini-3.1-pro`).
+**The inference provider lives in the model string, not a separate field.** Some providers route to a choice of upstream inference backend — **pi** (via a separate `--provider <backend>` flag) and **opencode** (via a `backend/model` token like `openai/gpt-5.4`). For these, the model string carries the inference provider as a **slash-prefixed namespace**: `anthropic/claude-haiku`, `openai/gpt-5.4`. Providers with a fixed backend (claude, codex, cursor, agy) take a bare model (`sonnet`, `gemini-3.1-pro`).
 
 - **pi renders the prefix as a separate flag; opencode passes it whole.** At `Render` (§12.2), if the provider's manifest declares a `provider_flag` (pi — the only one today), stagecoach splits the model on the first `/` and emits `--provider <prefix> --model <rest>` (so `anthropic/claude-haiku` → `pi --provider anthropic --model claude-haiku`). Providers without a `provider_flag` (opencode, and every single-backend provider) pass the model string verbatim.
 - **A bare model on a `provider_flag` provider is a hard error** (FR-R5b): `model = "claude-haiku"` on pi is rejected with "include the inference provider, e.g. `anthropic/claude-haiku`" — never silently rendered as an unroutable `pi --model claude-haiku`. This is precisely the bug class that motivated the design: there is no separate inference-provider field to forget, because **the prefix IS the field**.
@@ -415,29 +415,6 @@ agy --model "Gemini 3.5 Flash (Low)" --mode accept-edits --dangerously-skip-perm
 5. **Print-mode timeout:** `agy` exposes `--print-timeout` (default 5m); stagecoach's own `--timeout` (§9.5) governs the kill, but a shorter `--print-timeout` makes `agy` exit cleanly rather than hang — wire it to the same budget.
 
 Items 1–4 are cleared; agy is stager-capable. It still ships `experimental = true` (§12.7.2) pending a full `--help` re-verification pass (item 4 itself is resolved).
-
-### 12.5.2 Built-in provider: qwen-code — the Qwen3-Coder CLI (a Gemini-CLI fork)
-
-`qwen-code` (npm `@qwen-code/qwen-code`; GitHub `QwenLM/qwen-code`) is Alibaba/Qwen's terminal coding agent. It is a **fork of Google's Gemini CLI** and behaves identically to the *gemini-cli lineage* at the invocation/API level — same flag surface (`-m`/`--model`, `--approval-mode`, `-p`/`--prompt`, stdin delivery, no first-class system-prompt flag) — so its manifest mirrors `gemini` (§12.5). NOTE: do **not** assume it matches `agy` — `agy` (§12.5.1) **diverged** from this lineage in v1.1.0 (`--model`, value-taking `-p`, no `--approval-mode`); qwen-code's own flags remain `# TO CONFIRM` per FR-D5. What differs from gemini is the **model line and capabilities**: qwen-code is tuned for the **Qwen3-Coder** family, reached via Alibaba Cloud Model Studio / DashScope (`DASHSCOPE_API_KEY`, or `qwen-code login` for the free coding-plan quota). It is **single-backend** (Qwen/DashScope), so `provider` is meaningless and `provider_flag` is empty. Exact default model tokens (`qwen3-coder-plus` et al.) and the `reasoning_levels` mapping are **# TO CONFIRM** per FR-D5 — the model lineup differs materially from Gemini's despite the shared CLI lineage. Mark `experimental` until a real end-to-end run clears it.
-
-```toml
-# qwen-code — Gemini-CLI fork for Qwen3-Coder. Researched from docs (not yet `--help`-verified).
-name = "qwen-code"
-detect = "qwen-code"
-command = "qwen-code"
-subcommand = []
-prompt_delivery = "stdin"          # gemini-lineage: stdin appended to the prompt; avoids arg limits
-print_flag = "-p"                  # `-p` / `--prompt`: one-shot non-interactive
-model_flag = "-m"                  # gemini-lineage `-m` / `--model`. # TO CONFIRM exact token
-default_model = "qwen3-coder-plus" # Qwen3-Coder family; user overrides per account. # TO CONFIRM
-system_prompt_flag = ""            # none first-class (gemini lineage) → prepend to payload (§12.2). # TO CONFIRM
-provider_flag = ""                 # single-backend (Qwen/DashScope)
-bare_flags = ["--approval-mode", "default"]   # read-only, no tool execution. # TO CONFIRM gemini-equivalent
-tooled_flags = []                  # empty until verified → cannot stager until set (FR-D4 fallback)
-output = "raw"
-strip_code_fence = true
-# [reasoning_levels]               # Qwen3-Coder thinking-effort flags: # TO CONFIRM (FR-R6/FR-D5)
-```
 
 ### 12.6 Built-in provider: opencode
 

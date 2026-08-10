@@ -13,7 +13,7 @@ import (
 // ordered set of built-in provider names. Used as the `installed=[all]` case. Using the ordered
 // literal (NOT provider.BuiltinManifests() map keys — map iteration order is non-deterministic)
 // keeps the `[all]` case stable across runs.
-var bootstrapValidateAllBuiltins = []string{"pi", "opencode", "cursor", "agy", "qwen-code", "codex", "claude"}
+var bootstrapValidateAllBuiltins = []string{"pi", "opencode", "cursor", "agy", "codex", "claude"}
 
 // TestBootstrapValidateModels is the post-bootstrap FR-R5b regression net (PRD §9.15 FR-R5b,
 // §9.17 FR-B1; architecture/bootstrap_pi_model_bug.md §Post-Bootstrap ValidateModel Regression Net).

@@ -1,14 +1,14 @@
 # Packaging notes (maintainer)
 
 Distribution-surface decisions and one-time bootstraps that are NOT code. This file covers
-Chocolatey (PRD §21.2/§21.3); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew (tap `dabstractor/homebrew-stagecoach`), Scoop (bucket `dabstractor/stagecoach-bucket`),
+Chocolatey (/); npm is documented in [`npm/README.md`](../npm/README.md); Homebrew (tap `dabstractor/homebrew-stagecoach`), Scoop (bucket `dabstractor/stagecoach-bucket`),
 and AUR (`stagecoach-bin`) are all wired into `release.yml` with **no `--skip` flags** — each pushes to its target repo on tag. (AUR publish is currently disabled: its `git_url` is commented out in
 `.goreleaser.yaml` while aur.archlinux.org recovers.)
 
 ## Chocolatey
 
 Every `v*` tag runs goreleaser's native
-[`chocolateys:`](https://goreleaser.com/customization/chocolatey/) pipe (PRD §21.2), which builds a
+[`chocolateys:`](https://goreleaser.com/customization/chocolatey/) pipe, which builds a
 `.nupkg` and pushes it to the [Chocolatey community repository](https://community.chocolatey.org/)
 (`push.chocolatey.org`). Windows users install and update with Chocolatey directly:
 
@@ -31,9 +31,9 @@ choco upgrade stagecoach -y     # needs admin
   publishes directly via the API key with no such gate, so there is no manifest-acceptance queue
   to bootstrap or track.
 - **`stagecoach upgrade` behavior**: `choco upgrade` needs admin, so `stagecoach upgrade` detects
-  a Chocolatey install (FR-U2) and **prints** `choco upgrade stagecoach -y` for the user to run
-  (FR-U4). It does **not** self-swap — Chocolatey owns the binary under `ProgramData\chocolatey`
-  (FR-U1).
+ a Chocolatey install and **prints** `choco upgrade stagecoach -y` for the user to run
+. It does **not** self-swap — Chocolatey owns the binary under `ProgramData\chocolatey`
+.
 
 > No one-time bootstrap, no installer YAML, and no pending-acceptance checklist: unlike the old
 > manifest-PR flow, Chocolatey publishes on every release via the API key. The previous manifest
@@ -42,7 +42,7 @@ choco upgrade stagecoach -y     # needs admin
 ### PowerShell installer (no package manager)
 
 Windows users without Chocolatey (or Scoop) can use the `irm | iex` one-liner — the Windows analog
-of the Unix `curl | sh` installer (PRD §21.3). It downloads [`install.ps1`](../install.ps1) from the
+of the Unix `curl | sh` installer. It downloads [`install.ps1`](../install.ps1) from the
 repo root and executes it:
 
 ```powershell
@@ -55,7 +55,7 @@ against `checksums.txt`, extracts `stagecoach.exe` to `$LOCALAPPDATA\stagecoach`
 `rustup`/`starship`/`uv` pattern — user-owned, no admin), and prepends that directory to the
 **user** `PATH`. Because the binary is package-manager-unowned, the installer tags it
 `STAGECOACH_INSTALL_METHOD=direct` so `stagecoach upgrade` self-swaps it like any direct install
-(FR-U5).
+.
 
 > Re-open your terminal for the `PATH` change to take effect.
 
@@ -84,7 +84,7 @@ nix build .#default && ./result/bin/stagecoach --help # local build
 paste. The update workflow:
 
 1. Set `vendorHash = pkgs.lib.fakeHash;` (the `sha256-AAAA...=` placeholder) if starting fresh.
-2. Run `nix build .#default` (or `nix flake check`). It fails with a fixed-output mismatch:
+2. Run `nix build.#default` (or `nix flake check`). It fails with a fixed-output mismatch:
 
    ```
    specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -111,7 +111,7 @@ into `vendorHash` in `flake.nix` and commit the fix. Likewise, the first CI run 
 - [ ] `.gitignore` has `result`, `result-*`, `.direnv` (and NOT `flake.lock`).
 - [ ] The CI `nix-flake-check` job is green on `main`.
 
-> FR-D5 (verify at impl): re-confirm the `cachix/install-nix-action` major version pin, that the
+> (verify at impl): re-confirm the `cachix/install-nix-action` major version pin, that the
 > locked nixpkgs provides Go >= 1.22, and that `nix flake check` defaults to the current system
 > (modern Nix 2.21+) — building the x86_64-linux package on the ubuntu runner.
 
@@ -120,7 +120,7 @@ into `vendorHash` in `flake.nix` and commit the fix. Likewise, the first CI run 
 The public docs site at `https://dabstractor.github.io/stagecoach/` is built from `docs/*.md` with
 [mkdocs-material](https://squidfunk.github.io/mkdocs-material/) (`mkdocs.yml`, `requirements-docs.txt`)
 and deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). It lives on the
-**same `gh-pages` branch** as the apt/dnf repos above (PRD §21.6).
+**same `gh-pages` branch** as the apt/dnf repos above.
 
 Coexistence contract — two workflows, one branch:
 

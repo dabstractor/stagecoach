@@ -123,24 +123,6 @@ strip_code_fence = true
 // Note: detect/command = "agent" (≠ name "cursor"); subcommand = [] decodes to a NON-NIL empty slice
 // (FINDING D) — builtinCursor sets Subcommand: []string{}.
 
-// qwenCodeTOML — PRD §12.5.2 (experimental=true, # TO CONFIRM FR-D5). Decoding it must match builtinQwenCode().
-const qwenCodeTOML = `name = "qwen-code"
-detect = "qwen-code"
-command = "qwen-code"
-prompt_delivery = "stdin"
-print_flag = "-p"
-model_flag = "-m"
-default_model = "qwen3-coder-plus"
-system_prompt_flag = ""
-provider_flag = ""
-bare_flags = [
-  "--approval-mode", "default",
-]
-output = "raw"
-strip_code_fence = true
-experimental = true
-`
-
 const agyTOML = `name = "agy"
 detect = "agy"
 command = "agy"
@@ -211,15 +193,15 @@ func renderArgs(m Manifest, provider, model, sys string) []string {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: KeysAndCount — exactly 7 keys: pi, claude, opencode, codex, cursor, agy, qwen-code
+// Test 1: KeysAndCount — exactly 6 keys: pi, claude, opencode, codex, cursor, agy
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_KeysAndCount(t *testing.T) {
 	m := BuiltinManifests()
-	if len(m) != 7 {
-		t.Fatalf("BuiltinManifests() returned %d keys, want 7", len(m))
+	if len(m) != 6 {
+		t.Fatalf("BuiltinManifests() returned %d keys, want 6", len(m))
 	}
-	for _, k := range []string{"pi", "claude", "opencode", "codex", "cursor", "agy", "qwen-code"} {
+	for _, k := range []string{"pi", "claude", "opencode", "codex", "cursor", "agy"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing key %q", k)
 		}
@@ -392,11 +374,11 @@ func TestBuiltinManifests_DecodeParity(t *testing.T) {
 	}{
 		{"pi", builtinPi(), piTOML},
 		{"claude", builtinClaude(), claudeTOML},
-		{"opencode", builtinOpenCode(), opencodeTOML},  // opencodeTOML = verbatim §12.6
-		{"codex", builtinCodex(), codexTOML},           // codexTOML = §12.7 codex with BOTH revisions
-		{"cursor", builtinCursor(), cursorTOML},        // cursorTOML = verbatim §12.7 cursor
-		{"agy", builtinAgy(), agyTOML},                 // agyTOML = §12.5.1 (experimental=true)
-		{"qwen-code", builtinQwenCode(), qwenCodeTOML}, // qwenCodeTOML = §12.5.2 (experimental=true)
+		{"opencode", builtinOpenCode(), opencodeTOML}, // opencodeTOML = verbatim §12.6
+		{"codex", builtinCodex(), codexTOML},          // codexTOML = §12.7 codex with BOTH revisions
+		{"cursor", builtinCursor(), cursorTOML},       // cursorTOML = verbatim §12.7 cursor
+		{"agy", builtinAgy(), agyTOML},                // agyTOML = §12.5.1 (experimental=true)
+
 	} {
 		var decoded Manifest
 		if err := toml.Unmarshal([]byte(tc.toml), &decoded); err != nil {
@@ -709,45 +691,6 @@ func TestBuiltinManifests_RenderedCommand_Agy(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: QwenCodeFields — every qwen-code field asserted (experimental=true, nil tooled_flags)
-// ---------------------------------------------------------------------------
-
-func TestBuiltinManifests_QwenCodeFields(t *testing.T) {
-	m := builtinQwenCode()
-	assertStr(t, "Detect", m.Detect, "qwen-code")
-	assertStr(t, "Command", m.Command, "qwen-code")
-	assertStr(t, "PromptDelivery", m.PromptDelivery, "stdin")
-	assertStr(t, "PrintFlag", m.PrintFlag, "-p")
-	assertStr(t, "ModelFlag", m.ModelFlag, "-m")
-	assertStr(t, "DefaultModel", m.DefaultModel, "qwen3-coder-plus") // # TO CONFIRM FR-D5
-	assertStr(t, "SystemPromptFlag", m.SystemPromptFlag, "")         // NON-NIL explicit empty (prepend)
-	assertStr(t, "ProviderFlag", m.ProviderFlag, "")                 // NON-NIL explicit empty (single-backend)
-	wantBare := []string{"--approval-mode", "default"}
-	if !reflect.DeepEqual(m.BareFlags, wantBare) {
-		t.Errorf("BareFlags = %v, want %v", m.BareFlags, wantBare)
-	}
-	assertStr(t, "Output", m.Output, "raw")
-	if m.StripCodeFence == nil || *m.StripCodeFence != true {
-		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
-	}
-	if m.Experimental == nil || *m.Experimental != true {
-		t.Errorf("Experimental = %v, want non-nil true (§12.5.2 ships experimental)", m.Experimental)
-	}
-	if m.TooledFlags != nil {
-		t.Errorf("TooledFlags = %v, want nil (cannot stager until verified)", m.TooledFlags)
-	}
-	if m.Subcommand != nil {
-		t.Errorf("Subcommand = %v, want nil", m.Subcommand)
-	}
-	assertNilStr(t, "PromptFlag", m.PromptFlag)
-	assertNilStr(t, "JsonField", m.JsonField)
-	assertNilStr(t, "RetryInstruction", m.RetryInstruction)
-	if m.Env != nil {
-		t.Errorf("Env = %v, want nil", m.Env)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Test: ChromeDisableContract — FR-C2 (chrome-disable) + FR-C4(b) (read-only constraint),
 //       asserted ORDER-INDEPENDENTLY on every built-in provider's BareFlags.
 // ---------------------------------------------------------------------------
@@ -798,7 +741,7 @@ func TestBuiltinManifests_ChromeDisableContract(t *testing.T) {
 			{"codex", "codex", [2]string{"--sandbox", "read-only"}, []string{"--ephemeral"}, false},
 			{"cursor", "cursor", [2]string{"--mode", "ask"}, []string{"--trust"}, false},
 			{"agy", "agy", [2]string{"--mode", "plan"}, nil, false},
-			{"qwen-code", "qwen-code", [2]string{"--approval-mode", "default"}, nil, false},
+
 			{"opencode", "opencode", [2]string{}, nil, true},
 		}
 		for _, tc := range cases {
@@ -825,7 +768,7 @@ func TestBuiltinManifests_ChromeDisableContract(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 21: ListModelsCommand — 4 populated builtins carry the expected argv; 4 are nil.
+// Test 21: ListModelsCommand — 4 populated builtins carry the expected argv; 2 are nil.
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_ListModelsCommand(t *testing.T) {
@@ -847,30 +790,12 @@ func TestBuiltinManifests_ListModelsCommand(t *testing.T) {
 		}
 	}
 
-	// 4 unpopulated builtins — field must be nil (absent in struct literal).
-	for _, name := range []string{"claude", "codex", "qwen-code"} {
+	// 2 unpopulated builtins — field must be nil (absent in struct literal).
+	for _, name := range []string{"claude", "codex"} {
 		bm := m[name]
 		if bm.ListModelsCommand != nil {
 			t.Errorf("%s ListModelsCommand = %v, want nil", name, bm.ListModelsCommand)
 		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Test: RenderedCommand_QwenCode — stdin delivery: argv has NO payload (piped);
-//       sys prepended to stdin payload; print_flag "-p" last.
-// ---------------------------------------------------------------------------
-
-func TestBuiltinManifests_RenderedCommand_QwenCode(t *testing.T) {
-	argv := renderArgs(builtinQwenCode(), "", "", "<sys>") // model="" → default qwen3-coder-plus
-	want := []string{
-		"qwen-code", "-m", "qwen3-coder-plus",
-		"--approval-mode", "default",
-		"-p", // print_flag LAST per §12.2
-		// stdin delivery: "<sys>\n\n<user payload>" piped to stdin (NOT in argv). No sys/provider flag.
-	}
-	if !reflect.DeepEqual(argv, want) {
-		t.Errorf("qwen-code rendered argv:\n got %v\nwant %v", argv, want)
 	}
 }
 

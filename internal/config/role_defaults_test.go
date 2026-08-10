@@ -2,9 +2,9 @@ package config
 
 import "testing"
 
-// TestDefaultModelsForProvider_PerProvider asserts each of the 7 built-in providers returns its
+// TestDefaultModelsForProvider_PerProvider asserts each of the 6 built-in providers returns its
 // expected 4-role column (hardcoded — NOT derived from the table, so the test is meaningful).
-// PINS stager="" for the 6 non-stager-capable providers and non-empty stager for pi/claude.
+// PINS a non-empty stager cell for every provider (all six are stager-capable as of 2026-07-09).
 func TestDefaultModelsForProvider_PerProvider(t *testing.T) {
 	want := map[string]map[string]string{
 		"pi": {
@@ -25,9 +25,6 @@ func TestDefaultModelsForProvider_PerProvider(t *testing.T) {
 		"cursor": {
 			"planner": "composer-2.5-fast", "stager": "composer-2.5", "message": "composer-2.5-fast", "arbiter": "composer-2.5-fast",
 		},
-		"qwen-code": {
-			"planner": "qwen3-coder-flash", "stager": "", "message": "qwen3-coder-flash", "arbiter": "qwen3-coder-flash",
-		},
 	}
 	for name, exp := range want {
 		got := DefaultModelsForProvider(name)
@@ -47,7 +44,7 @@ func TestDefaultModelsForProvider_PerProvider(t *testing.T) {
 // 4 canonical role keys (planner/stager/message/arbiter), including stager when its value is "".
 func TestDefaultModelsForProvider_AllRolesPresent(t *testing.T) {
 	roles := []string{"planner", "stager", "message", "arbiter"}
-	for _, name := range []string{"pi", "claude", "agy", "opencode", "codex", "cursor", "qwen-code"} {
+	for _, name := range []string{"pi", "claude", "agy", "opencode", "codex", "cursor"} {
 		col := DefaultModelsForProvider(name)
 		if col == nil {
 			t.Errorf("DefaultModelsForProvider(%q) = nil, want a column", name)
@@ -64,9 +61,9 @@ func TestDefaultModelsForProvider_AllRolesPresent(t *testing.T) {
 	}
 }
 
-// TestDefaultModelsForProvider_StagerCapability isolates the stager="" signal: every provider EXCEPT
-// qwen-code has a non-empty stager cell (pi, claude, agy, codex, cursor, opencode are all
-// stager-capable as of 2026-07-09). qwen-code is the only one with stager="" (nil TooledFlags).
+// TestDefaultModelsForProvider_StagerCapability asserts every built-in provider has a non-empty
+// stager cell (all six — pi, claude, agy, codex, cursor, opencode — are stager-capable as of
+// 2026-07-09). No built-in has stager=="" anymore.
 // NOTE: pi/opencode's stager cell is a non-empty PLACEHOLDER — the bootstrap blanks their WRITTEN
 // [role.*] models (power-user); the cell stays non-empty here so StagerFallback's table lookup treats
 // them as capable.
@@ -74,11 +71,6 @@ func TestDefaultModelsForProvider_StagerCapability(t *testing.T) {
 	for _, capable := range []string{"pi", "claude", "agy", "codex", "cursor", "opencode"} {
 		if m := DefaultModelsForProvider(capable)["stager"]; m == "" {
 			t.Errorf("%q should be stager-capable (non-empty stager cell), got %q", capable, m)
-		}
-	}
-	for _, incapable := range []string{"qwen-code"} {
-		if m := DefaultModelsForProvider(incapable)["stager"]; m != "" {
-			t.Errorf("%q must have stager==\"\" (not stager-capable), got %q", incapable, m)
 		}
 	}
 }
@@ -101,12 +93,12 @@ func TestDefaultModelsForProvider_CopySemantics(t *testing.T) {
 	}
 }
 
-// TestRoleDefaults_KeySanity asserts the table has exactly the 7 built-in provider keys and no
+// TestRoleDefaults_KeySanity asserts the table has exactly the 6 built-in provider keys and no
 // provider column contains a role key outside the canonical set {planner, stager, message, arbiter}.
 func TestRoleDefaults_KeySanity(t *testing.T) {
 	expectedProviders := map[string]bool{
 		"pi": true, "claude": true, "opencode": true,
-		"codex": true, "cursor": true, "agy": true, "qwen-code": true,
+		"codex": true, "cursor": true, "agy": true,
 	}
 	validRoles := map[string]bool{
 		"planner": true, "stager": true, "message": true, "arbiter": true,

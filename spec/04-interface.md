@@ -42,7 +42,7 @@ With no command, runs the default action: commit staged changes (auto-staging al
 
 ### 15.3 Subcommands
 
-- **`stagecoach providers list`** — List all known providers (built-in + user). Mark detected (on `$PATH`) vs not. Show the resolved default (highest-priority _installed_ built-in per FR-D1's order: pi, opencode, cursor, agy, qwen-code, codex, claude).
+- **`stagecoach providers list`** — List all known providers (built-in + user). Mark detected (on `$PATH`) vs not. Show the resolved default (highest-priority _installed_ built-in per FR-D1's order: pi, opencode, cursor, agy, codex, claude).
 - **`stagecoach providers show <name>`** — Print the fully-resolved manifest as TOML.
 - **`stagecoach config init`** — Bootstrap a **populated, working** config (auto-detects the default provider and writes its per-role models); `--provider <name>` to target one, `--force` to overwrite **while preserving existing active settings (FR-B8)**, `--template` for the inert reference, `--interactive` for the TTY-gated wizard (§9.17, §9.23 FR-L3). To bring an existing config up to the current schema, use `config upgrade`, **not** `init --force` (FR-B4/B5).
 - **`stagecoach config path`** — Print the resolved global config path.

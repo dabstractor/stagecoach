@@ -95,51 +95,6 @@ func TestBuildBootstrapConfig_AgyStagerCapable(t *testing.T) {
 	assertContains(t, content, "[role.arbiter]", `model = "Gemini 3.5 Flash (Low)"`)
 }
 
-// TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel is the Issue 1 cross-provider
-// regression guard. S1 fixed the agy case (and its test); this proves the fix GENERALIZES to every
-// provider whose empty tooled_flags forces a stager fallback to pi (FR-D4). For each, the stager is
-// routed to pi with a BLANK model (never a bare gpt-5.4* — FR-R5b) plus the multi-backend guidance.
-// Would FAIL against the pre-S1 buildBootstrapConfig (which wrote a bare `gpt-5.4-mini` into the
-// stager block for every non-pi, non-stager-capable target).
-//
-// NOTE on the gpt-5.4 guard scope: S1's agy test scans the WHOLE content for "gpt-5.4" because agy's
-// own default models (Gemini 3.5 Flash) never contain that token. That whole-content scope does NOT
-// work for opencode, whose planner/message/arbiter models are legitimately `openai/gpt-5.4*`
-// (provider-prefixed — a valid multi-backend model, not a bare stager bug). So the regression guard
-// here is scoped to the [role.stager] BLOCK, which is precisely where the OLD bug wrote the bare
-// `gpt-5.4-mini`. This still catches the regression (the bare model lived in the stager block) while
-// avoiding a false positive from opencode's correctly-prefixed default models.
-func TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel(t *testing.T) {
-	for _, target := range []string{"qwen-code"} {
-		t.Run(target, func(t *testing.T) {
-			content := buildBootstrapConfig(target, nil, nil)
-
-			// stager routed to pi, model BLANKED (the S1 fix):
-			assertContains(t, content, "[role.stager]", `provider = "pi"`)
-			assertContains(t, content, "[role.stager]", `model = ""`)
-
-			// the negative guard, generalized to every stager-fallback case. Scoped to the stager
-			// block (see the function comment): the OLD bug wrote a bare `gpt-5.4-mini` INTO the
-			// stager block, so checking the block catches it without a false positive from opencode's
-			// legitimately provider-prefixed `openai/gpt-5.4*` planner/message/arbiter models.
-			stagerBlock := extractStagerBlock(content)
-			if strings.Contains(stagerBlock, "gpt-5.4") {
-				t.Errorf("%s stager-fallback config must not ship a bare gpt-5.4* pi model in the stager block (FR-R5b); stager block:\n%s", target, stagerBlock)
-			}
-
-			// multi-backend guidance present on the stager annotation:
-			if !strings.Contains(content, "multi-backend provider") {
-				t.Errorf("%s stager-fallback config missing the pi multi-backend guidance", target)
-			}
-
-			// fallback annotation present:
-			if !strings.Contains(content, "cannot serve as the stager") || !strings.Contains(content, "routed to pi") {
-				t.Errorf("%s stager-fallback config missing the stager-fallback annotation", target)
-			}
-		})
-	}
-}
-
 func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
 	content := buildBootstrapConfig("pi", []string{"pi", "claude"}, nil)
 
@@ -232,7 +187,6 @@ func TestBuildBootstrapConfig_ValidTOML(t *testing.T) {
 		{"claude", []string{"claude", "pi"}},
 		{"agy", []string{"agy", "pi", "claude"}},
 		{"opencode", nil},
-		{"qwen-code", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.target+"_"+strings.Join(tc.installed, ","), func(t *testing.T) {
@@ -302,28 +256,6 @@ func TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// extractStagerBlock returns the [role.stager] block text: from the "[role.stager]" header up to
-// (but not including) the next active table header ([role.<other>], [generation], or a section
-// separator). Used to scope the gpt-5.4 negative guard in the stager-fallback table test to JUST the
-// stager block, so opencode's legitimately provider-prefixed `openai/gpt-5.4*` planner/message/
-// arbiter models do not trip a whole-content guard (see
-// TestBuildBootstrapConfig_StagerFallbackProviders_NoBarePiModel).
-func extractStagerBlock(content string) string {
-	start := strings.Index(content, "[role.stager]")
-	if start < 0 {
-		return ""
-	}
-	rest := content[start:]
-	// the next table header / section separator terminates the block
-	nextIdx := len(rest)
-	for _, marker := range []string{"\n[role.", "\n[generation", "\n# ---"} {
-		if i := strings.Index(rest[1:], marker); i >= 0 && i+1 < nextIdx {
-			nextIdx = i + 1
-		}
-	}
-	return rest[:nextIdx]
-}
 
 // extractCommentedProviderBlock returns the commented-provider block for `provider`: from the
 // `# === <provider> (installed)` header up to (not including) the next section boundary (another
@@ -448,27 +380,7 @@ func TestBuildBootstrapConfig_RoleBlocksAllCommented(t *testing.T) {
 			}
 		}
 	})
-	t.Run("qwen-code: stager falls back to pi and is the ONLY role with a provider line", func(t *testing.T) {
-		content := buildBootstrapConfig("qwen-code", nil, nil)
-		// planner/message/arbiter inherit [defaults]=qwen-code → no provider line.
-		for _, role := range []string{"planner", "message", "arbiter"} {
-			blk := extractCommentedTargetRoleBlock(content, role)
-			if strings.Contains(blk, "# provider =") {
-				t.Errorf("[role.%s] must NOT carry a provider line; block:\n%s", role, blk)
-			}
-		}
-		// stager routed to pi → it carries `# provider = "pi"` + a blank model + a fallback note.
-		stager := extractCommentedTargetRoleBlock(content, "stager")
-		if !strings.Contains(stager, `# provider = "pi"`) {
-			t.Errorf("stager fallback should carry # provider = \"pi\"; block:\n%s", stager)
-		}
-		if !strings.Contains(stager, `# model = ""`) {
-			t.Errorf("stager fallback model should be blank (pi multi-backend); block:\n%s", stager)
-		}
-		if !strings.Contains(content, "cannot serve as the stager") || !strings.Contains(content, "routed to pi") {
-			t.Errorf("missing the stager-fallback annotation")
-		}
-	})
+
 }
 
 // extractCommentedTargetRoleBlock returns the commented [role.<role>] block that belongs to the

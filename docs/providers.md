@@ -17,7 +17,7 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 | `name` | string | (required) | Provider identity; set from the `[provider.<name>]` table key. |
 | `detect` | string | `command` | Binary to probe on `$PATH` for auto-detection. |
 | `command` | string | (required) | The executable to run. |
-| `list_models_command` | list of string | `[]` (none) | Full argv that asks the agent CLI to list its reachable models (e.g. `["opencode", "models"]`), used by `stagecoach models`. Empty/nil ⇒ stagecoach prints its curated per-role tier table instead (FR-L1). Populated only for providers whose CLI exposes a verified listing (opencode, pi, agy, cursor); never an HTTP call (§6.2 N2). |
+| `list_models_command` | list of string | `[]` (none) | Full argv that asks the agent CLI to list its reachable models (e.g. `["opencode", "models"]`), used by `stagecoach models`. Empty/nil ⇒ stagecoach prints its curated per-role tier table instead. Populated only for providers whose CLI exposes a verified listing (opencode, pi, agy, cursor); never an HTTP call. |
 | `subcommand` | list of string | `[]` (none) | Inserted between command and flags (e.g. `["run"]`, `["exec"]`). |
 | `prompt_delivery` | string | `"stdin"` | How to deliver the prompt: `stdin`, `positional`, or `flag`. |
 | `prompt_flag` | string | `""` | Flag used when `prompt_delivery` is `"flag"`. |
@@ -26,7 +26,7 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 | `default_model` | string | `""` | Model used when the user specifies none. |
 | `system_prompt_flag` | string | `""` | Flag for the system prompt. When `""`, the system prompt is prepended to the payload instead. |
 | `provider_flag` | string | `""` | Flag for sub-provider selection (e.g. `"--provider"`). |
-| `session_mode` | string | `""` | Multi-turn fallback capability (§9.24). `""` (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; `"append"` = re-invoking the same session id appends a recallable turn. **Only pi ships `"append"`** (VERIFIED 2026-07-05; FR-T9). Requires a verified, reproducible append-turn rendering — see below. |
+| `session_mode` | string | `""` | Multi-turn fallback capability. `""` (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; `"append"` = re-invoking the same session id appends a recallable turn. **Only pi ships `"append"`** (VERIFIED 2026-07-05). Requires a verified, reproducible append-turn rendering — see below. |
 | `bare_flags` | list of string | `[]` (none) | Extra flags appended verbatim before `print_flag` in bare mode. |
 | `tooled_flags` | list of string | `nil` (none) | Flags for tooled/stager mode — tools ON, git-scoped, non-interactive. `nil`/empty ⇒ not stager-capable. |
 | `output` | string | `"raw"` | Agent output mode: `"raw"` or `"json"`. |
@@ -34,23 +34,23 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 | `strip_code_fence` | bool | `true` | Strip one layer of `` ``` `` / `~~~` fences from agent output. |
 | `retry_instruction` | string | `"Output ONLY the commit message. No preamble, no markdown, no quotes."` | Prepended to the payload on a parse-failure retry. |
 | `env` | table | `nil` (none) | Environment variables set only for the subprocess (as `KEY=VAL`). |
-| `reasoning_levels` | table | nil (none) | Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op (FR-R6). Appended after the model flag at render. pi populates high/medium/low via `--thinking` (verified `pi --help`); claude via `--effort` (verified `claude --help`); all other built-ins are nil (graceful no-op). |
-| `experimental` | bool | false | Marks a provider experimental (agy, qwen-code) — surfaced in `providers list`/`show`. Absent/false ⇒ stable. |
+| `reasoning_levels` | table | nil (none) | Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op. Appended after the model flag at render. pi populates high/medium/low via `--thinking` (verified `pi --help`); claude via `--effort` (verified `claude --help`); all other built-ins are nil (graceful no-op). |
+| `experimental` | bool | false | Marks a provider experimental (agy) — surfaced in `providers list`/`show`. Absent/false ⇒ stable. |
 
 ### Multi-turn capability (`session_mode`)
 
-A provider supports Stagecoach's **lossless multi-turn fallback** (§9.24 — used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The `session_mode` manifest field declares this:
+A provider supports Stagecoach's **lossless multi-turn fallback** (— used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The `session_mode` manifest field declares this:
 
 - `"append"` — re-invoking the same session id appends a recallable turn (multi-turn available).
 - `""` (default) — the provider cannot append turns across one-shot calls (multi-turn unavailable; the run proceeds one-shot → rescue, unchanged).
 
-**Only `pi` ships `session_mode = "append"` today** — VERIFIED 2026-07-05 via a live run (`pi --session-id X <isolation-flags-minus-no-session> -p "remember BANANA"`, then a same-`--session-id` recall turn returning "BANANA"). Every other built-in (claude, opencode, codex, cursor, agy, qwen-code) ships `""`.
+**Only `pi` ships `session_mode = "append"` today** — VERIFIED 2026-07-05 via a live run (`pi --session-id X <isolation-flags-minus-no-session> -p "remember BANANA"`, then a same-`--session-id` recall turn returning "BANANA"). Every other built-in (claude, opencode, codex, cursor, agy) ships `""`.
 
-**FR-T9 verification bar.** A manifest MUST NOT declare `"append"` speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to FR-D5's model-token verification duty). Until a provider's append mechanism is verified, its `session_mode` stays `""` and multi-turn is silently skipped for it. See §9.24 (FR-T8/FR-T9) for the full contract.
+** verification bar.** A manifest MUST NOT declare `"append"` speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to 's model-token verification duty). Until a provider's append mechanism is verified, its `session_mode` stays `""` and multi-turn is silently skipped for it. See (/) for the full contract.
 
 ## Command rendering
 
-The renderer assembles the command invocation from the manifest fields and the resolved model, provider, system prompt, and user payload. Token order (per PRD §12.2):
+The renderer assembles the command invocation from the manifest fields and the resolved model, provider, system prompt, and user payload. Token order:
 
 ```text
 args = [subcommand...]
@@ -69,11 +69,11 @@ When `system_prompt_flag` is empty, the system prompt is **prepended** to the pa
 
 In **tooled mode** (the stager role), `tooled_flags` replaces `bare_flags`; tooled mode with empty `tooled_flags` errors — that provider cannot serve as a stager.
 
-For a multi-backend provider (one whose manifest sets `provider_flag` — pi today), the model is `inference/model` (e.g. `anthropic/claude-haiku`): Render splits it on the first `/` and emits `--provider <prefix> --model <rest>` (FR-R5b). A model with no `/` on such a provider is a HARD configuration error, never a silent bare `--model`. Single-backend providers take the model verbatim. When a `reasoning` level resolves to a non-empty token list in `reasoning_levels`, those tokens are appended after the model flag (FR-R6); absent/empty ⇒ silent no-op.
+For a multi-backend provider (one whose manifest sets `provider_flag` — pi today), the model is `inference/model` (e.g. `anthropic/claude-haiku`): Render splits it on the first `/` and emits `--provider <prefix> --model <rest>`. A model with no `/` on such a provider is a HARD configuration error, never a silent bare `--model`. Single-backend providers take the model verbatim. When a `reasoning` level resolves to a non-empty token list in `reasoning_levels`, those tokens are appended after the model flag; absent/empty ⇒ silent no-op.
 
 ## The 7 built-in providers
 
-Auto-detection order (first installed = default): **pi, opencode, cursor, agy, qwen-code, codex, claude**. User-defined providers are never auto-selected.
+Auto-detection order (first installed = default): **pi, opencode, cursor, agy, codex, claude**. User-defined providers are never auto-selected.
 
 | Provider | Delivery | Print flag | Model flag | Default model | System prompt flag | Tool-disable approach | Chrome-disable | Stager? |
 |----------|----------|-----------|-----------|----------------|-------------------|----------------------|----------------|--------|
@@ -83,39 +83,38 @@ Auto-detection order (first installed = default): **pi, opencode, cursor, agy, q
 | `codex` | stdin | (none) | `-m` | (user must set) | (prepended) | Read-only constraint (`--sandbox read-only --ephemeral`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
 | `cursor` | positional | `-p` | `--model` | (user must set) | (prepended) | Read-only constraint (`--mode ask --trust`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
 | `agy` | stdin | (none) | `--model` | `Gemini 3.5 Flash (Low)` | (prepended) | Read-only constraint (`--mode plan`) | no per-surface switch; read-only constraint only — documented limitation | ✓ yes (unscoped) |
-| `qwen-code` | stdin | `-p` | `-m` | `qwen3-coder-plus` ⚠️ | (prepended) | Read-only constraint (`--approval-mode default`) | no per-surface switch; read-only constraint only — documented limitation | — no ⚠️ |
 
-Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** (PRD §12.5.1) pending a full `--help` re-verification pass, and is **stager-capable** via the unscoped `--mode accept-edits --dangerously-skip-permissions` combo (§12.5.1.1 item 4, verified 2026-07-09, agy v1.1.11; the same unscoped model pi uses). `qwen-code` is **experimental** (PRD §12.5.2) — a Gemini-CLI fork for Qwen3-Coder via DashScope — and cannot serve as a stager (empty `tooled_flags`).
+Note: cursor is the only provider where `detect` and `command` differ from `name` — the binary is `agent`, not `cursor`. `agy` is **experimental** pending a full `--help` re-verification pass, and is **stager-capable** via the unscoped `--mode accept-edits --dangerously-skip-permissions` combo (item 4, verified 2026-07-09, agy v1.1.11; the same unscoped model pi uses).
 
 ## Tools-disable asymmetry
 
-The seven built-in providers achieve tool-safety via two distinct mechanisms (PRD §12.7.1):
+The six built-in providers achieve tool-safety via two distinct mechanisms:
 
 - **Explicit switch** (pi, claude): The manifest passes literal flags that **disable tools** (pi: `--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-session`; claude: `--tools "" --setting-sources "" --no-session-persistence`). This is the cleanest approach — the agent runs as a pure text-in/text-out process.
 
 - **Read-only constraint** (codex, cursor): The manifest passes flags that **constrain the agent to a read-only, never-ask profile** (codex: `--sandbox read-only --ephemeral`; cursor: `--mode ask --trust`). opencode's `run` subcommand is inherently non-interactive and read-only.
 
-Both approaches satisfy the §18.1 safety invariant: no provider can mutate the repository.
+Both approaches satisfy the safety invariant: no provider can mutate the repository.
 
-- **Chrome is a separate axis** (all providers): Mutation safety says nothing about agent chrome (skills, extensions, context files, MCP servers). Providers that expose a per-surface disable switch set it (pi, claude); providers that do not document the limitation honestly (codex, cursor, opencode, agy, qwen-code) — the call stays read-only and never-mutate regardless. See the **Chrome-disable** column above and the CHROME-DISABLE notes in each provider manifest (FR-C1–C5, §9.28).
+- **Chrome is a separate axis** (all providers): Mutation safety says nothing about agent chrome (skills, extensions, context files, MCP servers). Providers that expose a per-surface disable switch set it (pi, claude); providers that do not document the limitation honestly (codex, cursor, opencode, agy) — the call stays read-only and never-mutate regardless. See the **Chrome-disable** column above and the CHROME-DISABLE notes in each provider manifest (–C5).
 
 ## Tooled mode and the stager role
 
-The v2 manifest system has two invocation modes (PRD §11.5):
+The v2 manifest system has two invocation modes:
 
 - **Bare mode** (default): tools off, session-less, chrome-less, ephemeral. Serves the planner, message, and arbiter roles, and the entire v1 single-commit path. Uses `bare_flags`.
 
-- **Tooled mode** (stager only): tools on, git-scoped, non-interactive. Serves **only** the stager role — the per-concept agent that runs `git add` and applies hunks. Uses `tooled_flags`. A provider with nil/empty `tooled_flags` **cannot** serve as a stager (render errors at invocation time); FR-D4 falls back to the next stager-capable provider.
+- **Tooled mode** (stager only): tools on, git-scoped, non-interactive. Serves **only** the stager role — the per-concept agent that runs `git add` and applies hunks. Uses `tooled_flags`. A provider with nil/empty `tooled_flags` **cannot** serve as a stager (render errors at invocation time); falls back to the next stager-capable provider.
 
-The stager's safety is enforced by three layers (PRD §12.7.1):
+The stager's safety is enforced by three layers:
 
-1. **`tooled_flags`** — claude is **structurally** scoped via a staging-only git allowlist (`--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit`) that makes `git commit`/`push`/`update-ref`/`reset`/`rebase` unreachable. pi, agy, codex, opencode, and cursor are **not** flag-scoped — their tooled profiles enable tools with no git allowlist (the **UNSCOPED** model, §12.7.1), so a misbehaving unscoped stager CAN run arbitrary Bash. Their safety is therefore **instructional** (the §17.6 stager task prompt) + a **best-effort HEAD-movement guard** (HEAD is snapshotted before each stager call; the run aborts if HEAD moved) + **`verifyFreezeSubset` (FR-M1c)** (every staged tree is verified a content-subset of the frozen `T_start`), not structural. **claude is the ONLY structurally-scoped stager**; the other five stager-capable providers are unscoped.
-2. **Stagecoach's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (§13.6.2/§19). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.
-3. **The stager task prompt** (§17.6) — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.
+1. **`tooled_flags`** — claude is **structurally** scoped via a staging-only git allowlist (`--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit`) that makes `git commit`/`push`/`update-ref`/`reset`/`rebase` unreachable. pi, agy, codex, opencode, and cursor are **not** flag-scoped — their tooled profiles enable tools with no git allowlist (the **UNSCOPED** model), so a misbehaving unscoped stager CAN run arbitrary Bash. Their safety is therefore **instructional** (the stager task prompt) + a **best-effort HEAD-movement guard** (HEAD is snapshotted before each stager call; the run aborts if HEAD moved) + **`verifyFreezeSubset`** (every staged tree is verified a content-subset of the frozen `T_start`), not structural. **claude is the ONLY structurally-scoped stager**; the other five stager-capable providers are unscoped.
+2. **Stagecoach's ref-mutation monopoly** — the orchestrator alone runs `git commit`, `git update-ref`, and `git push` (/). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.
+3. **The stager task prompt** — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.
 
-## Per-role default models (FR-D4)
+## Per-role default models
 
-Out of the box, each agent role is assigned a model sized to its job (PRD §9.16 FR-D3):
+Out of the box, each agent role is assigned a model sized to its job:
 
 | Role | Tier | Rationale |
 |------|------|-----------|
@@ -124,7 +123,7 @@ Out of the box, each agent role is assigned a model sized to its job (PRD §9.16
 | **message** | fast | Commit-message generation is a short-text task — the cheapest/fastest tier suffices. |
 | **arbiter** | mid | Needs reasoning to evaluate diffs, but not the flagship — mid-tier balances quality and cost. |
 
-The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/role_defaults.go`. The config bootstrap (`config init`) uses these defaults — EXCEPT for **pi**, whose per-role models are written EMPTY in BOTH the active `[role.*]` block AND the commented-out pi block (pi needs an inference-provider prefix on the model, FR-R5b; its shipped per-role models are blank so you supply backend/model, e.g. `zai/gpt-5.4`). The pi row below is the compiled-in default, not the bootstrap output. Model names are 2026-07 baselines — FR-D5 mandates periodic re-verification per provider.
+The compiled-in per-provider table lives in `internal/config/role_defaults.go`. The config bootstrap (`config init`) uses these defaults — EXCEPT for **pi**, whose per-role models are written EMPTY in BOTH the active `[role.*]` block AND the commented-out pi block (pi needs an inference-provider prefix on the model, ; its shipped per-role models are blank so you supply backend/model, e.g. `zai/gpt-5.4`). The pi row below is the compiled-in default, not the bootstrap output. Model names are 2026-07 baselines — mandates periodic re-verification per provider.
 
 | Provider | planner | stager | message | arbiter |
 |----------|---------|--------|---------|--------|
@@ -134,12 +133,10 @@ The compiled-in per-provider table (PRD §9.16 FR-D4) lives in `internal/config/
 | `opencode` | `openai/gpt-5.4` | *(cannot)* | `openai/gpt-5.4-nano` | `openai/gpt-5.4-mini` |
 | `codex` | `gpt-5.1-codex-max` | *(cannot)* | `gpt-5.4-nano` | `gpt-5.1-codex-mini` |
 | `cursor` | `gpt-5.4` ⚠️ | *(cannot)* | `gpt-5.4-nano` ⚠️ | `gpt-5.4-mini` ⚠️ |
-| `qwen-code` | `qwen3-coder-plus` ⚠️ | *(cannot)* | `qwen3-coder-flash` ⚠️ | `qwen3-coder-plus` ⚠️ |
 
-*⚠️ cursor models are PRD tier-names (flagship/mid/nano) resolved to best-guess OpenAI tokens — FR-D5: verify against `agent --help`.*
-*⚠️ qwen-code models are # TO CONFIRM per FR-D5 (Alibaba Qwen3-Coder via DashScope; no live CLI lookup this pass).*
+*⚠️ cursor models are tier-names (flagship/mid/nano) resolved to best-guess OpenAI tokens — : verify against `agent --help`.*
 
-**Stager column:** A value of *(cannot)* reflects the **compiled-in `role_defaults.go` default** (no authored stager model), NOT a capability gap for every such provider — agy, opencode, codex, and cursor ARE stager-capable (per the main table + `builtin.go`); only **qwen-code** genuinely lacks `tooled_flags`. The per-role stager assignment for those four is pending a `role_defaults.go` update (a separate code change — tracked residual risk). When the detected provider cannot be the stager, the bootstrap falls back to the next stager-capable provider (FR-D4 fallback — currently pi, claude, agy, opencode, codex, or cursor).
+**Stager column:** A value of *(cannot)* reflects the **compiled-in `role_defaults.go` default** (no authored stager model), NOT a capability gap for every such provider — agy, opencode, codex, and cursor ARE stager-capable (per the main table + `builtin.go`). The per-role stager assignment for those four is pending a `role_defaults.go` update (a separate code change — tracked residual risk). When the detected provider cannot be the stager, the bootstrap falls back to the next stager-capable provider (fallback — currently pi, claude, agy, opencode, codex, or cursor).
 
 ## Adding a new agent
 
@@ -173,7 +170,7 @@ stagecoach --provider myagent
 
 ## Output parsing
 
-The output parser processes the agent's stdout in five steps (PRD §12.9):
+The output parser processes the agent's stdout in five steps:
 
 1. **Trim** — remove leading and trailing whitespace.
 2. **Strip code fence** (if `strip_code_fence` is true) — remove a leading `` ``` `` or `~~~` opener line and everything from the last matching closer onward.

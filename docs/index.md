@@ -8,7 +8,7 @@ instead. Stage while it thinks; it commits only what was staged when it started,
 can never corrupt your repo. With a dirty working tree and nothing staged, it automatically
 decomposes your changes into a sequence of logically-coherent commits.
 
-[View on GitHub](https://github.com/dabstractor/stagecoach){ .md-button .md-button--primary }
+[View on GitHub](https://github.com/dabstractor/stagecoach){.md-button.md-button--primary }
 
 ---
 

@@ -454,7 +454,8 @@ func runDecompose(ctx context.Context, stdout, stderr io.Writer, u *ui.UI, cfg *
 		{Name: "arbiter", Model: roleModels.Arbiter.Model, Provider: roleModels.Arbiter.Provider, Reasoning: roleModels.Arbiter.Reasoning},
 	})
 	// Surface the FR-D4 stager fallback as a stderr NOTICE (non-verbose): if the user configured the
-	// stager to a provider that cannot stage (agy/opencode/qwen-code — nil TooledFlags), ResolveRoles
+	// stager to a provider that cannot stage (nil TooledFlags — user-defined providers only,
+	// since all six built-ins are stager-capable), ResolveRoles
 	// silently swapped it to a tooled-capable one. Without this notice the user has no idea their stager
 	// isn't running on the provider they configured — and a fallback onto a multi-provider agent with no
 	// model (pi) silently stages nothing, producing the "0 commits" trap.
