@@ -183,15 +183,18 @@ chocolateys:
     owners: dabstractor
     title: Stagecoach
     authors: dabstractor
-    project_url: https://github.com/dabstractor/stagecoach
+    # project_url is the docs/landing site (NOT the repo) so it differs from project_source_url
+    # below — chocolatey's package-validator flags ProjectUrl==ProjectSourceUrl as a Guideline.
+    project_url: https://dabstractor.github.io/stagecoach/
     # Chocolatey moderation metadata (validator: package-validator / CPMR rules).
     package_source_url: 'https://github.com/dabstractor/stagecoach'
-    docs_url: 'https://github.com/dabstractor/stagecoach#readme'
+    docs_url: 'https://dabstractor.github.io/stagecoach/'
     bug_tracker_url: 'https://github.com/dabstractor/stagecoach/issues'
     project_source_url: 'https://github.com/dabstractor/stagecoach'
-    # icon_url: add when a 128–256px PNG is hosted (e.g. a raw.githubusercontent.com permalink).
-    #   Uncomment to satisfy the iconUrl guideline; until then it's an exempt quality nit.
-    #   icon_url: 'https://raw.githubusercontent.com/dabstractor/stagecoach/main/assets/icon.png'
+    # 256x256 PNG rendered from assets/stagecoach.svg (rsvg-convert); satisfies the iconUrl
+    #   Guideline. Served via raw.githubusercontent.com so the chocolatey.org package page renders it.
+    #   NOTE: must be committed to main BEFORE a release tags, or the raw URL 404s at validation time.
+    icon_url: 'https://raw.githubusercontent.com/dabstractor/stagecoach/main/assets/stagecoach.png'
     url_template: 'https://github.com/dabstractor/stagecoach/releases/download/{{ .Tag }}/{{ .ArtifactName }}'
     license_url: 'https://github.com/dabstractor/stagecoach/blob/main/LICENSE'
     copyright: 'Copyright 2026 dabstractor'
