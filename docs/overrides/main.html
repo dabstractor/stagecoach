@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{# Extra <link> icons that mkdocs.yml's single `theme.favicon` can't express:
+   - favicon.svg is already emitted by Material from `theme.favicon` (primary, scalable).
+   - PNG fallback for legacy browsers that can't render SVG favicons.
+   - apple-touch-icon for iOS Safari "Add to Home Screen" (must be opaque — see the PNG). #}
+{% block extrahead %}
+  {{ super() }}
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ 'assets/favicon-32.png' | url }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ 'assets/favicon-16.png' | url }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ 'assets/apple-touch-icon.png' | url }}">
+{% endblock %}

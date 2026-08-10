@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/stagecoach.svg" width="180" alt="Stagecoach">
+</p>
+
 # Stagecoach
 
 > **Stagecoach writes your commit messages using the AI agent you already pay for.**

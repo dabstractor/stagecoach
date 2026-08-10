@@ -24,6 +24,8 @@ theme:
   name: material
   language: en
   favicon: assets/favicon.svg
+  logo: assets/logo.svg
+  custom_dir: docs/overrides
   features:
     - navigation.top
     - navigation.tracking

@@ -30,3 +30,13 @@
 .md-grid {
   max-width: 80rem;
 }
+
+/* Header logo: Material ships the logo small inside a button with generous vertical
+ * padding, so there is unused space to claim. transform: scale() enlarges it visually
+ * WITHOUT touching its layout box — CSS transforms are paint-only, so the element's
+ * reserved height (and therefore the .md-header bar height) is computed from the
+ * UN-transformed box and cannot grow. The logo simply paints larger into the existing
+ * padding band. Scoped to the header logo button only (not the sidebar, if present). */
+.md-header__button.md-logo img {
+  transform: scale(1.8);
+}
