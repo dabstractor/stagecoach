@@ -373,7 +373,7 @@ const GenerationSection = `
 # multi_turn_fallback     = true     # lossless multi-turn fallback on one-shot exhaustion; set false to DISABLE
 # multi_turn_chunk_tokens = 32000    # per-turn chunk budget in tokens for multi-turn; does NOT interact with token_limit
 # no_parent_watchdog      = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run
-# format                  = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
+# format                  = "auto"   # <base>[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)
 # locale                  = ""       # free-form language name or BCP-47 tag; never validated
 # template                = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"
 # push                    = false    # run ` + "`" + `git push` + "`" + ` after a fully-successful run; on failure commits stand

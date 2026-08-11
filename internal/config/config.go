@@ -102,10 +102,12 @@ type Config struct {
 	MultiTurnChunkTokens int   `toml:"multi_turn_chunk_tokens"` // §9.24 FR-T3 per-request chunk size (tokens est) for multi-turn; default 32000; consumed by P1.M1.T3.S2 protocol
 	WorkDescReadRounds   int   `toml:"work_desc_read_rounds"`   // §9.26 FR-W6 max read rounds in work-description mode (default 5); != 0 guard (mirrors MultiTurnChunkTokens)
 	SubjectTargetChars   int   `toml:"subject_target_chars"`    // target subject length for truncation
-	// Format selects the commit-message style (PRD §9.19 FR-F1): "auto" (style learning, default),
-	// "conventional", "gitmoji", or "plain". Resolved through the standard 5-layer precedence
-	// (file → git → env → flag). Validated against validFormats at the tail of Load() — an unknown
-	// mode is a hard error (exit 1). Consumed by S3 (prompt scaffolds).
+	// Format selects the commit-message style (PRD §9.19 FR-F1/FR-F9): a <base>[+body] grammar where
+	// base ∈ {"auto" (style learning, default), "conventional", "gitmoji", "plain"} and an optional
+	// "+body" suffix forces a subject-plus-body message regardless of repo history (FR-F9). Resolved
+	// through the standard 5-layer precedence (file → git → env → flag). Validated against validFormats
+	// at the tail of Load() — an unknown base or malformed suffix is a hard error (exit 1). Consumed
+	// by S3 (prompt scaffolds).
 	Format string `toml:"format"`
 	// Locale is a free-form language name or BCP-47 tag appended to the system prompt (PRD §9.19
 	// FR-F6). Resolved through the standard 5-layer precedence; NEVER validated, passed verbatim

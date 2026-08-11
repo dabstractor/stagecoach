@@ -199,8 +199,9 @@ func init() {
 		"Per-role model override for the leftover arbiter (env STAGECOACH_ARBITER_MODEL; git stagecoach.role.arbiter)")
 	// §9.19 FR-F1/FR-F6 — message format + locale flags (zero default; loadFlags reads via fs.Changed).
 	pf.StringVar(&flagFormat, "format", "",
-		"Message format: auto|conventional|gitmoji|plain (env STAGECOACH_FORMAT; git stagecoach.format; "+
-			"[generation].format; default auto). Unknown mode is a hard error.")
+		"Message format: <base>[+body] — auto|conventional|gitmoji|plain, append +body to force a "+
+			"subject+body (env STAGECOACH_FORMAT; git stagecoach.format; [generation].format; default "+
+			"auto). Unknown base or malformed suffix is a hard error.")
 	pf.StringVar(&flagLocale, "locale", "",
 		"Write the message in this language (free-form name or BCP-47 tag; env STAGECOACH_LOCALE; "+
 			"git stagecoach.locale; [generation].locale; default empty)")

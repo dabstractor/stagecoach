@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Core: grammar parsing, validation, prompt assembly",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Implement the <base>[+body] grammar end-to-end through the format subsystem: splitFormat parser, bodyForceDirective constant, forceBody threading through buildFormatSystemPrompt/BuildSystemPrompt/BuildFallbackPrompt/BuildPlannerSystemPrompt, validateFormat extension, and the inline user-facing config-template/--help text.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "+body grammar parsing + prompt assembly + inline doc/flag-help updates",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Implement the <base>[+body] grammar end-to-end through the format subsystem, plus the user-facing config-template and --help text. The body-forcing directive replaces the multi-line rule; the subject scaffold is unchanged. The splitFormat parser is created in format.go and consumed by system.go, load.go, and planner.go.",
               "subtasks": [
                 {
@@ -76,7 +76,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S4",
                   "title": "User-facing config/flag text: config.go Format doc, bootstrap.go template comment, root.go --format help",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/format_subsystem.md §User-facing config/flag surfaces. Verified line numbers: config.go L105-109 (Format field doc), bootstrap.go L376 (config template comment), root.go L201-203 (--format flag help). All currently list only the 4 bases with no mention of +body.\n2. INPUT: No code dependency — this is pure documentation text. Can be done in parallel with S1-S3.\n3. LOGIC:\n   (a) config.go Format field doc (L105-109): Update from the 4-mode list to the <base>[+body] grammar. Note that +body forces a subject+body message (FR-F9). Keep the existing comments about 5-layer precedence and validateFormat.\n   (b) bootstrap.go template comment (L376): Change `# auto|conventional|gitmoji|plain; unknown = hard error (exit 1)` to include +body, e.g. `# <base>[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)`.\n   (c) root.go --format flag help (L201-203): Change `Message format: auto|conventional|gitmoji|plain` to `Message format: <base>[+body] — auto|conventional|gitmoji|plain, append +body to force a subject+body`. Keep the env/git-config/config-file references and the hard-error note.\n4. OUTPUT: All three user-facing surfaces (config field doc, config template comment, --help text) state the <base>[+body] grammar.\n5. DOCS: [Mode A] these ARE the user-facing config/flag surfaces — they ride with this subtask. This is the in-code documentation that downstream agents and users read.",
