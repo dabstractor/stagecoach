@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Implement the +body format modifier (message-role prompt surface)",
-      "status": "Planned",
+      "status": "Ready",
       "description": "A single cohesive phase: implement the v3.4 spec change — an optional +body suffix on every --format base that forces a subject-plus-body message regardless of repo history shape. Grammar parsing + validation + prompt assembly, with tests and user-facing docs riding along. No commit/CAS/rescue/lock/provider touch. Message-role prompt surface only.",
       "milestones": [
         {
@@ -96,14 +96,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Tests + user-facing docs sync",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Close the test gaps opened by P1.M1 and sync the user-facing docs (docs/cli.md, docs/configuration.md, README.md) off the old 4-mode list to the <base>[+body] grammar. Includes the final changeset-level documentation coherence sweep (Mode B).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Test coverage + docs sync (Mode A)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add test coverage for the +body grammar (validation, prompt assembly, auto+body special case) and sync docs/cli.md and docs/configuration.md to the <base>[+body] grammar.",
               "subtasks": [
                 {
@@ -132,7 +132,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "docs/cli.md + docs/configuration.md: --format / config format references → <base>[+body]",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S4"
@@ -152,14 +152,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Sync changeset-level documentation (Mode B)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Final coherence sweep depending on all implementing subtasks. Verifies the whole delta ships consistent: README.md feature blurbs, example invocations, and any other overview docs that span the whole changeset mention the +body option wherever the 4 bases are listed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "README + overview coherence sweep across the +body delta",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

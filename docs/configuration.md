@@ -113,7 +113,7 @@ token_limit           = 50000   # holistic token budget; the populated config sh
 # multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens; does NOT interact with token_limit
 # work_desc_read_rounds  = 5       # max READ rounds in work-description mode; flag/env activate the mode, not this knob
 # exclude               = []   # UNIONS across layers — see "Exclusion globs" below
-# format                = "auto"   # auto|conventional|gitmoji|plain; unknown = hard error (exit 1)
+# format                = "auto"   # <base>[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)
 # locale                = ""       # free-form language name or BCP-47 tag; never validated
 # template              = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"
 # hook_timeout          = "10m"    # per-hook execution timeout; file + default only
@@ -213,7 +213,7 @@ All `STAGECOACH_*` variables override the config file and are overridden by CLI 
 | `STAGECOACH_STAGER_TIMEOUT` | `--stager-timeout` | Per-role: stager generation timeout (; inherits 120s) | `STAGECOACH_STAGER_TIMEOUT=300s stagecoach` |
 | `STAGECOACH_MESSAGE_TIMEOUT` | `--message-timeout` | Per-role: message generation timeout (; the single-commit path's only role; inherits 120s) | `STAGECOACH_MESSAGE_TIMEOUT=120s stagecoach` |
 | `STAGECOACH_ARBITER_TIMEOUT` | `--arbiter-timeout` | Per-role: arbiter generation timeout (; inherits 120s) | `STAGECOACH_ARBITER_TIMEOUT=120s stagecoach` |
-| `STAGECOACH_FORMAT` | `--format` | Message format (auto\|conventional\|gitmoji\|plain; unknown = hard error) | `STAGECOACH_FORMAT=conventional stagecoach` |
+| `STAGECOACH_FORMAT` | `--format` | Message format: `<base>[+body]` — auto\|conventional\|gitmoji\|plain; append `+body` to force a subject+body; unknown = hard error (exit 1) | `STAGECOACH_FORMAT=conventional+body stagecoach` |
 | `STAGECOACH_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGECOACH_LOCALE=ja stagecoach` |
 | `STAGECOACH_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGECOACH_TEMPLATE='$msg (#205)' stagecoach` |
 | `STAGECOACH_PUSH` | `--push` | Run `git push` after a fully-successful run (true = push; false = disable); on failure commits stand, exit 1 | `STAGECOACH_PUSH=1 stagecoach` |
@@ -244,7 +244,7 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | `stagecoach.stripCodeFence` | bool | `git config --get --bool stagecoach.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
 | `stagecoach.tokenLimit` | int | `git config --get stagecoach.tokenLimit` | Holistic token budget for the whole payload; `0` = unset ⇒ legacy `max_diff_bytes`/`max_md_lines` caps. Supersedes both legacy caps when >0 (mutually exclusive). |
 | `stagecoach.diffContext` | int | `git config --get stagecoach.diffContext` | Unchanged context lines per hunk: `0` = changed-lines-only, `1` = one anchor line (default), `3` = git default. An explicit `0` is honored (changed-lines-only is a first-class value). |
-| `stagecoach.format` | string | `git config --get stagecoach.format` | Message format: `auto` \| `conventional` \| `gitmoji` \| `plain`. Unknown = hard error (exit 1). |
+| `stagecoach.format` | string | `git config --get stagecoach.format` | Message format: `<base>[+body]` — `auto` \| `conventional` \| `gitmoji` \| `plain`. Append `+body` to force a subject+body. Unknown = hard error (exit 1). |
 | `stagecoach.locale` | string | `git config --get stagecoach.locale` | Message language (free-form name or BCP-47 tag; never validated). |
 | `stagecoach.template` | string | `git config --get stagecoach.template` | Message template; the literal `$msg` is replaced with the generated message. Must contain `$msg` (hard error, exit 1). |
 | `stagecoach.push` | bool | `git config --get --bool stagecoach.push` | Run `git push` after a fully-successful run. On failure the commits stand — git's stderr is shown verbatim, "commits created; push failed" prints, exit 1. |
