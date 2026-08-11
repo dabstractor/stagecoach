@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dabstractor/stagecoach/internal/config"
 	"github.com/dabstractor/stagecoach/internal/git"
@@ -540,6 +541,58 @@ func TestBuildReadAnswer_EndOfDiff(t *testing.T) {
 			t.Errorf("control (offset=0): got %q, must contain the diff body for a.go", got)
 		}
 	})
+}
+
+// TestBuildReadAnswer_PartLabelRuneConsistent is the BUG-006 regression: the "part i of N" label
+// divided a BYTE cursor (st.offsets[p]) by a RUNE budget (chunkRuneBudget=64000), so multibyte UTF-8
+// over-counted i (e.g. a 2-chunk diff was labeled "part 3 of 2"). Post-fix i is the rune count of
+// diff[:cursor] ÷ budget, so the 2nd chunk of a 2-chunk multibyte diff is labeled "part 2".
+// Mirrors TestBuildReadAnswer_EndOfDiff's real-git + primed-readState shape.
+func TestBuildReadAnswer_PartLabelRuneConsistent(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	// High multibyte density (4 CJK chars/line, each 3 bytes) so byte/rune ratio > 2 — required for
+	// the byte vs rune part to diverge across a 64000 boundary after chunk 1. K=14000 lines ⇒ ~70K
+	// runes (>64000 ⇒ ≥2 chunks) at ~182KB (under the default MaxDiffBytes=300000).
+	const path = "mb.txt"
+	writeFile(t, repo, path, strings.Repeat("文本文本\n", 14000))
+	stageFile(t, repo, path)
+
+	g := git.New(repo)
+	ctx := context.Background()
+	opts := git.StagedDiffOptions{DiffContext: 1}
+	diff, err := g.StagedFileDiff(ctx, path, opts)
+	if err != nil {
+		t.Fatalf("StagedFileDiff: %v", err)
+	}
+	// Fixture guard: the diff MUST exceed the rune budget (≥2 chunks) AND must not have been truncated
+	// by MaxDiffBytes. If this fails, grow K.
+	if rc := utf8.RuneCountInString(diff); rc <= chunkRuneBudget() {
+		t.Fatalf("fixture too small or truncated: diff is %d runes, need > %d", rc, chunkRuneBudget())
+	}
+
+	cfg := config.Defaults()
+	// Prime the cursor to chunk-1's end (simulate "chunk 1 already delivered"): nextChunk(diff, 0)
+	// returns the byte advance of the first chunk, which is exactly the byte cursor value buildReadAnswer
+	// would have stored. The NEXT call must therefore report part == 2.
+	_, total, advance := nextChunk(diff, 0)
+	if total < 2 {
+		t.Fatalf("fixture did not span ≥2 chunks: total=%d (grow K)", total)
+	}
+	st := &readState{N: 5, offsets: map[string]int{path: advance}}
+
+	got := buildReadAnswer(ctx, g, cfg, nil, []string{path}, st)
+	// The 2nd chunk is labeled "part 2 of N". Pre-fix (byte numerator) the high multibyte density
+	// makes byte_offset ≥ 128000 after chunk 1 ⇒ part = floor(128000/64000)+1 = 3, emitting "part 3 of"
+	// (absent here). Post-fix part = floor(runeCount(~64000)/64000)+1 = 2.
+	if !strings.Contains(got, "— part 2 of") {
+		t.Errorf("post-fix label must say \"part 2 of …\"; got %q", got)
+	}
+	// Negative guard: the nonsensical over-count (part > total, e.g. "part 3 of 2") must NOT appear.
+	if strings.Contains(got, "— part 3 of") {
+		t.Errorf("BUG-006 regression: byte/rune mismatch produced \"part 3 of …\"; got %q", got)
+	}
 }
 
 // ---- BUG-001 helpers: containsReadVerb / readTargets / buildNonStagedReadAnswer ----

@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dabstractor/stagecoach/internal/config"
 	"github.com/dabstractor/stagecoach/internal/git"
@@ -389,7 +390,15 @@ func buildReadAnswer(ctx context.Context, g git.Git, cfg config.Config, excludes
 		if total <= 1 {
 			fmt.Fprintf(&b, "%s:\n%s\n\n", p, chunk)
 		} else {
-			part := (st.offsets[p] / chunkRuneBudget()) + 1
+			// part is the 1-based chunk index. st.offsets[p] is a BYTE cursor (nextChunk's advance is
+			// bytes, kept in bytes so diff[offset:end] slicing stays valid), but chunkRuneBudget() is in
+			// RUNES (readChunkTokenCap*4 = 64000, matching chunkCount's advanceRunes windowing). Convert the
+			// byte offset to a rune count before dividing so i and N in "part i of N" share a unit (FR-W5);
+			// otherwise multibyte UTF-8 over-counts i and can even exceed N (BUG-006).
+			// Safe: the cursor-exhaustion guard above guarantees st.offsets[p] < len(diff), and st.offsets[p]
+			// is always a rune boundary (nextChunk anchors end to a \n / @@ / len(diff), all byte-aligned),
+			// so the slice never splits a multibyte rune.
+			part := (utf8.RuneCountInString(diff[:st.offsets[p]]) / chunkRuneBudget()) + 1
 			fmt.Fprintf(&b, "%s — part %d of %d; READ %s again for the next part:\n%s\n\n",
 				p, part, total, p, chunk)
 		}

@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Work-Description Mode Bug Fixes (BUG-001, BUG-002, BUG-005, BUG-006)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Fix four bugs in internal/generate/workdesc.go. BUG-001 (major): a non-staged READ line silently becomes the commit subject. BUG-002 (minor): a fully-read file emits an empty body instead of an 'end of diff' note. BUG-005 (minor): chunk boundaries anchor to newlines not @@ hunk edges. BUG-006 (minor): the 'part i of N' label mixes byte and rune units. BUG-001 is the most urgent bug in this changeset — it silently writes garbage commit subjects.",
           "tasks": [
             {
@@ -89,14 +89,14 @@
               "type": "Task",
               "id": "P1.M1.T4",
               "title": "Fix 'part i of N' label dividing byte offset by rune budget (BUG-006)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The part label computes part := (st.offsets[p] / chunkRuneBudget()) + 1, but st.offsets[p] is a BYTE offset while chunkRuneBudget() returns runes. For multibyte UTF-8 diffs, the part index drifts. Fix by converting the byte offset to a rune count before dividing.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T4.S1",
                   "title": "Fix part label to use rune count consistently with chunkRuneBudget",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -114,14 +114,14 @@
               "type": "Task",
               "id": "P1.M1.T5",
               "title": "Sync changeset-level documentation for work-description fixes",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Sweep README.md and docs/how-it-works.md for any references to work-description mode behavior that the BUG-001/002/005/006 fixes change. The fixes bring code into line with existing FRs, so the spec is already correct; the user docs may reference the READ protocol behavior. Verify docs/how-it-works.md (lines ~367-382) accurately describes the non-staged READ note behavior and end-of-diff marker.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T5.S1",
                   "title": "Review and update README.md and docs/how-it-works.md for work-description READ protocol accuracy",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
