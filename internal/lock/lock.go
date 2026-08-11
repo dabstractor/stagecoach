@@ -16,6 +16,7 @@ package lock
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -115,16 +116,56 @@ func Acquire(repoPath string) (*Locker, error) {
 	return l, nil
 }
 
-// reapStaleLocks removes every *.lock file in dir whose recorded pid is not a
-// live process on its recorded hostname (PRD §18.5 stale-FILE reaping). Called
-// from Acquire AFTER the holder's own flock succeeds — the holder's pid is
-// os.Getpid() (live), so its own file is never reaped. SAFETY INVARIANT: a LIVE
-// pid is NEVER reaped (processAlive is conservative on every ambiguity) —
-// unlinking a live holder's inode-bound-flock file would let a contender
-// O_CREATE a fresh inode and flock it, defeating FR52. Only a DEAD pid (no open
-// fd → no flock) is safe to unlink. Malformed/empty pid → skip (best-effort).
-// All errors are ignored throughout (reaping is best-effort disk hygiene; a
-// failed Glob/ReadFile/Remove is a no-op, never fatal).
+// staleLockUnchanged reports whether the lock file's current contents still match
+// the bytes we liveness-checked (BUG-009 defense-in-depth). A concurrent acquirer
+// that took the lock on this path between our processAlive check and the os.Remove
+// would have rewritten the file in place (writeContents is a Seek→Write→Truncate→Sync
+// on the inode) → bytes differ → the caller SKIPS the remove. Removing would otherwise
+// unlink a live holder's inode: the directory entry goes, but the holder's open fd and
+// flock survive on the unlinked inode, so the NEXT contender OpenFile(O_CREATE)s a
+// FRESH inode and flocks it free → two holders → FR52 defeat. A re-read error → skip
+// (conservative; reapStaleLocks is best-effort throughout). The comparison is byte-equal
+// (bytes.Equal, NOT just pid) so even pid-reuse-with-a-new-timestamp is caught — a new
+// holder writes a fresh timestamp, so its bytes never equal the dead holder's.
+func staleLockUnchanged(original, reread []byte, rerr error) bool {
+	return rerr == nil && bytes.Equal(original, reread)
+}
+
+// reapStaleLocks removes every *.lock file in dir whose recorded pid is not a live
+// process on its recorded hostname (PRD §18.5 stale-FILE reaping). Called from Acquire
+// AFTER the holder's own flock succeeds — the holder's pid is os.Getpid() (live), so its
+// own file is never reaped.
+//
+// SAFETY INVARIANT: a LIVE pid is NEVER reaped (processAlive is conservative on every
+// ambiguity) — unlinking a live holder's inode-bound-flock file would let a contender
+// O_CREATE a fresh inode and flock it, defeating FR52. Only a DEAD pid (no open fd → no
+// flock) is safe to unlink. Malformed/empty pid → skip (best-effort).
+//
+// BUG-009 — TOCTOU window + the re-read defense: the check-then-remove sequence is
+//
+//	ReadFile(f) → processAlive(pid) → dead → os.Remove(f).
+//
+// A concurrent acquirer C can take the lock in between the liveness check and the remove:
+// the dead holder's flock auto-released on death, so C's flock on the SAME path succeeds
+// and C rewrites f (in place, via writeContents) with its own live pid + timestamp.
+// The reaper would then unlink a file whose inode C now holds flocked → on Unix the unlink
+// removes the directory entry but C's open fd/flock survives on the unlinked inode → the
+// next contender O_CREATEs a fresh inode and flocks it free → two holders → FR52 defeat.
+//
+// Defense-in-depth (Option A, RECOMMENDED by architecture/bugfix_subsystems.md §BUG-009):
+// after processAlive → dead, RE-READ f just before os.Remove and remove ONLY IF
+// staleLockUnchanged (byte-identical + no read error). If C rewrote the file (bytes
+// differ) or the re-read failed, SKIP — the next reap cycle re-evaluates. This closes the
+// COMMON race (C rewrote before the re-read) at the cost of one extra ReadFile.
+//
+// Residual: the window is NARROWED, not fully closed — C could still rewrite f between
+// the re-read and the os.Remove. That micro-window is bounded by the CAS/flock
+// mitigation already in place: a live holder's flock survives an unlink, so only the
+// PATH is stale (the unlinked inode is gone once C closes its fd); the next Acquire
+// recreates the file via O_CREATE, and the holder's own live-pid file is never reaped
+// (processAlive → true). All errors are ignored throughout (reaping is best-effort disk
+// hygiene; a failed Glob/ReadFile/Remove is a no-op, never fatal). The re-read's error
+// path preserves this discipline: a failed re-read ⇒ staleLockUnchanged false ⇒ skip.
 func reapStaleLocks(dir string) {
 	matches, _ := filepath.Glob(filepath.Join(dir, "*.lock"))
 	for _, f := range matches {
@@ -138,7 +179,16 @@ func reapStaleLocks(dir string) {
 			continue // malformed/empty pid → skip
 		}
 		if !processAlive(pid, c.Hostname) {
-			os.Remove(f) // dead pid → safe to unlink (ignore error)
+			// BUG-009 defense-in-depth: re-read just before remove. A concurrent acquirer may
+			// have taken the lock on this path after our liveness check (the dead holder's
+			// flock auto-released on death) and rewritten this file with its own live pid.
+			// Removing now would unlink a live holder's inode → a contender could O_CREATE a
+			// fresh inode and flock it free (FR52 defeat). Skip if the contents changed or the
+			// re-read failed; the next reap cycle re-evaluates.
+			reread, rerr := os.ReadFile(f)
+			if staleLockUnchanged(data, reread, rerr) {
+				os.Remove(f) // dead + unchanged → safe to unlink (ignore error)
+			}
 		}
 	}
 }

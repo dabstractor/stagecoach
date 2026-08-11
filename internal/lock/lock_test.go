@@ -1,6 +1,7 @@
 package lock
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -446,6 +447,29 @@ func TestSetSnapshot_MethodAfterRelease(t *testing.T) {
 	l.Release()
 	// Must not panic.
 	l.SetSnapshot("after-release-noop")
+}
+
+// TestStaleLockUnchanged pins the BUG-009 defense predicate's three branches
+// deterministically (the changed-content branch is unreachable end-to-end in a
+// single goroutine: both os.ReadFile calls return identical bytes when nothing
+// concurrently rewrites the file — so the pure helper is the idiomatic test target,
+// mirroring validateFormat/parseTimeout/exitcode.For). Cross-platform (no processAlive).
+func TestStaleLockUnchanged(t *testing.T) {
+	dead := []byte("pid=999999\nhostname=h\nrepo=fake\ntimestamp=t1\nsnapshot=\n")
+	live := []byte("pid=1000\nhostname=h\nrepo=fake\ntimestamp=t2\nsnapshot=\n") // a concurrent acquirer rewrote (fresh pid + timestamp)
+
+	// same bytes, no error → remove (the happy path: nothing rewrote the file).
+	if !staleLockUnchanged(dead, dead, nil) {
+		t.Errorf("staleLockUnchanged(same) = false, want true (unchanged → remove)")
+	}
+	// changed bytes → skip (BUG-009 defense: a concurrent acquirer rewrote the file).
+	if staleLockUnchanged(dead, live, nil) {
+		t.Errorf("staleLockUnchanged(changed) = true, want false (rewrite detected → skip)")
+	}
+	// re-read error → skip (conservative; best-effort reap).
+	if staleLockUnchanged(dead, nil, errors.New("read error")) {
+		t.Errorf("staleLockUnchanged(readErr) = true, want false (re-read failed → skip)")
+	}
 }
 
 // TestIsHeldError verifies the IsHeldError helper.

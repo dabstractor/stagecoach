@@ -361,14 +361,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Narrow TOCTOU window in reapStaleLocks (BUG-009)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "reapStaleLocks checks whether a recorded pid is dead, then removes the stale lock file. A contender could read the pid, find it dead, and reap a file whose inode is now held by a different live process. Mitigated by CAS-backed acquire and hostname check; flagged as defense-in-depth.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Add defense-in-depth re-check or comprehensive documentation of the TOCTOU window",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-009. The TOCTOU is in internal/lock/lock.go reapStaleLocks (~line 128). It checks processAlive(pid, hostname), then os.Remove(f). The window is between the liveness check and the acquire. Mitigated by: (a) flock + write+rename CAS on acquire; (b) hostname check; (c) the holder's own pid is live so its own file is never reaped.\n2. INPUT: reapStaleLocks(dir string) reads *.lock files, parses contents for pid+hostname, checks processAlive, removes dead-pid files. processAlive is conservative (returns true on any ambiguity).\n3. LOGIC: Two options: (A) Defense-in-depth: after reading the file contents and confirming the pid is dead, re-read the file contents just before os.Remove to verify they haven't changed (a different process may have rewritten the lock with its own pid). If contents changed, skip the remove. This closes the pid-reuse window at the cost of one extra ReadFile. (B) Documentation: add a comprehensive comment documenting the TOCTOU window and why the CAS mitigation makes it non-exploitable, accepting the current behavior. Recommended: Option A (re-read before remove) as a cheap, effective defense.\n4. OUTPUT: The TOCTOU window is narrowed (Option A) or comprehensively documented (Option B).\n5. DOCS: [Mode A] Update the code comment on reapStaleLocks to document the TOCTOU mitigation. No user-facing doc surface change.",
@@ -383,14 +383,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Improve or document Windows stale-file reaping no-op (BUG-010)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "On Windows, processAlive(pid, hostname) unconditionally returns true, so stale lock files are never reaped. This is effectively non-functional because flock is a no-op on Windows and lock files are not created on the Windows commit path (FR-K7). Noted for completeness.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Document accepted Windows reaping behavior or implement real processAlive via Windows API",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-010. internal/lock/lock_windows.go processAlive (~line 19) returns true unconditionally. Per FR-K7: 'flock is a no-op on Windows (the CAS is the guarantee)'. Lock files are not created on the Windows commit path, so reaping is moot.\n2. INPUT: processAlive(pid int, hostname string) bool is the cross-platform twin of lock_unix.go's processAlive. Used by reapStaleLocks. On Windows, the syscall package or golang.org/x/sys/windows could provide process liveness (OpenProcess + WaitForSingleObject).\n3. LOGIC: Option A (recommended given priority): Strengthen the existing documentation comment to explicitly state WHY processAlive returns true on Windows (flock is a no-op, CAS is the guarantee, lock files aren't created) and that reaping is intentionally non-functional per FR-K7. Add a cross-reference to FR-K7 in spec/SPEC.md. Option B (future enhancement): implement real process liveness using Windows API — but this is low-value since lock files aren't created on Windows anyway. Recommended: Option A.\n4. OUTPUT: The Windows processAlive behavior is comprehensively documented with FR-K7 cross-reference.\n5. DOCS: [Mode A] This IS a documentation fix (code comment). No user-facing doc surface change.",

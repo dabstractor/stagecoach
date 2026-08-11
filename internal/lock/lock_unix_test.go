@@ -127,6 +127,45 @@ func TestAcquire_ReapsDeadPidFile_SparesLive(t *testing.T) {
 	l.Release()
 }
 
+// TestReapStaleLocks_DirectDeadPidRemoved calls the UNEXPORTED reapStaleLocks
+// directly (white-box) with a planted dead-pid fixture and asserts the file is
+// REMOVED. This proves the BUG-009 re-read defense does NOT false-skip the happy
+// path: with no concurrent writer the two reads return identical bytes →
+// staleLockUnchanged true → remove. A live-pid fixture proves the safety
+// invariant still holds (processAlive true → never reaches the re-read).
+// Unix-only (//go:build !windows): the dead-pid assertion needs ESRCH (Windows
+// processAlive is always-true → a dead-pid file would NOT be reaped). The
+// changed-content branch of the defense is pinned by TestStaleLockUnchanged.
+func TestReapStaleLocks_DirectDeadPidRemoved(t *testing.T) {
+	resetCurrent(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // isolate — don't touch the real lock dir
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	dir, err := lockDir()
+	if err != nil {
+		t.Fatalf("lockDir: %v", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	thisHost, _ := os.Hostname()
+	deadPath := filepath.Join(dir, "dead.lock")
+	writeLockFile(t, deadPath, strconv.Itoa(math.MaxInt32), thisHost) // MaxInt32 ≫ pid_max → ESRCH → dead
+	// a live-pid fixture proves the safety invariant still holds (processAlive true → never reaches the re-read).
+	livePath := filepath.Join(dir, "live.lock")
+	writeLockFile(t, livePath, strconv.Itoa(os.Getpid()), thisHost) // self → alive
+
+	reapStaleLocks(dir) // DIRECT call (white-box) — no Acquire machinery
+
+	if _, err := os.Stat(deadPath); !os.IsNotExist(err) {
+		t.Errorf("dead-pid file should be REAPED (ESRCH + unchanged re-read), still present: %v", err)
+	}
+	if _, err := os.Stat(livePath); err != nil {
+		t.Errorf("live-pid file should be SPARED (alive → never reaped), missing: %v", err)
+	}
+}
+
 // TestAppearsOrphaned_DeadPidIsConservativeFalse pins the conservative-false
 // contract: a dead/gone pid (proc missing on Linux, ps non-zero exit on Darwin)
 // must NOT be claimed as an orphan — a false-positive orphan claim could prompt
