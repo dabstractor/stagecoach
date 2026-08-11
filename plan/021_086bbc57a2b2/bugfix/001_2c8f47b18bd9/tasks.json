@@ -383,14 +383,14 @@
               "type": "Task",
               "id": "P1.M4.T2",
               "title": "Improve or document Windows stale-file reaping no-op (BUG-010)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "On Windows, processAlive(pid, hostname) unconditionally returns true, so stale lock files are never reaped. This is effectively non-functional because flock is a no-op on Windows and lock files are not created on the Windows commit path (FR-K7). Noted for completeness.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T2.S1",
                   "title": "Document accepted Windows reaping behavior or implement real processAlive via Windows API",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-010. internal/lock/lock_windows.go processAlive (~line 19) returns true unconditionally. Per FR-K7: 'flock is a no-op on Windows (the CAS is the guarantee)'. Lock files are not created on the Windows commit path, so reaping is moot.\n2. INPUT: processAlive(pid int, hostname string) bool is the cross-platform twin of lock_unix.go's processAlive. Used by reapStaleLocks. On Windows, the syscall package or golang.org/x/sys/windows could provide process liveness (OpenProcess + WaitForSingleObject).\n3. LOGIC: Option A (recommended given priority): Strengthen the existing documentation comment to explicitly state WHY processAlive returns true on Windows (flock is a no-op, CAS is the guarantee, lock files aren't created) and that reaping is intentionally non-functional per FR-K7. Add a cross-reference to FR-K7 in spec/SPEC.md. Option B (future enhancement): implement real process liveness using Windows API — but this is low-value since lock files aren't created on Windows anyway. Recommended: Option A.\n4. OUTPUT: The Windows processAlive behavior is comprehensively documented with FR-K7 cross-reference.\n5. DOCS: [Mode A] This IS a documentation fix (code comment). No user-facing doc surface change.",
@@ -405,14 +405,14 @@
               "type": "Task",
               "id": "P1.M4.T3",
               "title": "Improve orphan detection under subreapers or document limitation (BUG-011)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The read-only 'stagecoach lock status' orphan hint (appearsOrphaned) keys off ppid==1. Under subreapers (systemd-run, Docker, supervisord), an orphan's ppid is the subreaper, not 1, so the hint under-reports. This affects ONLY the informational status hint; the actual watchdog is correct (uses parent-pid change detection).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T3.S1",
                   "title": "Improve appearsOrphaned heuristic or document the subreaper limitation",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-011. The bug is in internal/lock/orphan_unix.go appearsOrphaned (~line 42). It returns ppid == 1. Under subreapers (PR_SET_CHILD_SUBREAPER — systemd, systemd-run, Docker, supervisord), a reparented orphan's ppid is the subreaper pid, not 1. The ACTUAL watchdog (internal/watchdog/arm_unix.go:40) correctly uses osGetppid() != originalPpid (parent-pid CHANGE), so no live lock is ever force-broken. This is cosmetic/informational ONLY.\n2. INPUT: appearsOrphaned(pid int) bool calls ppidOf(pid) which dispatches on runtime.GOOS (Linux: /proc/pid/status, others: ps). It returns ppid == 1.\n3. LOGIC: Two options: (A) Improve the heuristic: also check if the ppid process is a known subreaper by reading /proc/<ppid>/comm (e.g., 'systemd', 'containerd', 'dockerd', 'supervisord', 'init', 'launchd'). If ppid's comm matches a subreaper or init, treat as orphaned. This adds false-positive risk, so keep the conservative invariant (return false on any error/ambiguity). (B) Document the limitation prominently: add a comment noting that under subreapers, ppid may be != 1, and this is a known limitation of the display-only hint; the actual watchdog is not affected. Recommended: Option B (document) since the existing code already has a LIMITATION comment; strengthen it with specific subreaper examples and cross-reference arm_unix.go's correct CHANGE detection.\n4. OUTPUT: The appearsOrphaned limitation is comprehensively documented (or the heuristic is improved for known subreapers).\n5. DOCS: [Mode A] Update the code comment on appearsOrphaned to document the subreaper limitation with cross-reference to arm_unix.go and FR-K2. No user-facing doc surface change.",
