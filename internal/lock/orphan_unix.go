@@ -15,8 +15,11 @@ import (
 // appearsOrphaned is a HEURISTIC that reports whether the holder process (pid)
 // APPEARS orphaned — i.e. reparented to init/launchd because its launcher exited
 // without killing it (PRD §9.27's "orphaned-but-alive" case, the lock-stays-
-// forever hazard FR-K4 diagnoses). It is called by Status ONLY when the holder
-// is alive (a dead pid will be reaped anyway, so its orphan status is moot).
+// forever hazard FR-K4 diagnoses). It is called by Status and IsOrphaned ONLY
+// when the holder is alive (a dead pid will be reaped anyway, so its orphan
+// status is moot). It is strictly READ-ONLY — it feeds the user's kill/rm
+// decision (FR-K4 lock status + FR-K5 busy hint); it changes nothing and NEVER
+// force-breaks a live lock (FR52's invariant holds regardless of this hint).
 //
 // The heuristic: ppid == 1 ⇒ reparented to init. CONSERVATIVE INVARIANT — it
 // returns false on ANY error or ambiguity (proc gone, ps failure, parse failure):
@@ -24,11 +27,34 @@ import (
 // a false-positive orphan claim (prompting the user to kill a legitimately-
 // parented run) is worse than a false negative. The only `true` is ppid == 1.
 //
-// LIMITATION: under a subreaper (PR_SET_CHILD_SUBREAPER — systemd, systemd-run,
-// some shells, containers) an orphan's ppid may be != 1 (it is reparented to the
-// subreaper, not init), so this can MISS orphans (false negative); it never
-// false-positives a legitimately-parented process in the common case. The
-// orphan==true path is proven end-to-end by the E2E harness (P1.M4.T1.S1).
+// LIMITATION (subreapers — BUG-011, accepted): under a subreaper
+// (PR_SET_CHILD_SUBREAPER — systemd, systemd-run, Docker/containerd/runc,
+// podman, supervisord, some shells) a reparented orphan's ppid is the
+// SUBREAPER's pid, not 1, so this hint can MISS orphans (false negative); it
+// never false-positives a legitimately-parented process. This is the SAME test
+// FR-K2 explicitly REJECTS for the watchdog — "never by the brittle
+// 'getppid() == 1' test (wrong under subreapers — systemd-run, some shells —
+// and for processes legitimately spawned by init)" — and appearsOrphaned is the
+// one place that still uses it. It does so DELIBERATELY: it is a SNAPSHOT
+// diagnostic that sees only the holder's CURRENT ppid (via ppidOf), with NO
+// startup baseline to diff, so it CANNOT use the parent-pid-CHANGE detection
+// the watchdog uses. ppid==1 is the only ZERO-false-positive snapshot answer.
+//
+// The AUTHORITATIVE orphan detector is internal/watchdog/arm_unix.go's poll
+// `osGetppid() != originalPpid` (FR-K2, subreaper-safe): it captures the parent
+// pid at startup, fires on the CHANGE (reparenting to init OR a subreaper), and
+// routes the holder through the §18.3 rescue + §18.5 lock-release exit path — so
+// this hint's false negative NEVER leaves a live lock orphaned-forever.
+// appearsOrphaned is DISPLAY-ONLY (FR-K4 lock status + FR-K5 busy hint);
+// arm_unix.go is the safety property. The orphan==true path is proven end-to-end
+// by the E2E harness (P1.M4.T1.S1).
+//
+// Option A (a comm-based enhancement — read /proc/<ppid>/comm and flag the ppid
+// as a subreaper when comm ∈ {systemd, containerd, dockerd, supervisord, init,
+// launchd}) is DELIBERATELY DEFERRED — it would false-positive a process
+// legitimately parented to systemd (a unit, a user-session child), violating the
+// conservative invariant above. The false negative is the accepted design
+// (architecture §BUG-011); the watchdog backstop makes it safe.
 //
 // Cross-platform: orphan_windows.go provides an always-false twin (FR-K7 —
 // Windows has no init-reparenting analog). Platform dispatch is via runtime.GOOS
@@ -39,7 +65,11 @@ func appearsOrphaned(pid int) bool {
 	if err != nil {
 		return false // conservative: don't claim orphan on ambiguity
 	}
-	return ppid == 1 // reparented to init/launchd (subreapers may have ppid≠1 — limitation)
+	// Reparented to init/launchd. Under a subreaper (systemd/dockerd/containerd/
+	// supervisord — see LIMITATION above) the orphan's ppid is the subreaper's
+	// pid, not 1 ⇒ false negative (display-only). The AUTHORITATIVE detector is
+	// arm_unix.go's `osGetppid() != originalPpid` poll (FR-K2, subreaper-safe).
+	return ppid == 1
 }
 
 // ppidOf returns the parent pid of pid, dispatching on runtime.GOOS. Linux reads
