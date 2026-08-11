@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Bug Fix Suite — Work-Description, Decompose, Upgrade, and Lock/Watchdog",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Fix 12 confirmed bugs (3 major, 9 minor) identified by PRD validation. The bugs cluster in four subsystems: work-description mode (BUG-001/002/005/006), decompose role resolution (BUG-003/012), self-upgrade (BUG-004/007/008), and lock/watchdog defense-in-depth (BUG-009/010/011). All are bug fixes bringing code into line with existing FRs — no PRP required per AGENTS.md rule 3. BUG-001 is most urgent (silent garbage commit subjects).",
       "milestones": [
         {
@@ -354,7 +354,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Lock/Watchdog Defense-in-Depth (BUG-009, BUG-010, BUG-011)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Address three minor defense-in-depth issues in the lock and watchdog subsystems. BUG-009: narrow TOCTOU window in reapStaleLocks. BUG-010: Windows processAlive always returns true (non-functional reaping). BUG-011: orphan status hint uses ppid==1 test that under-reports under subreapers. All are cosmetic or defense-in-depth — no live lock is ever force-broken.",
           "tasks": [
             {
@@ -427,14 +427,14 @@
               "type": "Task",
               "id": "P1.M4.T4",
               "title": "Sync changeset-level documentation for lock/watchdog fixes",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Sweep README.md and docs/ for any references to lock status, orphan detection, or stale-file reaping that the BUG-009/010/011 fixes change. These are all defense-in-depth/documentation fixes, so user docs likely need no changes.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T4.S1",
                   "title": "Review README.md and docs/ for lock/watchdog documentation accuracy",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T1.S1",

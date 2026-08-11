@@ -397,7 +397,7 @@ Lock: /home/you/.cache/stagecoach/locks/<hash>.lock
   orphaned:  true (holder reparented — launcher has exited)
 ```
 
-The `orphaned:` line has three outcomes: `true (holder reparented — launcher has exited)` (Unix; the holder's parent pid changed — its launcher closed without killing it), `false` (alive and not reparented — Windows always lands here), or `unknown (holder is dead)` (the holder process is no longer alive). With no lock held, the output is `no run lock for <repo>` (exit 0). Exit is **0 in all cases** — even when the holder is dead or orphaned — the read is the help; the action (kill/rm) is yours.
+The `orphaned:` line has three outcomes: `true (holder reparented — launcher has exited)` (Unix; the holder's parent is now process 1 — its launcher closed without killing it, so the kernel reparented the holder to init), `false` (alive and its parent is not init — Windows always lands here), or `unknown (holder is dead)` (the holder process is no longer alive). This is a *display-only snapshot hint*: it reports whether the holder currently appears reparented to init (`ppid == 1`), not whether its parent changed at runtime, so under a subreaper (systemd, Docker/containerd, supervisord) a reparented holder can read `false`. The authoritative backstop is the parent-death watchdog, which detects a parent-pid *change* at runtime and self-exits + releases the lock regardless (see [how-it-works.md — Per-repo run lock](how-it-works.md#per-repo-run-lock-fr52)). With no lock held, the output is `no run lock for <repo>` (exit 0). Exit is **0 in all cases** — even when the holder is dead or orphaned — the read is the help; the action (kill/rm) is yours.
 
 ```bash
 stagecoach lock status    # → "no run lock for <cwd>" (exit 0) when nothing holds it
