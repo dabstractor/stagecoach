@@ -1,0 +1,21 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: Work-description mode: a READ request for a non-staged path silently becomes the commit subject
+  h3.1 Issue 2: Decompose FR-M13 violation: eager stager resolution blocks the file-disjoint fast-path for no-tooled providers
+  h3.2 Issue 3: stagecoach upgrade: production detection runner has no per-query timeout or WaitDelay, so a hung package-manager query hangs indefinitely
+ h2.3 Minor Issues (Nice to Fix)
+  h3.3 Issue 1: Work-description mode: a fully-read file emits an empty body instead of an 'end of diff' note
+  h3.4 Issue 2: Work-description read chunks anchor to newline boundaries, not @@ hunk edges, so hunks can be split mid-hunk
+  h3.5 Issue 3: Work-description 'part i of N' label divides a byte offset by a rune budget, miscounting for multibyte UTF-8
+  h3.6 Issue 4: Upgrade path heuristic omits the Linuxbrew Cellar root, mis-detecting Linuxbrew installs as 'direct'
+  h3.7 Issue 5: Upgrade GitHub releases URL interpolates c.Repo unescaped (tag is escaped, repo is not)
+  h3.8 Issue 6: Lock stale-file reaper has a narrow TOCTOU window between pid-liveness check and acquire
+  h3.9 Issue 7: Lock stale-file reaping is a no-op on Windows (processAlive always returns true)
+  h3.10 Issue 8: 'lock status' orphan hint uses a ppid==1 test that under-reports orphans under subreapers (display only)
+  h3.11 Issue 9: Stale doc comment claims the arbiter stages from the live working tree (contradicts FR-M1d)
+ h2.4 Testing Summary
+ h2.5 Recommendations
+---
+para:41 list:2
