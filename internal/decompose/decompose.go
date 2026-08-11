@@ -401,20 +401,41 @@ func runOneFileShortcut(ctx context.Context, deps Deps, preRunHEAD string, isUnb
 // ZERO separate message-agent call on a clean subject (the shortcut's whole point — one agent round-trip).
 // Distinct from the escape-hatch (which bypasses the planner and regenerates via CommitStaged).
 // SIGNAL-FREE in S1.
+//
+// FR-F5/FR-F9 (+body): the planner's _partitioning_ prompt has no <multi-line rule> block — §17.8's
+// +body mechanism ("replace the <multi-line rule> with bodyForceDirective") is MESSAGE-ROLE only, so
+// the planner's shortcut message is generated with NO body directive and cannot be trusted to honor a
+// +body format. When the resolved format forces a body, route through the message agent (which DOES
+// carry the +body directive) instead of using plannerMsg verbatim. This is the spec-faithful way to
+// satisfy FR-F5 ("the planner's single-call shortcut message honors the resolved format") WITHOUT
+// altering the partitioning prompt (FR-F5: "the planner's partitioning prompt is unaffected"). The
+// cost is one extra message-agent call on a +body shortcut — correctness over the optimization.
 func runSingleShortcut(ctx context.Context, deps Deps, plannerMsg, preRunHEAD string, isUnborn bool, baseTree, tStart string) (DecomposeResult, error) {
 	// FR-M1b: commit the frozen T_start directly (NOT a live AddAll → WriteTree). The freeze already
 	// captured the working-tree change set; a live AddAll would pick up concurrent changes.
 	treePrime := tStart
 
-	// Dup-check the TEMPLATED planner's message (§9.19 FR-F8 seam — before dedupe, §9.7 judges the final
-	// subject). Fallback to the message agent ONLY on a duplicate (FR-M11); it templates internally
-	// (generateMessage → call site #3) so msg is NOT re-templated here.
-	msg := generate.FinalizeMessage(plannerMsg, deps.Config)
-	if dupCheckMessage(ctx, deps, msg, isUnborn) {
+	var msg string
+	if prompt.FormatForcesBody(deps.Config.Format) {
+		// FR-F5/FR-F9 (+body): the planner's shortcut message cannot honor a forced body (its prompt has
+		// no multi-line rule to replace — §17.8 is message-role only). Regenerate via the message agent,
+		// which carries the bodyForceDirective and its own dedupe loop. NOT re-templated here.
 		var err error
-		msg, err = generateMessage(ctx, deps, baseTree, tStart) // the message agent regenerates from baseTree→tStart
+		msg, err = generateMessage(ctx, deps, baseTree, tStart)
 		if err != nil {
 			return DecomposeResult{}, err // *RescueError — propagate DIRECTLY
+		}
+	} else {
+		// Dup-check the TEMPLATED planner's message (§9.19 FR-F8 seam — before dedupe, §9.7 judges the final
+		// subject). Fallback to the message agent ONLY on a duplicate (FR-M11); it templates internally
+		// (generateMessage → call site #3) so msg is NOT re-templated here.
+		msg = generate.FinalizeMessage(plannerMsg, deps.Config)
+		if dupCheckMessage(ctx, deps, msg, isUnborn) {
+			var err error
+			msg, err = generateMessage(ctx, deps, baseTree, tStart) // the message agent regenerates from baseTree→tStart
+			if err != nil {
+				return DecomposeResult{}, err // *RescueError — propagate DIRECTLY
+			}
 		}
 	}
 

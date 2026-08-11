@@ -501,6 +501,56 @@ func TestDecompose_SingleShortcut_DuplicateFallback(t *testing.T) {
 	}
 }
 
+// TestDecompose_SingleShortcut_PlusBodyRegenerates (FR-F5/FR-F9 regression): when the resolved
+// format carries the +body suffix, the FR-M11 single-shortcut must NOT commit the planner's
+// (bodyless) message verbatim. The planner's partitioning prompt has NO <multi-line rule> block —
+// §17.8's +body mechanism ("replace the <multi-line rule> with bodyForceDirective") is MESSAGE-ROLE
+// only — so the shortcut message is generated without any body directive and cannot be trusted to
+// honor a +body format. runSingleShortcut therefore routes through the message agent (which carries
+// the bodyForceDirective) when FormatForcesBody is true.
+//
+// BEFORE the fix: the planner's single-line "feat: add a and b" was committed as-is (no body) even
+// though format=conventional+body — a direct FR-F5/FR-F9 violation.
+// AFTER the fix: the message agent regenerates, and the committed message carries a body.
+func TestDecompose_SingleShortcut_PlusBodyRegenerates(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmCommitRaw(t, repo, "initial")      // BORN repo; baseTree = HEAD^{tree}
+	dcmWriteFile(t, repo, "a.txt", "a\n") // 2 un-staged files ⇒ FR-M2b one-file short-circuit does NOT fire
+	dcmWriteFile(t, repo, "b.txt", "b\n") //   ⇒ planner is invoked in auto mode
+
+	// Planner: single shortcut with a BODYLESS message (the partitioning prompt gave it no +body directive).
+	plannerJSON := `{"count":1,"single":true,"commits":[{"title":"add a and b","description":"a.txt + b.txt"}],"message":"feat: add a and b"}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	// Message agent stub: returns a subject + body (the +body contract). The distinctive body string
+	// proves the message agent — not the planner — produced the committed message.
+	messageM := dcmMessageManifest(t, bin, "feat: add a and b\n\nAdds two files for the plus-body regression.")
+
+	roles := RoleManifests{Planner: plannerM, Message: messageM}
+	deps := dcmDeps(t, repo, roles)
+	deps.Config.Format = "conventional+body" // FR-F9: forces a body on the shortcut message too (FR-F5)
+
+	result, err := Decompose(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Decompose(+body shortcut): %v", err)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("Commits len = %d, want 1", len(result.Commits))
+	}
+	// Subject unchanged (the base format contract is orthogonal to the +body suffix).
+	if result.Commits[0].Subject != "feat: add a and b" {
+		t.Errorf("Subject = %q, want %q", result.Commits[0].Subject, "feat: add a and b")
+	}
+	// The committed message MUST carry the body — proving the message agent regenerated it under +body.
+	// BEFORE the fix this body is absent (the planner's bodyless message was committed verbatim).
+	body := dcmRunGit(t, repo, "log", "-1", "--format=%B")
+	if !strings.Contains(body, "Adds two files for the plus-body regression.") {
+		t.Errorf("commit message missing the +body text; the planner's bodyless shortcut message was likely committed verbatim.\n%%B:\n%s", body)
+	}
+}
+
 func TestDecompose_AutoMultiCommit_HappyPath(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()

@@ -62,6 +62,16 @@ func splitFormat(format string) (base string, forceBody bool) {
 	return format, false
 }
 
+// FormatForcesBody reports whether format carries the FR-F9 +body suffix. Exported so cross-package
+// callers (e.g. decompose.runSingleShortcut) can branch on it without re-implementing the grammar
+// split or importing the unexported splitFormat. Pure; case-sensitive on the suffix (mirrors
+// splitFormat / config.validateFormat). It does NOT validate the base — the caller is expected to
+// pass an already-validated cfg.Format (Load rejects unknown bases + the suffix).
+func FormatForcesBody(format string) bool {
+	_, forceBody := splitFormat(format)
+	return forceBody
+}
+
 // buildFormatSystemPrompt assembles the non-auto message system prompt (§17.8 FR-F2/F3/F4/F9): the shared
 // preamble (role + output rules + essence — NO "Match the tone…" line), the mode scaffold body (empty
 // for "plain"), and EITHER the retained multi-line rule (selected by hasMultiline — FR12 detection still

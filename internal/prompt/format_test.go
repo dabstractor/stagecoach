@@ -213,3 +213,38 @@ func TestSplitFormat(t *testing.T) {
 		})
 	}
 }
+
+// TestFormatForcesBody pins the EXPORTED FR-F9 +body probe consumed by cross-package callers
+// (decompose.runSingleShortcut routes the FR-M11 shortcut through the message agent when this is
+// true). It must agree with splitFormat's forceBody on every input (same grammar, same case rules).
+func TestFormatForcesBody(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"auto", false},
+		{"conventional", false},
+		{"plain", false},
+		{"gitmoji", false},
+		{"", false},
+		{"auto+body", true},
+		{"conventional+body", true},
+		{"gitmoji+body", true},
+		{"plain+body", true},
+		{"+body", true},                // empty base — still forces (base validity is the caller's concern)
+		{"Conventional+Body", false},   // case-sensitive suffix does not match
+		{"AUTO+BODY", false},           // case-sensitive suffix does not match
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.in, func(t *testing.T) {
+			if got := FormatForcesBody(tc.in); got != tc.want {
+				t.Errorf("FormatForcesBody(%q) = %v; want %v", tc.in, got, tc.want)
+			}
+			// Cross-check: must agree with splitFormat's forceBody (the helper delegates to it).
+			if _, fb := splitFormat(tc.in); fb != tc.want {
+				t.Errorf("FormatForcesBody(%q) disagrees with splitFormat forceBody (%v)", tc.in, fb)
+			}
+		})
+	}
+}
