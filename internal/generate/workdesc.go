@@ -96,7 +96,25 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 	// misbehaving model that keeps emitting READ lines after the budget cannot loop forever.
 	for turn := 2; ; turn++ {
 		paths := parseReadLines(out, skeleton)
-		if len(paths) == 0 {
+
+		// 3-way split on the response shape (BUG-001 fix + FR-W3/FR-W7):
+		//   - staged READ (len(paths)>0): normal — build the staged-diff answer after the budget check;
+		//   - non-staged READ (len(paths)==0 BUT containsReadVerb): FR-W3 notes + loop continuation. This
+		//     is the BUG-001 case — previously such a response was parsed as the commit message. Now it
+		//     builds an answer and FALLS THROUGH the budget check so the round cap bounds it (a `continue`
+		//     here would bypass the cap ⇒ infinite loop);
+		//   - genuine no-READ (len(paths)==0 AND no READ verb): FR-W7 — the commit-message candidate.
+		var answer string
+		haveAnswer := false
+		if len(paths) > 0 {
+			// normal staged-READ path: buildReadAnswer runs after the budget check (below).
+		} else if containsReadVerb(out) {
+			// BUG-001 fix: a READ line existed but every target was non-staged. Note each (FR-W3) and
+			// continue the loop via the shared render path — fall through to the budget check so the
+			// round cap bounds a model that keeps emitting non-staged READs.
+			answer = buildNonStagedReadAnswer(readTargets(out))
+			haveAnswer = true
+		} else {
 			// FR-W7: a response with no valid READ line is the commit-message candidate.
 			m, parseOK, _ := provider.ParseOutput(out, manifest)
 			return m, parseOK, nil
@@ -119,8 +137,10 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 		}
 
 		st.rounds++
-		// Build the answer turn: each requested staged diff (chunked per FR-W5), non-staged noted.
-		answer := buildReadAnswer(ctx, deps.Git, cfg, deps.Excludes, paths, &st)
+		if !haveAnswer {
+			// Build the staged-diff answer turn: each requested staged diff (chunked per FR-W5), non-staged noted.
+			answer = buildReadAnswer(ctx, deps.Git, cfg, deps.Excludes, paths, &st)
+		}
 		spec, rerr = manifest.RenderMultiTurn(msgModel, "", answer, msgReasoning, sessionID, turn)
 		if rerr != nil {
 			return "", false, rerr
@@ -203,6 +223,85 @@ func stripReadLines(response string) string {
 		b.WriteByte('\n')
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// containsReadVerb reports whether ANY line of response is a READ request (verb == "READ" under the
+// exact tokenization parseReadLines/stripReadLines use: the first whitespace-delimited token, uppercased
+// and stripped of leading punctuation). It is the BUG-001 gate: a response of ONLY `READ <non-staged-path>`
+// has len(paths)==0 (parseReadLines returns staged paths only) but DOES contain a READ line, and must NOT
+// be parsed as the commit message — it is a non-staged read that gets an FR-W3 note + loop continuation.
+// Line-level: ANY matching line ⇒ true (mirrors stripReadLines's drop-any-matching-line semantics).
+func containsReadVerb(response string) bool {
+	for _, line := range strings.Split(response, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) == 0 {
+			continue
+		}
+		verb := strings.ToUpper(strings.TrimLeft(fields[0], " \t,.:;!?-*/`\"'"))
+		if verb == "READ" {
+			return true
+		}
+	}
+	return false
+}
+
+// readTargets extracts the RAW normalized de-duplicated path targets from every READ line in response
+// (the FR-W3 read-request targets), WITHOUT the skeleton filter parseReadLines applies. It is the
+// non-staged companion to parseReadLines: in the BUG-001 `len(paths)==0` branch every returned target is
+// by construction NON-staged (a staged target would have made len(paths)>0), so the FR-W3 note "is not in
+// the staged changes" is accurate for all of them — no skeleton re-check. A READ line with no path
+// contributes nothing (bare "READ" ⇒ no target).
+func readTargets(response string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, line := range strings.Split(response, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) == 0 {
+			continue
+		}
+		verb := strings.ToUpper(strings.TrimLeft(fields[0], " \t,.:;!?-*/`\"'"))
+		if verb != "READ" {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
+		if rest == "" {
+			continue
+		}
+		for _, raw := range splitPaths(rest) {
+			p := normalizePath(raw)
+			if p == "" || seen[p] {
+				continue
+			}
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// buildNonStagedReadAnswer constructs the FR-W3 note turn for a set of non-staged READ targets: each
+// target gets "<path> is not in the staged changes." so the model learns the path is off-limits and (per
+// FR-W3) the caller continues the loop toward a real message. The note wording is the cleaner form (NOT
+// buildReadAnswer's "(or has no further diff)" — that is for a STAGED path whose diff is exhausted, a
+// different semantic). Empty targets (e.g. a bare "READ" with no path) gets a single generic note so the
+// turn is non-empty; the round cap bounds the loop regardless.
+func buildNonStagedReadAnswer(targets []string) string {
+	if len(targets) == 0 {
+		return "(no staged file matches that read request.)"
+	}
+	var b strings.Builder
+	for _, p := range targets {
+		fmt.Fprintf(&b, "%s is not in the staged changes.\n\n", p)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // splitPaths splits a READ line's remainder into individual path tokens on commas, semicolons, and

@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Bug Fix Suite — Work-Description, Decompose, Upgrade, and Lock/Watchdog",
-      "status": "Ready",
+      "status": "Planned",
       "description": "Fix 12 confirmed bugs (3 major, 9 minor) identified by PRD validation. The bugs cluster in four subsystems: work-description mode (BUG-001/002/005/006), decompose role resolution (BUG-003/012), self-upgrade (BUG-004/007/008), and lock/watchdog defense-in-depth (BUG-009/010/011). All are bug fixes bringing code into line with existing FRs — no PRP required per AGENTS.md rule 3. BUG-001 is most urgent (silent garbage commit subjects).",
       "milestones": [
         {
@@ -18,18 +18,22 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Fix non-staged READ request silently becoming commit subject (BUG-001)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "In RunWorkDescription's len(paths)==0 branch, the entire raw model response is parsed as the commit message via ParseOutput WITHOUT stripping READ lines. When the model emits a READ for a non-staged path, parseReadLines filters it out (returns empty), but the response still contains a READ verb line — so it is NOT a valid commit message candidate per FR-W7 (which covers responses with NO valid READ line). The fix must detect whether the response contained any READ verb line; if so, emit FR-W3 notes for the non-staged paths and continue the loop (bounded by the round cap), mirroring the forced-conclusion path's use of stripReadLines.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S1",
                   "title": "Add containsReadVerb helper and fix the len(paths)==0 branch in RunWorkDescription",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
-                  "prd_selectors": ["h2.2/h3.0", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-001 for root cause and fix strategy. The bug is in internal/generate/workdesc.go RunWorkDescription (~line 109). The forced-conclusion path (~line 125) already calls stripReadLines before ParseOutput; the natural len(paths)==0 path does NOT.\n2. INPUT: The existing parseReadLines(response, skeleton string) []string returns only staged paths (non-staged are silently filtered). The existing stripReadLines(response string) string removes READ lines. provider.ParseOutput(out, manifest) parses a raw response into a commit message.\n3. LOGIC: Add a helper function (e.g., containsReadVerb(response string) bool) that detects whether ANY line in the response starts with the READ verb (case-insensitive, same tokenization as parseReadLines). In RunWorkDescription's len(paths)==0 branch, BEFORE calling ParseOutput(out, manifest), check containsReadVerb(out). If true (the response HAD READ lines but all were non-staged), do NOT parse as message — instead, build an FR-W3 note answer ('<path> is not in the staged changes') for each non-staged READ target and continue the loop (advance st.rounds, bounded by round cap which eventually forces conclusion). The non-staged paths can be extracted by re-parsing the response for READ targets WITHOUT the skeleton filter (a variant of parseReadLines that returns raw targets). If containsReadVerb is false (genuinely no READ line), proceed with ParseOutput as before (FR-W7).\n4. OUTPUT: RunWorkDescription's len(paths)==0 branch no longer treats a READ-only response as a commit message. The returned (msg, ok, cause) is either a genuine message or the loop continues until the round cap forces conclusion. The containsReadVerb helper is exported as needed for testing.\n5. DOCS: [Mode A] Update the code comment on the len(paths)==0 branch to document the two-case distinction (genuine message vs non-staged READ). No user-facing doc surface change — the behavior matches FR-W3 which is already documented in spec/01-product.md:524."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-001 for root cause and fix strategy. The bug is in internal/generate/workdesc.go RunWorkDescription (~line 109). The forced-conclusion path (~line 125) already calls stripReadLines before ParseOutput; the natural len(paths)==0 path does NOT.\n2. INPUT: The existing parseReadLines(response, skeleton string) []string returns only staged paths (non-staged are silently filtered). The existing stripReadLines(response string) string removes READ lines. provider.ParseOutput(out, manifest) parses a raw response into a commit message.\n3. LOGIC: Add a helper function (e.g., containsReadVerb(response string) bool) that detects whether ANY line in the response starts with the READ verb (case-insensitive, same tokenization as parseReadLines). In RunWorkDescription's len(paths)==0 branch, BEFORE calling ParseOutput(out, manifest), check containsReadVerb(out). If true (the response HAD READ lines but all were non-staged), do NOT parse as message — instead, build an FR-W3 note answer ('<path> is not in the staged changes') for each non-staged READ target and continue the loop (advance st.rounds, bounded by round cap which eventually forces conclusion). The non-staged paths can be extracted by re-parsing the response for READ targets WITHOUT the skeleton filter (a variant of parseReadLines that returns raw targets). If containsReadVerb is false (genuinely no READ line), proceed with ParseOutput as before (FR-W7).\n4. OUTPUT: RunWorkDescription's len(paths)==0 branch no longer treats a READ-only response as a commit message. The returned (msg, ok, cause) is either a genuine message or the loop continues until the round cap forces conclusion. The containsReadVerb helper is exported as needed for testing.\n5. DOCS: [Mode A] Update the code comment on the len(paths)==0 branch to document the two-case distinction (genuine message vs non-staged READ). No user-facing doc surface change — the behavior matches FR-W3 which is already documented in spec/01-product.md:524.",
+                  "prd_selectors": [
+                    "h2.2/h3.0",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -37,18 +41,22 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Fix fully-read file emitting empty body instead of 'end of diff' note (BUG-002)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "In buildReadAnswer, StagedFileDiff returns the FULL diff every call (cursor-unaware). When the per-file cursor is exhausted (st.offsets[p] >= len(diff)), nextChunk returns ('', 1, 0) and the total<=1 branch prints an empty body ('<path>:\\n\\n'). The 'end of diff' note only fires in the diff=='' branch (for non-staged files). Fix by checking cursor exhaustion before calling nextChunk.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add cursor-exhaustion check in buildReadAnswer to emit 'end of diff' note",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.3", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-002. The bug is in internal/generate/workdesc.go buildReadAnswer (~line 270). StagedFileDiff returns the full non-empty diff for staged files, so the diff=='' branch never fires; cursor exhaustion falls through to nextChunk which returns empty chunk with total==1.\n2. INPUT: buildReadAnswer receives paths []string and *readState (st.offsets[p] is the per-file byte cursor). g.StagedFileDiff returns the full diff string for path p. nextChunk(diff, offset) returns (chunk, total, advance) where offset>=len(diff) => ('', 1, 0).\n3. LOGIC: In buildReadAnswer, AFTER the diff=='' check (line ~268) and BEFORE calling nextChunk (line ~274), add: if st.offsets[p] >= len(diff) { emit FR-W5 end-of-diff note: fmt.Fprintf(&b, '%s — end of diff (all parts shown).\\n\\n', p); continue }. The note text matches FR-W5 spec: 'After the final chunk, a re-request returns <path> — end of diff'.\n4. OUTPUT: A re-request for an already-fully-read file produces an explicit 'end of diff' note instead of an empty body. The loop still terminates via the round cap.\n5. DOCS: [Mode A] Update the code comment on the cursor-exhaustion branch to cite FR-W5. No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-002. The bug is in internal/generate/workdesc.go buildReadAnswer (~line 270). StagedFileDiff returns the full non-empty diff for staged files, so the diff=='' branch never fires; cursor exhaustion falls through to nextChunk which returns empty chunk with total==1.\n2. INPUT: buildReadAnswer receives paths []string and *readState (st.offsets[p] is the per-file byte cursor). g.StagedFileDiff returns the full diff string for path p. nextChunk(diff, offset) returns (chunk, total, advance) where offset>=len(diff) => ('', 1, 0).\n3. LOGIC: In buildReadAnswer, AFTER the diff=='' check (line ~268) and BEFORE calling nextChunk (line ~274), add: if st.offsets[p] >= len(diff) { emit FR-W5 end-of-diff note: fmt.Fprintf(&b, '%s — end of diff (all parts shown).\\n\\n', p); continue }. The note text matches FR-W5 spec: 'After the final chunk, a re-request returns <path> — end of diff'.\n4. OUTPUT: A re-request for an already-fully-read file produces an explicit 'end of diff' note instead of an empty body. The loop still terminates via the round cap.\n5. DOCS: [Mode A] Update the code comment on the cursor-exhaustion branch to cite FR-W5. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.3",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -56,18 +64,24 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Fix chunk boundaries anchoring to newlines instead of @@ hunk edges (BUG-005)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "nextChunk anchors the chunk end forward to the next newline via strings.IndexByte(diff[end:], '\\n'), not to @@ hunk boundaries. Per FR-W5, chunk boundaries should hug @@ hunk edges so a change is never split mid-hunk. chunkCount must use the same anchoring for consistency.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "Modify nextChunk and chunkCount to anchor to @@ hunk boundaries",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
-                  "dependencies": ["P1.M1.T2.S1"],
-                  "prd_selectors": ["h2.3/h3.4", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-005. The bug is in internal/generate/workdesc.go nextChunk (~line 300) and chunkCount (~line 330). Both currently use strings.IndexByte(diff[end:], '\\n') for forward anchoring. Per FR-W5 (spec/01-product.md:526): 'Chunk boundaries hug @@ hunk edges so a change is never split mid-hunk; a single hunk exceeding the cap falls back to a line cut (noted in the label).'\n2. INPUT: nextChunk(diff string, offset int) returns (chunk string, total int, advance int). chunkCount(diff string, runeBudget int) returns int. Both use advanceRunes(diff, offset, budget) to compute the initial end position, then forward-anchor.\n3. LOGIC: Replace the newline forward-anchor with a hunk-edge anchor. After computing end via advanceRunes, scan forward for the next occurrence of '\\n@@' (the start of a new git diff hunk header) starting from diff[end:]. If found at position i, set end += i + 1 (include the newline before @@). If no @@ found within the remaining diff, fall back to the existing newline anchor (FR-W5: 'a single hunk exceeding the cap falls back to a line cut'). CRITICAL: both nextChunk AND chunkCount must use the IDENTICAL anchoring logic, otherwise the 'part i of N' total will be inconsistent with the actual chunk boundaries. Extract the anchor logic into a shared helper (e.g., anchorToHunkEdge(diff, end) int) used by both functions. Note: a git diff hunk header is '@@ -start,count +start,c @@' — the pattern '\\n@@' reliably identifies hunk starts because '@@' does not appear mid-line in diff content.\n4. OUTPUT: Chunk boundaries now fall on @@ hunk edges. The 'part i of N' total remains consistent between nextChunk and chunkCount.\n5. DOCS: [Mode A] Update the code comment on nextChunk to document @@ hunk-edge anchoring per FR-W5. No user-facing doc surface change."
+                  "dependencies": [
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-005. The bug is in internal/generate/workdesc.go nextChunk (~line 300) and chunkCount (~line 330). Both currently use strings.IndexByte(diff[end:], '\\n') for forward anchoring. Per FR-W5 (spec/01-product.md:526): 'Chunk boundaries hug @@ hunk edges so a change is never split mid-hunk; a single hunk exceeding the cap falls back to a line cut (noted in the label).'\n2. INPUT: nextChunk(diff string, offset int) returns (chunk string, total int, advance int). chunkCount(diff string, runeBudget int) returns int. Both use advanceRunes(diff, offset, budget) to compute the initial end position, then forward-anchor.\n3. LOGIC: Replace the newline forward-anchor with a hunk-edge anchor. After computing end via advanceRunes, scan forward for the next occurrence of '\\n@@' (the start of a new git diff hunk header) starting from diff[end:]. If found at position i, set end += i + 1 (include the newline before @@). If no @@ found within the remaining diff, fall back to the existing newline anchor (FR-W5: 'a single hunk exceeding the cap falls back to a line cut'). CRITICAL: both nextChunk AND chunkCount must use the IDENTICAL anchoring logic, otherwise the 'part i of N' total will be inconsistent with the actual chunk boundaries. Extract the anchor logic into a shared helper (e.g., anchorToHunkEdge(diff, end) int) used by both functions. Note: a git diff hunk header is '@@ -start,count +start,c @@' — the pattern '\\n@@' reliably identifies hunk starts because '@@' does not appear mid-line in diff content.\n4. OUTPUT: Chunk boundaries now fall on @@ hunk edges. The 'part i of N' total remains consistent between nextChunk and chunkCount.\n5. DOCS: [Mode A] Update the code comment on nextChunk to document @@ hunk-edge anchoring per FR-W5. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.4",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -84,9 +98,15 @@
                   "title": "Fix part label to use rune count consistently with chunkRuneBudget",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T2.S1"],
-                  "prd_selectors": ["h2.3/h3.5", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-006. The bug is in internal/generate/workdesc.go buildReadAnswer (~line 284). st.offsets[p] is advanced by nextChunk's byte 'advance' return value (byte offset), but chunkRuneBudget() = readChunkTokenCap * 4 = 64000 RUNES. The division mixes byte and rune units.\n2. INPUT: buildReadAnswer has access to the full diff string for path p (from g.StagedFileDiff). st.offsets[p] is the per-file byte cursor. chunkRuneBudget() returns rune count. utf8.RuneCountInString(s) from unicode/utf8 returns the rune count of a string.\n3. LOGIC: In the part label computation, replace st.offsets[p] with the rune-equivalent offset: part := (utf8.RuneCountInString(diff[:st.offsets[p]]) / chunkRuneBudget()) + 1. Since st.offsets[p] is a valid byte index into diff (always at a character boundary because nextChunk anchors to newlines/hunk-edges), slicing diff[:st.offsets[p]] is safe. Note: chunkCount already uses rune-windowing via advanceRunes, so the total count is correct in runes; only the part label is wrong.\n4. OUTPUT: The 'part i of N' label is correct for multibyte UTF-8 diffs.\n5. DOCS: [Mode A] Add a code comment noting the byte-to-rune conversion. No user-facing doc surface change."
+                  "dependencies": [
+                    "P1.M1.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-006. The bug is in internal/generate/workdesc.go buildReadAnswer (~line 284). st.offsets[p] is advanced by nextChunk's byte 'advance' return value (byte offset), but chunkRuneBudget() = readChunkTokenCap * 4 = 64000 RUNES. The division mixes byte and rune units.\n2. INPUT: buildReadAnswer has access to the full diff string for path p (from g.StagedFileDiff). st.offsets[p] is the per-file byte cursor. chunkRuneBudget() returns rune count. utf8.RuneCountInString(s) from unicode/utf8 returns the rune count of a string.\n3. LOGIC: In the part label computation, replace st.offsets[p] with the rune-equivalent offset: part := (utf8.RuneCountInString(diff[:st.offsets[p]]) / chunkRuneBudget()) + 1. Since st.offsets[p] is a valid byte index into diff (always at a character boundary because nextChunk anchors to newlines/hunk-edges), slicing diff[:st.offsets[p]] is safe. Note: chunkCount already uses rune-windowing via advanceRunes, so the total count is correct in runes; only the part label is wrong.\n4. OUTPUT: The 'part i of N' label is correct for multibyte UTF-8 diffs.\n5. DOCS: [Mode A] Add a code comment noting the byte-to-rune conversion. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.5",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -103,9 +123,17 @@
                   "title": "Review and update README.md and docs/how-it-works.md for work-description READ protocol accuracy",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T2.S1", "P1.M1.T3.S1", "P1.M1.T4.S1"],
-                  "prd_selectors": ["h2.0", "h2.3/h3.3"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/how-it-works.md (lines ~367-382) describes work-description mode's READ protocol and round budget. README.md may have a feature blurb. The spec (spec/01-product.md FR-W3/W5) is the authority and is already correct.\n2. INPUT: The implemented fixes from P1.M1.T1 through P1.M1.T4.\n3. LOGIC: Review docs/how-it-works.md for accuracy about: (a) non-staged READ paths producing a note (not becoming the commit subject), (b) the 'end of diff' marker after all chunks are read, (c) chunk quality. If the docs already match the FR (which they should, since the code was wrong not the spec), no changes needed — just verify. If any doc is stale, update it to match FR-W3/W5.\n4. OUTPUT: docs/how-it-works.md accurately reflects the fixed work-description READ behavior, or confirmed no changes needed.\n5. DOCS: This IS the documentation sync task."
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T2.S1",
+                    "P1.M1.T3.S1",
+                    "P1.M1.T4.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/how-it-works.md (lines ~367-382) describes work-description mode's READ protocol and round budget. README.md may have a feature blurb. The spec (spec/01-product.md FR-W3/W5) is the authority and is already correct.\n2. INPUT: The implemented fixes from P1.M1.T1 through P1.M1.T4.\n3. LOGIC: Review docs/how-it-works.md for accuracy about: (a) non-staged READ paths producing a note (not becoming the commit subject), (b) the 'end of diff' marker after all chunks are read, (c) chunk quality. If the docs already match the FR (which they should, since the code was wrong not the spec), no changes needed — just verify. If any doc is stale, update it to match FR-W3/W5.\n4. OUTPUT: docs/how-it-works.md accurately reflects the fixed work-description READ behavior, or confirmed no changes needed.\n5. DOCS: This IS the documentation sync task.",
+                  "prd_selectors": [
+                    "h2.0",
+                    "h2.3/h3.3"
+                  ]
                 }
               ]
             }
@@ -132,8 +160,12 @@
                   "status": "Planned",
                   "story_points": 2,
                   "dependencies": [],
-                  "prd_selectors": ["h2.2/h3.1", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. The bug is in internal/decompose/roles.go ResolveRoles (~line 132). When role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='' , it returns an error. This blocks Decompose before the planner runs. Decompose's fast-path (decompose.go:243) calls isFileDisjoint(out.Commits) → runLoopFastPath which needs NO stager. The call chain: CLI (default_action.go:452 or stagecoach.go:203) calls ResolveRoles BEFORE Decompose (line 466/219).\n2. INPUT: ResolveRoles(cfg config.Config, reg *provider.Registry) returns (RoleManifests, RoleModels, error). RoleManifests.Stager is a provider.Manifest. RoleModels.Stager is a config.RoleConfig. Decompose's runLoop (the tooled path) calls invokeStager → stageConcept which requires a real tooled agent.\n3. LOGIC: In ResolveRoles, when role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='', do NOT error. Instead, set a sentinel indicating 'no stager available — fast-path only'. Options: (a) Store the no-tooled manifest as-is in RoleManifests.Stager and add a bool field (e.g., StagerAvailable bool) to RoleManifests or Deps; (b) Use a nil sentinel. The downstream Decompose must then: if isFileDisjoint → runLoopFastPath (works, no stager needed); if NOT disjoint → runLoop → invokeStager → check sentinel → return clear error: 'this partition requires a tooled stager (shared files across concepts), but provider X has no tooled_flags and no stager-capable provider is installed'. The error must name the partition property (non-disjoint) so the user understands WHY a stager is needed.\n4. OUTPUT: ResolveRoles no longer hard-errors for a no-tooled provider. The stager requirement is deferred to Decompose's runLoop, which errors ONLY when the partition is non-disjoint. RoleManifests carries enough info for runLoop to detect the missing stager.\n5. DOCS: [Mode A] Update the code comment in ResolveRoles to document the deferred stager requirement (FR-M13). No user-facing doc surface change — the behavior matches FR-M13 which is documented in spec/03-generation.md:120."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. The bug is in internal/decompose/roles.go ResolveRoles (~line 132). When role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='' , it returns an error. This blocks Decompose before the planner runs. Decompose's fast-path (decompose.go:243) calls isFileDisjoint(out.Commits) → runLoopFastPath which needs NO stager. The call chain: CLI (default_action.go:452 or stagecoach.go:203) calls ResolveRoles BEFORE Decompose (line 466/219).\n2. INPUT: ResolveRoles(cfg config.Config, reg *provider.Registry) returns (RoleManifests, RoleModels, error). RoleManifests.Stager is a provider.Manifest. RoleModels.Stager is a config.RoleConfig. Decompose's runLoop (the tooled path) calls invokeStager → stageConcept which requires a real tooled agent.\n3. LOGIC: In ResolveRoles, when role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='', do NOT error. Instead, set a sentinel indicating 'no stager available — fast-path only'. Options: (a) Store the no-tooled manifest as-is in RoleManifests.Stager and add a bool field (e.g., StagerAvailable bool) to RoleManifests or Deps; (b) Use a nil sentinel. The downstream Decompose must then: if isFileDisjoint → runLoopFastPath (works, no stager needed); if NOT disjoint → runLoop → invokeStager → check sentinel → return clear error: 'this partition requires a tooled stager (shared files across concepts), but provider X has no tooled_flags and no stager-capable provider is installed'. The error must name the partition property (non-disjoint) so the user understands WHY a stager is needed.\n4. OUTPUT: ResolveRoles no longer hard-errors for a no-tooled provider. The stager requirement is deferred to Decompose's runLoop, which errors ONLY when the partition is non-disjoint. RoleManifests carries enough info for runLoop to detect the missing stager.\n5. DOCS: [Mode A] Update the code comment in ResolveRoles to document the deferred stager requirement (FR-M13). No user-facing doc surface change — the behavior matches FR-M13 which is documented in spec/03-generation.md:120.",
+                  "prd_selectors": [
+                    "h2.2/h3.1",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -141,9 +173,14 @@
                   "title": "Add stager-availability check in the tooled-stager runLoop path (error if needed but unavailable)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h2.2/h3.1", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. After deferring the stager requirement (S1), the tooled-stager path in Decompose (decompose.go:runLoop) must detect when no stager is available and return a clear error.\n2. INPUT: The sentinel from S1 (e.g., a bool flag on RoleManifests/Deps indicating stager availability). Decompose calls runLoop(ctx, deps, ...) when isFileDisjoint returns false (decompose.go:~255). runLoop calls invokeStager (decompose.go:~1133) which calls stageConcept (the real tooled agent).\n3. LOGIC: In runLoop (or invokeStager, or Decompose before entering runLoop), check whether the stager is available (the sentinel from S1). If not available, return fmt.Errorf wrapping ErrDecomposeFailed with a clear message: 'decompose requires a tooled stager for this partition (files are shared across concepts), but the configured provider has no tooled_flags and no stager-capable provider is installed. Use a disjoint partition or install a tooled provider (pi or claude)'. This error surfaces to the user at the CLI level.\n4. OUTPUT: A non-disjoint partition with no stager-capable provider produces a clear, actionable error instead of silently failing or crashing.\n5. DOCS: [Mode A] Update the code comment on the stager-availability check. No user-facing doc surface change."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. After deferring the stager requirement (S1), the tooled-stager path in Decompose (decompose.go:runLoop) must detect when no stager is available and return a clear error.\n2. INPUT: The sentinel from S1 (e.g., a bool flag on RoleManifests/Deps indicating stager availability). Decompose calls runLoop(ctx, deps, ...) when isFileDisjoint returns false (decompose.go:~255). runLoop calls invokeStager (decompose.go:~1133) which calls stageConcept (the real tooled agent).\n3. LOGIC: In runLoop (or invokeStager, or Decompose before entering runLoop), check whether the stager is available (the sentinel from S1). If not available, return fmt.Errorf wrapping ErrDecomposeFailed with a clear message: 'decompose requires a tooled stager for this partition (files are shared across concepts), but the configured provider has no tooled_flags and no stager-capable provider is installed. Use a disjoint partition or install a tooled provider (pi or claude)'. This error surfaces to the user at the CLI level.\n4. OUTPUT: A non-disjoint partition with no stager-capable provider produces a clear, actionable error instead of silently failing or crashing.\n5. DOCS: [Mode A] Update the code comment on the stager-availability check. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.2/h3.1",
+                    "h2.5"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -151,9 +188,14 @@
                   "title": "Extend FirstTooledProvider to also consider user-defined tooled providers as fallback",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h2.2/h3.1", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. internal/provider/registry.go FirstTooledProvider (line 127) only scans preferredBuiltins (pi, claude). A user-defined provider with non-empty TooledFlags is never selected as the stager fallback.\n2. INPUT: provider.Registry has Get(name) (provider.Manifest, bool), List() []provider.Manifest. FirstTooledProvider(installed []string) string currently iterates preferredBuiltins only.\n3. LOGIC: After the preferredBuiltins scan in FirstTooledProvider, add a secondary scan over ALL providers in the registry (reg.List()) that are installed AND have non-empty TooledFlags, returning the first match. This lets a user-defined tooled provider serve as the stager fallback. Preserve preference ordering: built-ins first (pi > claude), then user-defined in registry order.\n4. OUTPUT: FirstTooledProvider returns a user-defined tooled provider when no built-in tooled provider is installed.\n5. DOCS: [Mode A] Update the code comment on FirstTooledProvider to document the user-defined fallback scan. No user-facing doc surface change."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. internal/provider/registry.go FirstTooledProvider (line 127) only scans preferredBuiltins (pi, claude). A user-defined provider with non-empty TooledFlags is never selected as the stager fallback.\n2. INPUT: provider.Registry has Get(name) (provider.Manifest, bool), List() []provider.Manifest. FirstTooledProvider(installed []string) string currently iterates preferredBuiltins only.\n3. LOGIC: After the preferredBuiltins scan in FirstTooledProvider, add a secondary scan over ALL providers in the registry (reg.List()) that are installed AND have non-empty TooledFlags, returning the first match. This lets a user-defined tooled provider serve as the stager fallback. Preserve preference ordering: built-ins first (pi > claude), then user-defined in registry order.\n4. OUTPUT: FirstTooledProvider returns a user-defined tooled provider when no built-in tooled provider is installed.\n5. DOCS: [Mode A] Update the code comment on FirstTooledProvider to document the user-defined fallback scan. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.2/h3.1",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -171,8 +213,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.11", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-012. The stale comment is in internal/decompose/decompose.go (~line 981, in the runArbiterPhase/resolveArbiter doc block). It says 'The arbiter's STAGING ... is UNCHANGED — it stages from the working tree'. FR-M1d (spec/SPEC.md:14) extended the freeze boundary: gate, diff, AND staging derive from T_start via OverlayTreePaths. The code is correct (resolveArbiter/resolveNewCommit/amendTip use tStart, not AddAll).\n2. INPUT: The comment text to replace. The surrounding doc block describes the arbiter phase.\n3. LOGIC: Replace 'stages from the working tree (== T_start's source under the invariant)' with text reflecting FR-M1d: the arbiter stages from the frozen T_start via OverlayTreePaths (treePrime := tStart), never the live working tree. Reference FR-M1d and the OverlayTreePaths primitive.\n4. OUTPUT: The comment accurately describes the arbiter's frozen-tree staging behavior.\n5. DOCS: This IS a documentation fix (code comment). No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-012. The stale comment is in internal/decompose/decompose.go (~line 981, in the runArbiterPhase/resolveArbiter doc block). It says 'The arbiter's STAGING ... is UNCHANGED — it stages from the working tree'. FR-M1d (spec/SPEC.md:14) extended the freeze boundary: gate, diff, AND staging derive from T_start via OverlayTreePaths. The code is correct (resolveArbiter/resolveNewCommit/amendTip use tStart, not AddAll).\n2. INPUT: The comment text to replace. The surrounding doc block describes the arbiter phase.\n3. LOGIC: Replace 'stages from the working tree (== T_start's source under the invariant)' with text reflecting FR-M1d: the arbiter stages from the frozen T_start via OverlayTreePaths (treePrime := tStart), never the live working tree. Reference FR-M1d and the OverlayTreePaths primitive.\n4. OUTPUT: The comment accurately describes the arbiter's frozen-tree staging behavior.\n5. DOCS: This IS a documentation fix (code comment). No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.11",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -189,9 +234,16 @@
                   "title": "Review and update README.md and docs/how-it-works.md for decompose fast-path accuracy",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S1", "P1.M2.T1.S2", "P1.M2.T1.S3", "P1.M2.T2.S1"],
-                  "prd_selectors": ["h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The decompose fast-path (FR-M13) is documented in spec/03-generation.md:120 and spec/SPEC.md:24. User docs may reference provider requirements for multi-commit decomposition.\n2. INPUT: The implemented fixes from P1.M2.T1 and P1.M2.T2.\n3. LOGIC: Review README.md and docs/how-it-works.md for any statements about decompose requiring a tooled provider. If docs claim decompose requires a stager-capable provider unconditionally, update to note the FR-M13 fast-path allows no-tooled providers for disjoint partitions. If docs already match the spec, no changes needed.\n4. OUTPUT: User docs accurately reflect the FR-M13 fast-path for no-tooled providers.\n5. DOCS: This IS the documentation sync task."
+                  "dependencies": [
+                    "P1.M2.T1.S1",
+                    "P1.M2.T1.S2",
+                    "P1.M2.T1.S3",
+                    "P1.M2.T2.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The decompose fast-path (FR-M13) is documented in spec/03-generation.md:120 and spec/SPEC.md:24. User docs may reference provider requirements for multi-commit decomposition.\n2. INPUT: The implemented fixes from P1.M2.T1 and P1.M2.T2.\n3. LOGIC: Review README.md and docs/how-it-works.md for any statements about decompose requiring a tooled provider. If docs claim decompose requires a stager-capable provider unconditionally, update to note the FR-M13 fast-path allows no-tooled providers for disjoint partitions. If docs already match the spec, no changes needed.\n4. OUTPUT: User docs accurately reflect the FR-M13 fast-path for no-tooled providers.\n5. DOCS: This IS the documentation sync task.",
+                  "prd_selectors": [
+                    "h2.0"
+                  ]
                 }
               ]
             }
@@ -218,8 +270,12 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.2/h3.2", "h2.5", "h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-004. The bug is in internal/cmd/upgrade_run.go cmdRunner.Run (~line 152). The reference implementation is internal/upgrade/detect.go osRunner.Run (~line 121) which has: context.WithTimeout(ctx, timeout) where timeout = defaultQueryTimeout (3*time.Second, line ~109); cmd.WaitDelay = timeout; and checks ctx.Err() first on error. osRunner is UNEXPORTED so package cmd cannot reuse it. The root context originates from cmd/stagecoach/main.go:62 signal.Install(context.Background(), ...) — cancel-on-signal only, NO deadline.\n2. INPUT: cmdRunner is a struct{} implementing upgrade.Runner interface: Run(ctx context.Context, name string, args ...string) (string, int, error). It is used by prodDetect (upgrade_run.go:~205) as Detector.Exec. The contract: exit 0 => (stdout, 0, nil); non-zero exit => (stdout, code, nil) — 'not installed' skip; start failure or deadline => ('', 0, err) — skip. Go standard library: context.WithTimeout, exec.CommandContext, cmd.WaitDelay (Go 1.20+).\n3. LOGIC: In cmdRunner.Run, add a per-query timeout mirroring osRunner: (a) Derive a timeout context: ctx, cancel := context.WithTimeout(ctx, 3*time.Second); defer cancel(). (b) Set cmd.WaitDelay = 3 * time.Second to bound how long Run waits for forked grandchildren to release the stdout pipe. (c) On error, check ctx.Err() FIRST (a deadline kill surfaces as *exec.ExitError, so ctx.Err() must be checked before ExitError handling). (d) Keep the existing non-zero-exit => (stdout, code, nil) mapping. Option: export upgrade.defaultQueryTimeout and reference it for consistency, or hardcode 3*time.Second with a comment. Option B (cleaner): export osRunner from package upgrade and use it directly in prodDetect — but this changes the seam architecture. Preferred: replicate the timeout+WaitDelay in cmdRunner.Run with a shared constant.\n4. OUTPUT: cmdRunner.Run bounds each PM query to 3s and kills forked grandchildren via WaitDelay. A hung PM query (brew refreshing DB, NFS home) is recoverable instead of hanging indefinitely.\n5. DOCS: [Mode A] Update the cmdRunner comment to remove the 'There is NO per-query timeout here' claim and document the 3s deadline + WaitDelay. No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-004. The bug is in internal/cmd/upgrade_run.go cmdRunner.Run (~line 152). The reference implementation is internal/upgrade/detect.go osRunner.Run (~line 121) which has: context.WithTimeout(ctx, timeout) where timeout = defaultQueryTimeout (3*time.Second, line ~109); cmd.WaitDelay = timeout; and checks ctx.Err() first on error. osRunner is UNEXPORTED so package cmd cannot reuse it. The root context originates from cmd/stagecoach/main.go:62 signal.Install(context.Background(), ...) — cancel-on-signal only, NO deadline.\n2. INPUT: cmdRunner is a struct{} implementing upgrade.Runner interface: Run(ctx context.Context, name string, args ...string) (string, int, error). It is used by prodDetect (upgrade_run.go:~205) as Detector.Exec. The contract: exit 0 => (stdout, 0, nil); non-zero exit => (stdout, code, nil) — 'not installed' skip; start failure or deadline => ('', 0, err) — skip. Go standard library: context.WithTimeout, exec.CommandContext, cmd.WaitDelay (Go 1.20+).\n3. LOGIC: In cmdRunner.Run, add a per-query timeout mirroring osRunner: (a) Derive a timeout context: ctx, cancel := context.WithTimeout(ctx, 3*time.Second); defer cancel(). (b) Set cmd.WaitDelay = 3 * time.Second to bound how long Run waits for forked grandchildren to release the stdout pipe. (c) On error, check ctx.Err() FIRST (a deadline kill surfaces as *exec.ExitError, so ctx.Err() must be checked before ExitError handling). (d) Keep the existing non-zero-exit => (stdout, code, nil) mapping. Option: export upgrade.defaultQueryTimeout and reference it for consistency, or hardcode 3*time.Second with a comment. Option B (cleaner): export osRunner from package upgrade and use it directly in prodDetect — but this changes the seam architecture. Preferred: replicate the timeout+WaitDelay in cmdRunner.Run with a shared constant.\n4. OUTPUT: cmdRunner.Run bounds each PM query to 3s and kills forked grandchildren via WaitDelay. A hung PM query (brew refreshing DB, NFS home) is recoverable instead of hanging indefinitely.\n5. DOCS: [Mode A] Update the cmdRunner comment to remove the 'There is NO per-query timeout here' claim and document the 3s deadline + WaitDelay. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.2/h3.2",
+                    "h2.5",
+                    "h2.0"
+                  ]
                 }
               ]
             },
@@ -237,8 +293,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.6", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-007. The pathHeuristics table is in internal/upgrade/detect.go (~line 368). It maps install-root prefixes to channels. Currently has /opt/homebrew/Cellar/ (Apple Silicon) and /usr/local/Cellar/ (Intel macOS) but NOT /home/linuxbrew/.linuxbrew/Cellar/ (Linuxbrew on Linux).\n2. INPUT: pathHeuristics is a []pathHeuristic where each entry has {prefix string, channel Channel}. ChannelBrew is the brew channel constant.\n3. LOGIC: Add {prefix: '/home/linuxbrew/.linuxbrew/Cellar/', channel: ChannelBrew} to the pathHeuristics slice. Place it adjacent to the other Cellar entries for readability.\n4. OUTPUT: A Linuxbrew install is correctly detected as ChannelBrew instead of falling through to ChannelDirect.\n5. DOCS: [Mode A] No user-facing doc surface change. The detection is internal. Optionally add a code comment noting the three Homebrew Cellar roots (Apple Silicon, Intel, Linuxbrew)."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-007. The pathHeuristics table is in internal/upgrade/detect.go (~line 368). It maps install-root prefixes to channels. Currently has /opt/homebrew/Cellar/ (Apple Silicon) and /usr/local/Cellar/ (Intel macOS) but NOT /home/linuxbrew/.linuxbrew/Cellar/ (Linuxbrew on Linux).\n2. INPUT: pathHeuristics is a []pathHeuristic where each entry has {prefix string, channel Channel}. ChannelBrew is the brew channel constant.\n3. LOGIC: Add {prefix: '/home/linuxbrew/.linuxbrew/Cellar/', channel: ChannelBrew} to the pathHeuristics slice. Place it adjacent to the other Cellar entries for readability.\n4. OUTPUT: A Linuxbrew install is correctly detected as ChannelBrew instead of falling through to ChannelDirect.\n5. DOCS: [Mode A] No user-facing doc surface change. The detection is internal. Optionally add a code comment noting the three Homebrew Cellar roots (Apple Silicon, Intel, Linuxbrew).",
+                  "prd_selectors": [
+                    "h2.3/h3.6",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -256,8 +315,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.7", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-008. The bug is in internal/upgrade/releases.go. Lines ~179 and ~223 build paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' with c.Repo UNESCAPED. Line ~198 correctly uses url.PathEscape(tag). c.Repo is the 'owner/repo' string from config.\n2. INPUT: c.Repo is sourced from config (config.Upgrade.SourceRepo, default 'dabstractor/stagecoach'). The GitHub API expects '/repos/owner/repo/...' in the path. url.PathEscape escapes '/' to '%2F', which would BREAK 'owner/repo'. So naively applying url.PathEscape(c.Repo) is WRONG.\n3. LOGIC: Since c.Repo is a trusted config value that should be 'owner/repo' format, the correct fix is to VALIDATE c.Repo at Client construction time (or at do() entry) to ensure it matches the expected pattern ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$. If validation fails, return an error. Alternatively, split c.Repo on '/' and escape each segment: path := '/repos/' + url.PathEscape(owner) + '/' + url.PathEscape(repo) + '/releases/latest'. The split-and-escape approach is the most robust defense-in-depth.\n4. OUTPUT: A malformed c.Repo produces a clear error instead of a malformed HTTP request. Normal 'owner/repo' values are unaffected.\n5. DOCS: [Mode A] Add a code comment documenting the validation/escaping rationale. No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-008. The bug is in internal/upgrade/releases.go. Lines ~179 and ~223 build paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' with c.Repo UNESCAPED. Line ~198 correctly uses url.PathEscape(tag). c.Repo is the 'owner/repo' string from config.\n2. INPUT: c.Repo is sourced from config (config.Upgrade.SourceRepo, default 'dabstractor/stagecoach'). The GitHub API expects '/repos/owner/repo/...' in the path. url.PathEscape escapes '/' to '%2F', which would BREAK 'owner/repo'. So naively applying url.PathEscape(c.Repo) is WRONG.\n3. LOGIC: Since c.Repo is a trusted config value that should be 'owner/repo' format, the correct fix is to VALIDATE c.Repo at Client construction time (or at do() entry) to ensure it matches the expected pattern ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$. If validation fails, return an error. Alternatively, split c.Repo on '/' and escape each segment: path := '/repos/' + url.PathEscape(owner) + '/' + url.PathEscape(repo) + '/releases/latest'. The split-and-escape approach is the most robust defense-in-depth.\n4. OUTPUT: A malformed c.Repo produces a clear error instead of a malformed HTTP request. Normal 'owner/repo' values are unaffected.\n5. DOCS: [Mode A] Add a code comment documenting the validation/escaping rationale. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.7",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -274,9 +336,15 @@
                   "title": "Review and update docs/packaging.md and README.md for upgrade detection accuracy",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M3.T1.S1", "P1.M3.T2.S1", "P1.M3.T3.S1"],
-                  "prd_selectors": ["h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/packaging.md and README.md describe the upgrade/distribution channels. The fixes (BUG-004 timeout, BUG-007 Linuxbrew heuristic, BUG-008 URL escaping) are internal behavior changes. Check if any doc references the detection cascade or PM query behavior.\n2. INPUT: The implemented fixes from P1.M3.T1 through P1.M3.T3.\n3. LOGIC: Review docs/packaging.md for Homebrew/Linuxbrew coverage. If it mentions only macOS Homebrew, add a note about Linuxbrew detection. If docs reference PM query timeouts or upgrade reliability, verify accuracy. If docs already match, no changes needed.\n4. OUTPUT: User docs accurately reflect the upgrade detection improvements.\n5. DOCS: This IS the documentation sync task."
+                  "dependencies": [
+                    "P1.M3.T1.S1",
+                    "P1.M3.T2.S1",
+                    "P1.M3.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs/packaging.md and README.md describe the upgrade/distribution channels. The fixes (BUG-004 timeout, BUG-007 Linuxbrew heuristic, BUG-008 URL escaping) are internal behavior changes. Check if any doc references the detection cascade or PM query behavior.\n2. INPUT: The implemented fixes from P1.M3.T1 through P1.M3.T3.\n3. LOGIC: Review docs/packaging.md for Homebrew/Linuxbrew coverage. If it mentions only macOS Homebrew, add a note about Linuxbrew detection. If docs reference PM query timeouts or upgrade reliability, verify accuracy. If docs already match, no changes needed.\n4. OUTPUT: User docs accurately reflect the upgrade detection improvements.\n5. DOCS: This IS the documentation sync task.",
+                  "prd_selectors": [
+                    "h2.0"
+                  ]
                 }
               ]
             }
@@ -303,8 +371,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.8", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-009. The TOCTOU is in internal/lock/lock.go reapStaleLocks (~line 128). It checks processAlive(pid, hostname), then os.Remove(f). The window is between the liveness check and the acquire. Mitigated by: (a) flock + write+rename CAS on acquire; (b) hostname check; (c) the holder's own pid is live so its own file is never reaped.\n2. INPUT: reapStaleLocks(dir string) reads *.lock files, parses contents for pid+hostname, checks processAlive, removes dead-pid files. processAlive is conservative (returns true on any ambiguity).\n3. LOGIC: Two options: (A) Defense-in-depth: after reading the file contents and confirming the pid is dead, re-read the file contents just before os.Remove to verify they haven't changed (a different process may have rewritten the lock with its own pid). If contents changed, skip the remove. This closes the pid-reuse window at the cost of one extra ReadFile. (B) Documentation: add a comprehensive comment documenting the TOCTOU window and why the CAS mitigation makes it non-exploitable, accepting the current behavior. Recommended: Option A (re-read before remove) as a cheap, effective defense.\n4. OUTPUT: The TOCTOU window is narrowed (Option A) or comprehensively documented (Option B).\n5. DOCS: [Mode A] Update the code comment on reapStaleLocks to document the TOCTOU mitigation. No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-009. The TOCTOU is in internal/lock/lock.go reapStaleLocks (~line 128). It checks processAlive(pid, hostname), then os.Remove(f). The window is between the liveness check and the acquire. Mitigated by: (a) flock + write+rename CAS on acquire; (b) hostname check; (c) the holder's own pid is live so its own file is never reaped.\n2. INPUT: reapStaleLocks(dir string) reads *.lock files, parses contents for pid+hostname, checks processAlive, removes dead-pid files. processAlive is conservative (returns true on any ambiguity).\n3. LOGIC: Two options: (A) Defense-in-depth: after reading the file contents and confirming the pid is dead, re-read the file contents just before os.Remove to verify they haven't changed (a different process may have rewritten the lock with its own pid). If contents changed, skip the remove. This closes the pid-reuse window at the cost of one extra ReadFile. (B) Documentation: add a comprehensive comment documenting the TOCTOU window and why the CAS mitigation makes it non-exploitable, accepting the current behavior. Recommended: Option A (re-read before remove) as a cheap, effective defense.\n4. OUTPUT: The TOCTOU window is narrowed (Option A) or comprehensively documented (Option B).\n5. DOCS: [Mode A] Update the code comment on reapStaleLocks to document the TOCTOU mitigation. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.8",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -322,8 +393,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.9", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-010. internal/lock/lock_windows.go processAlive (~line 19) returns true unconditionally. Per FR-K7: 'flock is a no-op on Windows (the CAS is the guarantee)'. Lock files are not created on the Windows commit path, so reaping is moot.\n2. INPUT: processAlive(pid int, hostname string) bool is the cross-platform twin of lock_unix.go's processAlive. Used by reapStaleLocks. On Windows, the syscall package or golang.org/x/sys/windows could provide process liveness (OpenProcess + WaitForSingleObject).\n3. LOGIC: Option A (recommended given priority): Strengthen the existing documentation comment to explicitly state WHY processAlive returns true on Windows (flock is a no-op, CAS is the guarantee, lock files aren't created) and that reaping is intentionally non-functional per FR-K7. Add a cross-reference to FR-K7 in spec/SPEC.md. Option B (future enhancement): implement real process liveness using Windows API — but this is low-value since lock files aren't created on Windows anyway. Recommended: Option A.\n4. OUTPUT: The Windows processAlive behavior is comprehensively documented with FR-K7 cross-reference.\n5. DOCS: [Mode A] This IS a documentation fix (code comment). No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-010. internal/lock/lock_windows.go processAlive (~line 19) returns true unconditionally. Per FR-K7: 'flock is a no-op on Windows (the CAS is the guarantee)'. Lock files are not created on the Windows commit path, so reaping is moot.\n2. INPUT: processAlive(pid int, hostname string) bool is the cross-platform twin of lock_unix.go's processAlive. Used by reapStaleLocks. On Windows, the syscall package or golang.org/x/sys/windows could provide process liveness (OpenProcess + WaitForSingleObject).\n3. LOGIC: Option A (recommended given priority): Strengthen the existing documentation comment to explicitly state WHY processAlive returns true on Windows (flock is a no-op, CAS is the guarantee, lock files aren't created) and that reaping is intentionally non-functional per FR-K7. Add a cross-reference to FR-K7 in spec/SPEC.md. Option B (future enhancement): implement real process liveness using Windows API — but this is low-value since lock files aren't created on Windows anyway. Recommended: Option A.\n4. OUTPUT: The Windows processAlive behavior is comprehensively documented with FR-K7 cross-reference.\n5. DOCS: [Mode A] This IS a documentation fix (code comment). No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.9",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -341,8 +415,11 @@
                   "status": "Planned",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.3/h3.10", "h2.5"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-011. The bug is in internal/lock/orphan_unix.go appearsOrphaned (~line 42). It returns ppid == 1. Under subreapers (PR_SET_CHILD_SUBREAPER — systemd, systemd-run, Docker, supervisord), a reparented orphan's ppid is the subreaper pid, not 1. The ACTUAL watchdog (internal/watchdog/arm_unix.go:40) correctly uses osGetppid() != originalPpid (parent-pid CHANGE), so no live lock is ever force-broken. This is cosmetic/informational ONLY.\n2. INPUT: appearsOrphaned(pid int) bool calls ppidOf(pid) which dispatches on runtime.GOOS (Linux: /proc/pid/status, others: ps). It returns ppid == 1.\n3. LOGIC: Two options: (A) Improve the heuristic: also check if the ppid process is a known subreaper by reading /proc/<ppid>/comm (e.g., 'systemd', 'containerd', 'dockerd', 'supervisord', 'init', 'launchd'). If ppid's comm matches a subreaper or init, treat as orphaned. This adds false-positive risk, so keep the conservative invariant (return false on any error/ambiguity). (B) Document the limitation prominently: add a comment noting that under subreapers, ppid may be != 1, and this is a known limitation of the display-only hint; the actual watchdog is not affected. Recommended: Option B (document) since the existing code already has a LIMITATION comment; strengthen it with specific subreaper examples and cross-reference arm_unix.go's correct CHANGE detection.\n4. OUTPUT: The appearsOrphaned limitation is comprehensively documented (or the heuristic is improved for known subreapers).\n5. DOCS: [Mode A] Update the code comment on appearsOrphaned to document the subreaper limitation with cross-reference to arm_unix.go and FR-K2. No user-facing doc surface change."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-011. The bug is in internal/lock/orphan_unix.go appearsOrphaned (~line 42). It returns ppid == 1. Under subreapers (PR_SET_CHILD_SUBREAPER — systemd, systemd-run, Docker, supervisord), a reparented orphan's ppid is the subreaper pid, not 1. The ACTUAL watchdog (internal/watchdog/arm_unix.go:40) correctly uses osGetppid() != originalPpid (parent-pid CHANGE), so no live lock is ever force-broken. This is cosmetic/informational ONLY.\n2. INPUT: appearsOrphaned(pid int) bool calls ppidOf(pid) which dispatches on runtime.GOOS (Linux: /proc/pid/status, others: ps). It returns ppid == 1.\n3. LOGIC: Two options: (A) Improve the heuristic: also check if the ppid process is a known subreaper by reading /proc/<ppid>/comm (e.g., 'systemd', 'containerd', 'dockerd', 'supervisord', 'init', 'launchd'). If ppid's comm matches a subreaper or init, treat as orphaned. This adds false-positive risk, so keep the conservative invariant (return false on any error/ambiguity). (B) Document the limitation prominently: add a comment noting that under subreapers, ppid may be != 1, and this is a known limitation of the display-only hint; the actual watchdog is not affected. Recommended: Option B (document) since the existing code already has a LIMITATION comment; strengthen it with specific subreaper examples and cross-reference arm_unix.go's correct CHANGE detection.\n4. OUTPUT: The appearsOrphaned limitation is comprehensively documented (or the heuristic is improved for known subreapers).\n5. DOCS: [Mode A] Update the code comment on appearsOrphaned to document the subreaper limitation with cross-reference to arm_unix.go and FR-K2. No user-facing doc surface change.",
+                  "prd_selectors": [
+                    "h2.3/h3.10",
+                    "h2.5"
+                  ]
                 }
               ]
             },
@@ -359,9 +436,15 @@
                   "title": "Review README.md and docs/ for lock/watchdog documentation accuracy",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M4.T1.S1", "P1.M4.T2.S1", "P1.M4.T3.S1"],
-                  "prd_selectors": ["h2.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The lock/watchdog fixes are all defense-in-depth or documentation improvements. docs/how-it-works.md may reference lock status or orphan detection. README.md may reference the lock mechanism at a high level.\n2. INPUT: The implemented fixes from P1.M4.T1 through P1.M4.T3.\n3. LOGIC: Review docs for accuracy about lock status display, orphan detection, and stale-file reaping. If docs reference the orphan hint or Windows behavior, verify they match the fixed code. If docs already match, no changes needed.\n4. OUTPUT: User docs accurately reflect the lock/watchdog behavior.\n5. DOCS: This IS the documentation sync task."
+                  "dependencies": [
+                    "P1.M4.T1.S1",
+                    "P1.M4.T2.S1",
+                    "P1.M4.T3.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The lock/watchdog fixes are all defense-in-depth or documentation improvements. docs/how-it-works.md may reference lock status or orphan detection. README.md may reference the lock mechanism at a high level.\n2. INPUT: The implemented fixes from P1.M4.T1 through P1.M4.T3.\n3. LOGIC: Review docs for accuracy about lock status display, orphan detection, and stale-file reaping. If docs reference the orphan hint or Windows behavior, verify they match the fixed code. If docs already match, no changes needed.\n4. OUTPUT: User docs accurately reflect the lock/watchdog behavior.\n5. DOCS: This IS the documentation sync task.",
+                  "prd_selectors": [
+                    "h2.0"
+                  ]
                 }
               ]
             }

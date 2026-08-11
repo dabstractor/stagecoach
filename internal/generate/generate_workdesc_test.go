@@ -429,3 +429,136 @@ func TestStagedFileDiff_SinglePath(t *testing.T) {
 		t.Errorf("StagedFileDiff(nonexistent) = %q, want empty", missing)
 	}
 }
+
+// ---- BUG-001 helpers: containsReadVerb / readTargets / buildNonStagedReadAnswer ----
+
+// TestContainsReadVerb covers the BUG-001 gate: ANY line whose verb == "READ" (exact
+// parseReadLines/stripReadLines tokenization). Line-level, case-insensitive, punctuation-forgiving.
+func TestContainsReadVerb(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"read one path", "READ a.go", true},
+		{"case-insensitive verb", "read a.go", true},
+		{"message only", "feat: add thing", false},
+		{"empty", "", false},
+		{"bare READ (no path)", "READ", true},
+		{"any line is enough", "READ a.go\nfeat: x", true},
+		{"leading punctuation + ws on verb", "  read  a.go", true},
+		{"READ-like but not the verb (readfile)", "readfile a.go", false},
+		{"quoted verb is NOT recognized (matches parseReadLines tokenization)", "\"READ\" a.go", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := containsReadVerb(tc.in); got != tc.want {
+				t.Errorf("containsReadVerb(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestReadTargets covers the raw non-staged variant of parseReadLines: normalized, de-duplicated,
+// NO skeleton filter (every READ target returned as-is).
+func TestReadTargets(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"comma-separated", "READ a.go, b.go", []string{"a.go", "b.go"}},
+		{"backtick-stripped", "READ `typo.go`", []string{"typo.go"}},
+		{"dedupes", "READ a.go\nREAD a.go", []string{"a.go"}},
+		{"no READ yields empty", "feat: add thing", nil},
+		{"bare READ yields empty", "READ", nil},
+		{"multiple lines preserved in order", "READ a.go\nREAD b.go, c.go", []string{"a.go", "b.go", "c.go"}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := readTargets(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("readTargets(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+			for i, w := range tc.want {
+				if got[i] != w {
+					t.Errorf("readTargets(%q)[%d] = %q, want %q", tc.in, i, got[i], w)
+				}
+			}
+		})
+	}
+}
+
+// TestBuildNonStagedReadAnswer covers the FR-W3 note builder.
+func TestBuildNonStagedReadAnswer(t *testing.T) {
+	if got := buildNonStagedReadAnswer([]string{"typo.go"}); got != "typo.go is not in the staged changes." {
+		t.Errorf("single target = %q", got)
+	}
+	if got := buildNonStagedReadAnswer(nil); got != "(no staged file matches that read request.)" {
+		t.Errorf("empty targets = %q, want the generic note", got)
+	}
+	// Each target gets its own note line.
+	got := buildNonStagedReadAnswer([]string{"a.go", "b.go"})
+	if !strings.Contains(got, "a.go is not in the staged changes.") || !strings.Contains(got, "b.go is not in the staged changes.") {
+		t.Errorf("multi-target note missing a target: %q", got)
+	}
+}
+
+// TestCommitStaged_WorkDescription_NonStagedReadNotCommitted (BUG-001 regression): a model whose
+// first response is ONLY a READ of a NON-staged path ("READ typo.go", typo.go not staged) must NOT
+// have that READ line parsed as the commit subject. Before the fix the buggy len(paths)==0 branch did
+// exactly that (subject == "READ typo.go"). After the fix the run notes typo.go as non-staged (FR-W3)
+// and continues; the scripted second response is the real message, which is what commits.
+func TestCommitStaged_WorkDescription_NonStagedReadNotCommitted(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "feature.go", "package main\n\nfunc F() {}\n")
+	stageFile(t, repo, "feature.go")
+
+	// Script: turn 1 = "READ typo.go" (typo.go is NOT staged → BUG-001 trigger); turn 2 = the message.
+	m := appendScriptManifest(t, bin, []string{"READ typo.go", "feat: add F"})
+	cfg := config.Defaults()
+	cfg.WorkDescription = "add F"
+
+	res, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err != nil {
+		t.Fatalf("CommitStaged: %v", err)
+	}
+	if res.CommitSHA == "" {
+		t.Fatal("CommitSHA empty — nothing committed")
+	}
+	if res.Subject != "feat: add F" {
+		t.Errorf("BUG-001 regression: Subject = %q; the non-staged READ line must NOT be the subject (want %q)", res.Subject, "feat: add F")
+	}
+}
+
+// TestCommitStaged_WorkDescription_NonStagedReadRoundCapBounds (BUG-001 + FR-W6): a model that keeps
+// emitting ONLY non-staged READs must hit the round cap and force a conclusion — it must NOT loop
+// forever (the critical round-cap-routing requirement of the restructure) and must NOT commit the READ
+// line. With a tiny round budget and a script of all-non-staged READs, the cap fires and the
+// forced-conclusion turn (which itself strips READ lines) yields no valid message → RescueError.
+func TestCommitStaged_WorkDescription_NonStagedReadRoundCapBounds(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "feature.go", "package main\n\nfunc F() {}\n")
+	stageFile(t, repo, "feature.go")
+
+	// Script: every turn is a non-staged READ (typo.go never staged). The round cap (WorkDescReadRounds=1)
+	// must fire after the first non-staged READ is noted, forcing conclusion; the forced-conclusion turn
+	// also gets a non-staged READ → stripped → empty → ok=false → RescueError (NOT an infinite loop).
+	m := appendScriptManifest(t, bin, []string{"READ typo.go", "READ typo.go", "READ typo.go"})
+	cfg := config.Defaults()
+	cfg.WorkDescription = "add F"
+	cfg.WorkDescReadRounds = 1 // tiny cap so the bounded-termination path is exercised quickly
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err == nil {
+		t.Fatal("expected a rescue once the round cap forces conclusion on an all-non-staged-READ run; got nil")
+	}
+}
