@@ -117,18 +117,24 @@ func (r *Registry) DefaultProvider(installed []string) string {
 	return ""
 }
 
-// FirstTooledProvider returns the first built-in (in preference order, pi first) that the caller
-// reports installed AND whose manifest has non-empty TooledFlags (i.e. can serve as the stager),
-// or "" if none of the preferred built-ins are installed and stager-capable (FR-D4 — PRD §9.16).
-// It mirrors DefaultProvider's structure but adds the TooledFlags filter: only pi and claude are
-// stager-capable today (builtin.go). installed is the caller's list of installed provider NAMES
-// (computed via IsInstalled over List()). Taking it as a param keeps this pure/testable (no exec inside).
-// Only built-in names are candidates; user-defined §12.8 providers are never auto-selected.
+// FirstTooledProvider returns the first provider that the caller reports installed AND whose
+// manifest has non-empty TooledFlags (i.e. can serve as the stager), or "" if none qualifies
+// (FR-D4 — PRD §9.16). It scans in two phases, preserving preference order:
+//  1. Built-ins first, in FR-D1 preference order (pi first) — mirrors DefaultProvider but adds the
+//     TooledFlags filter. (Today pi, claude, and agy are stager-capable per builtin.go.)
+//  2. BUG-003/FR-M13 (S3): if no built-in tooled provider is installed, widen the fallback to
+//     user-defined (§12.8) providers with non-empty TooledFlags, scanned in registry List() order
+//     (deterministic, ascending by Name). This lets a user-defined tooled provider serve as the
+//     stager fallback so a non-disjoint decompose run need not be deferred to the fast-path.
+//
+// installed is the caller's list of installed provider NAMES (computed via IsInstalled over List()
+// in decompose.computeInstalled). Taking it as a param keeps this pure/testable (no exec inside).
 func (r *Registry) FirstTooledProvider(installed []string) string {
 	present := make(map[string]struct{}, len(installed))
 	for _, name := range installed {
 		present[name] = struct{}{}
 	}
+	// Phase 1 — built-ins in FR-D1 preference order (pi first). UNCHANGED.
 	for _, name := range preferredBuiltins {
 		if _, ok := present[name]; !ok {
 			continue
@@ -139,6 +145,24 @@ func (r *Registry) FirstTooledProvider(installed []string) string {
 		}
 		if len(m.TooledFlags) > 0 {
 			return name
+		}
+	}
+	// Phase 2 — BUG-003/FR-M13 (S3): user-defined tooled providers as the fallback. Built-ins are
+	// skipped (already considered in preference order above); preferredBuiltins is the complete built-in
+	// set (TestPreferredBuiltins_MatchesBuiltinKeys), so this set-membership check is exact.
+	builtins := make(map[string]struct{}, len(preferredBuiltins))
+	for _, name := range preferredBuiltins {
+		builtins[name] = struct{}{}
+	}
+	for _, m := range r.List() {
+		if _, isBuiltin := builtins[m.Name]; isBuiltin {
+			continue
+		}
+		if _, ok := present[m.Name]; !ok {
+			continue
+		}
+		if len(m.TooledFlags) > 0 {
+			return m.Name
 		}
 	}
 	return ""

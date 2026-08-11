@@ -376,3 +376,29 @@ func TestFirstTooledProvider(t *testing.T) {
 		}
 	}
 }
+
+// TestFirstTooledProvider_UserDefinedFallback (BUG-003/FR-M13, S3): a user-defined (§12.8) provider
+// with non-empty TooledFlags serves as the stager fallback when no built-in tooled provider is
+// installed; built-ins remain preferred; empty-tooled user-defined providers are never selected.
+func TestFirstTooledProvider_UserDefinedFallback(t *testing.T) {
+	r := NewRegistry(map[string]Manifest{
+		"custom-tooled": {TooledFlags: []string{"--allowed-tools", "git:*"}}, // stager-capable
+		"custom-empty":  {},                                                  // nil TooledFlags — not capable
+	})
+	cases := []struct {
+		name      string
+		installed []string
+		want      string
+	}{
+		{"user-defined tooled when no built-in installed", []string{"custom-tooled"}, "custom-tooled"},
+		{"built-in still preferred over user-defined", []string{"custom-tooled", "pi"}, "pi"},
+		{"user-defined tooled preferred over empty user-defined", []string{"custom-tooled", "custom-empty"}, "custom-tooled"},
+		{"empty-tooled user-defined never selected", []string{"custom-empty"}, ""},
+		{"nothing installed", nil, ""},
+	}
+	for _, c := range cases {
+		if got := r.FirstTooledProvider(c.installed); got != c.want {
+			t.Errorf("%s: FirstTooledProvider(%v) = %q, want %q", c.name, c.installed, got, c.want)
+		}
+	}
+}

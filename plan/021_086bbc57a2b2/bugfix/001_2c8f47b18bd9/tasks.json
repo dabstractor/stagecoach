@@ -150,7 +150,7 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Fix eager stager resolution blocking FR-M13 disjoint fast-path for no-tooled providers (BUG-003)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "ResolveRoles resolves the stager role (with FR-D4 tooled fallback) for EVERY decompose run at Decompose entry, BEFORE the planner runs and before disjointness is determined. A no-tooled provider with no installed tooled built-in hard-errors even for a perfectly file-disjoint tree. The fix defers the stager requirement so the fast-path (which needs no stager) is reachable.",
               "subtasks": [
                 {
@@ -186,7 +186,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S3",
                   "title": "Extend FirstTooledProvider to also consider user-defined tooled providers as fallback",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
