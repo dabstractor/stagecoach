@@ -385,6 +385,19 @@ func TestDetect_Path_BrewCellar(t *testing.T) {
 	}
 }
 
+func TestDetect_Path_LinuxbrewCellar(t *testing.T) {
+	// BUG-007: the Linuxbrew Cellar root (/home/linuxbrew/.linuxbrew/Cellar/) must detect as brew, not
+	// fall through to direct (which would self-swap a brew-managed binary — FR-U1). detectPath is
+	// GOOS-agnostic (cross-GOOS deterministic), so this matches under any host GOOS; GOOS="linux" is
+	// set for semantic accuracy (Linuxbrew is a Linux install). The ExePath need not exist (detectPath
+	// tolerates EvalSymlinks failure and falls back to the raw path).
+	d := &Detector{ExePath: "/home/linuxbrew/.linuxbrew/Cellar/stagecoach/1.0/bin/stagecoach", GOOS: "linux"}
+	ch, ev, ok := d.detectPath()
+	if !ok || ch != ChannelBrew {
+		t.Errorf("detectPath linuxbrew = %q,%q,%v, want brew,true", ch, ev, ok)
+	}
+}
+
 func TestDetect_Path_NixStore(t *testing.T) {
 	d := &Detector{ExePath: "/nix/store/abc123-stagecoach-1.0/bin/stagecoach", GOOS: "linux"}
 	ch, _, ok := d.detectPath()

@@ -283,14 +283,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Add Linuxbrew Cellar root to pathHeuristics (BUG-007)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "pathHeuristics recognizes /opt/homebrew/Cellar/ and /usr/local/Cellar/ but not /home/linuxbrew/.linuxbrew/Cellar/ used by Linuxbrew on Linux. A Linuxbrew install falls through to 'direct', so 'stagecoach upgrade' would self-swap a Homebrew-owned binary.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Add /home/linuxbrew/.linuxbrew/Cellar/ entry to pathHeuristics table",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-007. The pathHeuristics table is in internal/upgrade/detect.go (~line 368). It maps install-root prefixes to channels. Currently has /opt/homebrew/Cellar/ (Apple Silicon) and /usr/local/Cellar/ (Intel macOS) but NOT /home/linuxbrew/.linuxbrew/Cellar/ (Linuxbrew on Linux).\n2. INPUT: pathHeuristics is a []pathHeuristic where each entry has {prefix string, channel Channel}. ChannelBrew is the brew channel constant.\n3. LOGIC: Add {prefix: '/home/linuxbrew/.linuxbrew/Cellar/', channel: ChannelBrew} to the pathHeuristics slice. Place it adjacent to the other Cellar entries for readability.\n4. OUTPUT: A Linuxbrew install is correctly detected as ChannelBrew instead of falling through to ChannelDirect.\n5. DOCS: [Mode A] No user-facing doc surface change. The detection is internal. Optionally add a code comment noting the three Homebrew Cellar roots (Apple Silicon, Intel, Linuxbrew).",
@@ -305,14 +305,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Escape c.Repo in GitHub releases URLs (BUG-008)",
-              "status": "Researching",
+              "status": "Ready",
               "description": "releases.go builds request paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' without url.PathEscape, while the tag-based path uses url.PathEscape(tag). Defense-in-depth: if Repo ever carried a special character, the request would be malformed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Validate or escape c.Repo segments in releases.go request paths",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-008. The bug is in internal/upgrade/releases.go. Lines ~179 and ~223 build paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' with c.Repo UNESCAPED. Line ~198 correctly uses url.PathEscape(tag). c.Repo is the 'owner/repo' string from config.\n2. INPUT: c.Repo is sourced from config (config.Upgrade.SourceRepo, default 'dabstractor/stagecoach'). The GitHub API expects '/repos/owner/repo/...' in the path. url.PathEscape escapes '/' to '%2F', which would BREAK 'owner/repo'. So naively applying url.PathEscape(c.Repo) is WRONG.\n3. LOGIC: Since c.Repo is a trusted config value that should be 'owner/repo' format, the correct fix is to VALIDATE c.Repo at Client construction time (or at do() entry) to ensure it matches the expected pattern ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$. If validation fails, return an error. Alternatively, split c.Repo on '/' and escape each segment: path := '/repos/' + url.PathEscape(owner) + '/' + url.PathEscape(repo) + '/releases/latest'. The split-and-escape approach is the most robust defense-in-depth.\n4. OUTPUT: A malformed c.Repo produces a clear error instead of a malformed HTTP request. Normal 'owner/repo' values are unaffected.\n5. DOCS: [Mode A] Add a code comment documenting the validation/escaping rationale. No user-facing doc surface change.",

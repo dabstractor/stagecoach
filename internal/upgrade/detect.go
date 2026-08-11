@@ -368,8 +368,9 @@ type pathHeuristic struct {
 // all owned by tier-(b) QUERIES instead, each of which only confirms when THAT package manager
 // actually manages the package. FR-U2: ambiguous → direct.
 var pathHeuristics = []pathHeuristic{
-	{prefix: "/opt/homebrew/Cellar/", channel: ChannelBrew},
-	{prefix: "/usr/local/Cellar/", channel: ChannelBrew},
+	{prefix: "/opt/homebrew/Cellar/", channel: ChannelBrew},              // Apple Silicon macOS
+	{prefix: "/usr/local/Cellar/", channel: ChannelBrew},                 // Intel macOS
+	{prefix: "/home/linuxbrew/.linuxbrew/Cellar/", channel: ChannelBrew}, // Linuxbrew on Linux (BUG-007)
 	{prefix: `\scoop\shims\`, channel: ChannelScoop},
 	{prefix: "/nix/store/", channel: ChannelNix},
 	{prefix: "ProgramData/chocolatey/", channel: ChannelChocolatey},
