@@ -171,14 +171,20 @@ details like filenames or function names.`
 // non-empty, appends the FR-F6 one-line language instruction in EITHER path (withLocale is a no-op when
 // locale=="").
 //
-// Defensive: subjectTarget is a plain int with no failure mode; fmt.Sprintf cannot fail. Returns string
-// only (no error). See design-decisions.md §1/§2/§3.
+// FR-F9 +body (§17.8): the format is parsed via splitFormat and the dispatch is on the BASE (not the
+// raw format), so "auto+body" keeps the §17.2 fallback body+target line (it is NOT routed to the
+// non-auto branch) and appends bodyForceDirective to force a body. Byte-identical for "auto" (no suffix)
+// per FR-F1 (splitFormat("auto") ⇒ forceBody=false).
 func BuildFallbackPrompt(subjectTarget int, format, locale string) string {
-	if format != "auto" {
+	base, forceBody := splitFormat(format)
+	if base != "auto" {
 		return withLocale(buildFormatSystemPrompt(format, false, subjectTarget), locale)
 	}
 	s := fallbackPromptBody + "\n\n" +
 		fmt.Sprintf("Target ~%d characters (~7 words). Format: type(scope): description", subjectTarget)
+	if forceBody {
+		s += "\n\n" + bodyForceDirective // new-repo auto+body: keep §17.2 body + force a body (FR-F9)
+	}
 	return withLocale(s, locale)
 }
 
@@ -187,8 +193,15 @@ func BuildFallbackPrompt(subjectTarget int, format, locale string) string {
 // locale==""); any other mode replaces the style-examples block + anti-reuse warning with the mode's
 // scaffold (buildFormatSystemPrompt) while retaining the multi-line rule (FR12 detection still runs) and
 // the subject-target line.
+//
+// FR-F9 +body (§17.8): the format is parsed via splitFormat and the dispatch is on the BASE (not the
+// raw format), so "auto+body" keeps the §17.1 examples+anti-reuse block AND replaces the multi-line
+// rule with bodyForceDirective (an unconditional body directive; hasMultiline is ignored under +body).
+// Byte-identical for "auto" (no suffix) per FR-F1 (splitFormat("auto") ⇒ forceBody=false → unchanged
+// else-if rule selection).
 func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int, format, locale string) string {
-	if format != "auto" {
+	base, forceBody := splitFormat(format)
+	if base != "auto" {
 		return withLocale(buildFormatSystemPrompt(format, hasMultiline, subjectTarget), locale)
 	}
 
@@ -210,10 +223,13 @@ func BuildSystemPrompt(examples []string, hasMultiline bool, subjectTarget int, 
 	b.WriteByte('\n')
 	b.WriteString(antiReuseProhibition)
 
-	// Blank line, then the multi-line rule selected by the detection (FR12 → FR13).
+	// Blank line, then the multi-line rule selected by the detection (FR12 → FR13). Under +body (FR-F9)
+	// the unconditional bodyForceDirective REPLACES the conditional rule (hasMultiline is ignored).
 	b.WriteByte('\n')
 	b.WriteByte('\n')
-	if hasMultiline {
+	if forceBody {
+		b.WriteString(bodyForceDirective)
+	} else if hasMultiline {
 		b.WriteString(multilineRuleAllow)
 	} else {
 		b.WriteString(multilineRuleSingle)
