@@ -995,8 +995,10 @@ func drainMsgs(chs []chan msgOut) {
 // resolveArbiter.
 //
 // FR-M1b: the leftover diff is FROZEN — TreeDiff(tipTree, tStart), not a live WorkingTreeDiff.
-// The arbiter's STAGING (resolveArbiter via AddAll/Add) is UNCHANGED — it stages from the working tree
-// (== T_start's source under the invariant); the freeze OUTPUT guarantee for staging is P3.M2.T1.S1.
+// FR-M1b/FR-M1d: the arbiter's gate, diff, AND staging all derive from the FROZEN T_start —
+// TreeDiff(tipTree, tStart) for the leftover diff; resolveArbiter/resolveNewCommit/amendTip stage via
+// OverlayTreePaths(treePrime := tStart), never the live working tree. A change written to the working
+// tree after T_start capture is left untouched (not swept into an arbiter commit).
 // rereadFinalCommits re-reads the FINAL commits this run produced (post-arbiter) by listing the range
 // preRunHEAD..HEAD via LogRange and pairing each entry's SHA with DiffTree, rebuilding accurate
 // []CommitResult for DecomposeResult.Commits. It closes the §G-RESULT post-arbiter gap: after the

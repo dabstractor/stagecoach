@@ -143,7 +143,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Decompose Pipeline Bug Fixes (BUG-003, BUG-012)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Fix two bugs in the decompose subsystem. BUG-003 (major): ResolveRoles eagerly requires a stager at role resolution, blocking the FR-M13 file-disjoint fast-path for no-tooled providers. BUG-012 (minor): a stale doc comment claims the arbiter stages from the live working tree, contradicting FR-M1d.",
           "tasks": [
             {
@@ -203,14 +203,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Correct stale arbiter staging comment — stages from frozen T_start, not working tree (BUG-012)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "A comment near the arbiter phase (decompose.go:~981) states the arbiter's staging 'is UNCHANGED — it stages from the working tree', but FR-M1d extended the freeze boundary into the arbiter so staging derives from the frozen T_start via OverlayTreePaths. The code is correct (resolveArbiter uses tStart); only the comment is stale.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Update the stale arbiter staging comment to reflect FR-M1d frozen-tree staging",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-012. The stale comment is in internal/decompose/decompose.go (~line 981, in the runArbiterPhase/resolveArbiter doc block). It says 'The arbiter's STAGING ... is UNCHANGED — it stages from the working tree'. FR-M1d (spec/SPEC.md:14) extended the freeze boundary: gate, diff, AND staging derive from T_start via OverlayTreePaths. The code is correct (resolveArbiter/resolveNewCommit/amendTip use tStart, not AddAll).\n2. INPUT: The comment text to replace. The surrounding doc block describes the arbiter phase.\n3. LOGIC: Replace 'stages from the working tree (== T_start's source under the invariant)' with text reflecting FR-M1d: the arbiter stages from the frozen T_start via OverlayTreePaths (treePrime := tStart), never the live working tree. Reference FR-M1d and the OverlayTreePaths primitive.\n4. OUTPUT: The comment accurately describes the arbiter's frozen-tree staging behavior.\n5. DOCS: This IS a documentation fix (code comment). No user-facing doc surface change.",
@@ -225,14 +225,14 @@
               "type": "Task",
               "id": "P1.M2.T3",
               "title": "Sync changeset-level documentation for decompose fixes",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Sweep README.md and docs/how-it-works.md for any references to decompose stager requirements that the BUG-003 fix changes. Verify the docs accurately describe the file-disjoint fast-path for no-tooled providers.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T3.S1",
                   "title": "Review and update README.md and docs/how-it-works.md for decompose fast-path accuracy",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1",
