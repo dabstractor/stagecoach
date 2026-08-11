@@ -187,6 +187,68 @@ func TestNextChunk_SmallDiffIsOneChunk(t *testing.T) {
 	}
 }
 
+// TestAnchorToHunkEdge verifies the @@ hunk-edge anchor (FR-W5): prefer \n@@, fall back to \n,
+// then len(diff).
+func TestAnchorToHunkEdge(t *testing.T) {
+	diff := "@@ -1,2 +1,2 @@\n-old\n+new\n@@ -10,2 +10,2 @@\n-old2\n+new2\n"
+	// end inside hunk-1 body, before the hunk-2 @@ header → anchor to the \n@@ edge.
+	end := strings.Index(diff, "+new\n") + len("+new")
+	got := anchorToHunkEdge(diff, end)
+	want := strings.Index(diff, "\n@@ -10") + 1 // just past the \n before hunk-2's @@
+	if got != want {
+		t.Errorf("anchorToHunkEdge hunk-edge = %d, want %d (the \\n@@ before hunk 2)", got, want)
+	}
+	// No @@ after end (single remaining hunk) → fall back to the next newline (FR-W5 line cut).
+	end2 := strings.Index(diff, "+new2") // inside hunk-2 body; no further @@
+	got2 := anchorToHunkEdge(diff, end2)
+	want2 := len(diff) // no newline after "+new2\n" except the trailing one → len(diff)
+	if got2 != want2 {
+		t.Errorf("anchorToHunkEdge fallback = %d, want %d (len(diff))", got2, want2)
+	}
+}
+
+// TestChunkCount_HunkBoundaries verifies chunkCount (and thus nextChunk, which shares
+// anchorToHunkEdge) chunks a multi-hunk diff on @@ edges, keeping the "part i of N" total
+// consistent with the real boundaries.
+func TestChunkCount_HunkBoundaries(t *testing.T) {
+	// hunk1 is deliberately LONGER than the rune budget so advanceRunes from 0 lands inside hunk1
+	// (before its trailing \n@@), forcing the @@ anchor to snap the first boundary to hunk2's @@
+	// header. hunk2 is short enough to fit in one window after the boundary so it ends at len(diff).
+	// This is the FR-W5 scenario the BUG-005 fix targets: a budget position mid-hunk-1 must round UP
+	// to the next @@ edge, not split hunk-1 at a newline.
+	hunk1 := "@@ -1,5 +1,5 @@\n context-line-one\n context-line-two\n-del1\n+add1\n"
+	hunk2 := "@@ -20,3 +20,3 @@\n ctx2\n-del2\n+add2\n"
+	diff := hunk1 + hunk2
+	at := strings.Index(diff, "\n@@ -20") // the \n before hunk2's @@ header
+	budget := 40                          // > len(hunk2): hunk2 fits in one window; < first-@@-pos: hunk1 snaps to the @@ edge
+	total := chunkCount(diff, budget)
+	// With @@ anchoring, hunk-1 is one chunk (snapped to the @@ edge) and hunk-2 is one chunk (fits
+	// in one window) ⇒ total == 2. (Pre-fix, a newline anchor would split hunk-1 mid-body.)
+	if total != 2 {
+		t.Errorf("chunkCount = %d, want 2 (one chunk per hunk under @@ anchoring)", total)
+	}
+	// Walk the chunks with the SAME anchor and assert no boundary splits a hunk — every boundary is
+	// either a @@ line or the end of the diff (FR-W5).
+	for off := 0; off < len(diff); {
+		end := anchorToHunkEdge(diff, advanceRunes(diff, off, budget))
+		if end < len(diff) {
+			// The next chunk must start at a line beginning "@@" (a hunk header).
+			snippet := diff[end:]
+			if n := len(snippet); n > 10 {
+				snippet = snippet[:10]
+			}
+			if !strings.HasPrefix(diff[end:], "@@") {
+				t.Errorf("chunk boundary at %d does not start a hunk: %q", end, snippet)
+			}
+		}
+		if end <= off {
+			t.Fatalf("chunk boundary did not advance at off=%d end=%d", off, end)
+		}
+		off = end
+	}
+	_ = at // (the @@ index is documented context; the walk above is the assertion)
+}
+
 // ---- 3. CommitStaged end-to-end (work-description mode) ----
 
 // TestCommitStaged_WorkDescription_HappyPath: the model READs a staged file, then emits a unique

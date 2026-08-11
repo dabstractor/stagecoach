@@ -64,14 +64,14 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Fix chunk boundaries anchoring to newlines instead of @@ hunk edges (BUG-005)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "nextChunk anchors the chunk end forward to the next newline via strings.IndexByte(diff[end:], '\\n'), not to @@ hunk boundaries. Per FR-W5, chunk boundaries should hug @@ hunk edges so a change is never split mid-hunk. chunkCount must use the same anchoring for consistency.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "Modify nextChunk and chunkCount to anchor to @@ hunk boundaries",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -89,14 +89,14 @@
               "type": "Task",
               "id": "P1.M1.T4",
               "title": "Fix 'part i of N' label dividing byte offset by rune budget (BUG-006)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The part label computes part := (st.offsets[p] / chunkRuneBudget()) + 1, but st.offsets[p] is a BYTE offset while chunkRuneBudget() returns runes. For multibyte UTF-8 diffs, the part index drifts. Fix by converting the byte offset to a rune count before dividing.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T4.S1",
                   "title": "Fix part label to use rune count consistently with chunkRuneBudget",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T2.S1"

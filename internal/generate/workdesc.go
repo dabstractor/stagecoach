@@ -398,10 +398,31 @@ func buildReadAnswer(ctx context.Context, g git.Git, cfg config.Config, excludes
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// anchorToHunkEdge advances end FORWARD to the next @@ hunk boundary (a line beginning "@@") so a hunk
+// is never split mid-hunk (FR-W5). It first scans for "\n@@" from diff[end:]; if found at i it returns
+// end+i+1 (the newline before @@ ends the current chunk, so the @@ header starts the next). If no @@
+// hunk edge follows, it falls back to the next newline (FR-W5: a single hunk exceeding the cap falls
+// back to a line cut); if neither follows, it returns len(diff). SHARED by nextChunk and chunkCount so
+// the "part i of N" total stays consistent with the actual boundaries.
+func anchorToHunkEdge(diff string, end int) int {
+	if end > len(diff) {
+		end = len(diff)
+	}
+	if i := strings.Index(diff[end:], "\n@@"); i >= 0 {
+		return end + i + 1
+	}
+	if i := strings.IndexByte(diff[end:], '\n'); i >= 0 {
+		return end + i + 1
+	}
+	return len(diff)
+}
+
 // nextChunk returns the chunk of diff starting at offset (the implicit cursor), the total number of
 // chunks the full diff would span at the per-call cap, and the byte advance to the next chunk boundary
 // (FR-W5). When offset >= len(diff) the chunk is "" and advance is 0 (the caller notes "end of diff").
-// Boundaries hug newline edges so a hunk is never split mid-line; the cap is readChunkTokenCap tokens
+// Boundaries hug @@ hunk edges so a change is never split mid-hunk (FR-W5); a single hunk exceeding the
+// cap falls back to a line cut. The anchor is shared with chunkCount (anchorToHunkEdge) so the
+// "part i of N" total stays consistent with the actual boundaries. The cap is readChunkTokenCap tokens
 // realized as readChunkTokenCap*4 runes (the rune-equivalent of git.EstimateTokens's ceil(runes/4),
 // matching multiturn.go's chunk sizing discipline).
 func nextChunk(diff string, offset int) (chunk string, total int, advance int) {
@@ -411,24 +432,20 @@ func nextChunk(diff string, offset int) (chunk string, total int, advance int) {
 	budget := chunkRuneBudget()
 	total = chunkCount(diff, budget)
 	end := advanceRunes(diff, offset, budget)
-	// Anchor FORWARD to the next newline so a line is never split mid-line.
-	if i := strings.IndexByte(diff[end:], '\n'); i >= 0 {
-		end += i + 1
-	} else {
-		end = len(diff)
-	}
-	if end > len(diff) {
-		end = len(diff)
-	}
+	// Anchor FORWARD to the next @@ hunk edge so a change is never split mid-hunk (FR-W5); falls back
+	// to a line cut when no hunk edge follows. Shared with chunkCount (anchorToHunkEdge) so the
+	// "part i of N" total matches the real boundaries.
+	end = anchorToHunkEdge(diff, end)
 	return diff[offset:end], total, end - offset
 }
 
 // chunkRuneBudget is the per-chunk rune budget (readChunkTokenCap tokens realized as runes).
 func chunkRuneBudget() int { return readChunkTokenCap * 4 }
 
-// chunkCount returns the number of chunks diff would span at the rune budget (mirrors multiturn's
-// window+forward-anchor discipline, approximated here by rune-windowing without forward-anchoring —
-// the exact boundary is computed in nextChunk; this is the label count, FR-W5 "part i of N").
+// chunkCount returns the number of chunks diff would span at the rune budget (mirrors nextChunk's
+// window+anchor discipline EXACTLY via the shared anchorToHunkEdge helper, so the label count matches
+// the real chunk boundaries (FR-W5 "part i of N"). A budget < 1 is clamped to 1; an empty diff is 1
+// chunk.
 func chunkCount(diff string, runeBudget int) int {
 	if runeBudget < 1 {
 		runeBudget = 1
@@ -439,11 +456,7 @@ func chunkCount(diff string, runeBudget int) int {
 	n := 0
 	for offset := 0; offset < len(diff); {
 		end := advanceRunes(diff, offset, runeBudget)
-		if i := strings.IndexByte(diff[end:], '\n'); i >= 0 {
-			end += i + 1
-		} else {
-			end = len(diff)
-		}
+		end = anchorToHunkEdge(diff, end)
 		n++
 		offset = end
 	}
