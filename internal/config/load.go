@@ -570,17 +570,35 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 // prompt scaffolds from static strings, not this slice.
 var validFormats = []string{"auto", "conventional", "gitmoji", "plain"}
 
-// validateFormat returns nil iff format is one of validFormats, else an error naming the offending value
-// and the valid set (PRD §9.19 FR-F1: "An unknown mode is a hard configuration error"). PURE (no I/O) so it
-// is unit-testable; called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Format (not per-layer — a
-// low-layer typo overridden by a higher layer is not an error). Locale is deliberately NOT validated (FR-F6).
+// validateFormat returns nil iff format matches the FR-F1 <base>[+body] grammar — i.e. base ∈ validFormats
+// with an optional single case-sensitive "+body" suffix — else an error naming the offending value and the
+// grammar (PRD §9.19 FR-F1: "Anything outside the <base>[+body] grammar is a hard configuration error").
+// The suffix is GRAMMAR, not a mode, so validFormats stays the 4 bases and the strip is inline here.
+// forceBody (the suffix's presence) is DISCARDED — the prompt layer (S1/S2) owns body-forcing; validation
+// only gates the base. PURE (no I/O) so it is unit-testable; called ONCE at the tail of Load() on the FULLY
+// RESOLVED cfg.Format (not per-layer — a low-layer typo overridden by a higher layer is not an error).
+// Locale is deliberately NOT validated (FR-F6).
+//
+// Rejections (all fall out of the strip + membership test — no special-casing): "+body" alone (base ""),
+// "<base>+body+body" (strip leaves base "<base>+body"), "<base>+Body"/"+BODY" (case-sensitive suffix does
+// NOT strip ⇒ un-stripped base fails membership), and "<unknown>+body" (unknown base).
+//
+// NOTE: splitFormat (internal/prompt) is the canonical grammar split but is UNEXPORTED and lives in a
+// package config does NOT import (config is foundational — zero internal/* imports). This inline strip is
+// behavior-identical (same stdlib HasSuffix/TrimSuffix calls, same case-sensitivity).
 func validateFormat(format string) error {
+	base := format
+	if strings.HasSuffix(format, "+body") { // case-sensitive; "+Body"/"+BODY" do NOT strip
+		base = strings.TrimSuffix(format, "+body")
+	}
 	for _, m := range validFormats {
-		if format == m {
+		if base == m {
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid format %q (valid: %s)", format, strings.Join(validFormats, ", "))
+	// %q = the ORIGINAL format (so the offending value is named); %s = the 4 bases via Join (auto-maintains
+	// the "auto, conventional, gitmoji, plain" substring the existing TestValidateFormat asserts).
+	return fmt.Errorf("invalid format %q (valid: <base>[+body], base ∈ %s)", format, strings.Join(validFormats, ", "))
 }
 
 // validateDiffContext rejects an out-of-range diff_context (PRD §9.1 FR3f: integer 0–3). It is the

@@ -1353,7 +1353,9 @@ func TestLoad_NilFlagsSkipped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestValidateFormat(t *testing.T) {
-	validModes := []string{"auto", "conventional", "gitmoji", "plain"}
+	validModes := []string{"auto", "conventional", "gitmoji", "plain",
+		// FR-F1 <base>[+body] grammar (P1.M1.T1.S3): each base with exactly one case-sensitive "+body".
+		"auto+body", "conventional+body", "gitmoji+body", "plain+body"}
 	for _, mode := range validModes {
 		t.Run("valid_"+mode, func(t *testing.T) {
 			if err := validateFormat(mode); err != nil {
@@ -1361,7 +1363,9 @@ func TestValidateFormat(t *testing.T) {
 			}
 		})
 	}
-	invalidModes := []string{"", "emoji", "Conventional", "AUTO", "gitmojii", " auto"}
+	invalidModes := []string{"", "emoji", "Conventional", "AUTO", "gitmojii", " auto",
+		// FR-F1 grammar rejections (P1.M1.T1.S3): "+body" alone, unknown base +body, doubled suffix, case mismatch.
+		"+body", "bogus+body", "conventional+body+body", "conventional+Body"}
 	for _, mode := range invalidModes {
 		t.Run("invalid_"+mode, func(t *testing.T) {
 			err := validateFormat(mode)
