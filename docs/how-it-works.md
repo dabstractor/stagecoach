@@ -63,6 +63,8 @@ Decompose activates when **nothing is staged**, **auto-stage-all is on** (the de
 | **message** | bare | Generate a commit message from the concept diff | Raw commit message text |
 | **arbiter** | bare | Decide which just-made commit any leftover changes belong to, or create a new commit | JSON `{target: "<sha>"\|null}` |
 
+**The stager is conditional, not mandatory.** It is the pipeline's only *tooled* role, but it runs only when a concept shares a file with another. On a pairwise **file-disjoint** partition — the common case for cleanly separated changes — the stager is skipped entirely (each concept is staged deterministically with `git add`), so a provider with no `tooled_flags` (e.g. a user-defined provider) can still decompose a disjoint tree. See the *File-disjoint fast-path* note under [Key design points](#key-design-points) below.
+
 ### Pipeline flow
 
 The common case — files already staged — is the fast path: stagecoach snapshots the staged
