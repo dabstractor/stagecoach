@@ -603,7 +603,7 @@ Everything in §9 marked P0 or P1 _other than_ the §9.14/§9.15 additions. Conc
 
 ### 10.2 v1.1 (resolved)
 
-The v1.1 candidate list has been fully dispositioned: **`--edit`** graduated into the spec (§9.22, FR-E1–E4); **per-provider model overrides** were subsumed by per-role configuration (§9.15/§16.4) and `[provider.<name>]` field-merge (FR-37a). The remaining candidates (`--body`/`--no-body`, `--scope`/`--type`, `--amend`, fuzzy duplicate detection) moved to `FUTURE_SPEC.md`.
+The v1.1 candidate list has been fully dispositioned: **`--edit`** graduated into the spec (§9.22, FR-E1–E4); **per-provider model overrides** were subsumed by per-role configuration (§9.15/§16.4) and `[provider.<name>]` field-merge (FR-37a). The `--body`/`--no-body` candidate graduated as the **`+body` format variants** (§9.19, FR-F9) — a body-forcing suffix on each base format rather than a standalone flag. The remaining candidates (`--scope`/`--type`, `--amend`, fuzzy duplicate detection) moved to `FUTURE_SPEC.md`.
 
 ### 10.3 v2.0 — multi-commit decomposition + per-role models
 

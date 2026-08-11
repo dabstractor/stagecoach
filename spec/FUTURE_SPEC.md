@@ -39,7 +39,6 @@ All future targets inherit the FR-I3 no-mangle write protocol unchanged.
 
 ### 1.3 CLI candidates (carried from the old v1.1 list)
 
-- **`--body` / `--no-body`** — force multi-line/single-line regardless of history detection.
 - **`--scope` / `--type`** — hint conventional-commit scope/type (composes with `--format
   conventional`).
 - **`--amend`** — regenerate the previous commit's message via the same plumbing (`commit-tree`
