@@ -103,14 +103,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Test coverage + docs sync (Mode A)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Add test coverage for the +body grammar (validation, prompt assembly, auto+body special case) and sync docs/cli.md and docs/configuration.md to the <base>[+body] grammar.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Tests: load_test.go validation, format_test.go assembly + splitFormat, system_test.go auto+body + conventional+body",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -132,7 +132,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "docs/cli.md + docs/configuration.md: --format / config format references → <base>[+body]",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S4"

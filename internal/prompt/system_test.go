@@ -366,6 +366,14 @@ func TestBuildSystemPrompt_FormatModes_CanonicalExact(t *testing.T) {
 			want: promptPreamble + "\n\n" + multilineRuleSingle + "\n" +
 				"Target ~50 characters for the subject line.\nWrite the commit message in French.",
 		},
+		// +body format-modifier (FR-F9 / §17.8): the unconditional bodyForceDirective REPLACES the
+		// conditional multi-line rule. The mode scaffold is RETAINED — the subject contract is preserved;
+		// only the rule is replaced. Mirrors the "conventional, no locale" row above with the rule swapped.
+		{
+			name: "conventional+body, no locale", format: "conventional+body", locale: "",
+			want: promptPreamble + "\n\n" + conventionalScaffold + "\n\n" + bodyForceDirective + "\n" +
+				"Target ~50 characters for the subject line.",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -444,6 +452,36 @@ func TestBuildSystemPrompt_FormatModes_Properties(t *testing.T) {
 	}
 }
 
+// TestBuildSystemPrompt_AutoBodyRetainsExamplesAndForcesBody is the auto+body SPECIAL CASE (FR-F9 /
+// §17.8). Unlike conventional+body / gitmoji+body / plain+body (which REPLACE the examples block with a
+// scaffold), `auto+body` RETAINS the examples block — examplesIntro + antiReuseProhibition (auto keeps
+// learning the subject style from history) — AND adds bodyForceDirective. A refactor that wrongly drops
+// the examples block under auto+body (treating it like conventional+body) is the exact regression this
+// catches. hasMultiline is IGNORED under +body (looped false+true below).
+func TestBuildSystemPrompt_AutoBodyRetainsExamplesAndForcesBody(t *testing.T) {
+	examples := []string{"feat: a", "fix: b"}
+	for _, hm := range []bool{false, true} { // hasMultiline IGNORED under +body — prove both
+		p := BuildSystemPrompt(examples, hm, 50, "auto+body", "")
+		// auto path retained: the examples block (intro + the anti-reuse prohibition) is STILL there.
+		if !strings.Contains(p, examplesIntro) {
+			t.Errorf("auto+body (hasMultiline=%v) must RETAIN examplesIntro", hm)
+		}
+		if !strings.Contains(p, antiReuseProhibition) {
+			t.Errorf("auto+body (hasMultiline=%v) must RETAIN antiReuseProhibition", hm)
+		}
+		// +body: the unconditional body directive REPLACES the conditional multi-line rule.
+		if !strings.Contains(p, bodyForceDirective) {
+			t.Errorf("auto+body (hasMultiline=%v) must contain bodyForceDirective", hm)
+		}
+		if strings.Contains(p, multilineRuleAllow) {
+			t.Errorf("auto+body (hasMultiline=%v) must NOT contain multilineRuleAllow", hm)
+		}
+		if strings.Contains(p, multilineRuleSingle) {
+			t.Errorf("auto+body (hasMultiline=%v) must NOT contain multilineRuleSingle", hm)
+		}
+	}
+}
+
 // TestBuildFallbackPrompt_FormatModes_CanonicalExact mirrors the mature-repo scaffold test for the
 // new-repo (fallback) builder: hasMultiline is implicitly false (no history), and the same scaffold +
 // locale rules apply (FR-F2/F3/F4/F6).
@@ -467,6 +505,13 @@ func TestBuildFallbackPrompt_FormatModes_CanonicalExact(t *testing.T) {
 		{
 			name: "plain, no locale", format: "plain", locale: "",
 			want: promptPreamble + "\n\n" + multilineRuleSingle + "\n" + "Target ~50 characters for the subject line.",
+		},
+		// auto+body fallback (FR-F9): keeps the §17.2 body + appends bodyForceDirective (the unconditional
+		// body directive) to force a body. No scaffold (auto path), NO conditional multi-line rule.
+		{
+			name: "auto+body, no locale", format: "auto+body", locale: "",
+			want: fallbackPromptBody + "\n\n" +
+				"Target ~50 characters (~7 words). Format: type(scope): description" + "\n\n" + bodyForceDirective,
 		},
 	}
 	for _, tc := range cases {

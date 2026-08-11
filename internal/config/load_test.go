@@ -1378,6 +1378,15 @@ func TestValidateFormat(t *testing.T) {
 			if !strings.Contains(err.Error(), "auto, conventional, gitmoji, plain") {
 				t.Errorf("error %q does not contain valid set", err.Error())
 			}
+			// FR-F1 <base>[+body] grammar (P1.M2.T1.S1): the error message names the grammar — both the
+			// "<base>" placeholder and the "+body" suffix appear. Additive checks (the bases-set assertion
+			// above is unchanged and still passes — the message contains all three substrings).
+			if !strings.Contains(err.Error(), "base") {
+				t.Errorf("error %q does not mention the <base> grammar placeholder", err.Error())
+			}
+			if !strings.Contains(err.Error(), "+body") {
+				t.Errorf("error %q does not mention the +body suffix", err.Error())
+			}
 		})
 	}
 }

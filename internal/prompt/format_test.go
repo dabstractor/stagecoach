@@ -122,6 +122,61 @@ func TestBuildFormatSystemPrompt(t *testing.T) {
 			t.Error("subjectTarget leaked a hardcoded 50")
 		}
 	})
+
+	// +body format-modifier (FR-F9 / §17.8): the unconditional bodyForceDirective REPLACES the
+	// conditional multi-line rule, so hasMultiline is IGNORED under +body. Each subtest loops
+	// hasMultiline=false AND true to prove the directive wins either way (a regression that keyed the
+	// directive off hasMultiline would pass a single-value test). The mode scaffold (conventional /
+	// gitmoji) is RETAINED — the subject contract is preserved; only the rule is replaced.
+	t.Run("conventional+body forces the body directive (rule replaced)", func(t *testing.T) {
+		for _, hm := range []bool{false, true} { // hasMultiline IGNORED under +body — prove both
+			got := buildFormatSystemPrompt("conventional+body", hm, 50)
+			if !strings.Contains(got, bodyForceDirective) {
+				t.Errorf("conventional+body (hasMultiline=%v) must contain bodyForceDirective", hm)
+			}
+			if strings.Contains(got, multilineRuleAllow) {
+				t.Errorf("conventional+body (hasMultiline=%v) must NOT contain multilineRuleAllow", hm)
+			}
+			if strings.Contains(got, multilineRuleSingle) {
+				t.Errorf("conventional+body (hasMultiline=%v) must NOT contain multilineRuleSingle", hm)
+			}
+			if !strings.Contains(got, conventionalScaffold) {
+				t.Errorf("conventional+body (hasMultiline=%v) must retain conventionalScaffold", hm)
+			}
+		}
+	})
+	t.Run("gitmoji+body forces the body directive", func(t *testing.T) {
+		for _, hm := range []bool{false, true} {
+			got := buildFormatSystemPrompt("gitmoji+body", hm, 50)
+			if !strings.Contains(got, bodyForceDirective) {
+				t.Errorf("gitmoji+body (hasMultiline=%v) must contain bodyForceDirective", hm)
+			}
+			if strings.Contains(got, multilineRuleAllow) {
+				t.Errorf("gitmoji+body (hasMultiline=%v) must NOT contain multilineRuleAllow", hm)
+			}
+			if strings.Contains(got, multilineRuleSingle) {
+				t.Errorf("gitmoji+body (hasMultiline=%v) must NOT contain multilineRuleSingle", hm)
+			}
+			if !strings.Contains(got, gitmojiScaffoldInstruction) {
+				t.Errorf("gitmoji+body (hasMultiline=%v) must retain gitmojiScaffoldInstruction", hm)
+			}
+		}
+	})
+	t.Run("plain+body forces the body directive (no scaffold)", func(t *testing.T) {
+		for _, hm := range []bool{false, true} {
+			got := buildFormatSystemPrompt("plain+body", hm, 50)
+			if !strings.Contains(got, bodyForceDirective) {
+				t.Errorf("plain+body (hasMultiline=%v) must contain bodyForceDirective", hm)
+			}
+			if strings.Contains(got, multilineRuleAllow) {
+				t.Errorf("plain+body (hasMultiline=%v) must NOT contain multilineRuleAllow", hm)
+			}
+			if strings.Contains(got, multilineRuleSingle) {
+				t.Errorf("plain+body (hasMultiline=%v) must NOT contain multilineRuleSingle", hm)
+			}
+			// plain has no scaffold body (formatScaffoldBody("plain")=="") — nothing scaffold-ish to assert.
+		}
+	})
 }
 
 // TestSplitFormat pins the FR-F1 <base>[+body] grammar parser before S3 (validateFormat) and
