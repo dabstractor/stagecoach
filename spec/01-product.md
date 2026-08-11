@@ -447,7 +447,7 @@ Both incumbents install a `prepare-commit-msg` hook; it is their bridge into IDE
 
 ### 9.21 Tool integrations (P1, → G18)
 
-One command that wires stagecoach into the git tools the user already runs — starting with the two that matter most to the primary persona: the **git alias** (`git stagecoach`) and a **lazygit** keybind. This command edits user-owned dotfiles, so its write protocol is the point: **it must be impossible for stagecoach to mangle a config file.** (gitui was evaluated and is blocked upstream — its `key_bindings.ron` only remaps built-in actions; there is no custom-command facility to bind to. See `FUTURE_SPEC.md`.)
+One command that wires stagecoach into the git tools the user already runs — starting with the two that matter most to the primary persona: the **git alias** (`git stagecoach`) and a **lazygit** keybind. This command edits user-owned dotfiles, so its write protocol is the point: **it must be impossible for stagecoach to mangle a config file.**
 
 - **FR-I1. Surface.** `stagecoach integrate list` — table of supported targets with: tool detected on `$PATH`, resolved config path, current status (`not installed` / `installed` / `foreign` where a conflicting entry exists). `stagecoach integrate install <target>…` and `stagecoach integrate remove <target>…` — explicit targets only (no "install everything" default). v2.1 targets: **`git-alias`**, **`lazygit`**.
 - **FR-I2. Detection-gated.** A target whose tool is not detected is listed but refuses to install (exit 1 with a note). `git-alias` requires only git itself.
@@ -617,7 +617,7 @@ Decided feature-by-feature against the source-level review in `COMPETITOR-ANALYS
 
 - **Accepted and specified:** payload exclusions (§9.18), format/locale/context/template shaping (§9.19), git hook mode (§9.20), the tool-integrations exporter (§9.21), `--edit` and `--push` (§9.22), `stagecoach models` + `config init --interactive` (§9.23), and hook execution on the commit path with `--no-verify` (§9.25). The pre-commit-hooks caveat is now closed directly: the plumbing path honors the repository's hooks (FR-V1); `--no-verify` is the one-off opt-out (FR-V5); hook mode (FR-H7) remains the bridge for plain `git commit` from IDEs.
 - **Already closed before this revision:** lock-file/binary exclusion defaults (FR3/FR3a), config migrations (`config_version` + `config upgrade`, §9.17), populated bootstrap (FR-B1).
-- **Disqualified or deferred:** every remaining item — API-key providers, PR generation, the GitHub Action, editor extensions, generate-N-and-pick, interactive multiselect, chunking, clipboard, self-update, `config describe`, gitui — lives in `FUTURE_SPEC.md`, each with its reason. Earlier speculative roadmap items (branch-aware context, conventional-commit validation, telemetry, `--background`) moved there too; gitmoji graduated into §9.19 and the hook installer into §9.20.
+- **Disqualified or deferred:** every remaining item — API-key providers, PR generation, the GitHub Action, editor extensions, generate-N-and-pick, interactive multiselect, chunking, clipboard, self-update, `config describe` — lives in `FUTURE_SPEC.md`, each with its reason. Earlier speculative roadmap items (branch-aware context, conventional-commit validation, telemetry, `--background`) moved there too; gitmoji graduated into §9.19 and the hook installer into §9.20.
 
 ### 10.5 v3.0 — self-update + expanded distribution
 

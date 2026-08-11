@@ -31,9 +31,6 @@ Common design note for all of these: they must shell out to the installed `stage
 
 ### 1.2 More `integrate` targets (PRD §9.21)
 
-- **gitui — blocked upstream.** Verified 2026-07-02 against the gitui changelog: `key_bindings.ron`
-  can only remap built-in actions; there is no custom/external-command facility to bind
-  `stagecoach` to. Revisit if upstream ships custom commands.
 - **tig.** `~/.tigrc` external-command keybind; line-oriented format, easy to edit safely.
 - **magit / emacs.** Print-only (`integrate --print` style): never auto-edit a user's elisp.
 - **Sublime Merge.** Custom command via a `.sublime-commands` JSON file.
