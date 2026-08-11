@@ -123,3 +123,38 @@ func TestBuildFormatSystemPrompt(t *testing.T) {
 		}
 	})
 }
+
+// TestSplitFormat pins the FR-F1 <base>[+body] grammar parser before S3 (validateFormat) and
+// P1.M2.T1.S1 (the formal +body suite) depend on it. The suffix is case-sensitive; splitFormat is a
+// PURE grammar split (no base validation — "+body" returns ("", true) for S3 to reject; "Conventional+Body"
+// returns the input unchanged because the suffix casing mismatches).
+func TestSplitFormat(t *testing.T) {
+	cases := []struct {
+		name     string
+		in       string
+		wantBase string
+		wantBody bool
+	}{
+		{"no suffix (auto)", "auto", "auto", false},
+		{"no suffix (conventional)", "conventional", "conventional", false},
+		{"no suffix (plain)", "plain", "plain", false},
+		{"no suffix (gitmoji)", "gitmoji", "gitmoji", false},
+		{"+body on conventional", "conventional+body", "conventional", true},
+		{"+body on plain", "plain+body", "plain", true},
+		{"+body on gitmoji", "gitmoji+body", "gitmoji", true},
+		{"+body on auto", "auto+body", "auto", true},
+		{"case-sensitive suffix (Conventional+Body is NOT +body)", "Conventional+Body", "Conventional+Body", false},
+		{"case-sensitive suffix (AUTO+BODY is NOT +body)", "AUTO+BODY", "AUTO+BODY", false},
+		{"edge: +body alone (empty base — S3 validates/rejects)", "+body", "", true},
+		{"empty string", "", "", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			gotBase, gotBody := splitFormat(tc.in)
+			if gotBase != tc.wantBase || gotBody != tc.wantBody {
+				t.Errorf("splitFormat(%q) = (%q, %v); want (%q, %v)", tc.in, gotBase, gotBody, tc.wantBase, tc.wantBody)
+			}
+		})
+	}
+}

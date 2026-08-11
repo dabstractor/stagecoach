@@ -104,9 +104,12 @@ type PlannerOutput struct {
 // decompose/planner.go:132 errors). maxCommits/2 is Go integer division (12→6, 10→5, 11→5 for odd values).
 //
 // The rules-block selection (forcedCount) is ORTHOGONAL to the examples-vs-scaffold selection (format):
-// format=="auto" appends the §17.1 style examples ("---\n<msg>\n" each, same as system.go); any other
-// format appends formatScaffoldBody(format) instead (FR-F5). locale, when non-empty, appends the FR-F6
-// one-line language instruction (withLocale — a no-op when locale=="").
+// the base (splitFormat strips any +body suffix) drives the dispatch — base=="auto" appends the §17.1
+// style examples ("---\n<msg>\n" each, same as system.go); any other base appends formatScaffoldBody(base)
+// instead (FR-F5). The planner DISCARDS forceBody: per PRD §17.8 the planner's partitioning prompt is
+// unchanged by format modes, so a +body suffix routes to its base's branch WITHOUT forcing bodies (only
+// the message-role path forces bodies). locale, when non-empty, appends the FR-F6 one-line language
+// instruction (withLocale — a no-op when locale=="").
 //
 // ASSEMBLY TOPOLOGY (§17.5, exact):
 //
@@ -120,7 +123,7 @@ type PlannerOutput struct {
 //	plannerJSONContract                 // no trailing \n
 //	"\n\n"                              // blank line before examples/scaffold
 //	auto: for each ex: "---\n" + ex + '\n'
-//	non-auto: formatScaffoldBody(format)         // "" for plain
+//	non-auto: formatScaffoldBody(base)         // "" for plain
 //	<withLocale(b.String(), locale)>
 //
 // Defensive: nil/empty examples ⇒ no "---" lines and no panic. The shared opener+framing+contract are
@@ -138,15 +141,16 @@ func BuildPlannerSystemPrompt(examples []string, format, locale string, forcedCo
 	}
 	b.WriteString("\n\n")
 	b.WriteString(plannerJSONContract)
-	b.WriteString("\n\n") // blank line between the JSON contract and the style examples/scaffold
-	if format == "auto" {
+	b.WriteString("\n\n")          // blank line between the JSON contract and the style examples/scaffold
+	base, _ := splitFormat(format) // planner discards forceBody (PRD §17.8: +body does not change the planner prompt); route on the base
+	if base == "auto" {
 		for _, ex := range examples {
 			b.WriteString("---\n") // one "---" BEFORE each message (same format as system.go)
 			b.WriteString(ex)      // examples are pre-trimmed by RecentMessages
 			b.WriteByte('\n')
 		}
 	} else {
-		b.WriteString(formatScaffoldBody(format)) // scaffold REPLACES the examples (FR-F5)
+		b.WriteString(formatScaffoldBody(base)) // scaffold REPLACES the examples (FR-F5)
 	}
 	return withLocale(b.String(), locale)
 }
