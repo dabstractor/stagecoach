@@ -5,6 +5,18 @@ Chocolatey (/); npm is documented in [`npm/README.md`](../npm/README.md); Homebr
 and AUR (`stagecoach-bin`) are all wired into `release.yml` with **no `--skip` flags** — each pushes to its target repo on tag. (AUR publish is currently disabled: its `git_url` is commented out in
 `.goreleaser.yaml` while aur.archlinux.org recovers.)
 
+## Homebrew / Linuxbrew
+
+The tap is `dabstractor/homebrew-stagecoach` (published by `release.yml` on every tag). The same `brew`
+tool serves **both** macOS Homebrew (`/opt/homebrew` on Apple Silicon, `/usr/local` on Intel) **and**
+Linuxbrew (`/home/linuxbrew/.linuxbrew`) on Linux.
+
+- **`stagecoach upgrade` behavior**: `stagecoach upgrade` detects a brew install by its Cellar path
+  (`/opt/homebrew/Cellar/`, `/usr/local/Cellar/`, or `/home/linuxbrew/.linuxbrew/Cellar/`) and
+  **delegates** to `brew upgrade stagecoach`. Brew owns the binary under the Cellar, so it is never
+  self-swapped (FR-U1/FR-U4); unlike Chocolatey, `brew upgrade` is user-space and is run directly
+  (streaming its output), not printed.
+
 ## Chocolatey
 
 Every `v*` tag runs goreleaser's native
