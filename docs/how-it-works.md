@@ -376,6 +376,17 @@ after that, stagecoach refuses further reads and demands the commit message (gua
 termination). A response with no `READ` line is the commit message, parsed through the normal
 parse + duplicate-rejection pipeline (so `--format`, `--locale`, `--template`, `--edit` all apply).
 
+**Read/answer protocol.** A `READ <path>` whose path is *staged* returns that file's diff. A path that
+is *not* staged (or isn't recognized) is answered with a short note — "`<path>` is not in the staged
+changes." — and the read loop continues; the line is never treated as the commit message (a response
+with no `READ` line is the message, as above). Large diffs are returned in chunks: when a diff exceeds
+the per-call cap (≈16K tokens, internal), each chunk is labeled
+"`<path>` — part 1 of 3; `READ <path>` again for the next part," and re-reading the same path advances
+a per-file, session-scoped cursor — the model manages no cursor, no offsets, no line numbers itself.
+Chunk edges hug `@@` hunk edges so a single change is never split mid-hunk; a single hunk larger than
+the cap falls back to a line cut. Once the final chunk has been read, a further `READ` of that path
+returns "`<path>` — end of diff (all parts shown)." rather than an empty body.
+
 If nothing is staged when `--work-description` is present, stagecoach auto-stages all (even with
 `auto_stage_all` disabled), mirroring the default action's empty-tree behavior. The mode composes with
 `--dry-run`, hooks, and the snapshot/CAS/rescue core. It does **not** cascade into multi-turn fallback —
