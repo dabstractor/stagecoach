@@ -1,0 +1,179 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Implement the +body format modifier (message-role prompt surface)",
+      "status": "Researching",
+      "description": "A single cohesive phase: implement the v3.4 spec change — an optional +body suffix on every --format base that forces a subject-plus-body message regardless of repo history shape. Grammar parsing + validation + prompt assembly, with tests and user-facing docs riding along. No commit/CAS/rescue/lock/provider touch. Message-role prompt surface only.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Core: grammar parsing, validation, prompt assembly",
+          "status": "Planned",
+          "description": "Implement the <base>[+body] grammar end-to-end through the format subsystem: splitFormat parser, bodyForceDirective constant, forceBody threading through buildFormatSystemPrompt/BuildSystemPrompt/BuildFallbackPrompt/BuildPlannerSystemPrompt, validateFormat extension, and the inline user-facing config-template/--help text.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "+body grammar parsing + prompt assembly + inline doc/flag-help updates",
+              "status": "Planned",
+              "description": "Implement the <base>[+body] grammar end-to-end through the format subsystem, plus the user-facing config-template and --help text. The body-forcing directive replaces the multi-line rule; the subject scaffold is unchanged. The splitFormat parser is created in format.go and consumed by system.go, load.go, and planner.go.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "format.go + planner.go: add splitFormat parser + bodyForceDirective constant + thread forceBody through buildFormatSystemPrompt + fix planner base-dispatch",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": [
+                    "h3.35",
+                    "h3.90",
+                    "h3.83",
+                    "h2.10",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/format_subsystem.md. The file internal/prompt/format.go currently has NO format-parsing logic — formatScaffoldBody(format) and buildFormatSystemPrompt(format, hasMultiline, subjectTarget) both use the raw format string. Constants conventionalScaffold, gitmojiScaffoldInstruction, multilineRuleAllow, multilineRuleSingle, promptPreamble are defined WITHOUT trailing newlines (package convention — callers own inter-block newline placement).\n2. INPUT: No upstream subtask dependency — this is the parser origin point. The existing constants (multilineRuleAllow, multilineRuleSingle, promptPreamble, conventionalScaffold, gitmojiScaffoldInstruction) are available in format.go. RenderGitmojiTable() is available in gitmoji.go.\n3. LOGIC:\n   (a) Add `bodyForceDirective` const to format.go — VERBATIM from PRD §17.8 / Design Decision 4: `ALWAYS follow the subject with a body — a blank line, then a wrapped (~72-column) explanation of what this change does and why. Use a short bullet list only when the change has several distinct parts. The subject above still follows its format contract.` NO trailing newline (package convention).\n   (b) Add `splitFormat(format string) (base string, forceBody bool)` to format.go: returns (format, false) when format has no \"+body\" suffix; returns (base, true) when format == base + \"+body\" exactly (case-sensitive on the suffix; the suffix \"+body\" must be the trailing 5 chars). Caller validates base.\n   (c) Modify `buildFormatSystemPrompt(format string, hasMultiline bool, subjectTarget int)` — keep the SAME signature. Internally: `base, forceBody := splitFormat(format)`. Call `formatScaffoldBody(base)` (NOT raw format — subject contract keyed on base). When forceBody is true, write bodyForceDirective INSTEAD OF the multilineRuleAllow/multilineRuleSingle selection (the if/else on hasMultiline is skipped entirely). When forceBody is false, behavior is byte-identical to today. Keep the function pure (no I/O).\n   (d) FIX planner.go BuildPlannerSystemPrompt (L128, L142): CRITICAL DISCREPANCY from PRD — the planner currently dispatches on `if format == \"auto\"` and calls `formatScaffoldBody(format)` with the RAW format string. With +body suffixes, this breaks (auto+body falls through to scaffold dispatch which returns \"\"). Fix: add `base, _ := splitFormat(format)` before the L142 dispatch; change `if format == \"auto\"` to `if base == \"auto\"`; change `formatScaffoldBody(format)` to `formatScaffoldBody(base)`. The planner does NOT get body-forcing (no bodyForceDirective) — only the message-role path does.\n4. OUTPUT: Exposes splitFormat(), bodyForceDirective const, and a forceBody-aware buildFormatSystemPrompt() for consumption by S2 (system.go) and S3 (load.go validateFormat). formatScaffoldBody continues to receive the BASE string (unchanged contract — it switches on \"conventional\"/\"gitmoji\"/default).\n5. DOCS: [Mode A] none beyond inline code comments — format.go and planner.go have no user-facing surface. Update the doc comments on buildFormatSystemPrompt and BuildPlannerSystemPrompt to mention the +body / forceBody behavior."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "system.go: thread forceBody through BuildSystemPrompt + BuildFallbackPrompt (the auto+body special case)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": [
+                    "h3.35",
+                    "h3.90",
+                    "h3.83",
+                    "h3.84",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/format_subsystem.md. system.go BuildSystemPrompt (L102) and BuildFallbackPrompt (L168) currently dispatch on `format != \"auto\"` (raw string equality). With +body, auto+body would incorrectly match the `!= \"auto\"` branch and delegate to buildFormatSystemPrompt, losing the examples block. The fix is to parse the base before dispatching.\n2. INPUT: splitFormat() and bodyForceDirective from P1.M1.T1.S1. The existing constants: maturePromptHeader, antiReuseProhibition, multilineRuleAllow, multilineRuleSingle, fallbackPromptBody, promptPreamble. The existing helpers: formatScaffoldBody(base), withLocale(s, locale), subjectTargetLine(int).\n3. LOGIC:\n   (a) BuildSystemPrompt: At the top, `base, forceBody := splitFormat(format)`. Change the early-return dispatch from `if format != \"auto\"` to `if base != \"auto\"` — non-auto +body formats delegate to buildFormatSystemPrompt (S1 already handles forceBody internally). For the auto path: when forceBody is true, emit the examples block as today (maturePromptHeader + examples + antiReuseProhibition) but write bodyForceDirective INSTEAD OF the multilineRuleAllow/multilineRuleSingle branch. When forceBody is false, behavior is byte-identical to today. Dispatch formatScaffoldBody(base) (not raw format). The subject-target line follows the rule/directive in both cases.\n   (b) BuildFallbackPrompt: `base, forceBody := splitFormat(format)`. Change `if format != \"auto\"` to `if base != \"auto\"`. For the auto path: when forceBody is true, append bodyForceDirective after the essence/target line (the new-repo auto+body case). When forceBody is false, byte-identical to today.\n   (c) BYTE-IDENTITY GUARANTEE (FR-F1): auto (no suffix) + empty locale MUST be byte-identical to pre-delta. splitFormat(\"auto\") returns (\"auto\", false); forceBody is false; the assembly paths are unchanged. Verify against the existing TestBuildSystemPrompt_CanonicalExact and TestBuildFallbackPrompt_CanonicalExact tests which must remain GREEN without modification.\n4. OUTPUT: BuildSystemPrompt and BuildFallbackPrompt now correctly handle <base>[+body] for all 4 bases (auto/conventional/gitmoji/plain) × 2 suffix states (plain/+body). All 4 downstream call sites (generate.go, decompose/message.go, decompose/planner.go, hook/exec.go) gain +body support automatically since they pass cfg.Format verbatim.\n5. DOCS: [Mode A] none — system.go has no user-facing surface. Update doc comments on BuildSystemPrompt and BuildFallbackPrompt to document the +body / forceBody behavior and the byte-identity guarantee."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S3",
+                  "title": "load.go: extend validateFormat to the <base>[+body] grammar",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": [
+                    "h3.35",
+                    "h3.90",
+                    "h2.10",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/format_subsystem.md. load.go L571: validFormats = []string{\"auto\", \"conventional\", \"gitmoji\", \"plain\"} (the 4 bases). load.go L577: validateFormat(format string) error loops over validFormats and returns fmt.Errorf(\"invalid format %q (valid: %s)\", format, strings.Join(validFormats, \", \")). It is PURE (no I/O), called ONCE at the tail of Load() on the FULLY RESOLVED cfg.Format.\n2. INPUT: splitFormat() from P1.M1.T1.S1. The existing validFormats slice (stays the 4 bases — the suffix is grammar, not a mode).\n3. LOGIC: Modify validateFormat: `base, forceBody := splitFormat(format)`; validate `base` against the existing validFormats set (same loop); if base is not in validFormats, return an error. This covers +body alone (base=\"\", not in set), bogus+body (base=\"bogus\", not in set), and valid bases with or without +body. Update the error message to name the grammar: e.g. `invalid format %q (valid: <base>[+body], base \\u2208 auto, conventional, gitmoji, plain)` — mirroring the existing error shape but surfacing the +body option. The validFormats slice STAYS the 4 bases (it documents the base set).\n4. OUTPUT: validateFormat now accepts auto, conventional, gitmoji, plain, AND each with exactly one trailing +body. Rejects +body alone, <base>+body+body (splitFormat returns base=\"<base>+body\", which is not in validFormats), <unknown>+body, <base>+Body (case mismatch — splitFormat is case-sensitive on \"+body\"), and any other suffix.\n5. DOCS: [Mode A] none — validateFormat output is an error string, not a doc surface."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S4",
+                  "title": "User-facing config/flag text: config.go Format doc, bootstrap.go template comment, root.go --format help",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [],
+                  "prd_selectors": [
+                    "h3.74",
+                    "h3.80",
+                    "h3.90",
+                    "h2.16",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/format_subsystem.md §User-facing config/flag surfaces. Verified line numbers: config.go L105-109 (Format field doc), bootstrap.go L376 (config template comment), root.go L201-203 (--format flag help). All currently list only the 4 bases with no mention of +body.\n2. INPUT: No code dependency — this is pure documentation text. Can be done in parallel with S1-S3.\n3. LOGIC:\n   (a) config.go Format field doc (L105-109): Update from the 4-mode list to the <base>[+body] grammar. Note that +body forces a subject+body message (FR-F9). Keep the existing comments about 5-layer precedence and validateFormat.\n   (b) bootstrap.go template comment (L376): Change `# auto|conventional|gitmoji|plain; unknown = hard error (exit 1)` to include +body, e.g. `# <base>[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)`.\n   (c) root.go --format flag help (L201-203): Change `Message format: auto|conventional|gitmoji|plain` to `Message format: <base>[+body] — auto|conventional|gitmoji|plain, append +body to force a subject+body`. Keep the env/git-config/config-file references and the hard-error note.\n4. OUTPUT: All three user-facing surfaces (config field doc, config template comment, --help text) state the <base>[+body] grammar.\n5. DOCS: [Mode A] these ARE the user-facing config/flag surfaces — they ride with this subtask. This is the in-code documentation that downstream agents and users read."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M2",
+          "title": "Tests + user-facing docs sync",
+          "status": "Planned",
+          "description": "Close the test gaps opened by P1.M1 and sync the user-facing docs (docs/cli.md, docs/configuration.md, README.md) off the old 4-mode list to the <base>[+body] grammar. Includes the final changeset-level documentation coherence sweep (Mode B).",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M2.T1",
+              "title": "Test coverage + docs sync (Mode A)",
+              "status": "Planned",
+              "description": "Add test coverage for the +body grammar (validation, prompt assembly, auto+body special case) and sync docs/cli.md and docs/configuration.md to the <base>[+body] grammar.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
+                  "title": "Tests: load_test.go validation, format_test.go assembly + splitFormat, system_test.go auto+body + conventional+body",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T1.S3"],
+                  "prd_selectors": [
+                    "h3.35",
+                    "h3.90",
+                    "h3.83",
+                    "h3.84",
+                    "h2.10",
+                    "h2.17",
+                    "h2.21"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/test_and_docs_surfaces.md for exact test patterns. TestValidateFormat (load_test.go L1355) is table-driven with valid/invalid subtests via t.Run; asserts strings.Contains for the mode and the valid set. TestBuildFormatSystemPrompt (format_test.go L91) uses exact == comparison and strings.Contains checks. TestBuildSystemPrompt_FormatModes_CanonicalExact (system_test.go L331) uses exact == comparison. The existing auto byte-identity tests (CanonicalExact) MUST remain GREEN unchanged.\n2. INPUT: The implementation from P1.M1.T1.S1 (splitFormat, bodyForceDirective, buildFormatSystemPrompt forceBody), P1.M1.T1.S2 (BuildSystemPrompt/BuildFallbackPrompt forceBody), P1.M1.T1.S3 (validateFormat +body grammar). The existing constants are accessible within the prompt package test files.\n3. LOGIC:\n   (a) internal/config/load_test.go TestValidateFormat: Add valid cases auto+body, conventional+body, gitmoji+body, plain+body (assert err == nil). Add invalid cases: +body (alone), auto+body+body, bogus+body, auto+Body (case), auto+body+space (trailing space if testable). Update the asserted error substring from \"auto, conventional, gitmoji, plain\" to the new grammar message (e.g. contains \"base\" and \"+body\").\n   (b) internal/prompt/format_test.go: Add TestSplitFormat table test covering: auto→(\"auto\",false), auto+body→(\"auto\",true), conventional+body→(\"conventional\",true), plain+body→(\"plain\",true), +body→(\"\",true) [base=\"\" — caller validates], empty→(\"\",false), no-suffix→(\"conventional\",false). Add buildFormatSystemPrompt(\"conventional+body\", false, 50) subtest asserting bodyForceDirective present AND multilineRuleAllow absent AND multilineRuleSingle absent AND conventionalScaffold present (subject contract preserved). Same for gitmoji+body and plain+body.\n   (c) internal/prompt/system_test.go: Add auto+body case through BuildSystemPrompt — assert examplesIntro present (examples block retained), antiReuseProhibition present, bodyForceDirective present, multilineRuleAllow ABSENT, multilineRuleSingle ABSENT. Add conventional+body end-to-end case through BuildSystemPrompt — assert conventionalScaffold present, bodyForceDirective present, multilineRule* absent. Optionally add a BuildFallbackPrompt auto+body case.\n   (d) VERIFY: The existing TestBuildSystemPrompt_CanonicalExact and TestBuildFallbackPrompt_CanonicalExact (which test auto with no suffix) MUST remain GREEN without any modification — this is the FR-F1 byte-identity guarantee.\n4. OUTPUT: All +body validation, assembly, and auto+body topology cases pass. `go test ./internal/config/... ./internal/prompt/...` is green.\n5. DOCS: [Mode A] none — test-only."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S2",
+                  "title": "docs/cli.md + docs/configuration.md: --format / config format references → <base>[+body]",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S4"],
+                  "prd_selectors": [
+                    "h3.74",
+                    "h3.80",
+                    "h3.90",
+                    "h2.16",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/test_and_docs_surfaces.md for exact current text and line numbers. docs/cli.md L38 (--format table row), docs/configuration.md L116 (config template comment), L216 (env example), L247 (git-config table row). All currently list only the 4 bases.\n2. INPUT: The <base>[+body] grammar from P1.M1.T1.S4 (the inline config/flag text establishes the canonical wording).\n3. LOGIC:\n   (a) docs/cli.md L38: Update the --format table row to state the <base>[+body] grammar. Keep the existing structure (flag, type, default, env, git-config, description). Example: `Message format: <base>[+body] — auto (style learning) | conventional | gitmoji | plain; append +body to force a subject+body. Unknown = hard error (exit 1).`\n   (b) docs/configuration.md L116: Update config template comment to `# <base>[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)`.\n   (c) docs/configuration.md L216: Update env example row to mention +body in the description and optionally show `STAGECOACH_FORMAT=conventional+body`.\n   (d) docs/configuration.md L247: Update git-config table row description to `Message format: <base>[+body] — auto | conventional | gitmoji | plain. Append +body to force a subject+body. Unknown = hard error (exit 1).`\n   (e) ACCEPTANCE: `rg -n \"auto\\|conventional\\|gitmoji\\|plain\" docs/cli.md docs/configuration.md` returns no row that omits the +body option (the grammar is stated wherever the 4 bases are listed).\n4. OUTPUT: docs/cli.md and docs/configuration.md fully reflect the <base>[+body] grammar at all format-referencing locations.\n5. DOCS: [Mode A] this IS the docs work for these two files."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T2",
+              "title": "Sync changeset-level documentation (Mode B)",
+              "status": "Planned",
+              "description": "Final coherence sweep depending on all implementing subtasks. Verifies the whole delta ships consistent: README.md feature blurbs, example invocations, and any other overview docs that span the whole changeset mention the +body option wherever the 4 bases are listed.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T2.S1",
+                  "title": "README + overview coherence sweep across the +body delta",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T1.S2",
+                    "P1.M1.T1.S3",
+                    "P1.M1.T1.S4",
+                    "P1.M2.T1.S1",
+                    "P1.M2.T1.S2"
+                  ],
+                  "prd_selectors": [
+                    "h2.7",
+                    "h2.9",
+                    "h3.74",
+                    "h3.80",
+                    "h3.90",
+                    "h2.17"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/architecture/test_and_docs_surfaces.md §README.md. README.md L63 (Features table: `Message shaping | --format (auto, conventional, gitmoji, plain), --locale, --context, --template`), L196 (example: `stagecoach --format conventional`). Also check docs/how-it-works.md (linked from README L63 as the format-modes docs) for any format list that should mention +body.\n2. INPUT: The complete +body implementation and docs from all prior subtasks. The <base>[+body] grammar is finalized.\n3. LOGIC:\n   (a) README.md L63: Update the Message shaping features row to mention +body — e.g. `--format (auto, conventional, gitmoji, plain; append +body to force a subject+body)`.\n   (b) README.md L196: Optionally add or annotate an example showing +body, e.g. `stagecoach --format conventional+body  # force conventional-commit style with a body`.\n   (c) Sweep: `rg -n \"conventional.*gitmoji.*plain\\|gitmoji.*plain\" README.md docs/` — any feature-blurb or format list that should mention +body now does; any that lists the 4 bases states the +body option. Check docs/how-it-works.md, docs/cli.md, docs/configuration.md for consistency.\n   (d) VERIFY: `go test ./...` green; `go vet ./...` clean. The entire changeset is coherent — all user-facing surfaces state the <base>[+body] grammar.\n4. OUTPUT: README.md and all overview docs consistently reflect the +body option. The delta ships with zero stale format references.\n5. DOCS: [Mode B] this IS the changeset-level sync — the final coherence sweep across the whole +body delta."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

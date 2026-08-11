@@ -252,9 +252,6 @@ stagecoach integrate install git-alias     # enables `git stagecoach` everywhere
 stagecoach integrate list                  # see what's installed / detected
 ```
 
-> [!NOTE]
-> gitui isn't supported.
-
 <details>
 <summary><em>Manual install (no <code>stagecoach integrate</code>)</em></summary>
 
@@ -445,7 +442,7 @@ Yes. As of v2.4, the default `stagecoach` command runs your repository's standar
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, gitui integration, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason. (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
+Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason. (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
 
 ---
 
