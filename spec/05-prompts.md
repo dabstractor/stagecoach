@@ -190,15 +190,17 @@ User payload: the commit list + the leftover diff. Stagecoach performs all resul
 
 ### 17.8 Format modes, locale, and context (v2.1; §9.19)
 
-Three orthogonal deltas to the prompts above. All default to off; `auto` format means §17.1/§17.2 verbatim.
+Four orthogonal deltas to the prompts above. All default to off; `auto` format means §17.1/§17.2 verbatim.
 
-**Format modes (FR-F1–F5).** A non-`auto` format **replaces** the style-examples block (the `Match the tone and style…` section plus the anti-reuse warning — there are no examples to protect) with an explicit contract; the output rules, essence-not-filenames instruction, and multi-line rule are retained:
+**Format modes (FR-F1–F5; `+body` modifier FR-F9).** A non-`auto` format **replaces** the style-examples block (the `Match the tone and style…` section plus the anti-reuse warning — there are no examples to protect) with an explicit contract; the output rules and essence-not-filenames instruction are retained, as is the multi-line rule — **except under a `+body` variant**, which replaces that rule with an unconditional body directive (see below):
 
 - `conventional`: _"Format: `type(scope): description`. type ∈ feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert; scope optional. Target ~50 characters for the subject."_
 - `gitmoji`: _"Begin the subject with exactly ONE emoji from the gitmoji list below (the emoji character itself, not a `:shortcode:`), followed by a space and the description."_ — followed by the compiled-in gitmoji reference table (emoji + meaning).
 - `plain`: no format contract and no examples; output rules + essence + subject-length target only.
 
 The planner's partitioning prompt (§17.5) is unchanged by format modes; when the planner emits a message (FR-M11), its style-examples block undergoes the same substitution.
+
+**Body forcing (`+body`, FR-F9).** A `+body` variant (`auto+body`, `conventional+body`, `gitmoji+body`, `plain+body`) replaces the `<multi-line rule>` block entirely with an unconditional directive: _"ALWAYS follow the subject with a body — a blank line, then a wrapped (~72-column) explanation of what this change does and why. Use a short bullet list only when the change has several distinct parts. The subject above still follows its format contract."_ The subject contract (the `conventional` / `gitmoji` / `plain` bullet above) is unchanged by the suffix; `auto+body` keeps the learned subject style and forces only the body. `--locale` (FR-F6) governs the whole message; `--template` (FR-F8) wraps the full `$msg` (subject and body together).
 
 **Locale (FR-F6).** When set, appended to the system prompt (any format, both repo-age variants): `Write the commit message in <lang>.` Nothing else changes — the diff, examples, and rules stay in their original language; models handle the mix natively, which is why stagecoach ships zero i18n prompt files.
 
