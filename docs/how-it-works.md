@@ -297,6 +297,8 @@ For repos with zero or one commit (including unborn repos), Stagecoach falls bac
 
 For any mode other than `auto`, the recent-commit history examples are omitted entirely — useful for repos with an idiosyncratic or empty history. The multi-line rule and subject-length target still apply in every mode.
 
+**Body forcing (`+body`).** Append `+body` to any format — `auto+body`, `conventional+body`, `gitmoji+body`, `plain+body` — to replace the multi-line rule with an unconditional directive: always follow the subject with a wrapped (~72-column) body explaining what the change does and why. Use this when you want explanatory bodies even on a repo whose history is single-line. The subject contract (`conventional` / `gitmoji` / `plain`) is unchanged by the suffix; `auto+body` keeps the learned subject style and forces only the body.
+
 `--locale` (e.g. `--locale French`, `--locale ja`) appends one line — "Write the commit message in `<locale>`." — to the system prompt in every format mode. The value is passed through as-is with no translation or validation.
 
 ### User payload

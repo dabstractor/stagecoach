@@ -55,5 +55,5 @@ entire product.
 - **Per-role model routing** — planner / stager / message / arbiter, each on the right model.
 - **22-field provider manifests** — pi, Claude Code, Codex, Cursor, opencode, agy.
 - **Git hook mode + IDE integrations** — lazygit and a git alias, with a no-mangle write protocol.
-- **Message shaping** — `--format` (conventional/gitmoji/plain), `--locale`, `--template`.
+- **Message shaping** — `--format` (conventional/gitmoji/plain; append `+body` for a subject+body), `--locale`, `--template`.
 - **Self-update** — `stagecoach upgrade` delegates to your package manager; never fights it.

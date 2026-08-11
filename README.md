@@ -60,7 +60,7 @@ Stagecoach does one thing — commit messages — and a few things around them.
 | Payload exclusions | `.stagecoachignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
 | Payload optimization | The diff sent to your agent is trimmed and budgeted — rename-aware (`-M`), reduced-context (`-U1`), led by a compact file skeleton, and optionally capped to your model's context window via `token_limit` — a closed-loop guarantee that the assembled prompt never exceeds the limit ([how it works](docs/how-it-works.md#diff-capture-pipeline) · [knobs](docs/configuration.md#built-in-defaults)). |
 | Multi-turn fallback | Lossless multi-turn fallback: when a one-shot generation of a large diff fails, stagecoach re-delivers the full diff across session turns so the message still lands — no truncation, no extra commits ([how it works](docs/how-it-works.md#multi-turn-generation-fallback) · [knobs](docs/configuration.md#built-in-defaults)). |
-| Message shaping | `--format` (auto, conventional, gitmoji, plain), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
+| Message shaping | `--format` (auto, conventional, gitmoji, plain; append `+body` to force a subject+body), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
 | Git hook mode | `stagecoach hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
 | Commit hooks on every `stagecoach` commit | As of v2.4, your repo's `pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit` hooks run around every `stagecoach` commit, scoped to the frozen snapshot (atomic + stage-while-generating preserved); `--no-verify` mirrors git ([how it works](docs/how-it-works.md#commit-hooks-on-the-plumbing-path)). |
 | Tool integrations | `stagecoach integrate install git-alias lazygit` wires `git stagecoach` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
@@ -194,6 +194,7 @@ stagecoach --dry-run
 stagecoach --push                 # commit + push after a clean run
 stagecoach --edit                 # review in $EDITOR before the atomic commit
 stagecoach --format conventional  # force conventional-commit style
+stagecoach --format conventional+body  # conventional-commit subject PLUS a descriptive body
 stagecoach --exclude '*.snap'     # hide snapshot diffs from the model (still committed)
 ```
 
