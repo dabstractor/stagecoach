@@ -34,6 +34,14 @@ var (
 	// ErrHTTP is returned for any other HTTP failure (401, 5xx, …) or a transport-layer error
 	// (DNS, connection refused, server closed, context-deadline during the request, malformed URL).
 	ErrHTTP = errors.New("upgrade: HTTP request failed")
+
+	// ErrMalformedRepo is returned BEFORE any network call when Client.Repo is not a well-formed
+	// "owner/repo" string. It is a defense-in-depth gate (BUG-008): a malformed repo (empty, the
+	// wrong shape, or containing characters outside the GitHub segment charset) must never reach the
+	// path-building sites, where it could otherwise produce a request line that leaks into an
+	// unintended endpoint or confuses a proxy. Validation happens in repoPath (the single chokepoint
+	// every releases path goes through); escaping is applied per-segment there as a second layer.
+	ErrMalformedRepo = errors.New("upgrade: malformed source repo (want \"owner/repo\")")
 )
 
 // Asset is a single downloadable artifact attached to a release. It is consumed by the download +
@@ -112,6 +120,54 @@ func (c *Client) baseURL() string {
 	return strings.TrimRight(c.BaseURL, "/")
 }
 
+// isRepoSegment reports whether s is a single well-formed GitHub repo path segment (an owner or a
+// repo name): non-empty and composed solely of the characters GitHub permits — ASCII letters,
+// digits, dot, underscore, and hyphen. It is the per-segment half of the repoPath validation gate
+// (BUG-008). Whitespace, slashes, and URL-special characters (space, #, ?, %, etc.) are rejected,
+// which is what lets repoPath safely PathEscape each segment without surprises.
+func isRepoSegment(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '.', r == '_', r == '-':
+			// allowed GitHub segment character
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// repoPath returns the validated, per-segment-escaped "/repos/{owner}/{repo}" path prefix shared by
+// every releases request. It is the SINGLE chokepoint at which Client.Repo is both VALIDATED (gated:
+// exactly two non-empty segments, each passing isRepoSegment) and ESCAPED (defense-in-depth:
+// url.PathEscape applied to each segment independently, so a stray special character in an otherwise
+// valid-shaped repo still cannot reach the request line unencoded).
+//
+// WHY NOT url.PathEscape(c.Repo) wholesale: GitHub encodes the owner/repo boundary as a literal '/',
+// and PathEscape would turn that into %2F, yielding "/repos/owner%2Frepo/..." which the API does NOT
+// route to the repo (it 404s or hits the wrong resource). The two-segment split + per-segment escape
+// preserves the literal '/' while still neutralizing any per-segment special character — the correct
+// combination for this path shape.
+//
+// On a malformed repo it returns "" and an error wrapping ErrMalformedRepo; callers are expected to
+// return it as-is (NOT re-wrapped as ErrHTTP — the failure is a configuration bug, not an HTTP
+// outcome, and surfacing ErrMalformedRepo lets the command layer report it distinctly). The
+// remaining path suffix ("/releases/latest", "/releases/tags/{tag}", "/releases") is appended by the
+// caller; the tag, where present, is escaped separately by the caller via url.PathEscape.
+func (c *Client) repoPath() (string, error) {
+	parts := strings.Split(c.Repo, "/")
+	if len(parts) != 2 || !isRepoSegment(parts[0]) || !isRepoSegment(parts[1]) {
+		return "", fmt.Errorf("source repo %q: %w", c.Repo, ErrMalformedRepo)
+	}
+	return "/repos/" + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1]), nil
+}
+
 // newReq builds a GET request against path with the headers GitHub requires: Accept (the canonical
 // releases media type), User-Agent (Go's default "Go-http-client" is sometimes rejected — §1), and
 // Authorization when a token is configured. The context is attached for cancellation/timeouts.
@@ -176,7 +232,11 @@ func (c *Client) do(ctx context.Context, path string) ([]byte, error) {
 // this method decodes the single returned object directly (no list+filter) — simpler and more
 // correct than re-implementing GitHub's selection. FR-U5 step 2 / FR-U6.
 func (c *Client) LatestStable(ctx context.Context) (Release, error) {
-	body, err := c.do(ctx, "/repos/"+c.Repo+"/releases/latest")
+	prefix, err := c.repoPath()
+	if err != nil {
+		return Release{}, err
+	}
+	body, err := c.do(ctx, prefix+"/releases/latest")
 	if err != nil {
 		return Release{}, err
 	}
@@ -195,7 +255,11 @@ func (c *Client) ReleaseByTag(ctx context.Context, tag string) (Release, error) 
 		// Empty tag would yield a bare /releases/tags/ path (the array endpoint) — reject explicitly.
 		return Release{}, fmt.Errorf("release by tag: empty tag: %w", ErrHTTP)
 	}
-	path := "/repos/" + c.Repo + "/releases/tags/" + url.PathEscape(tag)
+	prefix, err := c.repoPath()
+	if err != nil {
+		return Release{}, err
+	}
+	path := prefix + "/releases/tags/" + url.PathEscape(tag)
 	body, err := c.do(ctx, path)
 	if err != nil {
 		return Release{}, err
@@ -220,7 +284,11 @@ func (c *Client) ReleaseByTag(ctx context.Context, tag string) (Release, error) 
 // garbage tag from winning over a valid release (BUG-003). When every non-draft tag is unparseable,
 // the first non-draft is returned (graceful — no ErrNoReleases since entries exist).
 func (c *Client) LatestAdmittingPrereleases(ctx context.Context) (Release, error) {
-	body, err := c.do(ctx, "/repos/"+c.Repo+"/releases")
+	prefix, err := c.repoPath()
+	if err != nil {
+		return Release{}, err
+	}
+	body, err := c.do(ctx, prefix+"/releases")
 	if err != nil {
 		return Release{}, err
 	}

@@ -253,7 +253,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Upgrade Subsystem Bug Fixes (BUG-004, BUG-007, BUG-008)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Fix three bugs in the self-upgrade subsystem. BUG-004 (major): the production cmdRunner for package-manager DB queries has no per-query timeout or WaitDelay, so a hung PM query hangs indefinitely. BUG-007 (minor): pathHeuristics omits the Linuxbrew Cellar root. BUG-008 (minor): c.Repo is interpolated unescaped in GitHub releases URLs.",
           "tasks": [
             {
@@ -305,14 +305,14 @@
               "type": "Task",
               "id": "P1.M3.T3",
               "title": "Escape c.Repo in GitHub releases URLs (BUG-008)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "releases.go builds request paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' without url.PathEscape, while the tag-based path uses url.PathEscape(tag). Defense-in-depth: if Repo ever carried a special character, the request would be malformed.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T3.S1",
                   "title": "Validate or escape c.Repo segments in releases.go request paths",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-008. The bug is in internal/upgrade/releases.go. Lines ~179 and ~223 build paths as '/repos/'+c.Repo+'/releases/latest' and '/repos/'+c.Repo+'/releases' with c.Repo UNESCAPED. Line ~198 correctly uses url.PathEscape(tag). c.Repo is the 'owner/repo' string from config.\n2. INPUT: c.Repo is sourced from config (config.Upgrade.SourceRepo, default 'dabstractor/stagecoach'). The GitHub API expects '/repos/owner/repo/...' in the path. url.PathEscape escapes '/' to '%2F', which would BREAK 'owner/repo'. So naively applying url.PathEscape(c.Repo) is WRONG.\n3. LOGIC: Since c.Repo is a trusted config value that should be 'owner/repo' format, the correct fix is to VALIDATE c.Repo at Client construction time (or at do() entry) to ensure it matches the expected pattern ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$. If validation fails, return an error. Alternatively, split c.Repo on '/' and escape each segment: path := '/repos/' + url.PathEscape(owner) + '/' + url.PathEscape(repo) + '/releases/latest'. The split-and-escape approach is the most robust defense-in-depth.\n4. OUTPUT: A malformed c.Repo produces a clear error instead of a malformed HTTP request. Normal 'owner/repo' values are unaffected.\n5. DOCS: [Mode A] Add a code comment documenting the validation/escaping rationale. No user-facing doc surface change.",
@@ -327,14 +327,14 @@
               "type": "Task",
               "id": "P1.M3.T4",
               "title": "Sync changeset-level documentation for upgrade fixes",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Sweep README.md and docs/ for any references to the upgrade detection cascade or package-manager support that the BUG-004/007/008 fixes change. Verify docs/packaging.md accurately describes Homebrew detection including Linuxbrew.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T4.S1",
                   "title": "Review and update docs/packaging.md and README.md for upgrade detection accuracy",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1",

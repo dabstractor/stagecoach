@@ -311,3 +311,72 @@ func TestClient_ContextCanceled(t *testing.T) {
 		t.Errorf("err = %v, want errors.Is ErrHTTP", err)
 	}
 }
+
+// TestClient_MalformedRepo_RejectedBeforeHTTP is the BUG-008 regression: a malformed Client.Repo
+// must be rejected at the repoPath validation gate BEFORE any network call. Every table entry is a
+// repo that is NOT a well-formed "owner/repo" (wrong shape, empty segment, or a character outside
+// the GitHub segment charset). The httptest handler is a tripwire — if ANY request reaches it the
+// test fails, proving the rejection happened client-side (no real HTTP, no real GitHub).
+func TestClient_MalformedRepo_RejectedBeforeHTTP(t *testing.T) {
+	badRepos := []string{
+		"",            // empty
+		"noslash",     // no slash — not owner/repo
+		"a/b/c",       // too many segments
+		"a//b",        // empty middle segment
+		"/b",          // empty owner
+		"a/",          // empty repo
+		"a b/c",       // space in owner (outside charset)
+		"a/b c",       // space in repo (outside charset)
+		"a/b#c",       // fragment separator in repo (URL-special)
+		"a/b?c",       // query separator in repo (URL-special)
+		"owner/repo!", // '!' outside charset
+	}
+	// The handler is a tripwire: it must NEVER be hit (the malformed repo is rejected before HTTP).
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("malformed repo must not reach HTTP: %s", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(ts.Close)
+
+	ctx := context.Background()
+	for _, repo := range badRepos {
+		c := &Client{BaseURL: ts.URL, Repo: repo} // BaseURL = fake server (never real GitHub)
+		// All three releases methods must reject the malformed repo with ErrMalformedRepo, and none
+		// may reach the handler.
+		if _, err := c.LatestStable(ctx); !errors.Is(err, ErrMalformedRepo) {
+			t.Errorf("LatestStable repo=%q: err = %v, want errors.Is ErrMalformedRepo", repo, err)
+		}
+		if _, err := c.ReleaseByTag(ctx, "v1.2.3"); !errors.Is(err, ErrMalformedRepo) {
+			t.Errorf("ReleaseByTag repo=%q: err = %v, want errors.Is ErrMalformedRepo", repo, err)
+		}
+		if _, err := c.LatestAdmittingPrereleases(ctx); !errors.Is(err, ErrMalformedRepo) {
+			t.Errorf("LatestAdmittingPrereleases repo=%q: err = %v, want errors.Is ErrMalformedRepo", repo, err)
+		}
+	}
+}
+
+// TestClient_RepoPath_OK confirms a well-formed repo round-trips through repoPath into the expected
+// "/repos/{owner}/{repo}" prefix, and that each segment is independently PathEscaped (a literal '.'
+// or '_' survives; this guards the per-segment-escape design against a future whole-PathEscape
+// regression that would break the owner/repo boundary).
+func TestClient_RepoPath_OK(t *testing.T) {
+	cases := []struct {
+		repo string
+		want string
+	}{
+		{"owner/repo", "/repos/owner/repo"},
+		{"octocat/Hello-World", "/repos/octocat/Hello-World"},
+		{"a.b/_c-d", "/repos/a.b/_c-d"}, // '.', '_', '-' are valid segment chars and survive
+	}
+	for _, tc := range cases {
+		c := &Client{Repo: tc.repo}
+		got, err := c.repoPath()
+		if err != nil {
+			t.Errorf("repoPath(%q): unexpected error: %v", tc.repo, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("repoPath(%q) = %q, want %q", tc.repo, got, tc.want)
+		}
+	}
+}
