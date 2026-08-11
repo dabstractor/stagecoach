@@ -103,13 +103,15 @@ type Runner interface {
 // short timeout." The timeout is per-QUERY, not per-cascade, so a single hung brew/scoop/chocolatey
 // cannot stall `stagecoach upgrade`.
 type osRunner struct {
-	timeout time.Duration // 0 ⇒ 3s default (defaultQueryTimeout).
+	timeout time.Duration // 0 ⇒ 3s default (DefaultQueryTimeout).
 }
 
-// defaultQueryTimeout caps each package-manager DB query so a hung PM cannot stall the cascade
+// DefaultQueryTimeout caps each package-manager DB query so a hung PM cannot stall the cascade
 // (external_deps §7). 3s is generous for a local `brew list` / `scoop prefix` / `pacman -Q` while
-// still bounding the worst case.
-const defaultQueryTimeout = 3 * time.Second
+// still bounding the worst case. Exported so internal/cmd/upgrade_run.go's cmdRunner shares the same
+// bound as osRunner — the two production runners must not drift (BUG-004: drift is how cmdRunner lost
+// its timeout in the first place).
+const DefaultQueryTimeout = 3 * time.Second
 
 // Run executes name args... and maps the outcome to the Runner contract:
 //   - exit 0 ⇒ (stdout, 0, nil) — the probe's confirm predicate runs.
@@ -121,7 +123,7 @@ const defaultQueryTimeout = 3 * time.Second
 func (r *osRunner) Run(ctx context.Context, name string, args ...string) (string, int, error) {
 	timeout := r.timeout
 	if timeout == 0 {
-		timeout = defaultQueryTimeout
+		timeout = DefaultQueryTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

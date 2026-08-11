@@ -138,8 +138,10 @@ func prodNewClient(repo, token string) *upgrade.Client {
 // (mirrors upgrade.osRunner + internal/git/git.go run): a NON-ZERO process exit — e.g. `brew list
 // stagecoach` exits 1 when the package is not installed — ⇒ (stdout, code, nil) so the cascade treats
 // "not installed" as a SKIP, not an error; only a start failure (binary absent) or a context deadline
-// ⇒ err. There is NO per-query timeout here (unlike osRunner's 3s) because the command's ctx already
-// bounds the whole upgrade; a hung PM surfaces as ctx.Err().
+// ⇒ err. Each Run wraps the command in a per-query 3s deadline (upgrade.DefaultQueryTimeout) +
+// cmd.WaitDelay, mirroring upgrade.osRunner (the root ctx from main.go's signal.Install is
+// signal-cancelable with NO deadline, so the per-query bound is load-bearing — FR-U2(b)/external_deps
+// §7; BUG-004). The shared constant keeps the two runners from drifting.
 type cmdRunner struct{}
 
 // Run executes name args... and maps the outcome to the upgrade.Runner contract:
@@ -150,9 +152,21 @@ type cmdRunner struct{}
 // A context cancellation/timeout kills the child with a signal that surfaces as a *exec.ExitError, so
 // ctx.Err() is checked FIRST (mirrors upgrade.osRunner's ordering).
 func (cmdRunner) Run(ctx context.Context, name string, args ...string) (string, int, error) {
+	// BUG-004: bound each PM query to the shared 3s deadline so a hung PM (brew refreshing its DB, NFS
+	// home, broken PM) cannot stall the cascade. The root ctx (main.go signal.Install) is signal-cancelable
+	// with NO deadline, so this per-query bound is load-bearing (FR-U2(b)/external_deps §7). Mirrors
+	// upgrade.osRunner.Run; the shared upgrade.DefaultQueryTimeout keeps the two runners from drifting.
+	ctx, cancel := context.WithTimeout(ctx, upgrade.DefaultQueryTimeout)
+	defer cancel()
+
 	var buf bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout = &buf
+	// WaitDelay bounds how long Run waits for the process (and any forked grandchild still holding the
+	// stdout pipe) to release its I/O AFTER the deadline fires. Without it a hung PM that forked a helper
+	// keeps the pipe open past the cancel. Same window as the timeout (mirrors osRunner).
+	cmd.WaitDelay = upgrade.DefaultQueryTimeout
+
 	if err := cmd.Run(); err != nil {
 		// ctx deadline / cancellation kills the child with a signal that looks like an ExitError —
 		// check ctx.Err() first so a timeout is treated as "PM hung" (err), not "not installed".
