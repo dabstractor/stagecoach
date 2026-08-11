@@ -356,9 +356,10 @@ func skeletonPaths(skeleton string) map[string]bool {
 
 // buildReadAnswer constructs the answer turn payload for a set of READ requests (PRD §9.26 FR-W3/FR-W5).
 // For each requested path: if it is staged and has a (remaining) diff chunk, that chunk is appended
-// (labeled "part i/N" when chunked, FR-W5); if it is not staged or fully read, a short note is appended
-// (FR-W3: "<path> is not in the staged changes" / FR-W5: "end of diff"). The per-file byte offset
-// (st.offsets) is the implicit cursor: re-requesting a path returns the NEXT chunk (FR-W5).
+// (labeled "part i/N" when chunked, FR-W5); if it is not staged (or a read error), the FR-W3 "not in the
+// staged changes" note is appended; if it is staged but the cursor is exhausted (diff already fully
+// delivered), the FR-W5 "end of diff" note is appended. The per-file byte offset (st.offsets) is the
+// implicit cursor: re-requesting a path returns the NEXT chunk (FR-W5).
 func buildReadAnswer(ctx context.Context, g git.Git, cfg config.Config, excludes, paths []string, st *readState) string {
 	opts := git.StagedDiffOptions{
 		MaxDiffBytes:     cfg.MaxDiffBytes,
@@ -371,9 +372,17 @@ func buildReadAnswer(ctx context.Context, g git.Git, cfg config.Config, excludes
 	for _, p := range paths {
 		diff, err := g.StagedFileDiff(ctx, p, opts)
 		if err != nil || diff == "" {
-			// Either not staged, fully read (cursor exhausted), or a read error. Note it (FR-W3/FR-W5).
+			// Either not staged or a read error (cursor exhaustion is handled below, before nextChunk —
+			// StagedFileDiff returns the full non-empty diff, so exhaustion never reaches diff=="").
 			// On a read error, treat the file as unreadable and note it (best-effort; the loop continues).
 			fmt.Fprintf(&b, "%s is not in the staged changes (or has no further diff).\n\n", p)
+			continue
+		}
+		// FR-W5: cursor exhausted — the model re-requested a file whose diff was already fully delivered.
+		// StagedFileDiff returns the full diff (cursor-unaware), so exhaustion is detected here (offset >=
+		// len), not by the diff=="" branch above. Emit the explicit 'end of diff' note (not an empty body).
+		if st.offsets[p] >= len(diff) {
+			fmt.Fprintf(&b, "%s — end of diff (all parts shown).\n\n", p)
 			continue
 		}
 		chunk, total, advance := nextChunk(diff, st.offsets[p])

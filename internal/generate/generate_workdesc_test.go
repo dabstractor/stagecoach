@@ -430,6 +430,56 @@ func TestStagedFileDiff_SinglePath(t *testing.T) {
 	}
 }
 
+// TestBuildReadAnswer_EndOfDiff is the BUG-002 regression: a re-READ of a staged file whose diff was
+// already fully delivered (cursor exhausted) MUST emit the FR-W5 "end of diff" note — not the empty
+// "a.go:\n\n" body the pre-fix code produced. Mirrors TestStagedFileDiff_SinglePath (real git.New(repo),
+// a staged file) and sets the cursor deterministically via len(diff)+1 (no hardcoded length). Includes
+// a non-exhaustion control (offset=0 ⇒ chunk delivered, NOT "end of diff") proving the branch fires
+// ONLY when exhausted.
+func TestBuildReadAnswer_EndOfDiff(t *testing.T) {
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "a.go", "package main\n")
+	stageFile(t, repo, "a.go")
+
+	g := git.New(repo)
+	ctx := context.Background()
+	opts := git.StagedDiffOptions{DiffContext: 1}
+	diff, err := g.StagedFileDiff(ctx, "a.go", opts)
+	if err != nil {
+		t.Fatalf("StagedFileDiff: %v", err)
+	}
+	if diff == "" {
+		t.Fatalf("setup: staged a.go diff is empty — test fixture broken")
+	}
+	cfg := config.Defaults()
+
+	t.Run("exhausted_cursor_emits_end_of_diff", func(t *testing.T) {
+		st := &readState{N: 5, offsets: map[string]int{"a.go": len(diff) + 1}} // cursor EXHAUSTED
+		got := buildReadAnswer(ctx, g, cfg, nil, []string{"a.go"}, st)
+		if !strings.Contains(got, "a.go — end of diff (all parts shown).") {
+			t.Errorf("exhausted cursor: got %q, want the 'end of diff' note", got)
+		}
+		// The BUG-002 hazard: an empty-body "a.go:\n\n" (the pre-fix output) must NOT appear.
+		if strings.Contains(got, "a.go:\n\n") {
+			t.Errorf("exhausted cursor: got empty-body form %q, want the 'end of diff' note", got)
+		}
+	})
+
+	t.Run("control_offset_zero_delivers_chunk", func(t *testing.T) {
+		st := &readState{N: 5, offsets: map[string]int{"a.go": 0}} // cursor at start
+		got := buildReadAnswer(ctx, g, cfg, nil, []string{"a.go"}, st)
+		if strings.Contains(got, "end of diff") {
+			t.Errorf("control (offset=0): got %q, must NOT contain 'end of diff' (the branch fired prematurely)", got)
+		}
+		// The diff body must be delivered (the chunk is present).
+		if !strings.Contains(got, "a.go") {
+			t.Errorf("control (offset=0): got %q, must contain the diff body for a.go", got)
+		}
+	})
+}
+
 // ---- BUG-001 helpers: containsReadVerb / readTargets / buildNonStagedReadAnswer ----
 
 // TestContainsReadVerb covers the BUG-001 gate: ANY line whose verb == "READ" (exact

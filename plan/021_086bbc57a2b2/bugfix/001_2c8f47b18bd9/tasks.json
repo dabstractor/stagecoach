@@ -41,14 +41,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Fix fully-read file emitting empty body instead of 'end of diff' note (BUG-002)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "In buildReadAnswer, StagedFileDiff returns the FULL diff every call (cursor-unaware). When the per-file cursor is exhausted (st.offsets[p] >= len(diff)), nextChunk returns ('', 1, 0) and the total<=1 branch prints an empty body ('<path>:\\n\\n'). The 'end of diff' note only fires in the diff=='' branch (for non-staged files). Fix by checking cursor exhaustion before calling nextChunk.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Add cursor-exhaustion check in buildReadAnswer to emit 'end of diff' note",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_workdesc.md §BUG-002. The bug is in internal/generate/workdesc.go buildReadAnswer (~line 270). StagedFileDiff returns the full non-empty diff for staged files, so the diff=='' branch never fires; cursor exhaustion falls through to nextChunk which returns empty chunk with total==1.\n2. INPUT: buildReadAnswer receives paths []string and *readState (st.offsets[p] is the per-file byte cursor). g.StagedFileDiff returns the full diff string for path p. nextChunk(diff, offset) returns (chunk, total, advance) where offset>=len(diff) => ('', 1, 0).\n3. LOGIC: In buildReadAnswer, AFTER the diff=='' check (line ~268) and BEFORE calling nextChunk (line ~274), add: if st.offsets[p] >= len(diff) { emit FR-W5 end-of-diff note: fmt.Fprintf(&b, '%s — end of diff (all parts shown).\\n\\n', p); continue }. The note text matches FR-W5 spec: 'After the final chunk, a re-request returns <path> — end of diff'.\n4. OUTPUT: A re-request for an already-fully-read file produces an explicit 'end of diff' note instead of an empty body. The loop still terminates via the round cap.\n5. DOCS: [Mode A] Update the code comment on the cursor-exhaustion branch to cite FR-W5. No user-facing doc surface change.",
