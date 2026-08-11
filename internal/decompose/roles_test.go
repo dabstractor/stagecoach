@@ -128,6 +128,10 @@ func TestResolveRoles_HappyPath_AllPi(t *testing.T) {
 	if len(rm.Stager.TooledFlags) == 0 {
 		t.Error("Stager.TooledFlags is empty, want non-empty (pi is capable)")
 	}
+	// BUG-003: a tooled stager (native TooledFlags) reports StagerAvailable=true.
+	if !rm.StagerAvailable {
+		t.Error("StagerAvailable = false, want true (pi is stager-capable)")
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +176,10 @@ func TestResolveRoles_StagerFallback(t *testing.T) {
 	// Stager TooledFlags should be non-empty (fallback to claude which is capable).
 	if len(rm.Stager.TooledFlags) == 0 {
 		t.Error("Stager.TooledFlags is empty after fallback, want non-empty")
+	}
+	// BUG-003: a successful FR-D4 fallback reports StagerAvailable=true.
+	if !rm.StagerAvailable {
+		t.Error("StagerAvailable = false, want true (fallback to claude succeeded)")
 	}
 
 	// Other roles should be bareprov (global default).
@@ -285,10 +293,17 @@ func TestResolveRoles_StagerFallback_ToPi_MultiProviderModel(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestResolveRoles_NoStagerCapable
+// TestResolveRoles_NoStagerCapable_Deferred (BUG-003 / FR-M13)
 // ---------------------------------------------------------------------------
 
-func TestResolveRoles_NoStagerCapable(t *testing.T) {
+// TestResolveRoles_NoStagerCapable_Deferred pins the BUG-003 fix: a no-tooled stager provider with
+// NO installed tooled fallback no longer hard-errors in ResolveRoles. Instead resolution SUCCEEDS with
+// StagerAvailable=false (the deferred-stager sentinel) and rm.Stager carrying the no-tooled manifest
+// (for diagnostics + S2's runLoop error). The FR-M13 file-disjoint fast-path (runLoopFastPath, no
+// stager) is now reachable for a no-tooled provider; the "a stager is genuinely required" error is
+// deferred to S2's tooled-stager runLoop (fires ONLY on a non-disjoint partition). Pre-fix this test
+// asserted the 'cannot stage'/'stager-capable' error; the fix flips the expected behavior.
+func TestResolveRoles_NoStagerCapable_Deferred(t *testing.T) {
 	// Stager set to bareprov (not capable); pi, agy, and claude NOT installed → no fallback possible.
 	// Only bareprov is installed (via Command="go" override); all others have bogus commands.
 	reg := bogusRegistry(t, []string{"bareprov"})
@@ -300,13 +315,19 @@ func TestResolveRoles_NoStagerCapable(t *testing.T) {
 		},
 	}
 
-	_, _, err := ResolveRoles(cfg, reg)
-	if err == nil {
-		t.Fatal("ResolveRoles returned nil error, want stager-capable error")
+	rm, _, err := ResolveRoles(cfg, reg)
+	if err != nil {
+		t.Fatalf("ResolveRoles = %v, want nil (FR-M13: stager requirement deferred, not a hard error)", err)
 	}
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "cannot stage") || !strings.Contains(errMsg, "stager-capable") {
-		t.Errorf("error = %q, want stager-capable message", errMsg)
+	if rm.StagerAvailable {
+		t.Error("StagerAvailable = true, want false (no tooled stager + no fallback)")
+	}
+	// The no-tooled manifest is still stored in rm.Stager (for diagnostics + S2's named-provider error).
+	if rm.Stager.Name != "bareprov" {
+		t.Errorf("Stager.Name = %q, want bareprov (the no-tooled manifest retained)", rm.Stager.Name)
+	}
+	if len(rm.Stager.TooledFlags) != 0 {
+		t.Errorf("Stager.TooledFlags = %v, want empty (the no-tooled manifest, not a fallback)", rm.Stager.TooledFlags)
 	}
 }
 

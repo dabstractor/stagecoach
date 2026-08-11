@@ -28,12 +28,22 @@ import (
 // RoleManifests holds the four resolved (merged-but-unresolved — Render Validates+Resolves) provider
 // manifests for the decomposition pipeline (PRD §13.6.2). Built by ResolveRoles; consumed by the
 // orchestrator (P3.M4.T1.S1) via RoleManifests.X.Render(...). The stager field carries the TOOLED
-// manifest post-FR-D4 fallback (non-empty TooledFlags guaranteed); the other three are bare manifests.
+// manifest post-FR-D4 fallback (TooledFlags non-empty) when StagerAvailable is true; when false it
+// carries the no-tooled manifest for diagnostics + S2's runLoop error message.
 type RoleManifests struct {
 	Planner provider.Manifest // bare
-	Stager  provider.Manifest // tooled (TooledFlags non-empty after fallback)
+	Stager  provider.Manifest // tooled (TooledFlags non-empty after fallback) when StagerAvailable; the no-tooled manifest otherwise
 	Message provider.Manifest // bare
 	Arbiter provider.Manifest // bare
+
+	// StagerAvailable reports whether the resolved Stager is tooled — i.e. it has native TooledFlags OR
+	// the FR-D4 fallback found an installed tooled provider. When false, the stager CANNOT stage: the
+	// FR-M13 file-disjoint fast-path (runLoopFastPath) still works (it does deterministic `git add`, no
+	// stager agent), but the tooled-stager runLoop (a non-disjoint partition) MUST error before Render
+	// (S2 reads deps.Roles.StagerAvailable). BUG-003 / FR-M13: this defers the stager requirement out of
+	// ResolveRoles so a no-tooled provider can reach the fast-path instead of being hard-blocked at
+	// role resolution before the planner even runs.
+	StagerAvailable bool
 }
 
 // RoleModels holds the four resolved (provider, model, reasoning) triples (one config.RoleConfig
@@ -101,6 +111,10 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 	var rm RoleManifests
 	var rmodels RoleModels
 
+	// stagerAvailable is flipped false ONLY in the FR-D4 no-fallback arm (stager has no TooledFlags AND
+	// no installed tooled provider exists to fall back to). Defaults true for every other path.
+	stagerAvailable := true
+
 	for _, role := range []string{"planner", "stager", "message", "arbiter"} {
 		prov, mdl, rsn := config.ResolveRoleModel(role, cfg)
 
@@ -132,28 +146,33 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 		if role == "stager" && len(m.TooledFlags) == 0 {
 			fb := reg.FirstTooledProvider(installed)
 			if fb == "" {
-				return RoleManifests{}, RoleModels{}, fmt.Errorf(
-					"role %q: provider %q cannot stage (tooled_flags empty) and no other installed "+
-						"provider is stager-capable", role, prov)
-			}
-			fbm, ok := reg.Get(fb)
-			if !ok {
-				return RoleManifests{}, RoleModels{}, fmt.Errorf(
-					"role %q: stager fallback provider %q not found", role, fb)
-			}
-			prov = fb
-			m = fbm
-			// Models are provider-specific (FR-R5). The old provider's model (user-configured
-			// or default-table) may be bare and invalid on the new multi-provider fallback target.
-			// Clear a bare model when falling back to a multi-provider agent, then apply the
-			// default-table model for the fallback provider only if it is FR-R5b-compatible.
-			if isMultiProvider(m) && mdl != "" && !strings.Contains(mdl, "/") {
-				mdl = "" // bare model from old provider — invalid on multi-provider fallback
-			}
-			if col := config.DefaultModelsForProvider(fb); col != nil {
-				candidate := col["stager"]
-				if candidate != "" && !(isMultiProvider(m) && !strings.Contains(candidate, "/")) {
-					mdl = candidate
+				// BUG-003 / FR-M13: do NOT error here. A no-tooled provider can still decompose a
+				// file-disjoint tree via the FR-M13 fast-path (runLoopFastPath — deterministic `git add`,
+				// no stager agent). Defer the "a stager is genuinely required" error to the tooled-stager
+				// runLoop (S2): it fires ONLY when the partition is non-disjoint (i.e. a stager is truly
+				// needed). The no-tooled manifest is still stored in rm.Stager below (for diagnostics +
+				// S2's named-provider error message); the fast-path never touches it.
+				stagerAvailable = false
+			} else {
+				fbm, ok := reg.Get(fb)
+				if !ok {
+					return RoleManifests{}, RoleModels{}, fmt.Errorf(
+						"role %q: stager fallback provider %q not found", role, fb)
+				}
+				prov = fb
+				m = fbm
+				// Models are provider-specific (FR-R5). The old provider's model (user-configured
+				// or default-table) may be bare and invalid on the new multi-provider fallback target.
+				// Clear a bare model when falling back to a multi-provider agent, then apply the
+				// default-table model for the fallback provider only if it is FR-R5b-compatible.
+				if isMultiProvider(m) && mdl != "" && !strings.Contains(mdl, "/") {
+					mdl = "" // bare model from old provider — invalid on multi-provider fallback
+				}
+				if col := config.DefaultModelsForProvider(fb); col != nil {
+					candidate := col["stager"]
+					if candidate != "" && !(isMultiProvider(m) && !strings.Contains(candidate, "/")) {
+						mdl = candidate
+					}
 				}
 			}
 		}
@@ -172,6 +191,7 @@ func ResolveRoles(cfg config.Config, reg *provider.Registry) (RoleManifests, Rol
 		setRole(&rm, &rmodels, role, m, prov, mdl, rsn)
 	}
 
+	rm.StagerAvailable = stagerAvailable
 	return rm, rmodels, nil
 }
 

@@ -157,7 +157,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Defer stager requirement in ResolveRoles — return success with no-tooled sentinel instead of erroring",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-003. The bug is in internal/decompose/roles.go ResolveRoles (~line 132). When role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='' , it returns an error. This blocks Decompose before the planner runs. Decompose's fast-path (decompose.go:243) calls isFileDisjoint(out.Commits) → runLoopFastPath which needs NO stager. The call chain: CLI (default_action.go:452 or stagecoach.go:203) calls ResolveRoles BEFORE Decompose (line 466/219).\n2. INPUT: ResolveRoles(cfg config.Config, reg *provider.Registry) returns (RoleManifests, RoleModels, error). RoleManifests.Stager is a provider.Manifest. RoleModels.Stager is a config.RoleConfig. Decompose's runLoop (the tooled path) calls invokeStager → stageConcept which requires a real tooled agent.\n3. LOGIC: In ResolveRoles, when role=='stager' && len(m.TooledFlags)==0 && FirstTooledProvider(installed)=='', do NOT error. Instead, set a sentinel indicating 'no stager available — fast-path only'. Options: (a) Store the no-tooled manifest as-is in RoleManifests.Stager and add a bool field (e.g., StagerAvailable bool) to RoleManifests or Deps; (b) Use a nil sentinel. The downstream Decompose must then: if isFileDisjoint → runLoopFastPath (works, no stager needed); if NOT disjoint → runLoop → invokeStager → check sentinel → return clear error: 'this partition requires a tooled stager (shared files across concepts), but provider X has no tooled_flags and no stager-capable provider is installed'. The error must name the partition property (non-disjoint) so the user understands WHY a stager is needed.\n4. OUTPUT: ResolveRoles no longer hard-errors for a no-tooled provider. The stager requirement is deferred to Decompose's runLoop, which errors ONLY when the partition is non-disjoint. RoleManifests carries enough info for runLoop to detect the missing stager.\n5. DOCS: [Mode A] Update the code comment in ResolveRoles to document the deferred stager requirement (FR-M13). No user-facing doc surface change — the behavior matches FR-M13 which is documented in spec/03-generation.md:120.",
@@ -171,7 +171,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Add stager-availability check in the tooled-stager runLoop path (error if needed but unavailable)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
