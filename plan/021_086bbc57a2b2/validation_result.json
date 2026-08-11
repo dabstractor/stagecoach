@@ -1,0 +1,5 @@
+{
+  "hasIssues": true,
+  "issueCount": 2,
+  "summary": "Production-ready: all build/test/coverage/e2e/workflow checks pass; 2 minor polish items found (empty --format CLI inconsistency; --work-description failure cause not surfaced on non-session providers)."
+}

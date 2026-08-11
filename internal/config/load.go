@@ -503,8 +503,12 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 	}
 
 	// §9.19 FR-F1/FR-F6 — format/locale via CLI flags (gated on fs.Changed, mirrors provider).
+	// An explicit empty value (e.g. `--format ""`) is treated as UNSET — consistent with the env
+	// layer above (STAGECOACH_FORMAT="" ⇒ default auto) and the omitted-flag case. Otherwise an empty
+	// CLI value would reach validateFormat as a hard error while its env/config analog silently does
+	// the right thing (validation report Issue 1).
 	if fs.Changed("format") {
-		if v, err := fs.GetString("format"); err == nil {
+		if v, err := fs.GetString("format"); err == nil && v != "" {
 			cfg.Format = v
 		}
 	}

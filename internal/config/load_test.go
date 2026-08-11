@@ -484,6 +484,25 @@ func TestLoadFlags_NoneChanged(t *testing.T) {
 	}
 }
 
+// TestLoadFlags_FormatEmptyIsUnset (validation report Issue 1): an explicit empty --format value
+// (--format "") must be treated as UNSET — consistent with STAGECOACH_FORMAT="" (env layer:
+// ok && v != "") and the omitted-flag case — NOT as a malformed value. Otherwise an empty CLI
+// value would reach validateFormat as a hard error while its env/config analog silently defaults
+// to auto.
+func TestLoadFlags_FormatEmptyIsUnset(t *testing.T) {
+	cfg := Config{Format: "auto"} // simulate a resolved default
+	fs := newFlagSet(t)
+	if err := fs.Set("format", ""); err != nil { // mark format as Changed with an empty value
+		t.Fatal(err)
+	}
+
+	loadFlags(&cfg, fs)
+
+	if cfg.Format != "auto" {
+		t.Errorf("Format=%q want auto (empty --format must be treated as unset, not clobber)", cfg.Format)
+	}
+}
+
 func TestLoadFlags_TimeoutString(t *testing.T) {
 	cfg := Config{}
 	fs := newFlagSet(t)

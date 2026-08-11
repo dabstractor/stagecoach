@@ -253,7 +253,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		VerboseOn: cfg.Verbose,
 	})
 	if err != nil {
-		return handleGenError(stderr, err) // §4: rescue/CAS/timeout/nothing/generic matrix
+		return handleGenError(stderr, err, cfg.Verbose) // §4: rescue/CAS/timeout/nothing/generic matrix
 	}
 
 	// ---- Success ----
@@ -351,7 +351,7 @@ func handleLockContention(stderr io.Writer, heldErr *lock.HeldError, g git.Git, 
 // prints the detailed message for rescue/CAS (to stderr) and returns a SILENT exitcode.New(code, nil) so
 // main does not double-print; for friendly/generic errors it returns exitcode.New(code, err) so main
 // prints "stagecoach: <msg>". (design §4)
-func handleGenError(stderr io.Writer, err error) error {
+func handleGenError(stderr io.Writer, err error, verboseOn bool) error {
 	// Dry-run generation failure (PRD §9.12 FR49 + bugfix-002 Issue 4): --dry-run runs the full
 	// pipeline (incl. the snapshot), so a timeout or parse/dedupe-exhaustion surfaces a
 	// *generate.RescueError from the library. For a "preview" that was never going to commit, the
@@ -372,6 +372,14 @@ func handleGenError(stderr io.Writer, err error) error {
 	var re *generate.RescueError
 	if errors.As(err, &re) { // covers BOTH ErrTimeout and ErrRescue (both are *RescueError)
 		fmt.Fprintln(stderr, generate.FormatRescue(re.TreeSHA, re.ParentSHA, re.Candidate))
+		// Surface the underlying cause under --verbose (validation report Issue 2). The §18.3 rescue
+		// message itself is spec-frozen (byte-for-byte) so the cause is appended AFTER it as a DEBUG
+		// line, mirroring ui.Verbose's VerboseWarn/VerboseRetry style. This lets a user diagnose WHY
+		// generation failed — e.g. `--work-description` against a non-append provider
+		// (session_mode gate), a turn error, or a timeout cause — without affecting the default output.
+		if verboseOn && re.Cause != nil {
+			fmt.Fprintln(stderr, "DEBUG: cause: "+re.Cause.Error())
+		}
 		code := exitcode.Rescue
 		if errors.Is(err, generate.ErrTimeout) { // timeout → 124; rescue → 3 (timeout checked first)
 			code = exitcode.Timeout

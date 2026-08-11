@@ -1117,6 +1117,62 @@ func TestHandleDecomposeError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestHandleGenError_CauseUnderVerbose — validation report Issue 2: the underlying
+// generation cause (e.g. a non-append provider's session_mode gate) is surfaced as a
+// DEBUG line under --verbose, appended AFTER the spec-frozen §18.3 rescue message.
+// ---------------------------------------------------------------------------
+
+func TestHandleGenError_CauseUnderVerbose(t *testing.T) {
+	cause := errors.New(`provider "claude": multi-turn render requires session_mode="append"`)
+	err := &generate.RescueError{
+		Kind:      generate.ErrRescue,
+		TreeSHA:   "deadbeef",
+		Candidate: "",
+		Cause:     cause,
+	}
+
+	t.Run("verbose_on_surfaces_cause", func(t *testing.T) {
+		var b bytes.Buffer
+		_ = handleGenError(&b, err, true)
+		out := b.String()
+		if !strings.Contains(out, "Commit generation failed.") {
+			t.Errorf("missing §18.3 rescue body; got %q", out)
+		}
+		if !strings.Contains(out, "DEBUG: cause:") {
+			t.Errorf("expected DEBUG cause line under --verbose; got %q", out)
+		}
+		if !strings.Contains(out, cause.Error()) {
+			t.Errorf("expected cause text %q in output; got %q", cause.Error(), out)
+		}
+	})
+
+	t.Run("verbose_off_hides_cause", func(t *testing.T) {
+		var b bytes.Buffer
+		_ = handleGenError(&b, err, false)
+		out := b.String()
+		if strings.Contains(out, "DEBUG: cause:") {
+			t.Errorf("cause must NOT surface without --verbose; got %q", out)
+		}
+		if strings.Contains(out, cause.Error()) {
+			t.Errorf("cause text must NOT appear without --verbose; got %q", out)
+		}
+		// Rescue body still present.
+		if !strings.Contains(out, "Commit generation failed.") {
+			t.Errorf("missing §18.3 rescue body; got %q", out)
+		}
+	})
+
+	t.Run("nil_cause_hides_debug_line_even_when_verbose", func(t *testing.T) {
+		var b bytes.Buffer
+		noCause := &generate.RescueError{Kind: generate.ErrRescue, TreeSHA: "deadbeef"}
+		_ = handleGenError(&b, noCause, true)
+		if strings.Contains(b.String(), "DEBUG: cause:") {
+			t.Errorf("nil cause must not emit a DEBUG line; got %q", b.String())
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // TestRouting_SingleOptOut — --single on dirty/un-staged tree → v1 path, 1 commit
 // ---------------------------------------------------------------------------
 
