@@ -516,6 +516,23 @@ func isFileDisjoint(concepts []prompt.PlannerCommit) bool {
 // On ANY error, drain the in-flight channel (<-ch) before returning (no leak). Signal uses SetSnapshot/
 // ClearSnapshot toggling (NOT RestoreDefault — one-shot+permanent, §G-RESTOREDEFAULT-ONESHOT).
 func runLoop(ctx context.Context, deps Deps, concepts []prompt.PlannerCommit, baseTree, tStart, preRunHEAD string, isUnborn bool) ([]CommitResult, []ChainEntry, error) {
+	// BUG-003/FR-M13: ResolveRoles (S1) defers the stager requirement so a no-tooled provider can
+	// reach the file-disjoint fast-path (runLoopFastPath, which needs NO stager). This runLoop runs
+	// ONLY for a shared-file (non-disjoint) partition, which genuinely requires a tooled stager to
+	// stage overlapping hunks (FR-M5). This guard handles the CAPABILITY-GAP case: StagerAvailable=false
+	// means the configured stager is bare/tooled-less with no tooled fallback, so it "simply cannot
+	// serve as a stager" (spec §12.7) — a deterministic, permanent gap, NOT a transient exec failure.
+	// Fail fast BEFORE any freeze/generation work so the user gets a clear, actionable error instead
+	// of every concept deterministically empty-skipping into a silent zero-commit "success".
+	// ORTHOGONAL to FR-M12d: FR-M12d's invokeStagerRetry retry-once-then-empty governs RUNTIME
+	// failures ("stager exits non-zero", spec §13.6.6) of a TOOLED stager (StagerAvailable=true), which
+	// this guard never sees. The two do not overlap once StagerAvailable is the gate.
+	if !deps.Roles.StagerAvailable {
+		return nil, nil, fmt.Errorf("%w: this partition shares files across concepts, so a tooled "+
+			"stager is required, but the configured provider has no tooled_flags and no "+
+			"stager-capable provider is installed; use a disjoint partition (or a disjoint changeset) "+
+			"or install a tooled provider (pi or claude)", ErrDecomposeFailed)
+	}
 	var commits []CommitResult
 	var chainData []ChainEntry
 	prevTree := baseTree

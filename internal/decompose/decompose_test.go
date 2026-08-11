@@ -204,8 +204,12 @@ func dcmAllRoles(t *testing.T, bin string, o stubtest.Options) RoleManifests {
 	return RoleManifests{
 		Planner: m,
 		Stager:  tooledStubManifest(t, bin, o),
-		Message: m,
-		Arbiter: m,
+		// Tests bypass ResolveRoles, so mirror its post-BUG-003 sentinel: a tooled stub stager
+		// (non-empty TooledFlags) means StagerAvailable=true — the runLoop guard then lets these
+		// shared-file scenarios proceed instead of short-circuiting.
+		StagerAvailable: true,
+		Message:         m,
+		Arbiter:         m,
 	}
 }
 
@@ -568,7 +572,7 @@ func TestDecompose_AutoMultiCommit_HappyPath(t *testing.T) {
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""}) // stub stager (can't run git)
 	// The real stager can't run git, so inject the seam.
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
 		"c1": {"a.txt"},
@@ -642,7 +646,7 @@ func TestDecompose_AutoMultiCommit_TemplateAppliedUniformly(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b", "feat: add c"})
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""}) // stub stager (can't run git)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Template = "$msg (#812)"
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
@@ -684,7 +688,7 @@ func TestDecompose_Overlap(t *testing.T) {
 	messageM.Env["STAGECOACH_STUB_SLEEP_MS"] = "200"
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 
 	var stagerTimestamps []int64
@@ -748,7 +752,7 @@ func TestDecompose_EmptyConceptSkip(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c"})
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	// c2 has no files to stage → empty concept → skipped.
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
@@ -1056,6 +1060,31 @@ func TestDecompose_Dispatch_DisjointFastPath(t *testing.T) {
 	}
 }
 
+// TestRunLoop_NoStagerAvailable_Errors is the BUG-003/FR-M13 guard test: a shared-file (non-disjoint)
+// partition routes to runLoop, which genuinely requires a tooled stager. When ResolveRoles (S1) reports
+// StagerAvailable=false (no tooled provider + no fallback), runLoop must fail fast with a clear,
+// actionable error BEFORE any freeze/generation work — so a zero-Git Deps returns the error without
+// dereferencing Git (the guard fires first). The disjoint fast-path (runLoopFastPath) is unaffected.
+func TestRunLoop_NoStagerAvailable_Errors(t *testing.T) {
+	deps := Deps{Roles: RoleManifests{StagerAvailable: false}} // Git/Planner zero — guard fires first
+	concepts := []prompt.PlannerCommit{
+		{Title: "a", Files: []string{"shared.go"}},
+		{Title: "b", Files: []string{"shared.go"}}, // shared file → non-disjoint (the runLoop case)
+	}
+	_, _, err := runLoop(context.Background(), deps, concepts, "base", "tstart", "head", false)
+	if err == nil {
+		t.Fatal("runLoop StagerAvailable=false: want error, got nil")
+	}
+	if !errors.Is(err, ErrDecomposeFailed) {
+		t.Errorf("error not ErrDecomposeFailed-wrapped: %v", err)
+	}
+	for _, want := range []string{"tooled stager", "tooled_flags", "disjoint", "pi or claude"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err.Error(), want)
+		}
+	}
+}
+
 // TestDecompose_Dispatch_SharedFileFallback is the inverse oracle: a shared-file partition (one path
 // in ≥2 concepts) routes to runLoop, which invokes the stager per concept. A flag set inside the
 // injected stager seam PROVES the fallback was taken. Mirrors HunkSplitAcrossConcepts's store.py
@@ -1187,7 +1216,7 @@ func TestDecompose_ConcurrentChangeExclusion(t *testing.T) {
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // never invoked under FR-M1d (gate skips)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 
 	// The custom seam: stages concept files + writes sentinel UNSTAGED on first concept.
@@ -1284,7 +1313,7 @@ func TestDecompose_ArbiterFoldsOnlyTStart(t *testing.T) {
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // IS invoked (leftover non-empty)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 
 	// Reuse concurrentSentinelSeam VERBATIM: "add b" no-op (empty slice) ⇒ b.go unclaimed leftover;
@@ -1349,7 +1378,7 @@ func TestDecompose_TStartCompleteness(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add x", "feat: add y"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // arbiter skipped (stagers cover all T_start)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	deps.stager = concurrentSentinelSeam(t, repo,
 		map[string][]string{"add x": {"x.go"}, "add y": {"y.go"}},
@@ -1520,7 +1549,7 @@ func TestDecompose_ArbiterSkippedOnCleanTree(t *testing.T) {
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Commits = 2 // override FR-M2b one-file short-circuit so the loop+arbiter path is tested
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}})
@@ -1563,7 +1592,7 @@ func TestDecompose_ArbiterWiring(t *testing.T) {
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	// Stager only stages a.txt — leaves leftover.txt un-staged.
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}})
@@ -1617,7 +1646,7 @@ func TestDecompose_ErrorPropagation_Stager(t *testing.T) {
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	stagerErr := errors.New("stager injection error")
 	callCount := 0
@@ -1661,7 +1690,7 @@ func TestDecompose_ErrorPropagation_RescueError(t *testing.T) {
 	messageM := stubtest.Manifest(bin, stubtest.Options{Exit: 1, Out: ""})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDepsWithConfig(t, repo, roles, cfg)
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}})
 
@@ -1687,7 +1716,7 @@ func TestDecompose_UnbornRepo(t *testing.T) {
 	messageM := dcmMessageManifest(t, bin, "feat: initial")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Commits = 2 // override FR-M2b one-file short-circuit so the loop path is tested
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}})
@@ -1783,7 +1812,7 @@ func TestDecompose_MessageRescuePartial(t *testing.T) {
 	counterFile := counterDir + "/counter"
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps, buf := dcmOutBuffer(t, repo, roles)
 	deps.Config = cfg
 	_ = callCount // not used
@@ -1875,7 +1904,7 @@ func TestDecompose_CASAbortPartial(t *testing.T) {
 	counterFile := counterDir + "/counter"
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps, buf := dcmOutBuffer(t, repo, roles)
 
 	// External HEAD move, made deterministic on two axes:
@@ -1984,7 +2013,7 @@ func TestDecompose_StagerRetryThenEmpty(t *testing.T) {
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 
 	// Stager seam: fails twice for concept c2, succeeds for others.
@@ -2083,7 +2112,7 @@ func TestDecompose_RescueArbiterSkipped(t *testing.T) {
 	counterFile := counterDir + "/counter"
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps, _ := dcmOutBuffer(t, repo, roles)
 	deps.Config = cfg
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
@@ -2128,7 +2157,7 @@ func TestDecompose_StagerRetryThenSuccess(t *testing.T) {
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Commits = 2 // override FR-M2b one-file short-circuit so the loop path is tested
 
@@ -2275,7 +2304,7 @@ func TestDecompose_OneFileShortcut_CommitsOverride(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: c1", "feat: arbiter"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	cfg := config.Defaults()
 	cfg.Commits = 2 // FORCED count ⇒ short-circuit OVERRIDDEN
 	deps := dcmDepsWithConfig(t, repo, roles, cfg)
@@ -2311,7 +2340,7 @@ func TestDecompose_OneFileShortcut_TwoFilesNoBypass(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add b"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles) // auto mode (Commits=0), but 2 files ⇒ count 2 ⇒ NO short-circuit
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}, "c2": {"b.txt"}})
 
@@ -2617,7 +2646,7 @@ func TestDecompose_ArbiterTipAmend_RereadsFinalSHA(t *testing.T) {
 	arbiterM := dcmScriptArbiter(t, bin, "tip")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
 		"c1": {"a.txt"},
@@ -2679,7 +2708,7 @@ func TestDecompose_ArbiterMidChain_AllSHAsResolve(t *testing.T) {
 	arbiterM := dcmScriptArbiter(t, bin, "mid")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
 		"c1": {"a.txt"},
@@ -2727,7 +2756,7 @@ func TestDecompose_HappyPath_CommitsAccurate(t *testing.T) {
 	messageM := dcmMessageManifest(t, bin, "feat: add a")
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Commits = 2 // override FR-M2b one-file short-circuit so the loop path is tested
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{"c1": {"a.txt"}})
@@ -2773,7 +2802,7 @@ func TestDecompose_RoleResolvesSubProvider(t *testing.T) {
 	arbiterM := stubtest.Manifest(bin, stubtest.Options{Out: `{"target": null}`})
 	piShape(&arbiterM, "--provider")
 
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	deps.Config.Provider = "pi"              // the manifest NAME — the conflation source; must NOT be emitted
 	deps.Config.Model = "openrouter/gpt-5.4" // slash-prefix model → Render emits --provider openrouter
@@ -2822,7 +2851,7 @@ func TestDecompose_SentinelAfterFreezeExcluded(t *testing.T) {
 	messageM := dcmMessageScriptManifest(t, bin, []string{"feat: add a", "feat: add c", "feat: add leftover", "feat: add sentinel", "feat: add sentinel"})
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`) // null → new commit for any leftovers
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 
 	// Stager seam: stages only the concept's path (well-behaved). On first invocation, writes a sentinel
 	// file simulating a concurrent change mid-run (AFTER the freeze). The sentinel is NOT staged.
@@ -2895,7 +2924,7 @@ func TestDecompose_PlannerCoverageLogsUnclaimed(t *testing.T) {
 	arbiterM := dcmArbiterManifest(t, bin, `{"target": null}`)
 
 	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
-	roles := RoleManifests{Planner: plannerM, Stager: stagerM, Message: messageM, Arbiter: arbiterM}
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
 	deps := dcmDeps(t, repo, roles)
 	// Stager seam stages only the CLAIMED files (c1→a.txt, c2→b.txt); c.txt is left for the arbiter.
 	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
@@ -4135,10 +4164,11 @@ func TestDecompose_FastPath_RescueIsolation(t *testing.T) {
 	counterDir := t.TempDir()
 	counterFile := counterDir + "/counter"
 	roles := RoleManifests{
-		Planner: plannerM,
-		Stager:  tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
-		Message: messageM,
-		Arbiter: stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
+		Planner:         plannerM,
+		Stager:          tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
+		StagerAvailable: true,
+		Message:         messageM,
+		Arbiter:         stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
 	}
 	deps, buf := dcmOutBuffer(t, repo, roles)
 	deps.Config = cfg
@@ -4224,10 +4254,11 @@ func TestDecompose_FastPath_CASAbortPartial(t *testing.T) {
 	counterDir := t.TempDir()
 	counterFile := counterDir + "/counter"
 	roles := RoleManifests{
-		Planner: plannerM,
-		Stager:  tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
-		Message: messageM,
-		Arbiter: stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
+		Planner:         plannerM,
+		Stager:          tooledStubManifest(t, bin, stubtest.Options{Out: ""}),
+		StagerAvailable: true,
+		Message:         messageM,
+		Arbiter:         stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile}),
 	}
 	deps, buf := dcmOutBuffer(t, repo, roles)
 	deps.stager = fastPathStagerFatal(t)
@@ -4424,12 +4455,13 @@ func TestDecompose_FastPath_FreezeGuardWired(t *testing.T) {
 //
 // G29 side effect (FR-D4): a TooledFlags-less provider (BARE manifest — nil TooledFlags, the
 // opencode shape) DECOMPOSES a disjoint tree via the fast-path (stager bypassed ⇒
-// RenderTooled never called) but CANNOT serve as a stager on a shared-file tree: runLoop invokes the
-// real stageConcept → RenderTooled → 'tooled mode requires non-empty tooled_flags', which FR-M12d's
-// retry-once-then-empty SWALLOWS into an empty-skip for BOTH concepts (the error is ErrStagerFailed,
-// NOT ErrStagerMovedHEAD, so it is retried then treated as empty). The faithful proof is ZERO commits
-// + the Verbose "stager failed twice … treating concept as empty" log. deps.stager is left nil so the
-// REAL stageConcept fires (a seam would mask the error).
+// RenderTooled never called). On a SHARED-file tree, however, a tooled-less provider "simply
+// cannot serve as a stager" (spec §12.7) — a capability gap — so BUG-003's runLoop
+// StagerAvailable guard produces a hard ErrDecomposeFailed error naming the remedy, BEFORE any
+// per-concept staging (the guard checks the S1 sentinel, not exec output). This is ORTHOGONAL to
+// FR-M12d, whose retry-once-then-empty governs RUNTIME failures of a TOOLED stager (StagerAvailable=true,
+// spec §13.6.6) and is covered by TestDecompose_StagerRetryThenEmpty. deps.stager is left nil so the
+// disjoint sub-case proves the fast-path bypass and the shared sub-case proves the capability-gap hard error.
 // ---------------------------------------------------------------------------
 
 func TestDecompose_FastPath_TooledFlagsLessProvider(t *testing.T) {
@@ -4480,14 +4512,16 @@ func TestDecompose_FastPath_TooledFlagsLessProvider(t *testing.T) {
 		}
 	})
 
-	// --- Sub-case: shared CANNOT serve as a stager (FR-M12d swallows the render error). ---
+	// --- Sub-case: shared partition + BARE stager → BUG-003 hard error (capability gap). ---
 	//
-	// A TooledFlags-less provider cannot render in tooled mode, so stageConcept errors with the
-	// unchanged 'tooled mode requires non-empty tooled_flags' message. runLoop's FR-M12d retry-once-
-	// then-empty logic SWALLOWS that stager error (it is ErrStagerFailed, NOT ErrStagerMovedHEAD) into
-	// an empty-skip for BOTH concepts, so the run returns nil error with ZERO commits. The faithful
-	// proof the stager was invoked + failed is the Verbose retry log ("stager failed twice … treating
-	// concept as empty"). The disjoint sub-case above proves the bypass; this proves the failure.
+	// A TooledFlags-less provider "simply cannot serve as a stager" (spec §12.7) — that is a
+	// capability gap, deterministic and permanent, NOT a transient exec failure. BUG-003 (runLoop's
+	// StagerAvailable guard) turns the old silent empty-skip into a clear, actionable error: the guard
+	// fires at runLoop entry, BEFORE any per-concept staging, so Decompose returns ErrDecomposeFailed
+	// naming the remedy. This is ORTHOGONAL to FR-M12d: FR-M12d's invokeStagerRetry retry-once-then-
+	// empty governs RUNTIME failures ("stager exits non-zero", spec §13.6.6) of a TOOLED stager
+	// (StagerAvailable=true), covered separately by TestDecompose_StagerRetryThenEmpty. The disjoint
+	// sub-case above proves the FR-M13 fast-path bypass; this proves the capability-gap hard error.
 	t.Run("shared_cannot_serve_as_stager", func(t *testing.T) {
 		repo := t.TempDir()
 		dcmInitRepo(t, repo)
@@ -4516,25 +4550,25 @@ func TestDecompose_FastPath_TooledFlagsLessProvider(t *testing.T) {
 			Git:     git.New(repo),
 			Config:  config.Defaults(),
 			Roles:   roles,
-			Verbose: ui.NewVerbose(&logBuf, true), // captures the FR-M12d stager-failed retry log
+			Verbose: ui.NewVerbose(&logBuf, true), // guard fires before the retry log; logBuf kept for parity with disjoint_succeeds
 		}
 		deps.Config.Commits = 2
-		// deps.stager NIL ⇒ the run hits the REAL stageConcept → RenderTooled → the unchanged error.
+		// deps.stager NIL ⇒ the run routes to runLoop (shared partition) where the StagerAvailable guard fires.
 
 		result, err := Decompose(context.Background(), deps)
-		if err != nil {
-			t.Fatalf("FR-M12d swallows the stager error into empty-skip; got unexpected err: %v", err)
+		if err == nil {
+			t.Fatal("BUG-003: a bare/tooled-less stager on a shared partition must hard-error; got nil")
 		}
-		// FR-M12d empty-skips BOTH concepts (stager fails twice each) ⇒ ZERO commits. A TooledFlags-less
-		// provider cannot decompose a shared-file tree (the G29 side effect's negative proof).
+		if !errors.Is(err, ErrDecomposeFailed) {
+			t.Errorf("error not ErrDecomposeFailed-wrapped: %v", err)
+		}
+		for _, want := range []string{"tooled stager", "tooled_flags", "disjoint", "pi or claude"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q missing %q", err.Error(), want)
+			}
+		}
 		if len(result.Commits) != 0 {
-			t.Errorf("Commits len = %d, want 0 (TooledFlags-less stager cannot stage the shared file; both concepts FR-M8-skipped)", len(result.Commits))
-		}
-		// The Verbose log PROVES the stager was invoked + failed both times (the RenderTooled error
-		// fired for each concept), confirming the provider genuinely cannot serve as a stager.
-		logStr := logBuf.String()
-		if !strings.Contains(logStr, "stager failed twice") || !strings.Contains(logStr, "treating concept as empty") {
-			t.Errorf("expected FR-M12d 'stager failed twice … treating concept as empty' log (proof the TooledFlags-less stager failed); got: %s", logStr)
+			t.Errorf("Commits len = %d, want 0 (guard fires before any staging)", len(result.Commits))
 		}
 	})
 }

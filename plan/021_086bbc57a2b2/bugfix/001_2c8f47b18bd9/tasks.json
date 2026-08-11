@@ -150,7 +150,7 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Fix eager stager resolution blocking FR-M13 disjoint fast-path for no-tooled providers (BUG-003)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "ResolveRoles resolves the stager role (with FR-D4 tooled fallback) for EVERY decompose run at Decompose entry, BEFORE the planner runs and before disjointness is determined. A no-tooled provider with no installed tooled built-in hard-errors even for a perfectly file-disjoint tree. The fix defers the stager requirement so the fast-path (which needs no stager) is reachable.",
               "subtasks": [
                 {
@@ -171,7 +171,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Add stager-availability check in the tooled-stager runLoop path (error if needed but unavailable)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -186,7 +186,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S3",
                   "title": "Extend FirstTooledProvider to also consider user-defined tooled providers as fallback",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -203,14 +203,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Correct stale arbiter staging comment — stages from frozen T_start, not working tree (BUG-012)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "A comment near the arbiter phase (decompose.go:~981) states the arbiter's staging 'is UNCHANGED — it stages from the working tree', but FR-M1d extended the freeze boundary into the arbiter so staging derives from the frozen T_start via OverlayTreePaths. The code is correct (resolveArbiter uses tStart); only the comment is stale.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Update the stale arbiter staging comment to reflect FR-M1d frozen-tree staging",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/021_086bbc57a2b2/bugfix/001_2c8f47b18bd9/architecture/bugfix_subsystems.md §BUG-012. The stale comment is in internal/decompose/decompose.go (~line 981, in the runArbiterPhase/resolveArbiter doc block). It says 'The arbiter's STAGING ... is UNCHANGED — it stages from the working tree'. FR-M1d (spec/SPEC.md:14) extended the freeze boundary: gate, diff, AND staging derive from T_start via OverlayTreePaths. The code is correct (resolveArbiter/resolveNewCommit/amendTip use tStart, not AddAll).\n2. INPUT: The comment text to replace. The surrounding doc block describes the arbiter phase.\n3. LOGIC: Replace 'stages from the working tree (== T_start's source under the invariant)' with text reflecting FR-M1d: the arbiter stages from the frozen T_start via OverlayTreePaths (treePrime := tStart), never the live working tree. Reference FR-M1d and the OverlayTreePaths primitive.\n4. OUTPUT: The comment accurately describes the arbiter's frozen-tree staging behavior.\n5. DOCS: This IS a documentation fix (code comment). No user-facing doc surface change.",
