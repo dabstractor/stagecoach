@@ -5,9 +5,9 @@
 # Stagecoach
 
 > **Stagecoach writes your commit messages using the AI agent you already pay for.**
-> No API key. No per-token billing. It shells out to Claude Code, Codex, pi, opencode, agy, or Cursor — whatever you already have installed — and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
+> No API key. No per-token billing. It shells out to whatever you already have installed (Claude Code, Codex, pi, opencode, agy, or Cursor) and spends your existing coding-plan quota instead. Stage while it thinks; it commits only what was staged when it started, atomically, and can never corrupt your repo. With a dirty working tree and nothing staged, it automatically decomposes your changes into a sequence of logically-coherent commits.
 
-A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Chocolatey, PowerShell installer, npm, Nix, mise/asdf) — see [Features](#features) below.
+A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.1 adds payload exclusions, message shaping, git hook mode, editor/git integrations, `--edit`/`--push`, and model discovery; v3.0 adds `stagecoach upgrade` (delegate-first self-update) and expands distribution (Homebrew, Scoop, Chocolatey, PowerShell installer, npm, Nix, mise/asdf). See [Features](#features) below.
 
 
 
@@ -18,57 +18,74 @@ A snapshot-based AI commit message generator that uses YOUR local CLI agent. v2.
 
 https://github.com/user-attachments/assets/89dd318d-5f75-4d25-af7d-4623fe8cfe23
 
+## Why not just ask your agent to commit?
+
+If you already have Claude Code, Cursor, or pi open, the obvious move is to turn to your session and say *"commit this."* Stagecoach exists because that move is the wrong tool for a lot of commits. Not because the agent can't write a good message, but because the *message* is perfect agent work and the *commit* is not. The agent writes the message; stagecoach owns the commit.
+
+Four reasons, in rough order of how often they bite:
+
+1. **You'd burn a 300k-context Opus session to emit 50 characters.** A commit subject is the least context-intensive thing you'll ask an agent to do, yet asking your session pays for the whole loaded invocation to return one line. Stagecoach calls the agent chrome-less (skills, extensions, context files, and MCP servers off where the provider allows) behind a purpose-built prompt, and pins to a cheap model per role. A subject line doesn't need Opus. The diff is budgeted against a hard token limit, so the same message costs a sliver of a full session.
+
+2. **You might not actually want your agent touching git.** Agents are creative with git in the worst way: they batch logically-unrelated changes into one commit, "helpfully" rewrite the author, reorder history, or `--force` something they shouldn't. Writing prose about a diff is exactly what they're good at; mutating your repository is where they get unpredictable. Stagecoach never hands the model `commit`, `rebase`, or `push`. The agent returns text; stagecoach builds the commit from git plumbing (`write-tree` + `commit-tree` + `update-ref`): atomic, snapshot-frozen, and byte-for-byte unchanged on failure.
+
+3. **Many commits aren't agent work.** Half of real commits are config tweaks, lazygit staging, or a one-line fix you made by hand, work that never passed through an agent session. Routing those through *"spin up a session and ask it to commit"* is absurd overhead for 50 characters of output. Stagecoach meets you where you already are: a lazygit keybind, a `git stagecoach` alias, a shell one-liner. No session, no context, no preamble.
+
+4. **Your session is too close to its own work.** Ask an agent to commit at the end of a long session and it writes through the lens of its last few turns (the bug it just chased, the plan mid-execution), not the diff in your index. Recent turns dominate deep context, so the full scope gets under-weighted, and no prompt makes an in-flight session look at its own work with fresh eyes. Stagecoach evaluates every diff from a clean slate: the frozen changes and your repo's commit style, nothing else.
+
+The section below answers the other question: why this beats the API-key commit bots.
 
 ## Why not opencommit/aicommits?
 
-The incumbent tools — opencommit, aicommits — own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API. Not every plan is locked down this way — a few are permissive (Opencode's, for one) — but the most popular ones like Anthropic, Antigravity and Cursor gate their quota to the official harness. The quota lives behind your agent's CLI either way, which is exactly why stagecoach shells out to that CLI instead of opening its own connection.
+The incumbent tools (opencommit, aicommits) own the HTTP call to the model, so they can normalize providers, handle retries, and abstract auth. Once you own the HTTP call, you cannot use a coding-plan subscription, because that subscription is not reachable over the public API.
 
-Stagecoach inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse — the agent brings its own auth and billing. That trade-off — give up control of the model call in exchange for access to the user's existing quota — is the entire product.
+Not every plan is locked down this way. A few are permissive (Opencode's, for one), but the most popular ones like Anthropic, Antigravity, and Cursor gate their quota to the official harness. The quota lives behind your agent's CLI either way, which is exactly why stagecoach shells out to that CLI instead of opening its own connection.
+
+Stagecoach inverts the architecture: it shells out to your installed CLI agent, trading provider normalization for quota reuse. The agent brings its own auth and billing. That trade-off (give up control of the model call in exchange for access to the user's existing quota) is the entire product.
 
 | | **opencommit / aicommits** | **Stagecoach** |
 |---|---|---|
-| Auth | API key required | None — uses your agent's existing auth |
+| Auth | API key required | None: uses your agent's existing auth |
 | Architecture | Owns the HTTP call | Shells out to your CLI agent |
 | Billing | Per-token | Your existing coding-plan quota |
 | Stage while generating | No | Yes (snapshot-based) |
 | Multi-commit decomposition | No | Yes (auto-decompose dirty tree into N logical commits) |
-| Per-role model routing | No | Yes (planner/stager/message/arbiter — right model for the right job) |
+| Per-role model routing | No | Yes (planner/stager/message/arbiter, right model for the right job) |
 
 <details>
 <summary><em>Which coding plans actually gate their quota?</em></summary>
 
 How strictly a coding plan's quota is tied to its official harness varies by provider. A few are
-permissive; the popular ones are not — and that distinction is the whole reason stagecoach shells
+permissive; the popular ones are not, and that distinction is the whole reason stagecoach shells
 out to your agent rather than calling an API.
 
-- **Anthropic (Claude Code)** — strict. Plan quota is gated to the Claude Code harness and isn't
+- **Anthropic (Claude Code)**: strict. Plan quota is gated to the Claude Code harness and isn't
   reachable over the public API.
-- **Antigravity** — strict (and newly arriving). Quota is reserved for the harness.
-- **Cursor** — has explicit policies against use outside its own harness.
+- **Antigravity**: strict (and newly arriving). Quota is reserved for the harness.
+- **Cursor**: has explicit policies against use outside its own harness.
 
-Net: Most providers cares about keeping you on their harness. Opencode and Pi are the outliers.
+Net: Most providers care about keeping you on their harness. Opencode and Pi are the outliers.
 
 </details>
 
 ## Features
 
-Stagecoach does one thing — commit messages — and a few things around them.
+Stagecoach does one thing (commit messages) and a few things around them.
 
 | Capability | Description |
 |---|---|
-| Multi-commit decomposition | Auto-decompose a dirty, un-staged tree into N logical commits (planner → stager → message → arbiter). A start-of-run freeze means a concurrent edit during the run can never enter a commit — including across the leftover-reconciliation arbiter; the planner partitions per file and leans toward a soft count target ([how it works](docs/how-it-works.md#multi-commit-decomposition) · [flags](docs/cli.md)). |
-| Payload exclusions | `.stagecoachignore` / `--exclude` hide a file's diff from the model — never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
-| Payload optimization | The diff sent to your agent is trimmed and budgeted — rename-aware (`-M`), reduced-context (`-U1`), led by a compact file skeleton, and optionally capped to your model's context window via `token_limit` — a closed-loop guarantee that the assembled prompt never exceeds the limit ([how it works](docs/how-it-works.md#diff-capture-pipeline) · [knobs](docs/configuration.md#built-in-defaults)). |
-| Multi-turn fallback | Lossless multi-turn fallback: when a one-shot generation of a large diff fails, stagecoach re-delivers the full diff across session turns so the message still lands — no truncation, no extra commits ([how it works](docs/how-it-works.md#multi-turn-generation-fallback) · [knobs](docs/configuration.md#built-in-defaults)). |
+| Multi-commit decomposition | Auto-decompose a dirty, un-staged tree into N logical commits (planner → stager → message → arbiter). A start-of-run freeze means a concurrent edit during the run can never enter a commit, including across the leftover-reconciliation arbiter; the planner partitions per file and leans toward a soft count target ([how it works](docs/how-it-works.md#multi-commit-decomposition) · [flags](docs/cli.md)). |
+| Payload exclusions | `.stagecoachignore` / `--exclude` hide a file's diff from the model, never from the commit ([docs](docs/configuration.md#exclusion-globs-generationexclude)). |
+| Payload optimization | The diff sent to your agent is trimmed and budgeted: rename-aware (`-M`), reduced-context (`-U1`), led by a compact file skeleton, and optionally capped to your model's context window via `token_limit`, a closed-loop guarantee that the assembled prompt never exceeds the limit ([how it works](docs/how-it-works.md#diff-capture-pipeline) · [knobs](docs/configuration.md#built-in-defaults)). |
+| Multi-turn fallback | Lossless multi-turn fallback: when a one-shot generation of a large diff fails, stagecoach re-delivers the full diff across session turns so the message still lands: no truncation, no extra commits ([how it works](docs/how-it-works.md#multi-turn-generation-fallback) · [knobs](docs/configuration.md#built-in-defaults)). |
 | Work-description mode | `--work-description "..."` leads the prompt with your description + the file skeleton, and the model reads staged file diffs on demand via `READ <path>` (no tool-calling needed; runs in bare mode on every provider) ([how it works](docs/how-it-works.md#work-description-mode-description-first-read-on-demand) · [flags](docs/cli.md)). |
 | Message shaping | `--format` (auto, conventional, gitmoji, plain; append `+body` to force a subject+body), `--locale`, `--context`, `--template` ([docs](docs/how-it-works.md#format-modes-and-locale)). |
-| Git hook mode | `stagecoach hook install` fills the message on `git commit` — pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
-| Commit hooks on every `stagecoach` commit | As of v2.4, your repo's `pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit` hooks run around every `stagecoach` commit, scoped to the frozen snapshot (atomic + stage-while-generating preserved); `--no-verify` mirrors git ([how it works](docs/how-it-works.md#commit-hooks-on-the-plumbing-path)). |
+| Git hook mode | `stagecoach hook install` fills the message on `git commit`; pre-commit hooks honored, never blocks ([docs](docs/how-it-works.md#trade-off-inversion-fr-h7)). |
+| Commit hooks on every `stagecoach` commit | Your repo's `pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit` hooks run around every `stagecoach` commit, scoped to the frozen snapshot (atomic + stage-while-generating preserved); `--no-verify` mirrors git ([how it works](docs/how-it-works.md#commit-hooks-on-the-plumbing-path)). |
 | Tool integrations | `stagecoach integrate install git-alias lazygit` wires `git stagecoach` and a lazygit keybind ([docs](docs/cli.md#integrate-install-target)). |
 | `--edit` / `--push` | Review in `$EDITOR` before the atomic commit; push after a clean run ([docs](docs/cli.md)). |
 | Discovery | `stagecoach models` and `config init --interactive` for guided setup ([docs](docs/cli.md#models-provider)). |
 
-<!-- Multi-turn fallback (Features row above): intentionally generic — "stagecoach" re-delivers, NOT
+<!-- Multi-turn fallback (Features row above): intentionally generic; "stagecoach" re-delivers, NOT
      "the commit path". Multi-turn runs on EVERY generation path (snapshot commit, `--dry-run`, hook
      mode); the per-path detail lives in docs/how-it-works.md#multi-turn-generation-fallback (linked
      from the row), so this high-level row deliberately does NOT enumerate paths. "no extra commits"
@@ -80,7 +97,7 @@ Stagecoach does one thing — commit messages — and a few things around them.
 **Prerequisite:** a coding-agent CLI already installed and on `$PATH` (pi, Claude Code, opencode, Codex, Cursor, or agy).
 
 > [!NOTE]
-> Stagecoach ships via the package-managed channels below, and `stagecoach upgrade` keeps any of them current — see [Updating](#updating) below.
+> Stagecoach ships via the package-managed channels below, and `stagecoach upgrade` keeps any of them current. See [Updating](#updating) below.
 
 ### Package managers
 
@@ -97,26 +114,26 @@ scoop install stagecoach/stagecoach
 # Windows (Chocolatey)
 choco install stagecoach
 
-# Windows (PowerShell installer — no package manager needed)
+# Windows (PowerShell installer, no package manager needed)
 irm https://github.com/dabstractor/stagecoach/raw/main/install.ps1 | iex
 
 # npm (zero-install trial: npx stagecoach-ai; or global install)
 npm install -g stagecoach-ai
 
-# Nix (flake — no channel/registry needed)
+# Nix (flake, no channel/registry needed)
 nix profile install github:dabstractor/stagecoach
 
 # mise / asdf (version-manager users)
 mise use stagecoach@latest   # or: asdf plugin add stagecoach && asdf install stagecoach latest
 
-# Debian/Ubuntu (apt repo — updates flow through apt)
+# Debian/Ubuntu (apt repo, updates flow through apt)
 curl -fsSL https://github.com/dabstractor/stagecoach/raw/main/apt-archive-keyring.asc \
   | sudo gpg --dearmor -o /etc/apt/keyrings/stagecoach.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/stagecoach.gpg] https://dabstractor.github.io/stagecoach/apt stable main" \
   | sudo tee /etc/apt/sources.list.d/stagecoach.list
 sudo apt update && sudo apt install stagecoach
 
-# Fedora/RHEL (dnf repo — updates flow through dnf)
+# Fedora/RHEL (dnf repo, updates flow through dnf)
 sudo curl -fsSL https://dabstractor.github.io/stagecoach/rpm/stagecoach.repo -o /etc/yum.repos.d/stagecoach.repo
 sudo dnf install stagecoach
 
@@ -158,7 +175,7 @@ stagecoach --version   # stagecoach version dev
 
 ### Updating
 
-Keep stagecoach current with one command — it detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core — it acquires no run lock, reads no repo, and invokes no provider.
+Keep stagecoach current with one command. It detects how you installed it and delegates to that channel's own updater (Homebrew, Scoop, npm, mise, asdf, `go install`), prints the command where running it needs privileges (AUR) or is declarative (Nix), and self-swaps only for a direct (curl\|sh / manual) install. A `go install` binary under `~/go/bin` is detected automatically even when `GOPATH` is unset, so it delegates to `go install …@latest` rather than self-swapping. It never overwrites a package-manager-owned file, so it never fights your package manager. `stagecoach upgrade` is walled off from the commit core: it acquires no run lock, reads no repo, and invokes no provider.
 
 ```bash
 stagecoach upgrade             # detect → delegate (or self-swap), confirm, apply
@@ -174,7 +191,7 @@ See [docs/cli.md#upgrade](docs/cli.md#upgrade) for the full flag reference.
 # 1. Stage your changes
 git add feature/login.js
 
-# 2. Run stagecoach — it snapshots, generates, and commits atomically
+# 2. Run stagecoach: it snapshots, generates, and commits atomically
 stagecoach
 # [abc1234] feat: add login flow
 # M  src/login.js
@@ -187,17 +204,17 @@ stagecoach --dry-run
 ```
 
 > [!NOTE]
-> If generation fails, `--dry-run` exits 1 with a short message — not the full recovery recipe or exit 3/124 — since no commit was ever intended.
+> If generation fails, `--dry-run` exits 1 with a short message (not the full recovery recipe or exit 3/124), since no commit was ever intended.
 
 ### More options
 
 ```bash
-stagecoach --push                 # commit + push after a clean run
-stagecoach --edit                 # review in $EDITOR before the atomic commit
-stagecoach --format conventional  # force conventional-commit style
-stagecoach --format conventional+body  # conventional-commit subject PLUS a descriptive body
-stagecoach --exclude '*.snap'     # hide snapshot diffs from the model (still committed)
-stagecoach --work-description "..."  # lead with your description; model READs staged diffs on demand
+stagecoach --push                     # commit + push after a clean run
+stagecoach --edit                     # review in $EDITOR before the atomic commit
+stagecoach --format conventional      # force conventional-commit style
+stagecoach --format conventional+body # conventional-commit subject PLUS a descriptive body
+stagecoach --exclude '*.snap'         # hide snapshot diffs from the model (still committed)
+stagecoach --work-description "..."   # lead with your description; model READs staged diffs on demand
 ```
 
 See [Features](#features) above and the [CLI reference](docs/cli.md) for the rest.
@@ -208,10 +225,14 @@ See [Features](#features) above and the [CLI reference](docs/cli.md) for the res
 https://github.com/user-attachments/assets/fbd9429d-99d2-4be9-99c8-cd01ac9c0504
 
 
-With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit. A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit — the run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). As defense-in-depth, decompose also re-asserts its empty-index precondition at entry, so a stale trigger that reaches it with a staged index fails loudly rather than silently folding that hand-staged content into the run. The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
+With a dirty working tree and nothing staged, `stagecoach` automatically decomposes your changes into a sequence of logically-coherent commits using a four-role agent pipeline (planner → stager → message → arbiter). Each concept becomes its own commit.
+
+A start-of-run freeze (T_start) captures your entire change set up front, so files you change mid-run are excluded from every commit. The run only ever commits what existed when it started, and that holds across the leftover-reconciliation arbiter too (a concurrent edit can never sneak into a commit). As defense-in-depth, decompose also re-asserts its empty-index precondition at entry, so a stale trigger that reaches it with a staged index fails loudly rather than silently folding that hand-staged content into the run.
+
+The planner partitions changes per file and leans toward a soft count target, so a typical mixed tree lands at or below half the cap. The stager is constrained to staging operations: claude via a staging-only git allowlist (`git add`/`apply`/`status`/`diff`); pi instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. Either way, Stagecoach owns every commit via git plumbing.
 
 ```bash
-# Auto-decompose — planner decides the count and grouping
+# Auto-decompose: planner decides the count and grouping
 stagecoach
 # Decomposes into N commits automatically
 
@@ -233,7 +254,7 @@ stagecoach --single
 
 > [!NOTE]
 > `--reasoning` is provider-dependent: it engages deeper reasoning for **pi** (`--thinking`) and
-> **claude** (`--effort`). It is a **no-op** for **agy** and **cursor** — those two bake the reasoning
+> **claude** (`--effort`). It is a **no-op** for **agy** and **cursor**: those two bake the reasoning
 > level into the *model name* (agy's `(Low)/(Medium)/(High)` suffix, cursor's `-none/-low/-medium/-high`
 > suffix), so the reasoning dial is the model you pick, not a flag. Other providers treat `--reasoning`
 > as a graceful no-op (no error) per. It applies to any role via `--<role>-reasoning` or
@@ -241,11 +262,11 @@ stagecoach --single
 >
 > **Environment variables pass through to the agent.** stagecoach always runs the provider CLI with
 > your shell environment intact (its own `STAGECOACH_*` vars layer on top), so anything the agent reads
-> works unchanged — e.g. point `claude` at a z.ai OpenAI-compatible endpoint:
+> works unchanged, e.g. point `claude` at a z.ai OpenAI-compatible endpoint:
 > `ANTHROPIC_BASE_URL=https://… stagecoach --provider claude --model sonnet`. The generated config
 > template also lists the `STAGECOACH_*` vars stagecoach itself reads.
 
-See [How Stagecoach works — Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
+See [How Stagecoach works: Multi-commit decomposition](docs/how-it-works.md#multi-commit-decomposition) for the pipeline architecture and [CLI reference](docs/cli.md) for all decompose and per-role flags.
 
 ### lazygit & git alias
 
@@ -272,6 +293,22 @@ customCommands:
 
 </details>
 
+### Unattended runs (CI, agent harnesses)
+
+Stagecoach is non-interactive: it never prompts, shells out to your agent in print mode, and exits with a structured code, so it drops into a pipeline as a discrete step. It was originally extracted from a determinism-rich agent harness where subtasks are implemented, reviewed, and committed in a fixed sequence. The commit step needed to be an isolated tool that ships the repo's reviewed state on demand, not a round-trip asking the implementation agent to *also commit what you just did*, and not scoped to one subtask's files when the whole repo's work needed to land together.
+
+That origin is why it's safe to point at a repo unattended: the start-of-run snapshot freezes exactly what will ship, a per-repo lock keeps two runs from racing on HEAD, and a failed generation leaves everything byte-for-byte unchanged.
+
+```bash
+# Preview the message a pipeline would write (full pipeline, no commit)
+stagecoach --dry-run
+
+# Commit and push in one step, no prompts (safe inside CI or an agent loop)
+stagecoach --push
+```
+
+Exit codes are machine-readable, so a workflow can branch on them: `0` success; `1` generation/config/usage failure; `2` nothing staged; `3` rescue (snapshot armed, nothing committed; recovery printed); `5` busy, another run holds the lock, retry; `124` timeout. See the [full exit-code table](docs/cli.md#exit-codes).
+
 ## Configure your agent
 
 Stagecoach auto-detects which agents are installed and uses the first one it finds (in preference order: pi, opencode, cursor, agy, codex, claude). To see what's detected:
@@ -288,7 +325,7 @@ pi         ✓         (default)
 ```
 
 > [!NOTE]
-> A provider whose command isn't on `$PATH` fails fast with exit 1 before any snapshot — no partial state, no rescue recipe.
+> A provider whose command isn't on `$PATH` fails fast with exit 1 before any snapshot: no partial state, no rescue recipe.
 
 Set a per-repo default with git config:
 
@@ -308,7 +345,7 @@ git config stagecoach.model anthropic/claude-haiku
 > `git config stagecoach.model anthropic/claude-haiku` (or `[defaults] model = "anthropic/claude-haiku"` in your config).
 > See [Provider manifests](docs/providers.md) for the full schema.
 
-Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are auto-pinned to `openrouter/free` when an `OPENROUTER_API_KEY` is present in your environment, or left empty otherwise so you can supply your own inference-backend/model prefix; set `model = "anthropic/claude-haiku"` to pin a specific backend):
+Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults; for **pi**, the default, per-role models are auto-pinned to `openrouter/free` when an `OPENROUTER_API_KEY` is present in your environment, or left empty otherwise so you can supply your own inference-backend/model prefix; set `model = "anthropic/claude-haiku"` to pin a specific backend):
 
 ```bash
 stagecoach config init
@@ -325,13 +362,13 @@ stagecoach config upgrade
 > [!NOTE]
 > The template also documents a `[generation]` section: `output` ("raw"|"json") and `strip_code_fence` are an **opt-in override** for how Stagecoach parses agent output. When unset, the per-provider `[provider.<name>]` value is used (defaulting to `raw` / `true`); set them under `[generation]` only to force the value across ALL providers.
 
-Point discovery at a specific file with `stagecoach --config path/to/config.toml`. It is honored by every command — including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path) — so a provider declared under `[provider.<name>]` there is usable with `--provider <name>` directly. The path must exist: an explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file fails fast with exit 1 rather than silently falling back to auto-detection.
+Point discovery at a specific file with `stagecoach --config path/to/config.toml`. It is honored by every command, including the default commit action **and the `config init`, `config path`, and `config upgrade` subcommands** (e.g. `stagecoach --config X config upgrade` upgrades file `X`, and `config path` prints the resolved path), so a provider declared under `[provider.<name>]` there is usable with `--provider <name>` directly. The path must exist: an explicit `--config` (or `STAGECOACH_CONFIG`) pointing at a missing file fails fast with exit 1 rather than silently falling back to auto-detection.
 
 **Config precedence** (highest → lowest): CLI flags > `STAGECOACH_*` env vars > repo `git config` (`stagecoach.*`) > repo `.stagecoach.toml` > global config file > provider defaults > built-in defaults.
 
 ## The snapshot workflow
 
-Stagecoach creates commits against a frozen snapshot of your index — not the live state. This means you can keep staging more files while the message generates, and they will **never** be included in the current in-flight commit.
+Stagecoach creates commits against a frozen snapshot of your index, not the live state. This means you can keep staging more files while the message generates, and they will **never** be included in the current in-flight commit.
 
 ```text
 Pane A (lazygit / shell)        Pane B (shell)
@@ -341,12 +378,12 @@ stagecoach                     ┐
   ↳ snapshotting…             │  (user is free to work here)
   ↳ generating with pi…       │  git add docs/login.md
   ↳ (10s pass)                │  git add tests/login.test.js
-  ↳ created abc1234           │  (these stay staged — NOT in abc1234)
+  ↳ created abc1234           │  (these stay staged, NOT in abc1234)
                               ┘
                                 stagecoach        # next run commits these
 ```
 
-Generation time is no longer dead time. The in-flight commit only ever contains what was staged when it started, so you can stage the next batch freely while the current message generates — and a failed generation leaves your repo byte-for-byte unchanged.
+Generation time is no longer dead time. The in-flight commit only ever contains what was staged when it started, so you can stage the next batch freely while the current message generates. A failed generation leaves your repo byte-for-byte unchanged.
 
 ## Full CLI and config reference
 
@@ -364,7 +401,7 @@ See the [docs/](docs/) for the full reference (growing).
 
 ## Adding a new agent
 
-No recompilation needed — community agents land via a manifest in your config file. Drop a `[provider.<name>]` block into `~/.config/stagecoach/config.toml` (or a repo-local `.stagecoach.toml`):
+No recompilation needed: community agents land via a manifest in your config file. Drop a `[provider.<name>]` block into `~/.config/stagecoach/config.toml` (or a repo-local `.stagecoach.toml`):
 
 ```toml
 # ~/.config/stagecoach/config.toml
@@ -391,31 +428,33 @@ Then use it:
 stagecoach --provider myagent
 ```
 
-For field reference, copy from the [shipped `providers/*.toml` files](providers/) in this repo — `providers/pi.toml` is the cleanest template.
+For field reference, copy from the [shipped `providers/*.toml` files](providers/) in this repo. `providers/pi.toml` is the cleanest template.
 
 ## FAQ
 
 ### Stagecoach is not for you if…
 
-…you don't have (and don't want) a coding-agent CLI installed. Stagecoach has no model of its own — it is a thin wrapper around *your* agent. If you just want an API-key-based commit generator, [opencommit](https://github.com/dlintw/opencommit) is the right tool.
+…you don't have (and don't want) a coding-agent CLI installed. Stagecoach has no model of its own; it is a thin wrapper around *your* agent. If you just want an API-key-based commit generator, [opencommit](https://github.com/dlintw/opencommit) is the right tool.
 
 ### Will it corrupt my repo?
 
-No. Stagecoach uses `git write-tree` + `git commit-tree` + `git update-ref` (atomic snapshot commits). A failed generation leaves the repo byte-for-byte unchanged — it never touches the live index during generation.
+No. Stagecoach uses `git write-tree` + `git commit-tree` + `git update-ref` (atomic snapshot commits). A failed generation leaves the repo byte-for-byte unchanged. It never touches the live index during generation.
 
-**Safe to run twice.** A per-repo run lock prevents two concurrent commit-producing runs from racing on HEAD. On the **single-commit path** (changes staged), an accidental double-invoke exits `0` if nothing new has been staged since the in-progress run began (*nothing to do — an in-progress run already covers your staged changes*), or exits `5` (Busy) if genuinely new work is staged (your changes stay staged to re-run). On the **decompose path** (nothing staged, dirty working tree), an accidental double-run exits `5` (Busy) rather than `0` — the in-progress run publishes a working-tree snapshot a contender can't reproduce without the lock, so it conservatively refuses and leaves your working tree untouched. (On a shared filesystem across hosts the lock can't help — the atomic `update-ref` CAS is the never-clobber-HEAD guarantee there.)
+**Safe to run twice.** A per-repo run lock prevents two concurrent commit-producing runs from racing on HEAD. On the **single-commit path** (changes staged), an accidental double-invoke exits `0` if nothing new has been staged since the in-progress run began (*nothing to do: an in-progress run already covers your staged changes*), or exits `5` (Busy) if genuinely new work is staged (your changes stay staged to re-run).
 
-If the launcher closed without killing stagecoach — you closed the lazygit TUI, quit your IDE, or detached the terminal mid-run — the orphaned run **self-exits** via a parent-death watchdog and releases the lock, so it never strands. `stagecoach lock status` shows the holder's path and liveness so you can decide whether to `kill`/`rm` yourself; it never force-breaks a live lock.
+On the **decompose path** (nothing staged, dirty working tree), an accidental double-run exits `5` (Busy) rather than `0`. The in-progress run publishes a working-tree snapshot a contender can't reproduce without the lock, so it conservatively refuses and leaves your working tree untouched. (On a shared filesystem across hosts the lock can't help; the atomic `update-ref` CAS is the never-clobber-HEAD guarantee there.)
 
-And the commit-message call itself is **chrome-less** where the agent allows it — skills, extensions, context files, and MCP servers are switched off (pi, claude), so nothing loads, spawns, or injects around the call; providers that expose no such switch document the gap instead ([docs/providers.md](docs/providers.md#tools-disable-asymmetry)).
+If the launcher closed without killing stagecoach (you closed the lazygit TUI, quit your IDE, or detached the terminal mid-run), the orphaned run **self-exits** via a parent-death watchdog and releases the lock, so it never strands. `stagecoach lock status` shows the holder's path and liveness so you can decide whether to `kill`/`rm` yourself; it never force-breaks a live lock.
+
+And the commit-message call itself is **chrome-less** where the agent allows it: skills, extensions, context files, and MCP servers are switched off (pi, claude), so nothing loads, spawns, or injects around the call; providers that expose no such switch document the gap instead ([docs/providers.md](docs/providers.md#tools-disable-asymmetry)).
 
 ### Does it send my code anywhere new?
 
-No. It shells out to *your* agent under *your* existing auth and billing. On the commit path, stagecoach makes no network calls itself — it shells out to your agent, and your agent opens the connection exactly as it would if you ran it manually. The single exception is `stagecoach upgrade` (see below), which fetches only this project's own release artifacts and checksums.
+No. It shells out to *your* agent under *your* existing auth and billing. On the commit path, stagecoach makes no network calls itself. It shells out to your agent, and your agent opens the connection exactly as it would if you ran it manually. The single exception is `stagecoach upgrade` (see below), which fetches only this project's own release artifacts and checksums.
 
 ### Does stagecoach make network calls?
 
-On the commit path (writing commit messages), **no** — stagecoach makes no network calls itself; it shells out to your agent, and your agent makes the connection. The one named exception is `stagecoach upgrade` (see [Updating](#updating)), which fetches **only** this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never your repo data. See [docs/cli.md#upgrade](docs/cli.md#upgrade).
+On the commit path (writing commit messages), **no**: stagecoach makes no network calls itself; it shells out to your agent, and your agent makes the connection. The one named exception is `stagecoach upgrade` (see [Updating](#updating)), which fetches **only** this project's own GitHub release artifacts and checksums, never provider credentials, never a diff, never your repo data. See [docs/cli.md#upgrade](docs/cli.md#upgrade).
 
 ### Can it write multiple commits?
 
@@ -427,10 +466,10 @@ It learns from the last 20 commits in your repo, with a prohibition on reusing t
 
 ### Which agents are supported?
 
-Six built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
+Six built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest. See [Adding a new agent](#adding-a-new-agent).
 
 > [!NOTE]
-> **Free models.** For **pi**, setting `OPENROUTER_API_KEY` auto-pins the per-role models to `openrouter/free` — a managed alias that always routes to a currently-available free model, so the default never goes stale. **opencode** has no equivalent managed alias (its free models are individual, time-limited entries on its Zen gateway), so stagecoach ships its models blank. To pin a free opencode model, list what's currently free and set it per role:
+> **Free models.** For **pi**, setting `OPENROUTER_API_KEY` auto-pins the per-role models to `openrouter/free`, a managed alias that always routes to a currently-available free model, so the default never goes stale. **opencode** has no equivalent managed alias (its free models are individual, time-limited entries on its Zen gateway), so stagecoach ships its models blank. To pin a free opencode model, list what's currently free and set it per role:
 >
 > ```bash
 > opencode models | grep -free
@@ -439,7 +478,7 @@ Six built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(exp
 > #   model = "opencode/<the-free-model-you-picked>"
 > ```
 
-**End-to-end verification status** (this build): all six providers — **pi**, **opencode**, **cursor**, **agy**, **codex**, and **claude** — have each been driven through a real commit-generation run.
+**End-to-end verification status** (this build): all six providers (**pi**, **opencode**, **cursor**, **agy**, **codex**, and **claude**) have each been driven through a real commit-generation run.
 
 ### How do I see what command it runs?
 
@@ -451,11 +490,11 @@ This prints the resolved provider command, raw agent output, and retry attempts.
 
 ### Does it run my pre-commit hooks?
 
-Yes. As of v2.4, the default `stagecoach` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot — so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagecoach hook install`) remains for when you commit via plain `git commit` from an IDE — the two compose (covers `stagecoach`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
+Yes. The default `stagecoach` command runs your repository's standard commit hooks (`pre-commit` → `prepare-commit-msg` → `commit-msg` → `post-commit`) around every commit, scoped to the frozen snapshot, so atomicity and stage-while-generating are preserved (a `pre-commit` formatter's fixes are included; a hook that stages brand-new content aborts the run). `--no-verify` skips `pre-commit` and `commit-msg` only, mirroring `git commit --no-verify`. **Hook mode** (`stagecoach hook install`) remains for when you commit via plain `git commit` from an IDE; the two compose (covers `stagecoach`; hook mode covers `git commit`). See [Commit hooks on the plumbing path](docs/how-it-works.md#commit-hooks-on-the-plumbing-path).
 
 ### What about PR generation, editor extensions, a GitHub Action, API-key providers?
 
-Stagecoach writes commit messages — nothing else. Ideas we considered but deferred or rejected — VS Code/neovim extensions, a GitHub Action, API-key HTTP providers, generate-N-and-pick, diff chunking, and more — each with its reason. (Self-update shipped in v3.0 as `stagecoach upgrade` — see [Updating](#updating).)
+Stagecoach writes commit messages, nothing else. Ideas we considered but deferred or rejected: VS Code/neovim extensions, a GitHub Action, API-key HTTP providers, generate-N-and-pick, diff chunking, and more, each with its reason. (Self-update shipped in v3.0 as `stagecoach upgrade`; see [Updating](#updating).)
 
 ---
 
