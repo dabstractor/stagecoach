@@ -308,7 +308,7 @@ git config stagecoach.model anthropic/claude-haiku
 > `git config stagecoach.model anthropic/claude-haiku` (or `[defaults] model = "anthropic/claude-haiku"` in your config).
 > See [Provider manifests](docs/providers.md) for the full schema.
 
-Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are left empty so you can supply your own inference-backend/model prefix; set `model = "anthropic/claude-haiku"` to pin a specific backend):
+Or bootstrap a **populated, working config** (auto-detects your agent and writes per-role model defaults — for **pi**, the default, per-role models are auto-pinned to `openrouter/free` when an `OPENROUTER_API_KEY` is present in your environment, or left empty otherwise so you can supply your own inference-backend/model prefix; set `model = "anthropic/claude-haiku"` to pin a specific backend):
 
 ```bash
 stagecoach config init
@@ -428,6 +428,16 @@ It learns from the last 20 commits in your repo, with a prohibition on reusing t
 ### Which agents are supported?
 
 Six built-ins are auto-detected: **pi**, **opencode**, **cursor**, **agy** *(experimental)*, **codex**, **claude**. Any agent with a non-interactive CLI interface can be added via a `[provider.<name>]` manifest — see [Adding a new agent](#adding-a-new-agent).
+
+> [!NOTE]
+> **Free models.** For **pi**, setting `OPENROUTER_API_KEY` auto-pins the per-role models to `openrouter/free` — a managed alias that always routes to a currently-available free model, so the default never goes stale. **opencode** has no equivalent managed alias (its free models are individual, time-limited entries on its Zen gateway), so stagecoach ships its models blank. To pin a free opencode model, list what's currently free and set it per role:
+>
+> ```bash
+> opencode models | grep -free
+> # then in your config, e.g.:
+> #   [role.message]
+> #   model = "opencode/<the-free-model-you-picked>"
+> ```
 
 **End-to-end verification status** (this build): all six providers — **pi**, **opencode**, **cursor**, **agy**, **codex**, and **claude** — have each been driven through a real commit-generation run.
 

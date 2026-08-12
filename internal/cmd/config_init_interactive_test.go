@@ -418,6 +418,10 @@ func TestInteractive_NothingDetected_Exits1(t *testing.T) {
 // TestPlainConfigInit_Unchanged verifies plain `config init` (no --interactive) output is
 // byte-identical to the pre-refactor output (regression test).
 func TestPlainConfigInit_Unchanged(t *testing.T) {
+	// Pin the env: OPENROUTER_API_KEY (if set in the developer's shell) flips pi's default models to
+	// "openrouter/free" via GenerateBootstrapConfig's wrapper. This test asserts the no-key (blank)
+	// path AND a byte-for-byte match with GenerateBootstrapConfig("pi"), so clear it for determinism.
+	t.Setenv("OPENROUTER_API_KEY", "")
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 

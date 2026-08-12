@@ -39,7 +39,17 @@ func GenerateBootstrapConfigWithOverrides(prov string, overrides map[string]stri
 			target = "pi" // nothing on $PATH — valid default; annotated by buildBootstrapConfig
 		}
 	}
-	return buildBootstrapConfig(target, installed, overrides)
+	// OPENROUTER_API_KEY affordance: when the key is present, pin pi's otherwise-blank per-role
+	// models to "openrouter/free" — pi's managed aggregate that always routes to a currently-
+	// available free model, so the default never goes stale. (opencode has no equivalent managed
+	// alias — its free models are individual, time-limited Zen entries — so it stays blank with
+	// README guidance.) Detection lives here, the I/O layer; buildBootstrapConfig receives the
+	// resolved value as a param and stays pure/deterministic (byte-identical when piEnvModel == "").
+	piEnvModel := ""
+	if os.Getenv("OPENROUTER_API_KEY") != "" {
+		piEnvModel = "openrouter/free"
+	}
+	return buildBootstrapConfig(target, installed, overrides, piEnvModel)
 }
 
 // bootstrapWriteConfig writes the populated bootstrap config to path (MkdirAll + WriteFile), used by the
@@ -137,7 +147,13 @@ func applyOverrides(models map[string]string, stagerModel *string, overrides map
 // annotated), each OTHER installed provider as a commented [role.*] group, then a commented
 // [generation] section. overrides is applied AFTER pi-blank + stagerFallback (structural routing
 // preserved; only MODEL values change). nil/empty overrides ⇒ no edits.
-func buildBootstrapConfig(target string, installed []string, overrides map[string]string) string {
+//
+// piEnvModel is the OPENROUTER_API_KEY-derived default for pi's otherwise-blank per-role models
+// (detected in GenerateBootstrapConfigWithOverrides, the I/O layer, so this function stays pure).
+// Non-empty ⇒ pi's blank role models are pinned to that managed aggregate ("openrouter/free", which
+// always routes to a free model and never goes stale); "" ⇒ the legacy blanking, byte-identical to
+// the pre-affordance output. opencode is untouched (no managed free alias exists for it).
+func buildBootstrapConfig(target string, installed []string, overrides map[string]string, piEnvModel string) string {
 	var b strings.Builder
 
 	// --- header (precedence/env/git/cli docs — shared with the inert template) ---
@@ -185,6 +201,22 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		stagerModel = ""
 	}
 
+	// OPENROUTER_API_KEY affordance: fill pi's otherwise-blank role models with the managed
+	// "openrouter/free" aggregate (always routes to a free model — never goes stale). Applies to the
+	// target's own pi roles (target == "pi") and to a stager routed to pi (a user-defined-provider
+	// fallback). Placed AFTER all blanking and BEFORE applyOverrides, so an explicit per-role override
+	// from the interactive wizard still wins over the env-derived default.
+	if piEnvModel != "" {
+		if piBlanked {
+			for role := range models {
+				models[role] = piEnvModel
+			}
+		}
+		if stagerName == "pi" {
+			stagerModel = piEnvModel
+		}
+	}
+
 	// Apply overrides AFTER pi-blank + stagerFallback (structural routing preserved; only MODEL values).
 	piHasOverrides := piBlanked && len(overrides) > 0
 	applyOverrides(models, &stagerModel, overrides)
@@ -196,6 +228,11 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 		b.WriteString("# NOTE: opencode's models are plan-/backend-dependent (provider-prefixed, e.g. openai/gpt-5.4).\n")
 		b.WriteString("# The shipped per-role models are EMPTY so you supply your own — opencode then uses whatever\n")
 		b.WriteString("# model/backend your plan provides. opencode is a power-user provider.\n")
+	} else if piBlanked && piEnvModel != "" && !piHasOverrides {
+		b.WriteString("# NOTE: OPENROUTER_API_KEY detected in your environment — the per-role models below are pinned to\n")
+		b.WriteString("# \"openrouter/free\", pi's managed alias that always routes to a currently-available free model\n")
+		b.WriteString("# (so the default never goes stale). Swap any model for a different/paid backend (e.g.\n")
+		b.WriteString("# \"anthropic/claude-haiku\"); a bare model (no '/') on pi is a config error.\n")
 	} else if piBlanked && !piHasOverrides {
 		b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
 		b.WriteString("# e.g. model = \"anthropic/claude-haiku\". A bare model (no '/') on pi is a config error.\n")
@@ -261,11 +298,23 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 			for role := range other {
 				other[role] = ""
 			}
+			// OPENROUTER_API_KEY affordance: pin the commented pi roles to the managed free aggregate
+			// too, so an uncommented pi role "just works" for a user with the key set.
+			if piEnvModel != "" {
+				for role := range other {
+					other[role] = piEnvModel
+				}
+			}
 		}
 		b.WriteString("\n# === " + name + " (installed) — uncomment a [role.*] block to route that role to " + name + " ===\n")
 		if piCommented {
-			b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
-			b.WriteString("# e.g. model = \"openai/gpt-5.4\". A bare model (no '/') on pi is a config error.\n")
+			if piEnvModel != "" {
+				b.WriteString("# NOTE: OPENROUTER_API_KEY detected — models pinned to \"openrouter/free\" (pi's managed alias\n")
+				b.WriteString("# that always routes to a free model). Replace with any other pi model to change backend.\n")
+			} else {
+				b.WriteString("# NOTE: pi is a multi-backend provider — prefix the model with your inference backend,\n")
+				b.WriteString("# e.g. model = \"openai/gpt-5.4\". A bare model (no '/') on pi is a config error.\n")
+			}
 		}
 		if name == "agy" || name == "cursor" {
 			b.WriteString("# NOTE: " + name + " bakes reasoning into the MODEL NAME (suffix); the `reasoning` setting is a no-op here — pick the tier via the model.\n")

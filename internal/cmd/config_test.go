@@ -317,6 +317,9 @@ func TestConfigInit_Populated_WritesWorkingConfig(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConfigInit_ProviderPin_ExactOutput(t *testing.T) {
+	// Pin the env: OPENROUTER_API_KEY flips pi's default models to "openrouter/free"; this test
+	// asserts the no-key (blank) path, so clear it for determinism.
+	t.Setenv("OPENROUTER_API_KEY", "")
 	_, origOut, origErr, origRunE := saveRootState(t)
 	defer func() { restoreRootState(t, nil, origOut, origErr, origRunE); resetFlags(configInitCmd.Flags()) }()
 

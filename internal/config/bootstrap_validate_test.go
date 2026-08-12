@@ -55,7 +55,7 @@ func TestBootstrapValidateModels(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.target+"_installed_"+installedLabel(tc.installed), func(t *testing.T) {
-			content := buildBootstrapConfig(tc.target, tc.installed, nil)
+			content := buildBootstrapConfig(tc.target, tc.installed, nil, "")
 
 			// Parse the ACTIVE blocks (fileConfig) and materialize into a Config (populates Roles).
 			// Commented `# [role.*]` blocks are TOML comments → not decoded → not validated (Issue 2's

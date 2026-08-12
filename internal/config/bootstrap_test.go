@@ -14,7 +14,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestBuildBootstrapConfig_Pi(t *testing.T) {
-	content := buildBootstrapConfig("pi", []string{"pi"}, nil)
+	content := buildBootstrapConfig("pi", []string{"pi"}, nil, "")
 
 	// config_version = 3 uncommented (CurrentConfigVersion)
 	if !strings.Contains(content, fmt.Sprintf("config_version = %d", CurrentConfigVersion)) {
@@ -72,7 +72,7 @@ func TestBuildBootstrapConfig_Pi(t *testing.T) {
 }
 
 func TestBuildBootstrapConfig_AgyStagerCapable(t *testing.T) {
-	content := buildBootstrapConfig("agy", nil, nil)
+	content := buildBootstrapConfig("agy", nil, nil, "")
 
 	// provider = "agy"
 	if !strings.Contains(content, `provider = "agy"`) {
@@ -96,7 +96,7 @@ func TestBuildBootstrapConfig_AgyStagerCapable(t *testing.T) {
 }
 
 func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
-	content := buildBootstrapConfig("pi", []string{"pi", "claude"}, nil)
+	content := buildBootstrapConfig("pi", []string{"pi", "claude"}, nil, "")
 
 	// The TARGET's (pi) per-role blocks are COMMENTED with blank models (pi is multi-backend — no
 	// good default; the user supplies the inference/model prefix). No provider line: the roles inherit
@@ -128,7 +128,7 @@ func TestBuildBootstrapConfig_OtherInstalledCommented(t *testing.T) {
 // error when uncommented. Mirror of TestBuildBootstrapConfig_OtherInstalledCommented (which proves
 // the non-pi claude block is NOT blanked). See findings §1/§2/§7.
 func TestBuildBootstrapConfig_CommentedPiBlockBlanked(t *testing.T) {
-	content := buildBootstrapConfig("claude", []string{"claude", "pi"}, nil)
+	content := buildBootstrapConfig("claude", []string{"claude", "pi"}, nil, "")
 
 	// (a) commented pi block header present
 	if !strings.Contains(content, "# === pi (installed)") {
@@ -167,8 +167,72 @@ func TestBuildBootstrapConfig_CommentedPiBlockBlanked(t *testing.T) {
 	}
 }
 
+// TestBuildBootstrapConfig_PiOpenRouterKey covers the OPENROUTER_API_KEY affordance on the PURE
+// generator: when the env-derived piEnvModel ("openrouter/free") is passed, pi's otherwise-blank
+// per-role models are pinned to it — including the stager (pi is the stager). Pure/deterministic
+// (the env is read in the wrapper; here the value is passed directly). Companion to the no-key
+// TestBuildBootstrapConfig_Pi (which passes "" and asserts blank).
+func TestBuildBootstrapConfig_PiOpenRouterKey(t *testing.T) {
+	content := buildBootstrapConfig("pi", []string{"pi"}, nil, "openrouter/free")
+
+	// all four roles pinned to openrouter/free
+	for _, role := range []string{"planner", "stager", "message", "arbiter"} {
+		assertContains(t, content, "[role."+role+"]", `model = "openrouter/free"`)
+	}
+	// detection note present
+	if !strings.Contains(content, "OPENROUTER_API_KEY detected") {
+		t.Errorf("missing OPENROUTER_API_KEY detection note; content:\n%s", content)
+	}
+	// no blank models remain (the affordance fully replaces the blanking)
+	if strings.Contains(content, `model = ""`) {
+		t.Errorf("pi+key should not ship blank models; content:\n%s", content)
+	}
+	// valid TOML
+	var m map[string]any
+	if err := toml.Unmarshal([]byte(content), &m); err != nil {
+		t.Fatalf("invalid TOML: %v", err)
+	}
+}
+
+// TestBuildBootstrapConfig_CommentedPiBlockWithKey: a non-pi target generated with pi ALSO installed
+// AND the OpenRouter key present pins the COMMENTED pi provider block to "openrouter/free" (so an
+// uncommented pi role "just works"), with the detection note. Companion to
+// TestBuildBootstrapConfig_CommentedPiBlockBlanked (no-key path).
+func TestBuildBootstrapConfig_CommentedPiBlockWithKey(t *testing.T) {
+	content := buildBootstrapConfig("claude", []string{"claude", "pi"}, nil, "openrouter/free")
+
+	piBlock := extractCommentedProviderBlock(content, "pi")
+	if piBlock == "" {
+		t.Fatalf("missing commented pi block; content:\n%s", content)
+	}
+	if got := strings.Count(piBlock, `# model = "openrouter/free"`); got != 4 {
+		t.Errorf("commented pi block: want 4 pinned models, got %d; block:\n%s", got, piBlock)
+	}
+	if !strings.Contains(piBlock, "OPENROUTER_API_KEY detected") {
+		t.Errorf("commented pi block missing detection note; block:\n%s", piBlock)
+	}
+	// the active claude block is unaffected by the pi affordance
+	if !strings.Contains(content, `model = "haiku"`) {
+		t.Errorf("active claude block unexpectedly missing haiku (pi affordance must not touch claude)")
+	}
+}
+
+// TestBuildBootstrapConfig_PiEnvModelOnlyAffectsPi: piEnvModel must NOT change non-pi providers —
+// agy/claude/etc. ship their normal defaults regardless of the OpenRouter key. Guards against the
+// affordance leaking across providers.
+func TestBuildBootstrapConfig_PiEnvModelOnlyAffectsPi(t *testing.T) {
+	without := buildBootstrapConfig("agy", []string{"agy"}, nil, "")
+	with := buildBootstrapConfig("agy", []string{"agy"}, nil, "openrouter/free")
+	if without != with {
+		t.Errorf("piEnvModel must not affect a non-pi target (agy); outputs differ")
+	}
+	if strings.Contains(with, "openrouter/free") {
+		t.Errorf("agy config must not contain openrouter/free; content:\n%s", with)
+	}
+}
+
 func TestBuildBootstrapConfig_NoInstallFallback(t *testing.T) {
-	content := buildBootstrapConfig("pi", nil, nil)
+	content := buildBootstrapConfig("pi", nil, nil, "")
 
 	// Should have the fallback annotation on the provider line
 	if !strings.Contains(content, "no built-in agent detected on $PATH") {
@@ -190,7 +254,7 @@ func TestBuildBootstrapConfig_ValidTOML(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.target+"_"+strings.Join(tc.installed, ","), func(t *testing.T) {
-			content := buildBootstrapConfig(tc.target, tc.installed, nil)
+			content := buildBootstrapConfig(tc.target, tc.installed, nil, "")
 			var m map[string]any
 			if err := toml.Unmarshal([]byte(content), &m); err != nil {
 				t.Errorf("buildBootstrapConfig(%q, %v) produced invalid TOML: %v", tc.target, tc.installed, err)
@@ -245,8 +309,35 @@ func TestGenerateBootstrapConfig_NamedProvider(t *testing.T) {
 
 // TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars guards Issue 4: the generated config
 // header must document the FR-R6 reasoning env vars (global + per-role), matching docs/cli.md.
+// TestGenerateBootstrapConfig_OpenRouterKeyEnv drives the REAL env detection in the public wrapper:
+// with OPENROUTER_API_KEY set, GenerateBootstrapConfig("pi") pins all four roles to
+// "openrouter/free" (pi's managed alias). This is the end-to-end affordance test (the pure tests
+// above cover the generator; this covers the env->param handoff in GenerateBootstrapConfigWithOverrides).
+func TestGenerateBootstrapConfig_OpenRouterKeyEnv(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	content := GenerateBootstrapConfig("pi")
+	for _, role := range []string{"planner", "stager", "message", "arbiter"} {
+		assertContains(t, content, "[role."+role+"]", `model = "openrouter/free"`)
+	}
+	if !strings.Contains(content, "OPENROUTER_API_KEY detected") {
+		t.Error("missing detection note")
+	}
+	var m map[string]any
+	if err := toml.Unmarshal([]byte(content), &m); err != nil {
+		t.Fatalf("invalid TOML: %v", err)
+	}
+}
+
+// TestGenerateBootstrapConfig_NoKeyStaysBlank: with the key cleared, pi ships blank models (the
+// legacy path) — guards against the affordance firing when no key is present.
+func TestGenerateBootstrapConfig_NoKeyStaysBlank(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "")
+	content := GenerateBootstrapConfig("pi")
+	assertContains(t, content, "[role.planner]", `model = ""`)
+}
+
 func TestBuildBootstrapConfig_HeaderDocumentsReasoningEnvVars(t *testing.T) {
-	content := buildBootstrapConfig("pi", nil, nil)
+	content := buildBootstrapConfig("pi", nil, nil, "")
 	assertContains(t, content,
 		"STAGECOACH_REASONING",
 		"STAGECOACH_<ROLE>_REASONING",
@@ -349,7 +440,7 @@ func TestRewriteHeaderForLocalScope(t *testing.T) {
 // than [defaults]) — never a redundant echo of [defaults] (the original complaint).
 func TestBuildBootstrapConfig_RoleBlocksAllCommented(t *testing.T) {
 	t.Run("pi: commented, BLANK, no provider line (multi-backend — no default)", func(t *testing.T) {
-		content := buildBootstrapConfig("pi", []string{"pi"}, nil)
+		content := buildBootstrapConfig("pi", []string{"pi"}, nil, "")
 		for _, role := range []string{"planner", "stager", "message", "arbiter"} {
 			blk := extractCommentedTargetRoleBlock(content, role)
 			if !strings.Contains(blk, "# [role."+role+"]") {
@@ -364,7 +455,7 @@ func TestBuildBootstrapConfig_RoleBlocksAllCommented(t *testing.T) {
 		}
 	})
 	t.Run("claude: commented, filled with the smallest/fastest default, no provider line", func(t *testing.T) {
-		content := buildBootstrapConfig("claude", []string{"claude"}, nil)
+		content := buildBootstrapConfig("claude", []string{"claude"}, nil, "")
 		// claude's shipped defaults (FR-D4): planner/message/arbiter = haiku, stager = sonnet.
 		want := map[string]string{"planner": "haiku", "stager": "sonnet", "message": "haiku", "arbiter": "haiku"}
 		for role, model := range want {
