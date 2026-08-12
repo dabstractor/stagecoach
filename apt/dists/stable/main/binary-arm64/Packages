@@ -1,0 +1,90 @@
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.10
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.10_linux_arm64.deb
+Size: 3830924
+MD5sum: ff26db3376ad6ae6bd5a178fb7be3187
+SHA1: 9150ea243dabc8aec5f9b4ebb15bc4b693487758
+SHA256: 43bb8777ee4ea8f362b698f67c23a1bfc783c265eae57ed96552c68414f3594f
+SHA512: 5a4069aab9a3e42663305e66944e627981a4fa967549f19370e501095bd5a17deedd59778a43dbb5f917c419862f9192edd62e59069fc3a3f0fa8b9307ee2a9f
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.12
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.12_linux_arm64.deb
+Size: 3839932
+MD5sum: c743f9501c1feb8bbe180fdacff0c771
+SHA1: d4c5a39eec90270fe79e07d2382a59d3effbd925
+SHA256: 83648335a96d5cf5238ccc59b81b6c6545a94fb0f4b1b632ee02e0e6ea3171c7
+SHA512: 0d8da211174c909ef56a0929a26ce73b93a2a871344b5b935e99a0aa252cccd1c22ab91419b54b268978ba36f8c178557da42da2786d9dbf1b76738b47146b44
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.13
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.13_linux_arm64.deb
+Size: 3839916
+MD5sum: fe1dcc7fa3f44cb74693750c6da4a7c3
+SHA1: 8538649f357fa1ab62a6b9c650fd9b17bd5f7d96
+SHA256: fa246661579c32850a701ec8d82fbc215c082abfcc08c7f8e1efb5ca3bf3e09b
+SHA512: 9c79c0a96d90dac0d78cb0a3bc1843db2e4df98035a5fbe9763edecab12acc81a8a38cac267750ef6fd58c6a6e99bcd0a208b44d046f11aef9659d7832ed449a
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.14
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.14_linux_arm64.deb
+Size: 3840244
+MD5sum: f7eef7f537746c4530f0ffb34b87526b
+SHA1: b340a5fa219fa4e00106bbb45a2e6f3ffe909ee2
+SHA256: bb6601dfd0c7f802984af39b3d6db9c2c866de7dbc556fd2a0114f4321ee113e
+SHA512: 1ca44ec6c53bc3be373f183a3d18718f752196ad02ffb535818896fbe2b0f788a1dcb6cf0ad5182d91be0850c077b992d25abfa3fec89fcb6572830e303a8dc8
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.15
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.15_linux_arm64.deb
+Size: 3847332
+MD5sum: 10257fa199250b8e2283bfd9ad59795e
+SHA1: abf23afaf3e89a9c7ab007cbc102a8f55783c4d0
+SHA256: fba8bbb1df094b4c505371d94c70d6f2aafa0e79eec29779646e8c4e3d2d6a98
+SHA512: e6c495df90b911a3283077992822accd100a7f43fbd979feb7beed89fff9e6fb9f9dfa05bef21b8b01b483fd956863bd321a9bbcd3d3e712ce88e26d7ca3ff20
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+
+Package: stagecoach
+Architecture: arm64
+Version: 0.1.16
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 9408
+Filename: pool/main/arm64/stagecoach_0.1.16_linux_arm64.deb
+Size: 3848492
+MD5sum: 066d3744269d9ecbf1150ab90bd7084d
+SHA1: 0bcb3818ce87dd235615fe0edf3346d3fc49f8af
+SHA256: cdef482c8c2d21ce0379160720c47ebea3f5b05af12b3bce2991173dc4902e36
+SHA512: 6f6b219e0908cb70829652a63baa75f071e8fdd6018aed3002ac7c9e96175a3dc0295c1b82c89536c8a6b548884160debf74eb73aa4bef17440b5463b077c1aa
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+

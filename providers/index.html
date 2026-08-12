@@ -1,0 +1,1231 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Stagecoach writes your commit messages using the AI agent you already pay for. No API key, no per-token billing — it shells out to your installed CLI agent and spends your existing coding-plan quota.">
+      
+      
+      
+        <link rel="canonical" href="https://dabstractor.github.io/stagecoach/providers/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../how-it-works/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Providers - Stagecoach</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#provider-manifests" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Stagecoach" class="md-header__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Stagecoach
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Providers
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Stagecoach" class="md-nav__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    Stagecoach
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-manifest-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a manifest is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-turn-capability-session_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-turn capability (session_mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-rendering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command rendering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-7-built-in-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 7 built-in providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools-disable-asymmetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools-disable asymmetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tooled-mode-and-the-stager-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tooled mode and the stager role
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-role-default-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-role default models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output parsing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-manifest-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a manifest is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-turn-capability-session_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-turn capability (session_mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-rendering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command rendering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-7-built-in-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 7 built-in providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools-disable-asymmetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools-disable asymmetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tooled-mode-and-the-stager-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tooled mode and the stager role
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-role-default-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-role default models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output parsing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="provider-manifests">Provider manifests<a class="headerlink" href="#provider-manifests" title="Permanent link">&para;</a></h1>
+<p>Full reference for Stagecoach's provider manifest system: the 22-field schema, command-rendering algorithm, the 7 built-in providers, the tools-disable asymmetry, adding a new agent, and output parsing. Matches the Go source in <code>internal/provider/</code> and the shipped <code>providers/*.toml</code> files.</p>
+<h2 id="what-a-manifest-is">What a manifest is<a class="headerlink" href="#what-a-manifest-is" title="Permanent link">&para;</a></h2>
+<p>A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Seven providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via <code>[provider.&lt;name&gt;]</code> sections in their config file.</p>
+<p>See the <a href="https://github.com/dabstractor/stagecoach/tree/main/providers/">shipped <code>providers/*.toml</code> files</a> for human-readable reference manifests — <code>providers/pi.toml</code> is the cleanest template.</p>
+<h2 id="the-schema">The schema<a class="headerlink" href="#the-schema" title="Permanent link">&para;</a></h2>
+<p>Each manifest has 22 fields (matching the TOML tags in <code>internal/provider/manifest.go</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>(required)</td>
+<td>Provider identity; set from the <code>[provider.&lt;name&gt;]</code> table key.</td>
+</tr>
+<tr>
+<td><code>detect</code></td>
+<td>string</td>
+<td><code>command</code></td>
+<td>Binary to probe on <code>$PATH</code> for auto-detection.</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>string</td>
+<td>(required)</td>
+<td>The executable to run.</td>
+</tr>
+<tr>
+<td><code>list_models_command</code></td>
+<td>list of string</td>
+<td><code>[]</code> (none)</td>
+<td>Full argv that asks the agent CLI to list its reachable models (e.g. <code>["opencode", "models"]</code>), used by <code>stagecoach models</code>. Empty/nil ⇒ stagecoach prints its curated per-role tier table instead. Populated only for providers whose CLI exposes a verified listing (opencode, pi, agy, cursor); never an HTTP call.</td>
+</tr>
+<tr>
+<td><code>subcommand</code></td>
+<td>list of string</td>
+<td><code>[]</code> (none)</td>
+<td>Inserted between command and flags (e.g. <code>["run"]</code>, <code>["exec"]</code>).</td>
+</tr>
+<tr>
+<td><code>prompt_delivery</code></td>
+<td>string</td>
+<td><code>"stdin"</code></td>
+<td>How to deliver the prompt: <code>stdin</code>, <code>positional</code>, or <code>flag</code>.</td>
+</tr>
+<tr>
+<td><code>prompt_flag</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Flag used when <code>prompt_delivery</code> is <code>"flag"</code>.</td>
+</tr>
+<tr>
+<td><code>print_flag</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Non-interactive print-mode flag (always appended last, after <code>bare_flags</code>).</td>
+</tr>
+<tr>
+<td><code>model_flag</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Flag for model selection (e.g. <code>"--model"</code>, <code>"-m"</code>).</td>
+</tr>
+<tr>
+<td><code>default_model</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Model used when the user specifies none.</td>
+</tr>
+<tr>
+<td><code>system_prompt_flag</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Flag for the system prompt. When <code>""</code>, the system prompt is prepended to the payload instead.</td>
+</tr>
+<tr>
+<td><code>provider_flag</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Flag for sub-provider selection (e.g. <code>"--provider"</code>).</td>
+</tr>
+<tr>
+<td><code>session_mode</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Multi-turn fallback capability. <code>""</code> (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; <code>"append"</code> = re-invoking the same session id appends a recallable turn. <strong>Only pi ships <code>"append"</code></strong> (VERIFIED 2026-07-05). Requires a verified, reproducible append-turn rendering — see below.</td>
+</tr>
+<tr>
+<td><code>bare_flags</code></td>
+<td>list of string</td>
+<td><code>[]</code> (none)</td>
+<td>Extra flags appended verbatim before <code>print_flag</code> in bare mode.</td>
+</tr>
+<tr>
+<td><code>tooled_flags</code></td>
+<td>list of string</td>
+<td><code>nil</code> (none)</td>
+<td>Flags for tooled/stager mode — tools ON, git-scoped, non-interactive. <code>nil</code>/empty ⇒ not stager-capable.</td>
+</tr>
+<tr>
+<td><code>output</code></td>
+<td>string</td>
+<td><code>"raw"</code></td>
+<td>Agent output mode: <code>"raw"</code> or <code>"json"</code>.</td>
+</tr>
+<tr>
+<td><code>json_field</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Field to extract when <code>output</code> is <code>"json"</code>.</td>
+</tr>
+<tr>
+<td><code>strip_code_fence</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Strip one layer of <code>```</code> / <code>~~~</code> fences from agent output.</td>
+</tr>
+<tr>
+<td><code>retry_instruction</code></td>
+<td>string</td>
+<td><code>"Output ONLY the commit message. No preamble, no markdown, no quotes."</code></td>
+<td>Prepended to the payload on a parse-failure retry.</td>
+</tr>
+<tr>
+<td><code>env</code></td>
+<td>table</td>
+<td><code>nil</code> (none)</td>
+<td>Environment variables set only for the subprocess (as <code>KEY=VAL</code>).</td>
+</tr>
+<tr>
+<td><code>reasoning_levels</code></td>
+<td>table</td>
+<td>nil (none)</td>
+<td>Per-level reasoning-effort token lists (off/low/medium/high); nil/empty ⇒ graceful no-op. Appended after the model flag at render. pi populates high/medium/low via <code>--thinking</code> (verified <code>pi --help</code>); claude via <code>--effort</code> (verified <code>claude --help</code>); all other built-ins are nil (graceful no-op).</td>
+</tr>
+<tr>
+<td><code>experimental</code></td>
+<td>bool</td>
+<td>false</td>
+<td>Marks a provider experimental (agy) — surfaced in <code>providers list</code>/<code>show</code>. Absent/false ⇒ stable.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multi-turn-capability-session_mode">Multi-turn capability (<code>session_mode</code>)<a class="headerlink" href="#multi-turn-capability-session_mode" title="Permanent link">&para;</a></h3>
+<p>A provider supports Stagecoach's <strong>lossless multi-turn fallback</strong> (— used when a one-shot generation repeatedly fails on a diff too large for a single reliable request) if and only if re-invoking the SAME session id appends a turn the model can recall. The <code>session_mode</code> manifest field declares this:</p>
+<ul>
+<li><code>"append"</code> — re-invoking the same session id appends a recallable turn (multi-turn available).</li>
+<li><code>""</code> (default) — the provider cannot append turns across one-shot calls (multi-turn unavailable; the run proceeds one-shot → rescue, unchanged).</li>
+</ul>
+<p><strong>Only <code>pi</code> ships <code>session_mode = "append"</code> today</strong> — VERIFIED 2026-07-05 via a live run (<code>pi --session-id X &lt;isolation-flags-minus-no-session&gt; -p "remember BANANA"</code>, then a same-<code>--session-id</code> recall turn returning "BANANA"). Every other built-in (claude, opencode, codex, cursor, agy) ships <code>""</code>.</p>
+<p>** verification bar.** A manifest MUST NOT declare <code>"append"</code> speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to 's model-token verification duty). Until a provider's append mechanism is verified, its <code>session_mode</code> stays <code>""</code> and multi-turn is silently skipped for it. See (/) for the full contract.</p>
+<h2 id="command-rendering">Command rendering<a class="headerlink" href="#command-rendering" title="Permanent link">&para;</a></h2>
+<p>The renderer assembles the command invocation from the manifest fields and the resolved model, provider, system prompt, and user payload. Token order:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>args = [subcommand...]
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>+ (provider_flag, provider)           if provider_flag != &quot;&quot; &amp;&amp; provider != &quot;&quot;
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>+ (model_flag,    model)              if model_flag    != &quot;&quot; &amp;&amp; model    != &quot;&quot;
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>+ (system_prompt_flag, system_prompt)  if system_prompt_flag != &quot;&quot; &amp;&amp; system_prompt != &quot;&quot;
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>+ bare_flags...
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>+ print_flag                          if print_flag != &quot;&quot;       (always LAST)
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>+ payload                             per prompt_delivery:
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    stdin     → piped to stdin
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    positional → trailing argument
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    flag      → (prompt_flag, payload)
+</span></code></pre></div>
+<p>When <code>system_prompt_flag</code> is empty, the system prompt is <strong>prepended</strong> to the payload (delimited by <code>\n\n</code>) instead of being delivered via a flag.</p>
+<p>In <strong>tooled mode</strong> (the stager role), <code>tooled_flags</code> replaces <code>bare_flags</code>; tooled mode with empty <code>tooled_flags</code> errors — that provider cannot serve as a stager.</p>
+<p>For a multi-backend provider (one whose manifest sets <code>provider_flag</code> — pi today), the model is <code>inference/model</code> (e.g. <code>anthropic/claude-haiku</code>): Render splits it on the first <code>/</code> and emits <code>--provider &lt;prefix&gt; --model &lt;rest&gt;</code>. A model with no <code>/</code> on such a provider is a HARD configuration error, never a silent bare <code>--model</code>. Single-backend providers take the model verbatim. When a <code>reasoning</code> level resolves to a non-empty token list in <code>reasoning_levels</code>, those tokens are appended after the model flag; absent/empty ⇒ silent no-op.</p>
+<h2 id="the-7-built-in-providers">The 7 built-in providers<a class="headerlink" href="#the-7-built-in-providers" title="Permanent link">&para;</a></h2>
+<p>Auto-detection order (first installed = default): <strong>pi, opencode, cursor, agy, codex, claude</strong>. User-defined providers are never auto-selected.</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Delivery</th>
+<th>Print flag</th>
+<th>Model flag</th>
+<th>Default model</th>
+<th>System prompt flag</th>
+<th>Tool-disable approach</th>
+<th>Chrome-disable</th>
+<th>Stager?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pi</code></td>
+<td>stdin</td>
+<td><code>-p</code></td>
+<td><code>--model</code></td>
+<td>"" (user must set)</td>
+<td><code>--system-prompt</code></td>
+<td>Explicit <code>--no-*</code> flags</td>
+<td>extensions/skills/templates/context off (<code>--no-*</code>); MCP use suppressed (servers may connect — tracked limitation)</td>
+<td>✓ yes</td>
+</tr>
+<tr>
+<td><code>claude</code></td>
+<td>stdin</td>
+<td><code>-p</code></td>
+<td><code>--model</code></td>
+<td><code>sonnet</code></td>
+<td><code>--system-prompt</code></td>
+<td>Explicit <code>--tools ""</code> + settings flags</td>
+<td>via <code>--tools ""</code> + <code>--setting-sources ""</code></td>
+<td>✓ yes (scoped)</td>
+</tr>
+<tr>
+<td><code>opencode</code></td>
+<td>stdin</td>
+<td>(none)</td>
+<td><code>-m</code></td>
+<td>(user must set)</td>
+<td>(prepended)</td>
+<td>Read-only constraint (<code>run</code> subcommand)</td>
+<td>no per-surface switch; read-only by design — documented limitation</td>
+<td>✓ yes (unscoped)</td>
+</tr>
+<tr>
+<td><code>codex</code></td>
+<td>stdin</td>
+<td>(none)</td>
+<td><code>-m</code></td>
+<td>(user must set)</td>
+<td>(prepended)</td>
+<td>Read-only constraint (<code>--sandbox read-only --ephemeral</code>)</td>
+<td>no per-surface switch; read-only constraint only — documented limitation</td>
+<td>✓ yes (unscoped)</td>
+</tr>
+<tr>
+<td><code>cursor</code></td>
+<td>positional</td>
+<td><code>-p</code></td>
+<td><code>--model</code></td>
+<td>(user must set)</td>
+<td>(prepended)</td>
+<td>Read-only constraint (<code>--mode ask --trust</code>)</td>
+<td>no per-surface switch; read-only constraint only — documented limitation</td>
+<td>✓ yes (unscoped)</td>
+</tr>
+<tr>
+<td><code>agy</code></td>
+<td>stdin</td>
+<td>(none)</td>
+<td><code>--model</code></td>
+<td><code>Gemini 3.5 Flash (Low)</code></td>
+<td>(prepended)</td>
+<td>Read-only constraint (<code>--mode plan</code>)</td>
+<td>no per-surface switch; read-only constraint only — documented limitation</td>
+<td>✓ yes (unscoped)</td>
+</tr>
+</tbody>
+</table>
+<p>Note: cursor is the only provider where <code>detect</code> and <code>command</code> differ from <code>name</code> — the binary is <code>agent</code>, not <code>cursor</code>. <code>agy</code> is <strong>experimental</strong> pending a full <code>--help</code> re-verification pass, and is <strong>stager-capable</strong> via the unscoped <code>--mode accept-edits --dangerously-skip-permissions</code> combo (item 4, verified 2026-07-09, agy v1.1.11; the same unscoped model pi uses).</p>
+<h2 id="tools-disable-asymmetry">Tools-disable asymmetry<a class="headerlink" href="#tools-disable-asymmetry" title="Permanent link">&para;</a></h2>
+<p>The six built-in providers achieve tool-safety via two distinct mechanisms:</p>
+<ul>
+<li>
+<p><strong>Explicit switch</strong> (pi, claude): The manifest passes literal flags that <strong>disable tools</strong> (pi: <code>--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-session</code>; claude: <code>--tools "" --setting-sources "" --no-session-persistence</code>). This is the cleanest approach — the agent runs as a pure text-in/text-out process.</p>
+</li>
+<li>
+<p><strong>Read-only constraint</strong> (codex, cursor): The manifest passes flags that <strong>constrain the agent to a read-only, never-ask profile</strong> (codex: <code>--sandbox read-only --ephemeral</code>; cursor: <code>--mode ask --trust</code>). opencode's <code>run</code> subcommand is inherently non-interactive and read-only.</p>
+</li>
+</ul>
+<p>Both approaches satisfy the safety invariant: no provider can mutate the repository.</p>
+<ul>
+<li><strong>Chrome is a separate axis</strong> (all providers): Mutation safety says nothing about agent chrome (skills, extensions, context files, MCP servers). Providers that expose a per-surface disable switch set it (pi, claude); providers that do not document the limitation honestly (codex, cursor, opencode, agy) — the call stays read-only and never-mutate regardless. See the <strong>Chrome-disable</strong> column above and the CHROME-DISABLE notes in each provider manifest (–C5).</li>
+</ul>
+<h2 id="tooled-mode-and-the-stager-role">Tooled mode and the stager role<a class="headerlink" href="#tooled-mode-and-the-stager-role" title="Permanent link">&para;</a></h2>
+<p>The v2 manifest system has two invocation modes:</p>
+<ul>
+<li>
+<p><strong>Bare mode</strong> (default): tools off, session-less, chrome-less, ephemeral. Serves the planner, message, and arbiter roles, and the entire v1 single-commit path. Uses <code>bare_flags</code>.</p>
+</li>
+<li>
+<p><strong>Tooled mode</strong> (stager only): tools on, git-scoped, non-interactive. Serves <strong>only</strong> the stager role — the per-concept agent that runs <code>git add</code> and applies hunks. Uses <code>tooled_flags</code>. A provider with nil/empty <code>tooled_flags</code> <strong>cannot</strong> serve as a stager (render errors at invocation time); falls back to the next stager-capable provider.</p>
+</li>
+</ul>
+<p>The stager's safety is enforced by three layers:</p>
+<ol>
+<li><strong><code>tooled_flags</code></strong> — claude is <strong>structurally</strong> scoped via a staging-only git allowlist (<code>--allowed-tools Bash(git add:*,git apply:*,git status:*,git diff:*),Read,Edit</code>) that makes <code>git commit</code>/<code>push</code>/<code>update-ref</code>/<code>reset</code>/<code>rebase</code> unreachable. pi, agy, codex, opencode, and cursor are <strong>not</strong> flag-scoped — their tooled profiles enable tools with no git allowlist (the <strong>UNSCOPED</strong> model), so a misbehaving unscoped stager CAN run arbitrary Bash. Their safety is therefore <strong>instructional</strong> (the stager task prompt) + a <strong>best-effort HEAD-movement guard</strong> (HEAD is snapshotted before each stager call; the run aborts if HEAD moved) + <strong><code>verifyFreezeSubset</code></strong> (every staged tree is verified a content-subset of the frozen <code>T_start</code>), not structural. <strong>claude is the ONLY structurally-scoped stager</strong>; the other five stager-capable providers are unscoped.</li>
+<li><strong>Stagecoach's ref-mutation monopoly</strong> — the orchestrator alone runs <code>git commit</code>, <code>git update-ref</code>, and <code>git push</code> (/). This is a defense-in-depth layer: for claude, the structural allowlist makes ref-mutating commands unreachable; for pi, the HEAD-movement guard (Layer 1) is the actual safety net since pi lacks flag-scoping.</li>
+<li><strong>The stager task prompt</strong> — instructs the agent to stage only concept[i]'s subset and never commit/update-ref/push.</li>
+</ol>
+<h2 id="per-role-default-models">Per-role default models<a class="headerlink" href="#per-role-default-models" title="Permanent link">&para;</a></h2>
+<p>Out of the box, each agent role is assigned a model sized to its job:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Tier</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>planner</strong></td>
+<td>flagship / smart</td>
+<td>Needs the strongest model for task decomposition and architecture reasoning.</td>
+</tr>
+<tr>
+<td><strong>stager</strong></td>
+<td>mid</td>
+<td>Needs tool use + competence, but not the flagship — cost-effective for git staging.</td>
+</tr>
+<tr>
+<td><strong>message</strong></td>
+<td>fast</td>
+<td>Commit-message generation is a short-text task — the cheapest/fastest tier suffices.</td>
+</tr>
+<tr>
+<td><strong>arbiter</strong></td>
+<td>mid</td>
+<td>Needs reasoning to evaluate diffs, but not the flagship — mid-tier balances quality and cost.</td>
+</tr>
+</tbody>
+</table>
+<p>The compiled-in per-provider table lives in <code>internal/config/role_defaults.go</code>. The config bootstrap (<code>config init</code>) uses these defaults — EXCEPT for <strong>pi</strong>, whose per-role models are written EMPTY in BOTH the active <code>[role.*]</code> block AND the commented-out pi block (pi needs an inference-provider prefix on the model, ; its shipped per-role models are blank so you supply backend/model, e.g. <code>zai/gpt-5.4</code>). The pi row below is the compiled-in default, not the bootstrap output. Model names are 2026-07 baselines — mandates periodic re-verification per provider.</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>planner</th>
+<th>stager</th>
+<th>message</th>
+<th>arbiter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pi</code></td>
+<td><code>gpt-5.4</code></td>
+<td><code>gpt-5.4-mini</code></td>
+<td><code>gpt-5.4-nano</code></td>
+<td><code>gpt-5.4-mini</code></td>
+</tr>
+<tr>
+<td><code>claude</code></td>
+<td><code>opus</code></td>
+<td><code>sonnet</code></td>
+<td><code>haiku</code></td>
+<td><code>sonnet</code></td>
+</tr>
+<tr>
+<td><code>agy</code></td>
+<td><code>Gemini 3.5 Flash (High)</code></td>
+<td><em>(cannot)</em></td>
+<td><code>Gemini 3.5 Flash (Low)</code></td>
+<td><code>Gemini 3.5 Flash (Medium)</code></td>
+</tr>
+<tr>
+<td><code>opencode</code></td>
+<td><code>openai/gpt-5.4</code></td>
+<td><em>(cannot)</em></td>
+<td><code>openai/gpt-5.4-nano</code></td>
+<td><code>openai/gpt-5.4-mini</code></td>
+</tr>
+<tr>
+<td><code>codex</code></td>
+<td><code>gpt-5.1-codex-max</code></td>
+<td><em>(cannot)</em></td>
+<td><code>gpt-5.4-nano</code></td>
+<td><code>gpt-5.1-codex-mini</code></td>
+</tr>
+<tr>
+<td><code>cursor</code></td>
+<td><code>gpt-5.4</code> ⚠️</td>
+<td><em>(cannot)</em></td>
+<td><code>gpt-5.4-nano</code> ⚠️</td>
+<td><code>gpt-5.4-mini</code> ⚠️</td>
+</tr>
+</tbody>
+</table>
+<p><em>⚠️ cursor models are tier-names (flagship/mid/nano) resolved to best-guess OpenAI tokens — : verify against <code>agent --help</code>.</em></p>
+<p><strong>Stager column:</strong> A value of <em>(cannot)</em> reflects the <strong>compiled-in <code>role_defaults.go</code> default</strong> (no authored stager model), NOT a capability gap for every such provider — agy, opencode, codex, and cursor ARE stager-capable (per the main table + <code>builtin.go</code>). The per-role stager assignment for those four is pending a <code>role_defaults.go</code> update (a separate code change — tracked residual risk). When the detected provider cannot be the stager, the bootstrap falls back to the next stager-capable provider (fallback — currently pi, claude, agy, opencode, codex, or cursor).</p>
+<h2 id="adding-a-new-agent">Adding a new agent<a class="headerlink" href="#adding-a-new-agent" title="Permanent link">&para;</a></h2>
+<p>Define a <code>[provider.&lt;name&gt;]</code> block in your config file (global or repo-local). You only need to set the fields that differ from the defaults — omitted fields inherit the built-in values (for a known name) or the schema defaults.</p>
+<p>Example — add a provider called <code>myagent</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[provider.myagent]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">command</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/myagent/bin/agent&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">prompt_delivery</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;stdin&quot;</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">print_flag</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;--once&quot;</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">model_flag</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;--model&quot;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">default_model</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-model-7b&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">system_prompt_flag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;--system&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">bare_flags</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--no-mcp&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--ephemeral&quot;</span><span class="p">]</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">output</span><span class="w">             </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;raw&quot;</span>
+</span></code></pre></div>
+<p>Verify the merged manifest:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>stagecoach<span class="w"> </span>providers<span class="w"> </span>show<span class="w"> </span>myagent
+</span></code></pre></div>
+<p>Use it:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>stagecoach<span class="w"> </span>--provider<span class="w"> </span>myagent
+</span></code></pre></div>
+<h2 id="output-parsing">Output parsing<a class="headerlink" href="#output-parsing" title="Permanent link">&para;</a></h2>
+<p>The output parser processes the agent's stdout in five steps:</p>
+<ol>
+<li><strong>Trim</strong> — remove leading and trailing whitespace.</li>
+<li><strong>Strip code fence</strong> (if <code>strip_code_fence</code> is true) — remove a leading <code>```</code> or <code>~~~</code> opener line and everything from the last matching closer onward.</li>
+<li><strong>Mode switch</strong>:</li>
+<li><code>raw</code> — the trimmed output is the commit message.</li>
+<li><code>json</code> — parse as JSON and extract <code>json_field</code>; on failure, try a brace-balanced substring; on any failure, fall back to raw.</li>
+<li><strong>Normalize newlines</strong> — <code>\r\n</code> → <code>\n</code>; collapse 3+ consecutive <code>\n</code> to 2.</li>
+<li><strong>Final trim</strong> — if the result is empty, the orchestrator retries with <code>retry_instruction</code> prepended.</li>
+</ol>
+<p>The v1 default is <code>output = "raw"</code> — the agent's stdout, after cleanup, is the commit message verbatim.</p>
+<p>A <code>[generation] output</code> / <code>strip_code_fence</code> value in the config file or git-config is an <strong>opt-in override</strong>: when unset, the per-provider manifest value above is what <code>parseOutput</code> uses (so <code>providers show</code> and parsing agree). Set it only to force a value across all providers (see <a href="../configuration/">configuration.md</a>).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "navigation.tracking", "toc.follow", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

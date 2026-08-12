@@ -1,0 +1,31 @@
+Architectures: amd64 arm64
+Codename: stable
+Components: main
+Date: Wed, 12 Aug 2026 04:48:12 +0000
+Label: stagecoach
+Origin: stagecoach
+Suite: stable
+MD5Sum:
+ 9b0f722f83bc7ff2ff03668ee7c5a43a              150 Release
+ 5d7238ee53509182219c44dadb59627f             4158 main/binary-amd64/Packages
+ 17ce863d082c3e01626aebbd41f815bf             1439 main/binary-amd64/Packages.gz
+ f75c56ce96bf9319efda943407a70dcc             3972 main/binary-arm64/Packages
+ 4df80a7e7ed30a3845be25aabf7f5f8f             1409 main/binary-arm64/Packages.gz
+SHA1:
+ 09823a6cc33f54242d0bde1afc93abc967b31064              150 Release
+ 501f5357e7c02d22745a9fa4372e0a894d684cda             4158 main/binary-amd64/Packages
+ 1bbe9f7af30c4e6c8ae158d4a1008d33fd48b795             1439 main/binary-amd64/Packages.gz
+ db648990f784d8ae1b6b5a21234563efa2c64b47             3972 main/binary-arm64/Packages
+ 8e090d863aa4ead2b2efcef9624c42ac43aa1743             1409 main/binary-arm64/Packages.gz
+SHA256:
+ 9523d57195ee7f55b42b004a95285ff0e5656b7d40a83e9d919419672fbfd34e              150 Release
+ 64f95b07567f4ffaf217736f2ebc62f9959e689ce3b91b421106fca901275d8a             4158 main/binary-amd64/Packages
+ 7789311e563dd0486d4b1958822e45b71805e727ba300365790148bbdf814a58             1439 main/binary-amd64/Packages.gz
+ 7b32a088bcfccad5e7eb185fdf0ce2c74dc2cf996a0d34740871f652cdcbb1fd             3972 main/binary-arm64/Packages
+ 2fce10eba9129b860201187c9178b2f9d8ce005248c10cd1bb8cec7beb78fb6d             1409 main/binary-arm64/Packages.gz
+SHA512:
+ 5e2708e169b33bcd2a367ed2636147e32e89450ca5bff49a9906af3e7ee8cb6addae013374f735e9c657478c7f1b5817b414dd608589145a45378f5201416c8d              150 Release
+ b4a1ced989bab060f17a169519023169721f5abe5a7135b80261269d19d6e26381d254d053cb22b9d6b506ccda2fc398ce6fcfd50f0665117df9fd8943c00534             4158 main/binary-amd64/Packages
+ f84857068d484f04c732e948238b73361c5c225856d50df0ed2ffde7ff08a65b7a2ad6c694ddcc8baf7b7618b7e8c0b4b695950a5c451248d96e2c76c42390ef             1439 main/binary-amd64/Packages.gz
+ 74459516b98d3dacbd9a19b8eeda295e9c85edafbaced0c6d0a3e31cf64f716010fdec427509a0518e32a6df3dc2ed95726214d8b8cbc6b96f8b13413a5892a0             3972 main/binary-arm64/Packages
+ 903c7c5f1de4ba838fbebc27448a8e765f89e05b2fd1cfbfef854bb71ba1b634882685a8206ce0bbdb98818429f7af3b7b599a032481b48760159116b755f033             1409 main/binary-arm64/Packages.gz

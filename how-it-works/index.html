@@ -1,0 +1,1750 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Stagecoach writes your commit messages using the AI agent you already pay for. No API key, no per-token billing — it shells out to your installed CLI agent and spends your existing coding-plan quota.">
+      
+      
+      
+        <link rel="canonical" href="https://dabstractor.github.io/stagecoach/how-it-works/">
+      
+      
+        <link rel="prev" href="../providers/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>How it works - Stagecoach</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-stagecoach-works" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Stagecoach" class="md-header__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Stagecoach
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              How it works
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Stagecoach" class="md-nav__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    Stagecoach
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-snapshot-based-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The snapshot-based flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The snapshot-based flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-not-git-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why not git commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-plumbing-alternative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The plumbing alternative
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot invariants
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-while-generating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage-while-generating
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-commit-decomposition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-commit decomposition
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-commit decomposition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trigger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-four-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The four roles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diff-capture-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diff capture pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-and-non-text-file-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary and non-text file filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#payload-exclusions-stagecoachignore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payload exclusions (.stagecoachignore)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-and-the-rescue-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety and the rescue protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Safety and the rescue protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-repo-run-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-repo run lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety-invariant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety invariant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-modes-and-exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure modes and exit codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rescue-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rescue protocol
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompt-engineering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt engineering
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prompt engineering">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-prompt-mature-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System prompt (mature repos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system-prompt-new-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System prompt (new repos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#format-modes-and-locale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format modes and locale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-raw-output-not-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why raw output, not JSON
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-turn-generation-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-turn generation fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-description-mode-description-first-read-on-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work-description mode (description-first, read-on-demand)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-hooks-on-the-plumbing-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commit hooks on the plumbing path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-mode-vs-the-snapshot-based-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook mode vs the snapshot-based flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hook mode vs the snapshot-based flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trade-off-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade-off inversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-which" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to use which
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-snapshot-based-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The snapshot-based flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The snapshot-based flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-not-git-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why not git commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-plumbing-alternative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The plumbing alternative
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot invariants
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-while-generating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage-while-generating
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-commit-decomposition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-commit decomposition
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-commit decomposition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trigger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-four-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The four roles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diff-capture-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diff capture pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-and-non-text-file-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary and non-text file filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#payload-exclusions-stagecoachignore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payload exclusions (.stagecoachignore)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-and-the-rescue-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety and the rescue protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Safety and the rescue protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-repo-run-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-repo run lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety-invariant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety invariant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-modes-and-exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure modes and exit codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rescue-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rescue protocol
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompt-engineering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt engineering
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prompt engineering">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-prompt-mature-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System prompt (mature repos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system-prompt-new-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System prompt (new repos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#format-modes-and-locale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format modes and locale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-raw-output-not-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why raw output, not JSON
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-turn-generation-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-turn generation fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-description-mode-description-first-read-on-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work-description mode (description-first, read-on-demand)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-hooks-on-the-plumbing-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commit hooks on the plumbing path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-mode-vs-the-snapshot-based-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook mode vs the snapshot-based flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hook mode vs the snapshot-based flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trade-off-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade-off inversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-which" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to use which
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="how-stagecoach-works">How Stagecoach works<a class="headerlink" href="#how-stagecoach-works" title="Permanent link">&para;</a></h1>
+<p>Architecture overview of the Stagecoach pipeline: snapshot-based commit creation, stage-while-generating, the safety and rescue protocol, and prompt engineering. This is the cross-cutting "architecture overview" — it ties together the git plumbing, orchestrator, rescue protocol, and prompt assembly.</p>
+<h2 id="the-snapshot-based-flow">The snapshot-based flow<a class="headerlink" href="#the-snapshot-based-flow" title="Permanent link">&para;</a></h2>
+<h3 id="why-not-git-commit">Why not <code>git commit</code><a class="headerlink" href="#why-not-git-commit" title="Permanent link">&para;</a></h3>
+<p>Stagecoach does not use <code>git commit</code>. The standard <code>git commit</code> reads the <strong>live</strong> index and mutates <code>HEAD</code> — it locks the repo state for the duration. If you stage a file while a commit is in progress, that file may end up in the commit unexpectedly.</p>
+<h3 id="the-plumbing-alternative">The plumbing alternative<a class="headerlink" href="#the-plumbing-alternative" title="Permanent link">&para;</a></h3>
+<p>Instead, Stagecoach uses three low-level git plumbing commands:</p>
+<ol>
+<li><code>git write-tree</code> — freezes the current index into an immutable tree object (the <strong>snapshot</strong>). The index is never reset.</li>
+<li><code>git commit-tree</code> — creates a dangling commit object from the frozen tree (no ref mutation).</li>
+<li><code>git update-ref HEAD</code> (compare-and-swap) — advances <code>HEAD</code> to the new commit atomically. If <code>HEAD</code> changed meanwhile, the CAS fails and the commit is aborted.</li>
+</ol>
+<h3 id="snapshot-invariants">Snapshot invariants<a class="headerlink" href="#snapshot-invariants" title="Permanent link">&para;</a></h3>
+<p>These four invariants hold for every run:</p>
+<ol>
+<li><strong>Frozen content</strong> — the committed content is exactly what was staged at <code>write-tree</code> time. Nothing added afterward can affect it.</li>
+<li><strong>Later-staged files stay staged</strong> — the index is never reset. Files staged during generation remain staged for the next run.</li>
+<li><strong>Atomic and safe</strong> — <code>update-ref CAS</code> is the only ref mutation. A failed generation leaves the repo byte-for-byte unchanged (only orphan tree/commit objects are left for <code>git gc</code>).</li>
+<li><strong>Overlap-able latency</strong> — generation time is dead time only if the user does nothing. With the snapshot, the user can stage the next batch while the current message generates.</li>
+</ol>
+<h2 id="stage-while-generating">Stage-while-generating<a class="headerlink" href="#stage-while-generating" title="Permanent link">&para;</a></h2>
+<p>The snapshot decouples "what's committed" from "what's staged now." The user can keep working while Stagecoach generates:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Pane A (lazygit / shell)        Pane B (shell)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>─────────────────────────       ───────────────────────
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>git add feature/login.js
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>stagecoach                     ┐
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  ↳ snapshotting…             │  (user is free to work here)
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  ↳ generating with pi…       │  git add docs/login.md
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  ↳ (10s pass)                │  git add tests/login.test.js
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  ↳ created abc1234           │  (these stay staged — NOT in abc1234)
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                              ┘
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                                stagecoach        # next run commits these
+</span></code></pre></div>
+<p>Generation time is no longer dead time. The in-flight commit only ever contains what was staged when it started.</p>
+<h2 id="multi-commit-decomposition">Multi-commit decomposition<a class="headerlink" href="#multi-commit-decomposition" title="Permanent link">&para;</a></h2>
+<p>v2.0's headline feature: run <code>stagecoach</code> with a dirty working tree and nothing staged, and it automatically splits the changes into a sequence of logically-coherent commits — one per concept — using a four-role agent pipeline.</p>
+<h3 id="trigger">Trigger<a class="headerlink" href="#trigger" title="Permanent link">&para;</a></h3>
+<p>Decompose activates when <strong>nothing is staged</strong>, <strong>auto-stage-all is on</strong> (the default), and the user has <strong>not opted out</strong> (<code>--single</code>, <code>--no-decompose</code>, or <code>--commits 1</code>). If something is already staged, the single-commit path runs unchanged. <code>--dry-run</code> also forces the single-commit preview (decompose commits, so dry-run honors the single preview).</p>
+<p><strong>Defense-in-depth.</strong> Decompose re-asserts the empty-index precondition at its entry: if a stale or buggy trigger ever routes to it with a non-empty index, it fails loudly — naming the offending staged paths and pointing to <code>git reset</code> (unstage, then re-run) or <code>stagecoach --single</code> (commit the hand-staged index as one) — instead of silently sweeping them into the start-of-run freeze. The single-commit escape hatch (<code>--single</code>, <code>--commits 1</code>) is checked first and is unaffected, since it handles a hand-staged index normally.</p>
+<h3 id="the-four-roles">The four roles<a class="headerlink" href="#the-four-roles" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Mode</th>
+<th>Job</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>planner</strong></td>
+<td>bare</td>
+<td>Analyze the full working-tree diff; decide how many commits and what each covers</td>
+<td>JSON <code>{count, single, commits:[{title,description,files}], message?}</code></td>
+</tr>
+<tr>
+<td><strong>stager</strong></td>
+<td>tooled</td>
+<td>Stage one concept's subset of files (<code>git add</code>, hunk-level staging)</td>
+<td>Mutates the index; exits 0</td>
+</tr>
+<tr>
+<td><strong>message</strong></td>
+<td>bare</td>
+<td>Generate a commit message from the concept diff</td>
+<td>Raw commit message text</td>
+</tr>
+<tr>
+<td><strong>arbiter</strong></td>
+<td>bare</td>
+<td>Decide which just-made commit any leftover changes belong to, or create a new commit</td>
+<td>JSON <code>{target: "&lt;sha&gt;"\|null}</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The stager is conditional, not mandatory.</strong> It is the pipeline's only <em>tooled</em> role, but it runs only when a concept shares a file with another. On a pairwise <strong>file-disjoint</strong> partition — the common case for cleanly separated changes — the stager is skipped entirely (each concept is staged deterministically with <code>git add</code>), so a provider with no <code>tooled_flags</code> (e.g. a user-defined provider) can still decompose a disjoint tree. See the <em>File-disjoint fast-path</em> note under <a href="#key-design-points">Key design points</a> below.</p>
+<h3 id="pipeline-flow">Pipeline flow<a class="headerlink" href="#pipeline-flow" title="Permanent link">&para;</a></h3>
+<p>The common case — files already staged — is the fast path: stagecoach snapshots the staged
+tree (<strong>T_start</strong>), asks the <strong>message</strong> role for a commit message, and commits it. Only one
+of the four roles runs; the planner, stager, and arbiter are skipped entirely. Decomposition
+is the exception, taken only when nothing is staged and the working tree is dirty.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>                    run stagecoach
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                            │
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                            ▼
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>               ┌─────────────────────────┐   ◀── frozen at run start (the atomic core)
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>               │    snapshot T_start     │
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>               └─────────────────────────┘
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>                            │
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>                            │   staged files?  ──no──▶  decompose pipeline (detailed below)
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>                            ▼
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>               ┌─────────────────────────┐   ◀── diff(tip, T_start) → commit message
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>               │         message         │
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>               │         (bare)          │
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>               └─────────────────────────┘
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>                            │   msg
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>                            ▼
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>commit-tree  -p HEAD  T_start  msg   →  newSHA
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>update-ref HEAD newSHA              (serialized CAS)
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>                            │
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>                            ▼
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>                          done    ◀── decompose lands here too
+</span></code></pre></div>
+<p>When nothing is staged (and auto-stage-all is on, not opted out), the full decompose pipeline runs:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>           nothing staged + dirty working tree
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                            │
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>                            ▼
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>               ┌─────────────────────────┐   ◀── T_start diff + style examples
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>               │         planner         │
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>               │         (bare)          │
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>               └─────────────────────────┘
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>                            │   {count, single, commits:[…], message?}
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>                            │   (if single: commit T_start with the planner’s
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>                            │    message and stop — the loop below is skipped)
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>                            ▼
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>               ┌─────────────────────────┐   ── mutates index (stages concept[i])
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>               │        stager[i]        │
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>               │        (tooled)         │
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>               └─────────────────────────┘
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>                            │   tree[i] = write-tree  (FROZEN)
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>                            ▼
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>               ┌─────────────────────────┐   ◀── diff(tree[i-1], tree[i])   ‖ overlaps stager[i+1]
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>               │       message[i]        │
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>               │         (bare)          │
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>               └─────────────────────────┘
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>                            │   msg[i]
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>                            ▼
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>commit-tree  -p newSHA[i-1]  tree[i]  msg[i]   →  newSHA[i]
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>update-ref HEAD newSHA[i]                   (serialized CAS)
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>                            │   (repeat for each concept i = 0..N-1)
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>                            ▼
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>                            │   frozen leftover empty?  ──yes──▶  done
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>                            │   no
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>                            ▼
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>               ┌─────────────────────────┐   ── commits made + leftover (stagecoach does all git)
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>               │         arbiter         │
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>               │         (bare)          │
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>               └─────────────────────────┘
+</span></code></pre></div>
+<h3 id="key-design-points">Key design points<a class="headerlink" href="#key-design-points" title="Permanent link">&para;</a></h3>
+<p><strong>Overlapped staging and generation.</strong> <code>stager[i+1]</code> runs in parallel with <code>message[i]</code> — the stager prepares the next concept's index while the message agent generates the current commit message. This 1-deep overlap keeps latency low.</p>
+<p><strong>File-disjoint fast-path (/).</strong> The stager is the pipeline's only tooled role and its only inherently serial step — every stager mutates the same live index, which is why the loop above can overlap staging and generation only 1-deep. But the stager exists solely to hunk-split a file shared across concepts; the planner already declares a file-level partition (<code>files</code> per concept). When that partition is <strong>pairwise file-disjoint</strong> — no path appears in two concepts' <code>files</code> — stagecoach stages each concept <strong>deterministically</strong> with <code>git add</code> (adds, modifications, and deletions for those whole paths), under the unchanged accumulate-never-reset index model, <strong>invoking no stager agent at all</strong>; <code>write-tree</code> then freezes <code>tree[i]</code> just as above. With every <code>tree[i]</code> frozen before any message starts, the N message generations run <strong>concurrently</strong> and publish in CAS order (serialized <code>update-ref</code>, same as the loop), collapsing a disjoint run's critical path from "planner + ~N sequential steps" to "planner + one message latency." <code>verifyFreezeSubset</code> still guards every fast-path tree; paths the planner declared for no concept still flow to the arbiter as leftovers; and the tree-to-tree-diff and serialized-CAS invariants are unchanged. Any shared file — a path in two or more concepts' <code>files</code> — falls back transparently to the tooled-stager loop above, for the whole run rather than per concept. This is why the disjoint-files case is both the most robust and the fastest path (no stager model in the loop), and it lets a provider with no <code>tooled_flags</code> (e.g. a user-defined provider) decompose a disjoint tree it otherwise could not serve.</p>
+<p><strong>Stage-while-editing.</strong> With <code>--edit</code>, the snapshot is frozen <em>before</em> the editor opens. You can <code>git add</code> in another pane during the edit session — the in-flight commit is unaffected. This is the same stage-while-generating property, extended through the editor. This is the one thing <code>git commit -e</code>-style flows cannot offer on top of generation.</p>
+<p><strong>Frozen tree snapshots.</strong> After each stager returns, <code>write-tree</code> freezes the accumulated index into an immutable tree object (<code>tree[i]</code>). This is the SAME snapshot mechanism as the single-commit path, composed N times.</p>
+<p><strong>Tree-to-tree diffs.</strong> <code>message[i]</code> reasons over <code>diff(tree[i-1], tree[i])</code> — never <code>index-vs-HEAD</code>. This makes each concept diff immune to concurrent staging and to earlier commits landing.</p>
+<p><strong>Serialized publication.</strong> Even though generation overlaps, <code>commit-tree</code> + <code>update-ref</code> are serialized per concept (CAS). If <code>HEAD</code> moved externally, the CAS fails and prior commits stand.</p>
+<p><strong>Start-of-run freeze (T_start).</strong> The instant decomposition activates, the entire working-tree change set (every modified/added/deleted/untracked path and its byte content) is captured as an immutable tree object T_start. The planner partitions T_start's diff (never a fresh re-read of the live tree); every stager, the arbiter (its gate, its diff, and its leftover staging), and the one-file/single shortcuts draw strictly from T_start. A file created or modified after T_start is captured is invisible to the run.</p>
+<p><strong>Freeze enforcement (defense-in-depth).</strong> The freeze boundary is guarded at two layers, neither trusting its caller nor the external stager. At entry, decompose re-asserts its empty-index precondition — a stale or buggy trigger that routes here with a non-empty index fails loudly, naming the offending staged paths, instead of silently folding them into T_start (see <a href="#trigger">Trigger</a>). Then, because the stager is an external agent running <code>git</code> against the live tree, after each staging step stagecoach verifies the resulting tree is a content-subset of T_start (only T_start paths, T_start content). Any deviation — a concurrent change swept in, or a stager that ran a bare <code>git add -A</code> — is a hard abort (non-rescue; already-landed commits stand per), with an error that names the concept by title and explains the cause in plain language (concurrent working-tree changes were picked up by the stager; the abort is intentional freeze-boundary protection), so the user knows the run was protected and can re-run from a clean tree.</p>
+<p><strong>One-file short-circuit.</strong> In auto-decompose, if exactly one path changed, the planner is bypassed entirely: stage that file's T_start content, generate one message, create one commit. Deterministic, not model judgment. <code>--commits N</code> (N≥2) overrides this shortcut.</p>
+<p><strong>Mode-conditional planner rules.</strong> The planner's <code>Rules:</code> block is mode-conditional. In auto-decompose (the default) it leans toward splitting unrelated changes — <em>lean toward SEVERAL</em> — tempered by a soft target of <code>max_commits / 2</code> (default 6) so an ordinary mixed tree lands at or below it rather than fanning into micro-commits; only the hard cap (<code>max_commits</code>, default 12) ever errors. Forced-count (<code>--commits N</code>) treats the count as fixed and omits the soft target. Every concept carries a <code>files</code> list naming each path it touches — a single file split across two concepts is named in both, with the description saying which part belongs where — so each stager knows where to look. After the planner returns, a deterministic coverage check logs (but never errors on) any changed path no concept claimed; the arbiter reconciles those leftovers.</p>
+<p><strong>Arbiter leftover reconciliation.</strong> After all N concepts are committed, stagecoach computes the <strong>frozen leftover</strong> = <code>diff-names(tipTree, T_start)</code> — the <code>T_start</code> content no stager claimed (<code>tipTree</code> is the last committed tree) — and runs the arbiter <strong>iff it is non-empty</strong>. The live working tree is never consulted for the gate, so a file written after <code>T_start</code> was captured cannot trigger the arbiter or enter any arbiter commit. Given <code>TreeDiff(tipTree, T_start)</code>, the arbiter decides whether the leftovers belong to an existing commit (a plumbing amend that rebuilds the chain from the frozen per-concept <code>tree[j]</code> and <code>T_start</code>) or warrant a new (N+1)th commit (committing <code>T_start</code> directly); stagecoach performs all git from frozen trees, then syncs the index to <code>T_start</code>, and the arbiter only decides.</p>
+<p><strong>Output quality is bounded by stager-model discipline.</strong> The freeze and arbiter logic guarantee a <em>correct</em> result: the final tree always equals <code>T_start</code>, the index is clean, and the repo is never corrupted. They do <strong>not</strong> guarantee <em>coherent intermediate history</em>. The stager is an LLM running <code>git</code> against the live accumulating index, and a weaker stager model may un-stage or re-add files that an earlier concept legitimately committed (e.g. concept 2 deleting <code>auth.go</code> that concept 1 added, forcing concept 3 to re-add it). Such thrashing is content-legal under the freeze (un-staging a <code>T_start</code> file is a subset of <code>T_start</code>), so it is not caught — only the <em>final</em> tree is reconciled. For clean, reviewable multi-commit history, prefer a strong stager model, or use <code>--single</code> / pre-stage each concept manually. The disjoint-files common case (the planner emits exact per-concept <code>files</code> lists) is the most robust against this.</p>
+<h3 id="safety">Safety<a class="headerlink" href="#safety" title="Permanent link">&para;</a></h3>
+<p>The same snapshot-based safety invariants from the single-commit path apply to every decompose iteration:</p>
+<ul>
+<li><strong>Atomic and safe</strong> — <code>update-ref CAS</code> is the only ref mutation per commit; stagecoach owns all <code>commit-tree</code>, <code>update-ref</code>, and <code>push</code> operations. The stager is the ONE role that touches the index. Its scoping differs by provider: claude is structurally constrained to a staging-only git allowlist (<code>git add</code>/<code>apply</code>/<code>status</code>/<code>diff</code>); pi is constrained instructionally (its task prompt) plus a HEAD-movement guard that aborts the run if the stager moves a ref. See <a href="../providers/#tooled-mode-and-the-stager-role">providers.md</a>.</li>
+<li><strong>Frozen content</strong> — <code>tree[i]</code> captures exactly what was staged at <code>write-tree</code> time. Nothing added afterward can affect it.</li>
+<li><strong>No index resets</strong> — the index accumulates across concepts. After the final commit, HEAD.tree == tree[N-1] == full accumulated index, so the index is clean relative to HEAD.</li>
+<li><strong>Start-of-run freeze</strong> — T_start captures the full working-tree change set at decompose activation; concurrent edits never enter any commit. The freeze boundary is held at three layers: the empty-index precondition is re-asserted at entry; the stager is verified as a content-subset of T_start after each staging step; and the arbiter — the third freeze surface — derives its gate, its diff, and every tree it commits strictly from T_start and tipTree, never a live re-read.</li>
+</ul>
+<p>See <a href="../configuration/">configuration.md</a> for per-role provider/model/reasoning/<strong>timeout</strong> configuration and <a href="../cli/">cli.md</a> for the decompose and per-role flags. Each role resolves its own generation timeout: the <strong>planner defaults to 480s</strong> (the heavy role), while stager/message/arbiter inherit the global <code>120s</code>; override with <code>--&lt;role&gt;-timeout</code>.</p>
+<h3 id="diff-capture-pipeline">Diff capture pipeline<a class="headerlink" href="#diff-capture-pipeline" title="Permanent link">&para;</a></h3>
+<p>Every diff payload Stagecoach builds — the staged diff, the multi-commit working-tree snapshot, and the per-concept tree-to-tree diff — goes through the same capture pipeline before it reaches the agent. Five transforms run, in order, in every path, alongside the binary/exclusion filtering described below:</p>
+<ol>
+<li>
+<p><strong>Compact change skeleton.</strong> A <code>git diff --numstat</code> summary is prepended to every payload, under a <code>Change summary (numstat: …)</code> header — one <code>added → deleted → path</code> line per changed file (binary files show as <code>- - &lt;path&gt;</code>). This is the completeness floor: the agent always sees the full shape of the change — every file, its add/delete magnitude, and its kind — even when individual bodies are truncated later. A file whose body is fully truncated still appears in the skeleton, so truncation never silently drops a file from view.</p>
+</li>
+<li>
+<p><strong>Deterministic rename detection.</strong> Every <code>git diff</code> passes <code>-M</code>, so a rename (or a near-rename above the similarity threshold) is emitted compactly — a <code>rename from</code> / <code>rename to</code> pair plus any residual edit — instead of as a delete + add that duplicates the full file content. This is deterministic regardless of your <code>diff.renames</code> config or git version. (Copy detection <code>-C</code> is intentionally not enabled — it is expensive and adds little for message generation.)</p>
+</li>
+<li>
+<p><strong>Reduced diff context.</strong> Diffs are captured with <code>-U1</code> by default — one anchor line per hunk — instead of git's <code>-U3</code> default, since unchanged surrounding lines are noise for message generation. Tune it with <code>diff_context</code>: <code>0</code> = changed lines only (maximal savings), <code>1</code> = one anchor line (the default), <code>3</code> = git's default.</p>
+</li>
+<li>
+<p><strong>Index-line stripping.</strong> The <code>index &lt;oid&gt;..&lt;oid&gt; &lt;mode&gt;</code> line is stripped from each file diff — the blob OIDs are useless to the model and cost roughly 30 bytes per file. The <code>diff --git</code>, <code>---</code>, <code>+++</code>, and <code>@@</code> lines are retained (they carry file identity and hunk location).</p>
+</li>
+<li>
+<p><strong>Size budget (/).</strong> Two mutually-exclusive modes govern how large the payload is:</p>
+</li>
+<li><strong>Legacy caps (the default).</strong> With <code>token_limit</code> unset (<code>0</code>), the markdown section is capped at <code>max_md_lines</code> per file (default 100) and the non-markdown aggregate at <code>max_diff_bytes</code> (default 300000); over-cap sections are marked <code>... [diff truncated at N bytes]</code> / <code>... [diff truncated at N lines]</code>.</li>
+<li><strong>Holistic token budget.</strong> Set <code>token_limit</code> (for example <code>120000</code>) to cap the <em>whole</em> payload — system prompt + style examples + the concatenated diff — to a token budget. Stagecoach reserves room for the prompt and examples, then allocates the remainder to the diff bodies with a <strong>dynamic water-fill</strong>: it sizes every file's body up front, and if they exceed the budget it finds a single water level <code>L</code> such that every file <em>smaller</em> than <code>L</code> is included whole and untouched, and every file <em>larger</em> than <code>L</code> is truncated to <code>L</code> (with a <code>... [truncated]</code> marker that ends the file's section on its own line, so the next file's <code>diff --git</code> begins fresh). Small files are never penalized for their size; large, substantive files receive the bulk of the budget; no single file can monopolize it; and nothing is wasted. The common case — a commit that fits — is left untouched. A non-zero <code>token_limit</code> <strong>supersedes</strong> both legacy caps for that run (they are mutually exclusive).</li>
+</ol>
+<p>See <a href="../configuration/#built-in-defaults">configuration.md</a> for the <code>token_limit</code>, <code>diff_context</code>, <code>max_diff_bytes</code>, and <code>max_md_lines</code> knobs.</p>
+<h3 id="binary-and-non-text-file-filtering">Binary and non-text file filtering<a class="headerlink" href="#binary-and-non-text-file-filtering" title="Permanent link">&para;</a></h3>
+<p>Binary files, lock files, snapshots, sourcemaps, and vendor directories are <strong>excluded from every diff payload</strong> — staged diff, working-tree snapshot, and concept diff. They are replaced with a <code>&lt;status&gt;\t[binary] &lt;path&gt;</code> placeholder so the agent sees <em>that</em> the file changed without the useless binary hunk. This applies identically in the single-commit and multi-commit paths.</p>
+<h3 id="payload-exclusions-stagecoachignore">Payload exclusions (.stagecoachignore)<a class="headerlink" href="#payload-exclusions-stagecoachignore" title="Permanent link">&para;</a></h3>
+<p>Exclusion patterns from <code>.stagecoachignore</code>, the <code>[generation] exclude</code> config key, or the <code>--exclude</code>/<code>-x</code> CLI flag hide a file's <strong>diff body</strong> from every payload while still committing the file exactly as it stands. Excluded files emit a <code>&lt;status&gt;\t[excluded] &lt;path&gt;</code> placeholder (same shape as the <code>[binary]</code> placeholder, distinguishable by tag) so the agent sees <em>that</em> the file changed without its contents.</p>
+<p><strong>Payload-only guarantee:</strong> Exclusion is payload-only — it never alters staging or commit content. The excluded file is committed exactly as staged, and <code>git diff-tree</code> of the resulting commit includes it. Only what the agent <em>sees</em> is affected.</p>
+<p>The built-in noise denylist (lock files, snapshots, sourcemaps, vendor directories) always applies alongside any user exclusions — the two sets are unioned, never replaced. See <a href="../configuration/">configuration.md</a> for <code>.stagecoachignore</code> syntax.</p>
+<h2 id="safety-and-the-rescue-protocol">Safety and the rescue protocol<a class="headerlink" href="#safety-and-the-rescue-protocol" title="Permanent link">&para;</a></h2>
+<h3 id="per-repo-run-lock">Per-repo run lock<a class="headerlink" href="#per-repo-run-lock" title="Permanent link">&para;</a></h3>
+<p>Stagecoach uses a <strong>two-stage defense</strong> against concurrent runs on the same repo:</p>
+<ol>
+<li><strong>Per-repo run lock</strong> (advisory <code>flock(LOCK_EX|LOCK_NB)</code>) — prevents the common local double-run (two terminals in the same repo). The lock is held on a file descriptor and <strong>auto-releases on process death</strong> (SIGKILL, crash, power loss) — the LOCK never goes stale. Orphaned lock FILES (left by exits that bypass the deferred cleanup) are reaped by pid-liveness on the next Acquire, and the signal path releases the file before exiting.</li>
+<li>** CAS** (<code>git update-ref HEAD</code> compare-and-swap) — the second, never-clobber-HEAD guarantee. Even if the lock somehow fails (shared/network FS, cross-host), the CAS ensures only one commit lands per run.</li>
+</ol>
+<p><strong>Per-host limit.</strong> The lock is a per-process advisory flock — it works on a single host. Cross-host contention (shared NFS, etc.) is the CAS's job.</p>
+<p><strong>Never-in-repo location.</strong> The lock file lives in a per-user runtime/cache directory (resolved via <code>XDG_RUNTIME_DIR</code> → <code>XDG_CACHE_HOME</code> → <code>~/.cache/stagecoach/locks</code>), keyed by a sha256 hash of the repo's canonical absolute path. It is <strong>never inside the repo</strong> — an in-repo lock would pollute <code>git status</code>, be committable, be ambiguous across worktrees, and be lost on clone.</p>
+<p><strong>No-op fast path.</strong> On the single-commit path (changes staged), the holder publishes its frozen index-tree SHA via <code>SetSnapshot</code>, and a contender whose staged snapshot is byte-identical to it exits 0 immediately. On the decompose path (nothing staged, dirty working tree), an accidental double-run exits <strong>5 (Busy)</strong> instead — the holder publishes a working-tree snapshot (<code>T_start</code>) that a lock-free contender cannot reproduce from the index, so it conservatively refuses.</p>
+<p><strong>Auto-release + file reaping.</strong> The lock uses POSIX <code>flock</code> — it releases when the file descriptor or process closes, so the LOCK is never stale. The lock FILE, however, is orphaned by exits that bypass the deferred cleanup (SIGKILL, crash, signal-rescue <code>os.Exit</code>); on the next Acquire, stagecoach reaps every <code>*.lock</code> whose recorded pid is dead (<code>kill(pid,0)</code>→<code>ESRCH</code>), and the signal path releases the file before exiting. On Windows, <code>flock</code> is a no-op stub, reaping is a no-op too, and the CAS is the guarantee there.</p>
+<p><strong>Orphaned-but-alive — the launcher-closed case (–K7).</strong> The two states above (dead holder, file reaped; live holder, never touched) miss a third that arises from stagecoach's primary launch path: a parent process — the lazygit TUI, an IDE, a detaching terminal — that <strong>closes without killing its child</strong>. The child is reparented to init (or a subreaper) and <strong>keeps running</strong>: it still holds the <code>flock</code>, its pid is still alive (so stale-file reaping never fires), and it is generating a commit nobody will see. Because the signal handler catches only delivered signals and the orphaning parent delivers none of them, the run never reaches the exit path — the lock file outlives the launcher until the orphan finishes (or forever, if its provider subprocess is wedged by the vanished terminal). This is the "the lock stays forever" report.</p>
+<p>The remedy is <strong>self-termination, never contender-side force-breaking</strong>: on startup stagecoach records its parent pid and arms a parent-death watchdog that, on parent death, routes the process through the same rescue + lock-release exit path the signal handler uses — abandoning the in-flight commit is always safe (HEAD moves only at the final <code>update-ref</code>; the snapshot is a gc'able orphan whose SHA the rescue recipe prints). Detection is by <strong>parent-pid change</strong> (reparenting), not the brittle <code>getppid==1</code> test — subreaper-safe; Linux uses <code>prctl(PR_SET_PDEATHSIG)</code> as a best-effort fast path plus a ~1s <code>getppid</code> poll, Darwin/other Unix poll only. The watchdog is <strong>Unix-only</strong>; on Windows <code>flock</code> is already a no-op and the CAS is the guarantee.</p>
+<p><code>SIGHUP</code> joins the caught signals <code>{SIGINT, SIGTERM, SIGHUP}</code> (Unix): when the controlling terminal closes and the kernel hangs up the process group, stagecoach routes it through the rescue path (clean exit + lock-file removal) instead of Go's default disposition (terminate, skipping the deferred release and leaving the file for the next run's reaper). <code>SIGHUP</code> covers the terminal-hangup case where the signal <em>is</em> delivered; the parent-death watchdog covers the detach/orphan case where it is <em>not</em>. (Windows omits <code>SIGHUP</code>.)</p>
+<p><code>stagecoach lock status</code> prints the holder's path/pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). It is <strong>read-only</strong>: it acquires no <code>flock</code> and never breaks/removes a lock; the <strong>user</strong> decides whether to <code>kill &lt;pid&gt;</code> or <code>rm &lt;path&gt;</code>. It never auto-breaks.</p>
+<p>The opt-out <code>no_parent_watchdog</code> (; default <strong>off</strong> — the watchdog runs by default) disables the parent-death watchdog for intentional-detach workflows (<code>nohup</code>/<code>setsid</code>/<code>systemd-run</code>, a service manager) that would otherwise trip it the moment the short-lived launcher exits. <code>SIGHUP</code> handling and <code>lock status</code> are independent of this flag and always on. 's "never force-break" guarantee is preserved unchanged: the guarantee is that <em>another</em> process never breaks a live lock, and the watchdog is the <em>same</em> process abandoning its own unwanted work.</p>
+<p>See <a href="../cli/#lock-status">CLI reference — lock status</a> and <a href="../configuration/#environment-variables">Configuration — environment variables</a> (the opt-out keys).</p>
+<h3 id="safety-invariant">Safety invariant<a class="headerlink" href="#safety-invariant" title="Permanent link">&para;</a></h3>
+<p>No provider mutates the repository. Every built-in manifest constrains the agent to a read-only mode — either via explicit tool-disable flags (pi, claude) or read-only constraint flags (codex, cursor, agy; opencode's <code>run</code> is read-only by design). The agent receives the diff via stdin/argv and writes the commit message to stdout — it never runs <code>git add</code>, <code>git commit</code>, or any write command. Every provider also renders chrome-less — skills, extensions, context files, and MCP servers are disabled wherever the agent CLI exposes a switch for them (pi and claude today); surfaces a provider cannot switch off are documented as tracked limitations rather than hidden assumptions. The commit-generation path (–) makes no network calls itself; the single named exception is <code>stagecoach upgrade</code>, which fetches only this project's own GitHub release artifacts and checksums — never provider credentials, never a diff, never repo data. See <a href="../providers/#tools-disable-asymmetry">providers.md</a> for the per-provider chrome-disable details.</p>
+<h3 id="failure-modes-and-exit-codes">Failure modes and exit codes<a class="headerlink" href="#failure-modes-and-exit-codes" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Exit code</th>
+<th>Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent missing on <code>$PATH</code></td>
+<td>1 (Error)</td>
+<td>Check the <code>[provider.&lt;name&gt;] command</code> path; install the agent</td>
+</tr>
+<tr>
+<td>Unresolved merge conflicts in the index</td>
+<td>1 (Error)</td>
+<td>Resolve the conflicts, then re-run <code>stagecoach</code> (caught before the snapshot)</td>
+</tr>
+<tr>
+<td>Generation failed (parse/retry exhaustion)</td>
+<td>3 (Rescue)</td>
+<td>Rescue message with tree SHA</td>
+</tr>
+<tr>
+<td>Generation timed out</td>
+<td>124 (Timeout)</td>
+<td>Rescue message with tree SHA</td>
+</tr>
+<tr>
+<td>CAS failure (HEAD moved meanwhile)</td>
+<td>1 (Error)</td>
+<td>HEAD-moved message</td>
+</tr>
+<tr>
+<td>Nothing to commit (clean tree)</td>
+<td>2 (NothingToCommit)</td>
+<td>Stage files and retry</td>
+</tr>
+<tr>
+<td>Another stagecoach run holds the per-repo lock</td>
+<td>5 (Busy)</td>
+<td>Wait for the in-progress run to finish, then re-run (see <a href="#per-repo-run-lock-fr52">Per-repo run lock</a>)</td>
+</tr>
+<tr>
+<td>General error</td>
+<td>1 (Error)</td>
+<td>Inspect error message</td>
+</tr>
+</tbody>
+</table>
+<p>The rescue (3) and timeout (124) rows are the real-commit path; under <code>--dry-run</code>, a generation failure reports exit 1 instead — see <a href="#rescue-protocol">Rescue protocol</a>.</p>
+<p>See <a href="../cli/#exit-codes">cli.md</a> for the full exit-code table.</p>
+<h3 id="rescue-protocol">Rescue protocol<a class="headerlink" href="#rescue-protocol" title="Permanent link">&para;</a></h3>
+<p>When generation fails after the snapshot is taken on a real commit (exit 3 or 124), Stagecoach prints a recovery block to stderr with the frozen tree SHA and the exact <code>git commit-tree</code> command to commit manually:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>❌ Commit generation failed.
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>------------------------------------------------------------
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>Your staged files were safely snapshotted before generation.
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Tree ID: &lt;TREE_SHA&gt;
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>To commit the originally staged files manually:
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  git commit-tree -p &lt;PARENT_SHA&gt; -m &quot;Your message&quot; &lt;TREE_SHA&gt; | xargs git update-ref HEAD
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>(omit &quot;-p &lt;PARENT_SHA&gt;&quot; if this is the repository&#39;s first commit)
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>------------------------------------------------------------
+</span></code></pre></div>
+<p>If a candidate commit message was produced but rejected (duplicate subject or parse failure), it is appended to the rescue block so the user can paste it into the manual command.</p>
+<p>Under <code>--dry-run</code>, the full pipeline still runs and the snapshot is still taken, but a generation failure (timeout or parse/duplicate-check exhaustion) exits <strong>1</strong> with a short stderr message and omits this recovery recipe — no commit was ever intended. The recipe and exit codes 3/124 apply to a real <code>stagecoach</code> commit.</p>
+<h2 id="prompt-engineering">Prompt engineering<a class="headerlink" href="#prompt-engineering" title="Permanent link">&para;</a></h2>
+<h3 id="system-prompt-mature-repos">System prompt (mature repos)<a class="headerlink" href="#system-prompt-mature-repos" title="Permanent link">&para;</a></h3>
+<p>For repos with more than one commit, Stagecoach builds a system prompt from the last 20 commit messages:</p>
+<ul>
+<li><strong>Style learning</strong> — the agent sees recent messages as examples of the project's conventions.</li>
+<li><strong>Anti-reuse</strong> — a prohibition against copying the wording of any recent commit. Combined with a separate 50-subject dedupe check, this ensures every generated subject is unique.</li>
+<li><strong>Subject length</strong> — the target is ~50 characters (configurable via <code>subject_target_chars</code>).</li>
+<li><strong>Multi-line rule</strong> — if recent commits use multi-line messages, the agent is instructed to follow the same convention.</li>
+</ul>
+<h3 id="system-prompt-new-repos">System prompt (new repos)<a class="headerlink" href="#system-prompt-new-repos" title="Permanent link">&para;</a></h3>
+<p>For repos with zero or one commit (including unborn repos), Stagecoach falls back to a <strong>conventional-commit</strong> system prompt: "Use Conventional Commits format (type: description)."</p>
+<h3 id="format-modes-and-locale">Format modes and locale<a class="headerlink" href="#format-modes-and-locale" title="Permanent link">&para;</a></h3>
+<p><code>--format</code> (default <code>auto</code>) controls how the system prompt shapes the commit message, and applies everywhere a message is produced: the message role, the planner's single-commit shortcut, and the arbiter's leftover-commit message.</p>
+<ul>
+<li><strong><code>auto</code></strong> — the default described above: learn style from recent commit history.</li>
+<li><strong><code>conventional</code></strong> — replaces the learned-style examples with an explicit <code>type(scope): description</code> contract (<code>feat</code>, <code>fix</code>, <code>docs</code>, <code>style</code>, <code>refactor</code>, <code>perf</code>, <code>test</code>, <code>build</code>, <code>ci</code>, <code>chore</code>, <code>revert</code>).</li>
+<li><strong><code>gitmoji</code></strong> — replaces the examples with an instruction to begin the subject with one <a href="https://gitmoji.dev">gitmoji</a> emoji, followed by the compiled-in emoji reference table (no network fetch).</li>
+<li><strong><code>plain</code></strong> — replaces the examples with nothing: no learned style, no format contract, just the essence of the change.</li>
+</ul>
+<p>For any mode other than <code>auto</code>, the recent-commit history examples are omitted entirely — useful for repos with an idiosyncratic or empty history. The multi-line rule and subject-length target still apply in every mode.</p>
+<p><strong>Body forcing (<code>+body</code>).</strong> Append <code>+body</code> to any format — <code>auto+body</code>, <code>conventional+body</code>, <code>gitmoji+body</code>, <code>plain+body</code> — to replace the multi-line rule with an unconditional directive: always follow the subject with a wrapped (~72-column) body explaining what the change does and why. Use this when you want explanatory bodies even on a repo whose history is single-line. The subject contract (<code>conventional</code> / <code>gitmoji</code> / <code>plain</code>) is unchanged by the suffix; <code>auto+body</code> keeps the learned subject style and forces only the body.</p>
+<p><code>--locale</code> (e.g. <code>--locale French</code>, <code>--locale ja</code>) appends one line — "Write the commit message in <code>&lt;locale&gt;</code>." — to the system prompt in every format mode. The value is passed through as-is with no translation or validation.</p>
+<h3 id="user-payload">User payload<a class="headerlink" href="#user-payload" title="Permanent link">&para;</a></h3>
+<p>The user payload combines the staged diff with the rejection list (previously rejected subjects). On a parse-failure retry, the retry instruction ("Output ONLY the commit message. No preamble, no markdown, no quotes.") is prepended as a corrective preamble.</p>
+<h3 id="why-raw-output-not-json">Why raw output, not JSON<a class="headerlink" href="#why-raw-output-not-json" title="Permanent link">&para;</a></h3>
+<p>Stagecoach requests raw text output from agents (<code>output = "raw"</code>) rather than structured JSON. Reasons:</p>
+<ul>
+<li>Agents that produce raw text are easier to invoke — no need to negotiate a JSON schema.</li>
+<li>A raw contract is more robust across different agent versions and providers.</li>
+<li>The parser handles code-fence stripping and newline normalization, which covers the common raw-output quirks.</li>
+<li>JSON mode is available as a fallback for agents that only produce structured output.</li>
+</ul>
+<h2 id="multi-turn-generation-fallback">Multi-turn generation fallback<a class="headerlink" href="#multi-turn-generation-fallback" title="Permanent link">&para;</a></h2>
+<p>For diffs too large for a single reliable request, stagecoach has an optional <strong>multi-turn</strong> generation
+path. It exists because a provider's <em>per-request</em> reliability ceiling can lie well below its
+advertised context window: a huge one-shot request may return empty or unparseable output even though the
+model can handle the same content delivered in smaller pieces. Multi-turn runs on
+every generation path — the snapshot commit flow, <code>--dry-run</code>, and hook mode (where
+it composes with the never-block contract; see
+<a href="#hook-mode-vs-the-snapshot-based-flow">Hook mode</a> below).</p>
+<p><strong>When it triggers.</strong> Multi-turn runs ONLY when all four hold: (1) the normal one-shot path exhausted its
+retries on empty/unparseable output; (2) the captured payload exceeds one chunk (<code>multi_turn_chunk_tokens</code>,
+default 32000); (3) <code>multi_turn_fallback</code> is enabled (default <code>true</code>); and (4) the resolved provider
+declares <code>session_mode = "append"</code> (the <strong>pi</strong> provider does; others ship <code>""</code> until verified). If any
+condition fails, the run proceeds to the normal rescue protocol unchanged — multi-turn is strictly an
+extra attempt, never a worse outcome.</p>
+<p><strong>Lossless, not summarized.</strong> Multi-turn is deliberately <em>not</em> the lossy "chunk-summarize-combine" pattern.
+The full captured diff is re-delivered across N+1 session turns in request-sized pieces — the model sees
+the entire diff in its session history — then writes one message at the end:</p>
+<ul>
+<li><strong>Turn 1:</strong> the normal system prompt + a priming preamble + the first chunk.</li>
+<li><strong>Turns 2..N:</strong> each remaining chunk, prefixed <code>PART i/N:</code>. Boundaries anchor to newlines so no diff line
+  is fractured.</li>
+<li><strong>Turn N+1:</strong> "Now write the commit message for the diff above." This turn's output runs through the
+  normal parse + duplicate-rejection pipeline, then commits like any other message.</li>
+</ul>
+<p>Each turn is a separate provider invocation bounded by the <strong>message role's</strong> resolved timeout (/); total wall-clock ≈ <code>message-timeout × (N+1)</code>,
+surfaced on the progress line at fallback time. That progress line also reports the per-chunk token budget each chunk targets; with <code>--verbose</code>, each turn additionally prints its payload size and raw agent output.</p>
+<p><strong>Failure handling.</strong> If any turn errors, times out, or the final output fails to parse/dedupe, the
+multi-turn attempt aborts and control passes to the standard rescue protocol — the snapshot is safe and
+the run is no worse off than a one-shot failure.</p>
+<p><strong><code>token_limit</code> does not apply.</strong> <code>token_limit</code> governs only the one-shot path (it truncates the
+payload to fit one request). Multi-turn deliberately ignores it: the whole point is lossless delivery of a
+large payload. So when <code>token_limit</code> is set, the multi-turn path re-captures the diff with <code>token_limit</code>
+disabled and delivers the <strong>untruncated</strong> diff across the N+1 turns — the chunking itself never consults
+<code>token_limit</code>. (The re-capture is skipped when <code>token_limit</code> is unset, since the one-shot payload is
+already untruncated in that case.)</p>
+<h2 id="work-description-mode-description-first-read-on-demand">Work-description mode (description-first, read-on-demand)<a class="headerlink" href="#work-description-mode-description-first-read-on-demand" title="Permanent link">&para;</a></h2>
+<p>When you already have a description of the work (e.g. a task system that breaks work into named units and
+commits each one), the default diff-first path makes the model reverse-engineer intent you already wrote.
+<strong>Work-description mode</strong> inverts that: you supply the description, stagecoach leads the prompt with it
+plus the file-change skeleton (the list of changed files), and the model pulls specific file diffs on
+demand by writing <code>READ &lt;path&gt;</code> on its own line. It needs no tool-calling support and runs in
+bare mode on every provider, because the only action is reading a staged file's diff.</p>
+<p>Activate it with <code>--work-description "..."</code> (or <code>--work-description-file &lt;path&gt;</code>, which wins when both
+are set; env <code>STAGECOACH_WORK_DESCRIPTION</code>). Message role only; never the default. Directing guidance
+("phrase it this way") still uses <code>--context</code> — the two inputs are distinct: <code>--work-description</code> is the
+<em>what</em>, <code>--context</code> is the <em>how</em>.</p>
+<p>The read/answer exchange accumulates in one provider session via <code>session_mode = "append"</code> (the same
+machinery multi-turn uses), so provider support is identical (pi ships <code>"append"</code>; others ship
+<code>""</code> until verified). The model has at most <code>work_desc_read_rounds</code> rounds (default 5) of READ requests;
+after that, stagecoach refuses further reads and demands the commit message (guarantees
+termination). A response with no <code>READ</code> line is the commit message, parsed through the normal
+parse + duplicate-rejection pipeline (so <code>--format</code>, <code>--locale</code>, <code>--template</code>, <code>--edit</code> all apply).</p>
+<p><strong>Read/answer protocol.</strong> A <code>READ &lt;path&gt;</code> whose path is <em>staged</em> returns that file's diff. A path that
+is <em>not</em> staged (or isn't recognized) is answered with a short note — "<code>&lt;path&gt;</code> is not in the staged
+changes." — and the read loop continues; the line is never treated as the commit message (a response
+with no <code>READ</code> line is the message, as above). Large diffs are returned in chunks: when a diff exceeds
+the per-call cap (≈16K tokens, internal), each chunk is labeled
+"<code>&lt;path&gt;</code> — part 1 of 3; <code>READ &lt;path&gt;</code> again for the next part," and re-reading the same path advances
+a per-file, session-scoped cursor — the model manages no cursor, no offsets, no line numbers itself.
+Chunk edges hug <code>@@</code> hunk edges so a single change is never split mid-hunk; a single hunk larger than
+the cap falls back to a line cut. Once the final chunk has been read, a further <code>READ</code> of that path
+returns "<code>&lt;path&gt;</code> — end of diff (all parts shown)." rather than an empty body.</p>
+<p>If nothing is staged when <code>--work-description</code> is present, stagecoach auto-stages all (even with
+<code>auto_stage_all</code> disabled), mirroring the default action's empty-tree behavior. The mode composes with
+<code>--dry-run</code>, hooks, and the snapshot/CAS/rescue core. It does <strong>not</strong> cascade into multi-turn fallback —
+a user who wants that degradation runs without <code>--work-description</code>.</p>
+<h2 id="commit-hooks-on-the-plumbing-path">Commit hooks on the plumbing path<a class="headerlink" href="#commit-hooks-on-the-plumbing-path" title="Permanent link">&para;</a></h2>
+<p>As of v2.4, the snapshot-based flow runs your repository's standard commit hooks itself — you no longer
+need hook mode just to get <code>pre-commit</code>, <code>commit-msg</code>, or <code>post-commit</code> to fire on a <code>stagecoach</code>
+commit. Hooks run in git's documented order around every commit produced by the plumbing path:
+<code>pre-commit</code> → <code>prepare-commit-msg</code> → <code>commit-msg</code> before the commit object is created, and <code>post-commit</code>
+after it is published.</p>
+<p>The snapshot freeze still holds: <code>pre-commit</code> runs against a throwaway index primed from the frozen
+<code>write-tree</code> snapshot, never the live index — so files you stage <em>while</em> the hook runs are never swept
+into the in-flight commit (the core stage-while-generating guarantee). A <code>pre-commit</code> may modify paths
+already in the snapshot (a formatter re-staging its output) and stagecoach includes those fixes, exactly
+like <code>git commit</code>; a <code>pre-commit</code> that stages a brand-new path aborts the run (it would sweep in
+concurrent work). After the commit lands, stagecoach <strong>reconciles the live index</strong> for exactly those
+mutated snapshot paths to the committed tree, so <code>git status</code> is clean and the index holds the
+formatter's output (not the pre-hook blob) — matching <code>git commit</code>. The reconcile is surgical: it
+updates only the paths the hook changed, so any files you staged <em>while</em> generating stay staged
+(the stage-while-generating guarantee holds).</p>
+<p><code>--no-verify</code> mirrors <code>git commit --no-verify</code>: it skips <code>pre-commit</code> and <code>commit-msg</code> only
+(<code>prepare-commit-msg</code> and <code>post-commit</code> still run). A hook that exits non-zero or times out aborts the
+run as a <strong>rescue</strong> (exit code 3) — no commit is created, HEAD and the index are byte-for-byte
+unchanged, and the rescue recipe is printed. A <code>prepare-commit-msg</code> or <code>commit-msg</code> hook that empties
+the message file (a rejection or force-re-edit pattern) aborts with <strong>exit 1</strong> and no commit created —
+mirroring <code>git commit</code>'s "Aborting commit due to empty commit message." and the <code>--edit</code> path's
+empty-result abort (exit 1, not a rescue). HEAD and the index are untouched at that point (no
+<code>update-ref</code> has run). <code>post-commit</code> is best-effort: its exit code is logged as a
+warning but cannot undo an already-landed commit (git itself disregards it).</p>
+<p>See (–V8) for the full specification, and <a href="#hook-mode-vs-the-snapshot-based-flow">Hook mode vs the snapshot-based flow</a> below for how the two modes compose.</p>
+<h2 id="hook-mode-vs-the-snapshot-based-flow">Hook mode vs the snapshot-based flow<a class="headerlink" href="#hook-mode-vs-the-snapshot-based-flow" title="Permanent link">&para;</a></h2>
+<h3 id="trade-off-inversion">Trade-off inversion<a class="headerlink" href="#trade-off-inversion" title="Permanent link">&para;</a></h3>
+<p>Stagecoach offers two ways to generate commit messages, each with different trade-offs:</p>
+<p><strong>Snapshot-based flow</strong> (the default <code>stagecoach</code> command):</p>
+<ul>
+<li><strong>Atomic</strong>: uses <code>git write-tree</code> to freeze the index, then <code>git commit-tree</code> + <code>git update-ref</code> to publish — the repo is byte-for-byte unchanged on failure (no orphan commits, no partial state).</li>
+<li><strong>Honors pre-commit hooks</strong>: the repository's pre-commit → prepare-commit-msg → commit-msg → post-commit hooks run around every stagecoach commit, scoped to the frozen snapshot (so the stage-while-generating freeze holds). <code>--no-verify</code> skips pre-commit + commit-msg (mirrors <code>git commit --no-verify</code>). See <a href="#commit-hooks-on-the-plumbing-path">Commit hooks on the plumbing path</a>.</li>
+<li><strong>Stage-while-generating</strong>: the snapshot decouples staged content from generation time, so you can keep staging while the message generates.</li>
+<li><strong>Rescue protocol</strong>: if generation fails after the snapshot, the frozen tree SHA is printed so you can commit manually.</li>
+</ul>
+<p><strong>Hook mode</strong> (<code>stagecoach hook install</code> + <code>git commit</code>):</p>
+<ul>
+<li><strong>The bridge for plain <code>git commit</code></strong>: hook mode covers the case where you commit via <code>git commit</code> from an IDE or another tool instead of invoking <code>stagecoach</code>. Hooks run there too (real <code>git commit</code>), but there is no snapshot, no atomicity guarantee, and no stage-while-generating — generation latency happens inside the commit.</li>
+<li><strong>No snapshot guarantees</strong>: the index is live during generation — if you stage more files while the hook runs, they may affect the commit. Generation latency is inside the commit flow (no overlap).</li>
+<li><strong>Never-block contract</strong>: any failure leaves the message file untouched and exits 0, so the commit proceeds to an empty editor — the commit is never aborted by a model hiccup (unless <code>--strict</code> opts in).</li>
+<li><strong>No rescue protocol</strong>: there is no frozen tree to recover — the commit simply proceeds without an AI message.</li>
+</ul>
+<p><strong>Multi-turn fallback in hook mode.</strong> The <a href="#multi-turn-generation-fallback">multi-turn fallback</a> is available in hook mode too: on a large diff with an append-mode provider, the hook tries it as one extra attempt before the never-block exit. On success the generated message is written to the commit-message file; on any failure — a turn error, an empty final parse, or a duplicate subject — the hook still exits 0 with the message file untouched (preserved).</p>
+<h3 id="when-to-use-which">When to use which<a class="headerlink" href="#when-to-use-which" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Use <strong><code>stagecoach</code> directly</strong> (the snapshot flow) for day-to-day commits: it's atomic, stage-while-generating, and — as of v2.4 — honors your repository's hooks (<code>--no-verify</code> for a one-off skip).</li>
+<li>Install <strong>hook mode</strong> only if you commit via plain <code>git commit</code> from an IDE or lazygit instead of invoking <code>stagecoach</code> — it fills the message without blocking, with hooks honored but no snapshot guarantees.</li>
+<li>The two <strong>compose</strong>: <a href="#commit-hooks-on-the-plumbing-path">Commit hooks on the plumbing path</a> covers <code>stagecoach</code> commits; hook mode covers <code>git commit</code> commits.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "navigation.tracking", "toc.follow", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

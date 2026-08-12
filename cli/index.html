@@ -1,0 +1,2240 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Stagecoach writes your commit messages using the AI agent you already pay for. No API key, no per-token billing — it shells out to your installed CLI agent and spends your existing coding-plan quota.">
+      
+      
+      
+        <link rel="canonical" href="https://dabstractor.github.io/stagecoach/cli/">
+      
+      
+        <link rel="prev" href="../overview/">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>CLI reference - Stagecoach</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cli-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Stagecoach" class="md-header__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Stagecoach
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CLI reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Stagecoach" class="md-nav__button md-logo" aria-label="Stagecoach" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    Stagecoach
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dabstractor/stagecoach" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dabstractor/stagecoach
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#synopsis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global flags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subcommands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subcommands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subcommands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hook-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-uninstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook uninstall
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook exec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providers-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        providers list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providers-show-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        providers show &lt;name&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config upgrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-install-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate install &lt;target&gt;…
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-remove-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate remove &lt;target&gt;…
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="integrate remove &lt;target&gt;…">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#git-alias-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        git-alias target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-mangle-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No-mangle protocol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazygit-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lazygit target
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#models-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        models [&lt;provider&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lock status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flag-env-git-config-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flag ↔ env ↔ git-config map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#synopsis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global flags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subcommands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subcommands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subcommands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hook-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-uninstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook uninstall
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hook-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hook exec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providers-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        providers list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providers-show-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        providers show &lt;name&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config upgrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-install-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate install &lt;target&gt;…
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrate-remove-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        integrate remove &lt;target&gt;…
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="integrate remove &lt;target&gt;…">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#git-alias-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        git-alias target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-mangle-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No-mangle protocol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazygit-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lazygit target
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#models-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        models [&lt;provider&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lock status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flag-env-git-config-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flag ↔ env ↔ git-config map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="cli-reference">CLI reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
+<p>Full reference for the <code>stagecoach</code> command, its flags, subcommands, exit codes, and examples. Matches the shipped binary (<code>stagecoach --help</code>) and the Go source in <code>internal/cmd/</code>.</p>
+<h2 id="synopsis">Synopsis<a class="headerlink" href="#synopsis" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>stagecoach [flags]
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>stagecoach &lt;command&gt; [flags]
+</span></code></pre></div>
+<p>With no subcommand, <code>stagecoach</code> runs the <strong>default action</strong>. The routing depends on repo state:</p>
+<ul>
+<li><strong>Something staged</strong> → single-commit path (snapshot the staged diff, generate, commit).</li>
+<li><strong>Nothing staged, dirty tree, auto-stage on (default), not opted out</strong> → <strong>multi-commit decomposition</strong> (planner → stager → message → arbiter pipeline; see <a href="../how-it-works/#multi-commit-decomposition">how-it-works.md</a>).</li>
+<li><strong>Nothing staged, clean tree</strong> → exit 2 "Nothing to commit."</li>
+<li><code>--single</code> / <code>--no-decompose</code> / <code>--commits 1</code> → force the single-commit path.</li>
+<li><code>--dry-run</code> → force the single-commit preview (decompose commits, so dry-run honors the single preview).</li>
+</ul>
+<h2 id="global-flags">Global flags<a class="headerlink" href="#global-flags" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Env var</th>
+<th>Git config</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--provider &lt;name&gt;</code></td>
+<td>string</td>
+<td>"" (auto-detect)</td>
+<td><code>STAGECOACH_PROVIDER</code></td>
+<td><code>stagecoach.provider</code></td>
+<td>Provider/agent to use</td>
+</tr>
+<tr>
+<td><code>--model &lt;name&gt;</code></td>
+<td>string</td>
+<td>"" (manifest default)</td>
+<td><code>STAGECOACH_MODEL</code></td>
+<td><code>stagecoach.model</code></td>
+<td>Model override. Sets the GLOBAL default — a <code>[role.&lt;role&gt;]</code> model in config (or a <code>--&lt;role&gt;-model</code> flag) takes precedence for that role, so a populated config can silently shadow <code>--model</code>; use <code>--message-model</code> to override the message role, or run with <code>--verbose</code> to see a note when <code>--model</code>/<code>--provider</code> is shadowed</td>
+</tr>
+<tr>
+<td><code>--config &lt;path&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_CONFIG</code></td>
+<td>—</td>
+<td>Path to a config file, overrides discovery. A path pointing at a <strong>missing</strong> file fails fast with exit 1 (like a malformed or directory path), rather than falling back to discovery.</td>
+</tr>
+<tr>
+<td><code>--timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>"120s"</td>
+<td><code>STAGECOACH_TIMEOUT</code></td>
+<td><code>stagecoach.timeout</code></td>
+<td>Generation timeout (e.g. <code>"120s"</code> or <code>120</code>)</td>
+</tr>
+<tr>
+<td><code>--verbose</code>, <code>-v</code></td>
+<td>bool</td>
+<td>false</td>
+<td><code>STAGECOACH_VERBOSE</code></td>
+<td>—</td>
+<td>Print resolved command, raw output, retries (<code>STAGECOACH_VERBOSE</code> accepts <code>true</code>/<code>false</code>/<code>1</code>/<code>0</code>; <code>2</code> is documented but not yet implemented and is rejected with a clear message)</td>
+</tr>
+<tr>
+<td><code>--no-color</code></td>
+<td>bool</td>
+<td>TTY-aware</td>
+<td><code>STAGECOACH_NO_COLOR</code></td>
+<td>—</td>
+<td>Disable color (also honors <code>NO_COLOR</code>)</td>
+</tr>
+<tr>
+<td><code>--all</code>, <code>-a</code></td>
+<td>bool</td>
+<td>false</td>
+<td>—</td>
+<td>—</td>
+<td>Run <code>git add -A</code> before snapshotting, even if something is staged</td>
+</tr>
+<tr>
+<td><code>--no-auto-stage</code></td>
+<td>bool</td>
+<td>false</td>
+<td><code>STAGECOACH_AUTO_STAGE_ALL</code> (inverse)</td>
+<td><code>stagecoach.autoStageAll</code></td>
+<td>If nothing is staged, exit instead of auto-staging (env/git-config use the POSITIVE sense: true=enable, false=disable)</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>bool</td>
+<td>false</td>
+<td>—</td>
+<td>—</td>
+<td>Run the full snapshot→generate→parse→duplicate-check pipeline (same as a real commit, including the write-tree snapshot and retry) and print the message; do not commit. If generation fails (timeout or parse/duplicate-check exhaustion), exits <strong>1</strong> with a short stderr message instead of exit 3/124 + the full recovery recipe (since no commit was ever intended)</td>
+</tr>
+<tr>
+<td><code>--commits &lt;N&gt;</code></td>
+<td>int</td>
+<td>0 (auto)</td>
+<td><code>STAGECOACH_COMMITS</code></td>
+<td>—</td>
+<td>Force exactly N commits when nothing is staged (0 = auto-decompose; ≥2 = force N; 1 ≡ <code>--single</code>)</td>
+</tr>
+<tr>
+<td><code>--single</code></td>
+<td>bool</td>
+<td>false</td>
+<td>—</td>
+<td>—</td>
+<td>Bypass decomposition; force the single-commit auto-stage-all behavior (alias: <code>--no-decompose</code>)</td>
+</tr>
+<tr>
+<td><code>--no-decompose</code></td>
+<td>bool</td>
+<td>false</td>
+<td>—</td>
+<td>—</td>
+<td>Alias for <code>--single</code></td>
+</tr>
+<tr>
+<td><code>--max-commits &lt;N&gt;</code></td>
+<td>int</td>
+<td>12</td>
+<td>—</td>
+<td>—</td>
+<td>Safety cap on auto-decompose commit count (also <code>[generation].max_commits</code> in config)</td>
+</tr>
+<tr>
+<td><code>--exclude &lt;glob&gt;</code>, <code>-x</code></td>
+<td>string (repeatable)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>Exclude matching files from the agent payload (placeholder line instead of the diff; never excluded from the commit itself). Unions with <code>.stagecoachignore</code> and <code>[generation].exclude</code> — repeat the flag to add more than one glob; it does not override the config-file set</td>
+</tr>
+<tr>
+<td><code>--format &lt;mode&gt;</code></td>
+<td>string</td>
+<td><code>auto</code></td>
+<td><code>STAGECOACH_FORMAT</code></td>
+<td><code>stagecoach.format</code></td>
+<td>Message format: <code>&lt;base&gt;[+body]</code> — <code>auto</code> (style learning) | <code>conventional</code> | <code>gitmoji</code> | <code>plain</code>; append <code>+body</code> to force a subject+body. Unknown = hard error (exit 1). Also <code>[generation].format</code>.</td>
+</tr>
+<tr>
+<td><code>--locale &lt;lang&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_LOCALE</code></td>
+<td><code>stagecoach.locale</code></td>
+<td>Write the message in this language (free-form name or BCP-47 tag; never validated). Also <code>[generation].locale</code>.</td>
+</tr>
+<tr>
+<td><code>--template &lt;tpl&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_TEMPLATE</code></td>
+<td><code>stagecoach.template</code></td>
+<td>Wrap every commit message: <code>$msg</code> is replaced with the generated message, e.g. <code>"$msg (#205)"</code>. Must contain the literal <code>$msg</code> (else hard error, exit 1). Applies to every commit in a run. Also <code>[generation].template</code>. Distinct from <code>config init --template</code>.</td>
+</tr>
+<tr>
+<td><code>--context &lt;text&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td>—</td>
+<td>—</td>
+<td>Extra authoritative context appended to the message and planner payloads (e.g. <code>"hotfix for #812"</code>). Flag only — per-invocation; no env var, git-config, or config-file key.</td>
+</tr>
+<tr>
+<td><code>--edit</code></td>
+<td>bool</td>
+<td>false</td>
+<td>—</td>
+<td>—</td>
+<td>Open your editor (<code>$GIT_EDITOR</code> via <code>git var GIT_EDITOR</code>) on the generated message before committing. The EDITMSG file includes the tree SHA + a diff-tree name-status summary; comment lines (<code>#</code>) are stripped on close. An empty result aborts (exit 1, not a rescue). The edited message bypasses the duplicate check (git parity). In decompose mode each commit is gated. Ignored with <code>--dry-run</code>; not valid with <code>hook exec</code>.</td>
+</tr>
+<tr>
+<td><code>--push</code></td>
+<td>bool</td>
+<td>false</td>
+<td><code>STAGECOACH_PUSH</code></td>
+<td><code>stagecoach.push</code></td>
+<td>Run plain <code>git push</code> (no arguments, streaming its output) after a fully-successful run. Never prompts. On push failure the commits stand — git's stderr is shown verbatim (including the no-upstream hint; stagecoach does NOT auto-<code>--set-upstream</code>), "commits created; push failed" prints, and stagecoach exits 1. Skipped on <code>--dry-run</code>, the nothing-to-commit exit, and any rescue/CAS abort. Also <code>[generation].push</code>.</td>
+</tr>
+<tr>
+<td><code>--no-verify</code></td>
+<td>bool</td>
+<td>false</td>
+<td><code>STAGECOACH_NO_VERIFY</code></td>
+<td><code>stagecoach.noVerify</code></td>
+<td>Bypass <code>pre-commit</code> and <code>commit-msg</code> hooks for this commit (mirrors <code>git commit --no-verify</code>; <code>prepare-commit-msg</code> and <code>post-commit</code> still run).,.</td>
+</tr>
+<tr>
+<td><code>--work-description &lt;text&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_WORK_DESCRIPTION</code></td>
+<td>—</td>
+<td>Activate work-description mode: lead the prompt with this description of the work + the file skeleton, and let the model read staged file diffs on demand via <code>READ &lt;path&gt;</code> (message role only; never the default). Flag/env only — per-invocation; no git-config or config-file key.,.</td>
+</tr>
+<tr>
+<td><code>--work-description-file &lt;path&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td>—</td>
+<td>—</td>
+<td>Activate work-description mode with the description read from this file (wins over <code>--work-description</code> when both are set).,.</td>
+</tr>
+<tr>
+<td><code>--planner-provider &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_PLANNER_PROVIDER</code></td>
+<td>—</td>
+<td>Per-role provider override for the decomposition planner</td>
+</tr>
+<tr>
+<td><code>--planner-model &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_PLANNER_MODEL</code></td>
+<td>—</td>
+<td>Per-role model override for the decomposition planner</td>
+</tr>
+<tr>
+<td><code>--stager-provider &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_STAGER_PROVIDER</code></td>
+<td>—</td>
+<td>Per-role provider override for the (tooled) staging agent</td>
+</tr>
+<tr>
+<td><code>--stager-model &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_STAGER_MODEL</code></td>
+<td>—</td>
+<td>Per-role model override for the (tooled) staging agent</td>
+</tr>
+<tr>
+<td><code>--arbiter-provider &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_ARBITER_PROVIDER</code></td>
+<td>—</td>
+<td>Per-role provider override for the leftover arbiter</td>
+</tr>
+<tr>
+<td><code>--arbiter-model &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_ARBITER_MODEL</code></td>
+<td>—</td>
+<td>Per-role model override for the leftover arbiter</td>
+</tr>
+<tr>
+<td><code>--reasoning &lt;level&gt;</code></td>
+<td>string</td>
+<td>"" (off)</td>
+<td><code>STAGECOACH_REASONING</code></td>
+<td><code>stagecoach.reasoning</code></td>
+<td>Global reasoning effort: off|low|medium|high. Provider-dependent: engages for pi (<code>--thinking</code>) and claude (<code>--effort</code>); other providers are a graceful no-op.</td>
+</tr>
+<tr>
+<td><code>--planner-reasoning &lt;level&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_PLANNER_REASONING</code></td>
+<td>—</td>
+<td>Per-role reasoning for the planner</td>
+</tr>
+<tr>
+<td><code>--stager-reasoning &lt;level&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_STAGER_REASONING</code></td>
+<td>—</td>
+<td>Per-role reasoning for the stager</td>
+</tr>
+<tr>
+<td><code>--message-provider &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_MESSAGE_PROVIDER</code></td>
+<td>—</td>
+<td>Per-role provider override for the message composer</td>
+</tr>
+<tr>
+<td><code>--message-model &lt;name&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_MESSAGE_MODEL</code></td>
+<td>—</td>
+<td>Per-role model override for the message composer</td>
+</tr>
+<tr>
+<td><code>--message-reasoning &lt;level&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_MESSAGE_REASONING</code></td>
+<td>—</td>
+<td>Per-role reasoning for the message composer</td>
+</tr>
+<tr>
+<td><code>--arbiter-reasoning &lt;level&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_ARBITER_REASONING</code></td>
+<td>—</td>
+<td>Per-role reasoning for the arbiter</td>
+</tr>
+<tr>
+<td><code>--planner-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_PLANNER_TIMEOUT</code></td>
+<td>—</td>
+<td>Per-role generation timeout for the planner (e.g. <code>"600s"</code> or <code>600</code>)</td>
+</tr>
+<tr>
+<td><code>--stager-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_STAGER_TIMEOUT</code></td>
+<td>—</td>
+<td>Per-role generation timeout for the (tooled) staging agent (e.g. <code>"300s"</code> or <code>300</code>)</td>
+</tr>
+<tr>
+<td><code>--message-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_MESSAGE_TIMEOUT</code></td>
+<td>—</td>
+<td>Per-role generation timeout for the message composer (e.g. <code>"120s"</code> or <code>120</code>)</td>
+</tr>
+<tr>
+<td><code>--arbiter-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_ARBITER_TIMEOUT</code></td>
+<td>—</td>
+<td>Per-role generation timeout for the leftover arbiter (e.g. <code>"120s"</code> or <code>120</code>)</td>
+</tr>
+<tr>
+<td><code>--version</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>Print the build version (<code>"dev"</code> for a local build; the release tag for a released binary)</td>
+</tr>
+<tr>
+<td><code>--help</code>, <code>-h</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>Print help</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>--config</code> flag is a path override for config-file discovery — it is not itself a <code>Config</code> field. An explicit <code>--config</code> (or <code>STAGECOACH_CONFIG</code>) pointing at a missing file errors with <code>config: config file not found: &lt;path&gt;</code> (exit 1) instead of silently falling back to provider auto-detection. Only the discovery default (no <code>--config</code> or <code>STAGECOACH_CONFIG</code>) tolerates a missing global file. The behavioral flags <code>--all</code> and <code>--dry-run</code> have no env-var or git-config analogs. (<code>--no-auto-stage</code> does: it mirrors <code>STAGECOACH_AUTO_STAGE_ALL</code> and <code>stagecoach.autoStageAll</code> in the positive sense — true=enable, false=disable.) <code>--config</code> is honored by every command — including the default commit action <strong>and the <code>config init</code>, <code>config path</code>, and <code>config upgrade</code> subcommands</strong> (e.g. <code>stagecoach --config X config upgrade</code> upgrades file <code>X</code>, and <code>config path</code> prints the resolved path) — so a user-defined provider declared under <code>[provider.&lt;name&gt;]</code> in that file is usable with <code>--provider &lt;name&gt;</code> on <code>stagecoach</code> directly.</p>
+<div class="admonition tip">
+<p class="admonition-title">Important</p>
+<p><strong><code>--model</code> / <code>--provider</code> set the GLOBAL default only (gotcha).</strong> A <code>[role.&lt;role&gt;]</code> <code>model</code>/<code>provider</code> in config (or a <code>--&lt;role&gt;-model</code>/<code>--&lt;role&gt;-provider</code> flag) takes precedence for that role. So a populated config can silently shadow an explicit <code>--model</code>/<code>--provider</code> — e.g. <code>stagecoach --model claude-haiku</code> against a <code>[role.message] model = "…"</code> config uses the config's model for the commit, and the bare <code>--model</code> value is never even validated. Use the per-role flag (e.g. <code>--message-model</code>) to override a specific role, or run with <code>--verbose</code> to see a <code>DEBUG: note: --model shadowed by [role.message].model; use --message-model to override</code> hint (and the <code>--provider</code> analog) when shadowing is active. This is advisory only — precedence and exit codes are unchanged.</p>
+</div>
+<h2 id="subcommands">Subcommands<a class="headerlink" href="#subcommands" title="Permanent link">&para;</a></h2>
+<h3 id="hook-install"><code>hook install</code><a class="headerlink" href="#hook-install" title="Permanent link">&para;</a></h3>
+<p>Install stagecoach's <code>prepare-commit-msg</code> hook in the current repo. Writes an executable (0755) script containing the marker <code># stagecoach prepare-commit-msg hook v1</code> at the repo's hooks directory. Re-running overwrites an existing stagecoach hook (idempotent — reports "Installed" on first run, "Updated" on subsequent).</p>
+<p>The hook script calls <code>stagecoach hook exec "$@"</code> (runtime lands in P1.M3.T2.S1 — not yet shipped).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w">             </span><span class="c1"># write the hook</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w">             </span><span class="c1"># → &quot;Updated stagecoach prepare-commit-msg hook.&quot; (idempotent)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w"> </span>--strict<span class="w">    </span><span class="c1"># bake --strict into the script body</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w"> </span>--print<span class="w">     </span><span class="c1"># print the script to stdout, no disk write (works outside a repo)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--strict</code></td>
+<td>Bake <code>--strict</code> into the hook so generation failures abort the commit (default: never block)</td>
+</tr>
+<tr>
+<td><code>--print</code></td>
+<td>Write the hook script to stdout instead of installing it</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Foreign-hook policy (never-clobber,):</strong> If a <code>prepare-commit-msg</code> already exists WITHOUT stagecoach's marker, <code>install</code> refuses (exit 1) and prints the one-line manual invocation you can add to your existing hook. There is <strong>no <code>--force</code></strong> — this is by design. Stagecoach will never overwrite someone else's hook.</p>
+<h3 id="hook-uninstall"><code>hook uninstall</code><a class="headerlink" href="#hook-uninstall" title="Permanent link">&para;</a></h3>
+<p>Remove stagecoach's <code>prepare-commit-msg</code> hook. Only removes the file when the marker is present. If no hook exists, prints an informational note and exits 0 (idempotent). A foreign hook is refused (exit 1, untouched).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># → &quot;Removed stagecoach prepare-commit-msg hook.&quot;</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># (no hook) → &quot;No stagecoach prepare-commit-msg hook to remove.&quot; (exit 0)</span>
+</span></code></pre></div>
+<h3 id="hook-status"><code>hook status</code><a class="headerlink" href="#hook-status" title="Permanent link">&para;</a></h3>
+<p>Report the current state of the repo's <code>prepare-commit-msg</code> hook. Prints exactly one line:</p>
+<table>
+<thead>
+<tr>
+<th>Output</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>none</code></td>
+<td>No <code>prepare-commit-msg</code> file exists</td>
+</tr>
+<tr>
+<td><code>stagecoach (v1)</code></td>
+<td>A stagecoach-owned hook is installed (marker present)</td>
+</tr>
+<tr>
+<td><code>foreign</code></td>
+<td>A <code>prepare-commit-msg</code> exists WITHOUT stagecoach's marker (never touched by install/uninstall)</td>
+</tr>
+</tbody>
+</table>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → &quot;none&quot;</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → &quot;stagecoach (v1)&quot;</span>
+</span></code></pre></div>
+<h3 id="hook-exec"><code>hook exec</code><a class="headerlink" href="#hook-exec" title="Permanent link">&para;</a></h3>
+<p>Generate a commit message into git's <code>prepare-commit-msg</code> file. Called by stagecoach's installed hook — not by users directly. When <code>git commit</code> fires the hook, stagecoach generates a message for the staged diff and writes it at the <strong>top</strong> of <code>&lt;msg-file&gt;</code>, preserving git's comment block beneath.</p>
+<p><strong>Source-gated no-op:</strong> exits 0 having done nothing when a message source is present (<code>message</code>/<code>template</code>/<code>merge</code>/<code>squash</code>/<code>commit</code>) or nothing is staged. This means <code>git commit -m "x"</code>, <code>git commit -t template</code>, merge commits, squash commits, and <code>--amend</code> all pass through unchanged — the explicit message wins.</p>
+<p><strong>Never-block:</strong> any generation failure (agent missing, timeout, parse failure, duplicate exhaustion) leaves <code>&lt;msg-file&gt;</code> byte-identical to before and exits 0 (so the commit proceeds to an empty editor). With <code>--strict</code> (baked into the script by <code>hook install --strict</code>), the same failure exits non-zero (aborts the commit).</p>
+<p><strong>Message-role resolution:</strong> resolves provider/model/reasoning exactly like the single-commit path (<code>--message-*</code> flags, <code>[role.message]</code> config, env vars). Never decomposes.</p>
+<p><strong>Per-role precedence gotcha:</strong> on the single-commit path <code>--model</code>/<code>--provider</code> set the GLOBAL default only; a <code>[role.message]</code> <code>model</code>/<code>provider</code> in config (or a <code>--message-model</code>/<code>--message-provider</code> flag) takes precedence for the message role. A populated config can therefore silently shadow <code>--model</code>/<code>--provider</code>. Run with <code>--verbose</code> to see a <code>DEBUG: note: --model shadowed by [role.message].model; use --message-model to override</code> hint (and the <code>--provider</code> analog) when this happens. Advisory only — precedence and exit codes are unchanged.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;msg-file&gt;<span class="w">                </span><span class="c1"># normal invocation (source absent → proceed)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;msg-file&gt;<span class="w"> </span>message<span class="w">        </span><span class="c1"># source=message → no-op (exit 0)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--strict<span class="w"> </span>&lt;msg-file&gt;<span class="w">       </span><span class="c1"># abort on failure (exit 1)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Arg</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;msg-file&gt;</code></td>
+<td>Path to git's <code>prepare-commit-msg</code> file (e.g. <code>.git/COMMIT_EDITMSG</code>)</td>
+</tr>
+<tr>
+<td><code>&lt;source&gt;</code></td>
+<td>Source of the message (absent/empty = proceed; <code>message</code>/<code>template</code>/<code>merge</code>/<code>squash</code>/<code>commit</code> = no-op)</td>
+</tr>
+<tr>
+<td><code>&lt;sha&gt;</code></td>
+<td>Commit SHA (present only when source=<code>commit</code>)</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--strict</code></td>
+<td>Abort the commit on generation failure (default: never block — exit 0 and leave the message empty)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="providers-list"><code>providers list</code><a class="headerlink" href="#providers-list" title="Permanent link">&para;</a></h3>
+<p>List all known providers with detection status:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>NAME      DETECTED  DEFAULT
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>claude    ✓
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>codex     ✓
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>cursor    ✓
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>opencode  ✓
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>pi        ✓         (default)
+</span></code></pre></div>
+<p><code>✓</code> = the provider's command is found on <code>$PATH</code>. <code>(default)</code> marks the provider selected by auto-detection (first installed built-in in preference order: pi, opencode, cursor, agy, codex, claude).</p>
+<h3 id="providers-show-name"><code>providers show &lt;name&gt;</code><a class="headerlink" href="#providers-show-name" title="Permanent link">&para;</a></h3>
+<p>Print the fully-merged manifest for a provider as TOML. Exits 1 if the provider is unknown:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>stagecoach<span class="w"> </span>providers<span class="w"> </span>show<span class="w"> </span>pi
+</span></code></pre></div>
+<h3 id="config-init"><code>config init</code><a class="headerlink" href="#config-init" title="Permanent link">&para;</a></h3>
+<p>Bootstrap a <strong>populated, working config</strong> to the resolved config path (override-aware: honors <code>--config</code> / <code>STAGECOACH_CONFIG</code>, defaulting to the global path). Auto-detects the highest-priority installed built-in agent (order: pi, opencode, cursor, agy, codex, claude) and writes <code>config_version = 3</code>, <code>[defaults] provider = "&lt;detected&gt;"</code>, and that provider's per-role model defaults — EXCEPT for <strong>pi</strong> (the default), whose per-role models are left EMPTY so pi picks its own backend model (set the model with an inference-provider prefix (e.g. model = "anthropic/claude-haiku") to pin a backend). Other detected providers get their per-role models UNCOMMENTED. Other installed providers appear as commented-out <code>[role.*]</code> blocks. If no agent is detected, defaults to <code>"pi"</code>. Creates parent directories as needed. <strong>Refuses to overwrite</strong> an existing file (exit 1) unless <code>--force</code> is passed:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Wrote config to ~/.config/stagecoach/config.toml</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Target a specific provider:</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--provider<span class="w"> </span>claude
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Overwrite existing config:</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--force
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Write the inert all-commented reference (v1 behavior):</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--template
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Write a repo-local config (./.stagecoach.toml) that overrides the global file:</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--local
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># Guided TTY wizard — pick a provider, accept or edit per-role models:</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--interactive
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># Pre-select a provider, then edit its models:</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>init<span class="w"> </span>--interactive<span class="w"> </span>--provider<span class="w"> </span>pi
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--provider &lt;name&gt;</code></td>
+<td>Target a specific built-in provider instead of auto-detecting</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>Overwrite an existing config file</td>
+</tr>
+<tr>
+<td><code>--template</code></td>
+<td>Write the inert all-commented reference config (v1 behavior)</td>
+</tr>
+<tr>
+<td><code>--local</code></td>
+<td>Write to the repo-local <code>./.stagecoach.toml</code> instead of the global config (it overrides the global file; mutually exclusive with <code>--config</code>). Composes with <code>--force</code>, <code>--template</code>, <code>--provider</code>, and <code>--interactive</code>.</td>
+</tr>
+<tr>
+<td><code>--interactive</code></td>
+<td>Guided TTY wizard: pick a detected provider, accept or edit per-role models; prompts for the inference/ prefix on multi-backend providers (pi, opencode). Writes the same file as plain <code>config init</code>. Non-TTY → exit 1 (use plain <code>config init</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>With <code>--force</code> and no <code>--provider</code>, the regenerated template is <strong>re-targeted to the preserved <code>[defaults] provider</code></strong> rather than auto-detecting pi — so the generated <code>[role.*]</code> blocks stay consistent with the default you kept (e.g. preserving <code>provider = "claude"</code> regenerates claude's role models, not pi's). An explicit <code>--provider &lt;name&gt;</code> always overrides this; a preserved custom/unknown provider falls back to auto-detection.</p>
+<p><code>--interactive</code> runs a three-step wizard: (1) pick a provider from the detected set (default highlighted), (2) accept or edit each per-role model default, (3) for multi-backend providers (pi, opencode), prompts for the <code>inference/model</code> prefix on any edited model. Writes the <strong>same</strong> file as plain <code>config init</code> — the wizard is a TTY front-end. Composes with <code>--force</code> (overwrites) and <code>--provider &lt;name&gt;</code> (pre-selects, skipping the provider prompt). Mutually exclusive with <code>--template</code> (exit 1). Non-TTY stdin exits 1 pointing at plain <code>config init</code>.</p>
+<p><code>--local</code> writes the config to the repo-local <code>./.stagecoach.toml</code> (the layer-3 file the loader reads from the current directory) instead of the global path. It overrides the global config file and is overridden by repo git config (<code>stagecoach.*</code>), <code>STAGECOACH_*</code> env vars, and CLI flags. The generated file's header scope is rewritten to repo-local framing so it does not claim to be the global file. Mutually exclusive with <code>--config</code> (exit 1). Composes with <code>--template</code> (writes the inert reference into the repo file), <code>--force</code> (refreshes an existing <code>.stagecoach.toml</code>, preserving active settings and backing up the prior file), <code>--provider</code>, and <code>--interactive</code>.</p>
+<h3 id="config-upgrade"><code>config upgrade</code><a class="headerlink" href="#config-upgrade" title="Permanent link">&para;</a></h3>
+<p>Upgrade an existing config's <code>config_version</code> to the current schema version (3) in place. For multi-backend providers, the former <code>default_provider</code> is folded into a slash-prefix on the model (<code>default_provider = "X"</code> + <code>model = "Y"</code> → <code>model = "X/Y"</code>) and the <code>default_provider</code> key is deleted. Every other line is preserved. Idempotent — running it twice leaves the file unchanged. No flags.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>upgrade
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Already at version 3 →  &quot;Config at ~/.config/stagecoach/config.toml is already at version 3 (no changes).&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Upgraded from v1  →  &quot;Backed up previous config to &lt;path&gt;.bak.&lt;ts&gt;&quot; then &quot;Upgraded config at ~/.config/stagecoach/config.toml to version 3.&quot;</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># No file          →  &quot;no config file at &lt;path&gt; (run &#39;stagecoach config init&#39; first)&quot;  (exit 1)</span>
+</span></code></pre></div>
+<p>At load time, a missing or outdated <code>config_version</code> triggers an advisory pointing at <code>config upgrade</code>; a <strong>newer-than-binary</strong> <code>config_version</code> triggers an advisory to <strong>upgrade stagecoach</strong>. The advisory never suggests <code>config init --force</code> — that would regenerate at the older binary's schema and destroy a config the binary cannot read.</p>
+<h3 id="config-path"><code>config path</code><a class="headerlink" href="#config-path" title="Permanent link">&para;</a></h3>
+<p>Print the resolved config path (override-aware: honors <code>--config</code> / <code>STAGECOACH_CONFIG</code>, falling back to the global path):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>path
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># ~/.config/stagecoach/config.toml</span>
+</span></code></pre></div>
+<h3 id="integrate-list"><code>integrate list</code><a class="headerlink" href="#integrate-list" title="Permanent link">&para;</a></h3>
+<p>List all integration targets with detection status, integration state, and config path:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>TARGET      DETECTED  STATUS         CONFIG
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>git-alias   ✓         installed      ~/.gitconfig
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>lazygit     ✓         not installed  —
+</span></code></pre></div>
+<ul>
+<li><strong>TARGET</strong>: the integration name (the <code>&lt;target&gt;</code> argument for install/remove)</li>
+<li><strong>DETECTED</strong>: ✓ if the tool is on <code>$PATH</code>, ✗ otherwise</li>
+<li><strong>STATUS</strong>: <code>not installed</code>, <code>installed</code>, or <code>foreign</code> (a conflicting entry exists)</li>
+<li><strong>CONFIG</strong>: the resolved config file path the integration edits (— if the tool is absent or the path cannot be determined)</li>
+</ul>
+<p>Supported targets are <code>git-alias</code> and <code>lazygit</code>.</p>
+<p>Detection gating: a target whose tool is absent is still listed (DETECTED=✗) but <code>install</code>/<code>remove</code> for it prints a note and exits 1.</p>
+<h3 id="integrate-install-target"><code>integrate install &lt;target&gt;…</code><a class="headerlink" href="#integrate-install-target" title="Permanent link">&para;</a></h3>
+<p>Install one or more stagecoach integrations. Targets are explicit (at least one required; there is no "install all" default). Each target runs the no-mangle protocol (see below) independently. Multiple targets may be named; if any target fails (detection gate, install error, or unknown target), the remaining targets are still attempted (best-effort), and the command exits 1.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--yes</code></td>
+<td>Skip the y/N confirmation prompt and apply changes directly (for scripts and CI)</td>
+</tr>
+</tbody>
+</table>
+<p>Detection gating: if a named target's tool is not on <code>$PATH</code>, the target is skipped with a note to stderr and marked as failed. <code>git-alias</code> requires only <code>git</code> (always present for stagecoach); <code>lazygit</code> requires <code>lazygit</code> on <code>$PATH</code>.</p>
+<p>Decline and no-change outcomes (user answered N, or the integration is already applied) are reported on stdout and are NOT errors (exit 0).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>git-alias<span class="w"> </span>lazygit<span class="w">   </span><span class="c1"># install both</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>--yes<span class="w"> </span>git-alias<span class="w">     </span><span class="c1"># skip confirmation</span>
+</span></code></pre></div>
+<h3 id="integrate-remove-target"><code>integrate remove &lt;target&gt;…</code><a class="headerlink" href="#integrate-remove-target" title="Permanent link">&para;</a></h3>
+<p>Remove one or more stagecoach integrations. Same semantics as <code>install</code>: explicit targets, detection gating, best-effort batch, and <code>--yes</code> to skip confirmation.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>lazygit<span class="w">     </span><span class="c1"># remove lazygit integration</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>--yes<span class="w"> </span>git-alias<span class="w"> </span>lazygit
+</span></code></pre></div>
+<h4 id="git-alias-target"><code>git-alias</code> target<a class="headerlink" href="#git-alias-target" title="Permanent link">&para;</a></h4>
+<p>Registers <code>git stagecoach</code> as a git alias in the <strong>global</strong> gitconfig (<code>git config --global alias.stagecoach '!stagecoach'</code>). After installation, <code>git stagecoach</code> runs stagecoach from any git repo — no PATH configuration needed.</p>
+<p>The <code>.gitconfig</code> write is delegated to <code>git config</code> itself, so the no-mangle protocol (unified-diff preview, backup, re-parse validation) does <strong>not</strong> apply. Instead, git-alias shows the exact command and resulting usage, then asks for confirmation (same <code>y/N</code> / <code>--yes</code> mechanics).</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>On</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--alias-name &lt;name&gt;</code></td>
+<td><code>install</code>, <code>remove</code></td>
+<td>Override the alias name (default: <code>stagecoach</code>). Manages <code>alias.&lt;name&gt;</code> instead of <code>alias.stagecoach</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conflicting alias behavior:</strong></p>
+<ul>
+<li><strong>Install:</strong> if <code>alias.&lt;name&gt;</code> already exists with a value other than <code>!stagecoach</code> (a <em>foreign</em> alias), the current value is shown in the preview with a warning. After confirmation, the alias is overwritten (outcome: <em>Updated</em>). Use <code>--yes</code> to skip the prompt.</li>
+<li><strong>Remove:</strong> if the alias is foreign (not stagecoach's), <code>remove</code> <strong>refuses</strong> to unset it and prints a note (outcome: <em>NoChange</em> — the alias is never silently removed). <code>remove</code> only unsets when the value is <code>!stagecoach</code>.</li>
+</ul>
+<p><strong><code>integrate list</code> shows:</strong></p>
+<ul>
+<li><strong>DETECTED:</strong> ✓ (git-alias needs only git, which is always present for stagecoach)</li>
+<li><strong>STATUS:</strong> <code>not installed</code> / <code>installed</code> / <code>foreign</code> (a conflicting alias exists at <code>alias.&lt;name&gt;</code>)</li>
+<li><strong>CONFIG:</strong> the resolved global gitconfig path (<code>$GIT_CONFIG_GLOBAL</code> if set, else <code>$HOME/.gitconfig</code>)</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>git-alias<span class="w">                       </span><span class="c1"># install `git stagecoach`</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>git-alias<span class="w"> </span>--yes<span class="w">                 </span><span class="c1"># skip confirmation</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>git-alias<span class="w"> </span>--alias-name<span class="w"> </span>ci<span class="w">       </span><span class="c1"># install as `git ci`</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>git-alias<span class="w">                        </span><span class="c1"># remove the alias</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>git-alias<span class="w"> </span>--yes<span class="w"> </span>--alias-name<span class="w"> </span>ci<span class="w">  </span><span class="c1"># remove `git ci`</span>
+</span></code></pre></div>
+<h4 id="no-mangle-protocol">No-mangle protocol<a class="headerlink" href="#no-mangle-protocol" title="Permanent link">&para;</a></h4>
+<p>Every file edit by an integration runs the no-mangle protocol: a unified-diff preview is shown, the user is asked to confirm (<code>y/N</code>; use <code>--yes</code> to skip), a timestamped backup is written before modification, and the file is re-parsed after writing with automatic restore on validation failure. This guarantee is enforced by the protocol engine — it is not a convention each target follows independently. The <code>git-alias</code> target does <strong>not</strong> use this protocol (it delegates the write to <code>git config</code>). The <code>lazygit</code> target uses it for all edits.</p>
+<h4 id="lazygit-target"><code>lazygit</code> target<a class="headerlink" href="#lazygit-target" title="Permanent link">&para;</a></h4>
+<p>Adds a <code>customCommands</code> entry to lazygit's <code>config.yml</code> via a <strong>comment-preserving YAML round-trip</strong> (<code>gopkg.in/yaml.v3</code> Node API). Press <code>&lt;c-a&gt;</code> in lazygit's files panel to run <code>stagecoach</code> and generate an AI commit message — <code>output: 'none'</code> keeps you in the UI (US8).</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">customCommands</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;&lt;c-a&gt;&#39;</span><span class="w">   </span><span class="c1"># stagecoach-integration</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;files&#39;</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;stagecoach&#39;</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">loadingText</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;Generating</span><span class="nv"> </span><span class="s">commit</span><span class="nv"> </span><span class="s">message…&#39;</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">output</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;none&#39;</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;stagecoach:</span><span class="nv"> </span><span class="s">AI</span><span class="nv"> </span><span class="s">commit&#39;</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key</code></td>
+<td><code>&lt;c-a&gt;</code></td>
+<td>Key binding in lazygit</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td><code>files</code></td>
+<td>Panel context (files panel)</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td><code>stagecoach</code></td>
+<td>Command to run</td>
+</tr>
+<tr>
+<td><code>loadingText</code></td>
+<td><code>Generating commit message…</code></td>
+<td>Spinner text while running</td>
+</tr>
+<tr>
+<td><code>output</code></td>
+<td><code>none</code></td>
+<td>Suppress output (stay in UI)</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>stagecoach: AI commit</code></td>
+<td>Menu description</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>On</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--key &lt;k&gt;</code></td>
+<td><code>install</code>, <code>remove</code></td>
+<td>Override the key binding (default: <code>&lt;c-a&gt;</code>). Remove targets the <strong>marked stagecoach entry</strong> (by the <code># stagecoach-integration</code> marker), not by key — so you can install with <code>--key '&lt;c-s&gt;'</code> and remove with the default.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Config discovery order:</strong></p>
+<ol>
+<li><code>lazygit --print-config-dir</code> output + <code>/config.yml</code> (when lazygit is installed)</li>
+<li>Platform default: <code>$XDG_CONFIG_HOME/lazygit/config.yml</code> (Linux), <code>~/Library/Application Support/lazygit/config.yml</code> (macOS), <code>%AppData%/lazygit/config.yml</code> (Windows)</li>
+</ol>
+<p><strong>No-mangle behavior:</strong> The full protocol applies: a unified-diff preview is shown before writing, a timestamped backup (<code>.stagecoach-backup.&lt;ts&gt;</code>) is created for existing files, and the output is re-parsed after writing with automatic restore on validation failure. A corrupt <code>config.yml</code> is <strong>hard-refused</strong> — nothing is written, and the error is surfaced. Hand-maintained comments, other <code>customCommands</code> entries, and all other config blocks are preserved.</p>
+<p><strong>Idempotency:</strong> The entry is identified by its <code># stagecoach-integration</code> marker comment (not the key binding). Re-running <code>install</code> on an already-installed entry reports "No changes" (replace, never duplicate). <code>remove</code> deletes only the stagecoach entry — other entries and config blocks are untouched.</p>
+<p><strong>Conflicting key behavior:</strong> Because <code>customCommands</code> is a YAML <em>sequence</em>, lazygit permits two entries to share a key binding. If an <strong>unmarked</strong> entry already binds your target key (e.g. <code>&lt;c-a&gt;</code>), <code>install</code> prints a <code>WARNING</code> to stderr noting that a duplicate <code>customCommands</code> entry will be created, then proceeds through the normal no-mangle preview/confirm flow (outcome: <em>Updated</em>). Use <code>--key '&lt;other&gt;'</code> to install under a different binding instead. (<code>integrate list</code> reports this pre-existing state as <code>foreign</code>.) Unlike the <code>git-alias</code> target — where a foreign alias is <strong>overwritten</strong> — the lazygit target cannot overwrite (a sequence key is not unique), so it <strong>appends</strong> and surfaces the resulting duplicate for you to resolve.</p>
+<p><strong><code>integrate list</code> shows:</strong></p>
+<ul>
+<li><strong>DETECTED:</strong> ✓ if <code>lazygit</code> is on <code>$PATH</code>, ✗ otherwise</li>
+<li><strong>STATUS:</strong> <code>not installed</code> / <code>installed</code> / <code>foreign</code> (an unmarked entry binds our key)</li>
+<li><strong>CONFIG:</strong> the resolved <code>config.yml</code> path</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w">               </span><span class="c1"># install with default key (&lt;c-a&gt;)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w"> </span>--yes<span class="w">         </span><span class="c1"># skip confirmation</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w"> </span>--key<span class="w"> </span><span class="s1">&#39;&lt;c-s&gt;&#39;</span><span class="w"> </span><span class="c1"># custom binding</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>lazygit<span class="w">                </span><span class="c1"># remove stagecoach entry</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>lazygit<span class="w"> </span>--yes<span class="w">          </span><span class="c1"># skip confirmation</span>
+</span></code></pre></div>
+<h3 id="models-provider"><code>models [&lt;provider&gt;]</code><a class="headerlink" href="#models-provider" title="Permanent link">&para;</a></h3>
+<p>List the models reachable by a provider's CLI. Source of truth, in order:</p>
+<ol>
+<li><strong>(a) Live list</strong> — if the provider manifest defines a <code>list_models_command</code>, it is run as a subprocess (inherited env, bounded timeout) and its stdout is printed under a provider heading.</li>
+<li><strong>(b) Curated table</strong> — if the <code>list_models_command</code> is absent <strong>or</strong> the command fails (non-zero exit, timeout, or not found), Stagecoach's curated per-role tier table is printed, annotated with its verification date and a "consult <code>&lt;command&gt; --help</code>" hint.</li>
+</ol>
+<p>Stagecoach never makes an HTTP call to list models — the agent CLI is the only model authority.</p>
+<p>With no argument, the <strong>resolved default provider</strong> is shown. With <code>--all</code>, every <strong>detected</strong> provider (command on <code>$PATH</code>) is shown, one block at a time. An unknown or undetected named provider exits 1.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>stagecoach<span class="w"> </span>models<span class="w">           </span><span class="c1"># show the default provider&#39;s models</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>claude<span class="w">    </span><span class="c1"># show claude&#39;s models</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>--all<span class="w">     </span><span class="c1"># show all detected providers</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>--help<span class="w">    </span><span class="c1"># see the models-scoped --all text</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--all</code>, <code>-a</code></td>
+<td>List models for every detected provider (default: the resolved default provider)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="lock-status"><code>lock status</code><a class="headerlink" href="#lock-status" title="Permanent link">&para;</a></h3>
+<p>Read-only diagnostic for this repo's run lock (,). Prints the lock path, the holder's pid/hostname/repo/timestamp/snapshot, whether the holder process is alive, and — on Unix — whether it appears orphaned (reparented). With no lock held, prints <code>no run lock for &lt;repo&gt;</code> and exits 0. It acquires no <code>flock</code> and never breaks/removes a lock (preserved); you decide whether to <code>kill &lt;pid&gt;</code> or <code>rm &lt;path&gt;</code>. Works outside a git repo.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Lock: /home/you/.cache/stagecoach/locks/&lt;hash&gt;.lock
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>  pid:       12345
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>  hostname:  laptop
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>  repo:      /home/you/proj
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>  timestamp: 2026-07-10T00:00:00Z
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>  snapshot:  &lt;tree-sha&gt;          # only shown once the snapshot is armed
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>  alive:     true
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>  orphaned:  true (holder reparented — launcher has exited)
+</span></code></pre></div>
+<p>The <code>orphaned:</code> line has three outcomes: <code>true (holder reparented — launcher has exited)</code> (Unix; the holder's parent is now process 1 — its launcher closed without killing it, so the kernel reparented the holder to init), <code>false</code> (alive and its parent is not init — Windows always lands here), or <code>unknown (holder is dead)</code> (the holder process is no longer alive). This is a <em>display-only snapshot hint</em>: it reports whether the holder currently appears reparented to init (<code>ppid == 1</code>), not whether its parent changed at runtime, so under a subreaper (systemd, Docker/containerd, supervisord) a reparented holder can read <code>false</code>. The authoritative backstop is the parent-death watchdog, which detects a parent-pid <em>change</em> at runtime and self-exits + releases the lock regardless (see <a href="../how-it-works/#per-repo-run-lock-fr52">how-it-works.md — Per-repo run lock</a>). With no lock held, the output is <code>no run lock for &lt;repo&gt;</code> (exit 0). Exit is <strong>0 in all cases</strong> — even when the holder is dead or orphaned — the read is the help; the action (kill/rm) is yours.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>status<span class="w">    </span><span class="c1"># → &quot;no run lock for &lt;cwd&gt;&quot; (exit 0) when nothing holds it</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>status<span class="w">    </span><span class="c1"># → the block above when a holder exists</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>--help<span class="w">    </span><span class="c1"># the `lock` command group (bare `lock` prints help)</span>
+</span></code></pre></div>
+<h3 id="upgrade"><code>upgrade</code><a class="headerlink" href="#upgrade" title="Permanent link">&para;</a></h3>
+<p>Update the stagecoach <strong>binary</strong> to the latest release. stagecoach detects the install method and delegates to that channel's updater (Homebrew, Scoop, Chocolatey, npm, mise, asdf, Nix, AUR, go install) — printing the command where it needs privileges (Chocolatey, AUR) or is declarative (Nix) — self-swapping only for the direct-binary channel. This is the v3.0 delegate-first updater.</p>
+<p><strong>Distinct from <code>config upgrade</code></strong> (run as <code>stagecoach config upgrade</code>): <code>config upgrade</code> is a config-schema migration that rewrites an existing config file to the current schema version in place. <code>stagecoach upgrade</code> updates the <strong>binary</strong>. Two different commands — do not confuse them.</p>
+<p>Flags (all LOCAL to <code>upgrade</code>; they do <strong>not</strong> appear on the commit path):</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--check</code>, <code>-c</code></td>
+<td>Check for an update without applying it (exit 6 if behind, 0 if up to date)</td>
+</tr>
+<tr>
+<td><code>--version &lt;v&gt;</code></td>
+<td>Pin a target version to install (default: latest in the channel)</td>
+</tr>
+<tr>
+<td><code>--prerelease</code></td>
+<td>Admit pre-release tags (shorthand for <code>--channel prerelease</code>)</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>Override a detected package-manager install and self-swap</td>
+</tr>
+<tr>
+<td><code>--rollback</code></td>
+<td>Restore the most recent backup (one-step undo)</td>
+</tr>
+<tr>
+<td><code>--install-method &lt;m&gt;</code></td>
+<td>Override install-method detection (env <code>STAGECOACH_INSTALL_METHOD</code>)</td>
+</tr>
+<tr>
+<td><code>--yes</code>, <code>-y</code></td>
+<td>Skip the confirmation prompt (for scripting)</td>
+</tr>
+<tr>
+<td><code>--channel &lt;stable\|prerelease&gt;</code></td>
+<td>Release channel (default <code>stable</code>; also <code>[upgrade].channel</code>)</td>
+</tr>
+<tr>
+<td><code>--source-repo &lt;owner/repo&gt;</code></td>
+<td><code>owner/repo</code> to fetch releases from (default <code>dabstractor/stagecoach</code>; also <code>[upgrade].source_repo</code>; for forks)</td>
+</tr>
+</tbody>
+</table>
+<p>Flag-contract rules: <code>--version</code> and <code>--prerelease</code> are mutually exclusive; <code>--rollback</code> cannot be combined with <code>--check</code> or <code>--version</code>; <code>--channel</code> rejects unknown values.</p>
+<p><strong>Repo-independent.</strong> <code>upgrade</code> acquires no run lock, reads no repo, invokes no provider, and runs outside a git repo. Its no-op pre-run hook overrides the default config load, so it never bootstraps a config file on first run. <strong>Network:</strong> <code>upgrade</code> is the one named exception to the no-network-calls commit path — it fetches <strong>only</strong> this project's own GitHub release artifacts and checksums (never an arbitrary URL, never the agent APIs).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>stagecoach<span class="w"> </span>upgrade<span class="w">               </span><span class="c1"># detect→delegate (or self-swap), confirm, swap in the new binary</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>stagecoach<span class="w"> </span>upgrade<span class="w"> </span>--check<span class="w">       </span><span class="c1"># exit 6 if a newer release exists, 0 if up to date (CI/cron gate)</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>stagecoach<span class="w"> </span>upgrade<span class="w"> </span>--rollback<span class="w">    </span><span class="c1"># restore the most recent backup (one-step undo)</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>stagecoach<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>prerelease
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>stagecoach<span class="w"> </span>upgrade<span class="w"> </span>--version<span class="w"> </span><span class="m">1</span>.2.3
+</span></code></pre></div>
+<p>Exit codes: <code>0</code> (up to date, upgraded, or <code>--check</code> found nothing newer), <code>1</code> (failure: detection failed, the delegated updater errored, the self-swap was refused, a flag violated the contract), <code>6</code> (update available via <code>--check</code>).</p>
+<h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td>Success (commit created, or dry-run message printed).</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>General error (generation failed, parse failed after retries, <strong>provider command missing on <code>$PATH</code> (checked before the snapshot)</strong>, CAS, usage).</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>Nothing to commit (clean tree after auto-stage, or nothing staged with <code>--no-auto-stage</code>).</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>Rescue condition (snapshot taken, commit not created — manual recovery printed).</td>
+</tr>
+<tr>
+<td><code>5</code></td>
+<td>Busy — another stagecoach run holds the per-repo lock; retry after it finishes.</td>
+</tr>
+<tr>
+<td><code>6</code></td>
+<td>Update available (<code>stagecoach upgrade --check</code> found a newer release); upgrade-path only — never returned by the commit path.</td>
+</tr>
+<tr>
+<td><code>124</code></td>
+<td>Timeout (generation exceeded <code>--timeout</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Exit codes mirror the constants in <code>internal/exitcode/exitcode.go</code>. A timeout is reported as <code>124</code> (matching GNU <code>timeout</code>), not <code>3</code>. With <code>--dry-run</code>, generation failures (timeout or parse/duplicate-check exhaustion) report exit <strong>1</strong> with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code <code>6</code> is upgrade-path only: it is produced solely by <code>stagecoach upgrade --check</code> and is walled off from the commit path, so a commit run never exits 6.</p>
+<p>Code <code>5</code> (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits <strong>0</strong> ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits <strong>5</strong> with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits <strong>5</strong> (Busy) rather than 0 — the holder publishes a working-tree snapshot (<code>T_start</code>) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.</p>
+<p><code>SIGHUP</code> (Unix) and the parent-death watchdog route through the <strong>rescue path</strong> (exit <code>3</code> when a snapshot is armed) rather than introducing signal-specific exit codes — see <a href="../how-it-works/#per-repo-run-lock-fr52">how-it-works.md — Per-repo run lock</a>.</p>
+<h2 id="flag-env-git-config-map">Flag ↔ env ↔ git-config map<a class="headerlink" href="#flag-env-git-config-map" title="Permanent link">&para;</a></h2>
+<p>Config-backed flags can also be set via environment variables or git-config keys. This table shows the mapping (highest to lowest precedence: CLI flag &gt; env var &gt; git config):</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Env var</th>
+<th>Git config key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--provider</code></td>
+<td><code>STAGECOACH_PROVIDER</code></td>
+<td><code>stagecoach.provider</code></td>
+</tr>
+<tr>
+<td><code>--model</code></td>
+<td><code>STAGECOACH_MODEL</code></td>
+<td><code>stagecoach.model</code></td>
+</tr>
+<tr>
+<td><code>--timeout</code></td>
+<td><code>STAGECOACH_TIMEOUT</code></td>
+<td><code>stagecoach.timeout</code></td>
+</tr>
+<tr>
+<td><code>--config</code></td>
+<td><code>STAGECOACH_CONFIG</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--verbose</code></td>
+<td><code>STAGECOACH_VERBOSE</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--no-color</code></td>
+<td><code>STAGECOACH_NO_COLOR</code> (also honors <code>NO_COLOR</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--all</code></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--no-auto-stage</code></td>
+<td><code>STAGECOACH_AUTO_STAGE_ALL</code> (inverse)</td>
+<td><code>stagecoach.autoStageAll</code></td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--commits</code></td>
+<td><code>STAGECOACH_COMMITS</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--single</code></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--no-decompose</code></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--max-commits</code></td>
+<td>—</td>
+<td>— (also <code>[generation].max_commits</code> in config)</td>
+</tr>
+<tr>
+<td><code>--exclude</code>, <code>-x</code></td>
+<td>— (no env var; deliberate — see <a href="../configuration/">configuration.md</a>)</td>
+<td>— (also <code>[generation].exclude</code> in config, UNIONS rather than overrides)</td>
+</tr>
+<tr>
+<td><code>--planner-provider</code></td>
+<td><code>STAGECOACH_PLANNER_PROVIDER</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--planner-model</code></td>
+<td><code>STAGECOACH_PLANNER_MODEL</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--stager-provider</code></td>
+<td><code>STAGECOACH_STAGER_PROVIDER</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--stager-model</code></td>
+<td><code>STAGECOACH_STAGER_MODEL</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--arbiter-provider</code></td>
+<td><code>STAGECOACH_ARBITER_PROVIDER</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--arbiter-model</code></td>
+<td><code>STAGECOACH_ARBITER_MODEL</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>STAGECOACH_FORMAT</code></td>
+<td><code>stagecoach.format</code></td>
+</tr>
+<tr>
+<td><code>--locale</code></td>
+<td><code>STAGECOACH_LOCALE</code></td>
+<td><code>stagecoach.locale</code></td>
+</tr>
+<tr>
+<td><code>--template</code></td>
+<td><code>STAGECOACH_TEMPLATE</code></td>
+<td><code>stagecoach.template</code></td>
+</tr>
+<tr>
+<td><code>--reasoning</code></td>
+<td><code>STAGECOACH_REASONING</code></td>
+<td><code>stagecoach.reasoning</code></td>
+</tr>
+<tr>
+<td><code>--planner-reasoning</code></td>
+<td><code>STAGECOACH_PLANNER_REASONING</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--stager-reasoning</code></td>
+<td><code>STAGECOACH_STAGER_REASONING</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--message-provider</code></td>
+<td><code>STAGECOACH_MESSAGE_PROVIDER</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--message-model</code></td>
+<td><code>STAGECOACH_MESSAGE_MODEL</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--message-reasoning</code></td>
+<td><code>STAGECOACH_MESSAGE_REASONING</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--arbiter-reasoning</code></td>
+<td><code>STAGECOACH_ARBITER_REASONING</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--planner-timeout</code></td>
+<td><code>STAGECOACH_PLANNER_TIMEOUT</code></td>
+<td><code>stagecoach.role.planner.timeout</code></td>
+</tr>
+<tr>
+<td><code>--stager-timeout</code></td>
+<td><code>STAGECOACH_STAGER_TIMEOUT</code></td>
+<td><code>stagecoach.role.stager.timeout</code></td>
+</tr>
+<tr>
+<td><code>--message-timeout</code></td>
+<td><code>STAGECOACH_MESSAGE_TIMEOUT</code></td>
+<td><code>stagecoach.role.message.timeout</code></td>
+</tr>
+<tr>
+<td><code>--arbiter-timeout</code></td>
+<td><code>STAGECOACH_ARBITER_TIMEOUT</code></td>
+<td><code>stagecoach.role.arbiter.timeout</code></td>
+</tr>
+<tr>
+<td>— (no flag)</td>
+<td><code>STAGECOACH_NO_PARENT_WATCHDOG</code></td>
+<td><code>stagecoach.noParentWatchdog</code> (also <code>[generation].no_parent_watchdog</code> in config)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Happy path — stage, generate, commit</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>git<span class="w"> </span>add<span class="w"> </span>feature/login.js
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>stagecoach
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># [abc1234] feat: add login flow</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># M  src/login.js</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Use a specific provider and model</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>stagecoach<span class="w"> </span>--provider<span class="w"> </span>claude<span class="w"> </span>--model<span class="w"> </span>sonnet
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Persist provider choice per-repo with git config</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>git<span class="w"> </span>config<span class="w"> </span>stagecoach.provider<span class="w"> </span>pi
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="c1"># Preview the message without committing (exit 0)</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>stagecoach<span class="w"> </span>--dry-run
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>
+</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="c1"># Force staging everything (including untracked)</span>
+</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>stagecoach<span class="w"> </span>-a
+</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>
+</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="c1"># Pipe the dry-run message</span>
+</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>stagecoach<span class="w"> </span>--dry-run<span class="w"> </span>--no-color<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span>/tmp/msg.txt
+</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>
+</span><span id="__span-20-22"><a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a><span class="c1"># See what command is being run</span>
+</span><span id="__span-20-23"><a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>stagecoach<span class="w"> </span>--verbose
+</span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a>
+</span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a><span class="c1"># Multi-commit decomposition — auto-split a dirty tree</span>
+</span><span id="__span-20-26"><a id="__codelineno-20-26" name="__codelineno-20-26" href="#__codelineno-20-26"></a>stagecoach
+</span><span id="__span-20-27"><a id="__codelineno-20-27" name="__codelineno-20-27" href="#__codelineno-20-27"></a><span class="c1"># Decomposes into N logically-coherent commits automatically</span>
+</span><span id="__span-20-28"><a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a>
+</span><span id="__span-20-29"><a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a><span class="c1"># Force exactly 3 commits</span>
+</span><span id="__span-20-30"><a id="__codelineno-20-30" name="__codelineno-20-30" href="#__codelineno-20-30"></a>stagecoach<span class="w"> </span>--commits<span class="w"> </span><span class="m">3</span>
+</span><span id="__span-20-31"><a id="__codelineno-20-31" name="__codelineno-20-31" href="#__codelineno-20-31"></a>
+</span><span id="__span-20-32"><a id="__codelineno-20-32" name="__codelineno-20-32" href="#__codelineno-20-32"></a><span class="c1"># Keep v1 single-commit behavior</span>
+</span><span id="__span-20-33"><a id="__codelineno-20-33" name="__codelineno-20-33" href="#__codelineno-20-33"></a>stagecoach<span class="w"> </span>--single
+</span><span id="__span-20-34"><a id="__codelineno-20-34" name="__codelineno-20-34" href="#__codelineno-20-34"></a>
+</span><span id="__span-20-35"><a id="__codelineno-20-35" name="__codelineno-20-35" href="#__codelineno-20-35"></a><span class="c1"># Route planning to a bigger model</span>
+</span><span id="__span-20-36"><a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a>stagecoach<span class="w"> </span>--planner-provider<span class="w"> </span>claude<span class="w"> </span>--planner-model<span class="w"> </span>opus
+</span><span id="__span-20-37"><a id="__codelineno-20-37" name="__codelineno-20-37" href="#__codelineno-20-37"></a>
+</span><span id="__span-20-38"><a id="__codelineno-20-38" name="__codelineno-20-38" href="#__codelineno-20-38"></a><span class="c1"># Use reasoning for deeper analysis (pi: --thinking, claude: --effort; others no-op)</span>
+</span><span id="__span-20-39"><a id="__codelineno-20-39" name="__codelineno-20-39" href="#__codelineno-20-39"></a>stagecoach<span class="w"> </span>--reasoning<span class="w"> </span>high
+</span><span id="__span-20-40"><a id="__codelineno-20-40" name="__codelineno-20-40" href="#__codelineno-20-40"></a>
+</span><span id="__span-20-41"><a id="__codelineno-20-41" name="__codelineno-20-41" href="#__codelineno-20-41"></a><span class="c1"># Per-repo per-role config (.stagecoach.toml)</span>
+</span><span id="__span-20-42"><a id="__codelineno-20-42" name="__codelineno-20-42" href="#__codelineno-20-42"></a><span class="c1"># [role.planner]</span>
+</span><span id="__span-20-43"><a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a><span class="c1"># provider = &quot;claude&quot;</span>
+</span><span id="__span-20-44"><a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a><span class="c1"># model = &quot;opus&quot;</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "navigation.tracking", "toc.follow", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

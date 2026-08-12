@@ -1,0 +1,96 @@
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.10
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10012
+Filename: pool/main/amd64/stagecoach_0.1.10_linux_amd64.deb
+Size: 4187348
+MD5sum: 21f618fc27b047a160a47cd405ed4fdf
+SHA1: 2f19948adb9308a859f9fc36dc9f32ac21462afa
+SHA256: 44d0a4178208840d26154ecee56c7cb83db584bc52d52abceb06481e9cbe0e1a
+SHA512: a86c1675853d81acc85edb92396085dd393f9cfd3483760a562d4fc91a52b1308bbea98dd4338e2e53b8b5bb100f6bf2700641726deb048d717066e037832dbf
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.12
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10052
+Filename: pool/main/amd64/stagecoach_0.1.12_linux_amd64.deb
+Size: 4201366
+MD5sum: 617de740e682596935c6f0b36c98b41d
+SHA1: 3c71b7726ed969554834165c17e207f0656367cd
+SHA256: c4e6b2c4c0d70d94d8cadd3a4cfdf2f9b8111f07c9dce9199fe4a444b3ae246f
+SHA512: a0fb9c80a49ab71457089179dd7210532703c14caff14934f43f4dda90001ae6a0465b2fc7ccb650a7b9268e56e605a23c9733368dc4977453e315b9445c2745
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.13
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10052
+Filename: pool/main/amd64/stagecoach_0.1.13_linux_amd64.deb
+Size: 4201364
+MD5sum: 32c2191015b416b0ca9e0e8f6c925769
+SHA1: d9c4d9fc6cc0cc93b28e602c2daebdb2225e85aa
+SHA256: c3a535d3b4844c61c2a3ef9f784acbd187bfc739f4d0327e817c70058c58f2a7
+SHA512: c2f947e5c5942b48763dbdf1f9f7a4a5d99c862a4cc47fb3921b0a6adf231e8a02f5128d4a2d2a223c8b75ceaebdff83e5811f70f103329fb4091244a74566b5
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.14
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10056
+Filename: pool/main/amd64/stagecoach_0.1.14_linux_amd64.deb
+Size: 4201514
+MD5sum: 8885fd23086f2d96bd3b079dd82ccf8c
+SHA1: cb147ba83948aff3ebe68c5105ce2a0882cba727
+SHA256: 2ee06368dc71ccc68b2172e4bde7e8769d83520cd77c6303008167a59af363c2
+SHA512: 62ac18ce54a3830db8b149b534269914b26d58b0e31d379989ee47c9231496c6cc1a10a5df6c28bbd6ec4736bb652d7ed7eac89b73c36fc3f8c9ac974b2339eb
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.15
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10064
+Filename: pool/main/amd64/stagecoach_0.1.15_linux_amd64.deb
+Size: 4207598
+MD5sum: c99bdfec58530856b216a9c91ab69edb
+SHA1: 8b8aa57a5960f8789f66b8230d9ad1e090737c23
+SHA256: 6b3187b0cc91fdddcc7ce55af849b1ecd72fb059f2519aa24017d1eaf2f424a9
+SHA512: 4c7e2c78d9212ff277c704a318516df34021944a5e9a45a25d96a476e8daae109c1e30c63df826feb21f095d1156964a20f03032a3d705b7a5b72b1557d16fb1
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
+Package: stagecoach
+Architecture: amd64
+Version: 0.1.16
+Priority: optional
+Maintainer: Dustin Schultz <dustindschultz@gmail.com>
+Installed-Size: 10068
+Filename: pool/main/amd64/stagecoach_0.1.16_linux_amd64.deb
+Size: 4208354
+MD5sum: cc4a2098366dac40c055d36408b67bd3
+SHA1: c3aac06d524b78e38981c3f4ea98273c1eb5426c
+SHA256: 3bfa184a581a0bae927949a29b1c2d1cf4c7c19512a365dae406868963b67913
+SHA512: d80ba1bc4a8b95c10437ffa2e0b9cb08095f3b80c886239c2e12b17e23fa5f2c71c878720cf5d224777d7e7c44a10f9f3f5b68272a13d037e732a962f2cf7d06
+Homepage: https://github.com/dabstractor/stagecoach
+Description: Snapshot-based AI commit message generator that uses YOUR local CLI agent
+Architecture-Variant: amd64v1
+
