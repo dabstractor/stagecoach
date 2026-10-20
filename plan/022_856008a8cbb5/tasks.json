@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Activity-based generation deadlines (FR-A1–A5, FR-R7, FR25, → G30)",
-      "status": "Planned",
+      "status": "Researching",
       "description": "The core v3.5 rework: two deadlines (idle 60s primary kill criterion + hard cap 600s backstop) resolved per role across all five precedence layers, an idle-detection engine (pipe counting-writer + Linux procfs read-counter) inside provider.Execute, threading through all 13 role call sites, and integration/regression parity. No commit/CAS/rescue/lock/index/freeze changes (FR-A5: downstream invariants unchanged).",
       "milestones": [
         {
@@ -163,14 +163,14 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Integration + regression parity",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Deadline behavior proven through the real pipeline (generate.CommitStaged + one decompose case) with stub agents: idle-kill parity with the old timeout path (FR-A5), the motivating false-kill regression (productive-slow agent survives), the hard-cap heartbeat pathology (FR-A2), verbose cause lines, and five-layer config observability.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "deadline behavior through the real pipeline",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Extend cmd/stubagent with progressive-emit and heartbeat modes, then drive the pipeline: hung→idle-kill parity, slow-emitting success, chatty-forever hard-cap kill, verbose cause lines, config-layer observability, and no-mutation invariants.",
               "subtasks": [
                 {
@@ -216,7 +216,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S3",
                   "title": "false-kill regression (productive-slow survives) + hard-cap heartbeat pathology (FR-A1/FR-A2)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S1",
@@ -233,7 +233,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S4",
                   "title": "config observability: every precedence layer observably binds per role",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M3.T1.S2",

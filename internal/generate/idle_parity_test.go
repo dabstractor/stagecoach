@@ -210,3 +210,90 @@ func TestCommitStaged_WorkDescription_IdleKill(t *testing.T) {
 		t.Errorf("HEAD moved on the rescued workdesc run: %s → %s", before, got)
 	}
 }
+
+// TestHardCapHeartbeat_ExitCodeParity is the FR-A2 (§9.30) exit-124 twin of TestIdleKill_
+// ExitCodeParity: a false-alive heartbeat agent (stderr "tick" every 50ms forever, NEVER an answer)
+// must still be bounded by the hard cap and produce the IDENTICAL downstream rescue — same
+// *generate.RescueError{Kind: ErrTimeout} with the tree SHA, same exit-124 mapping (exitcode.For),
+// same immediate-rescue NO-retry, same FormatRescue "Tree ID:" message. The discriminator is the
+// knob ordering: idle (1s) is SMALLER than the hard cap (1.5s), so a kill whose verbose cause names
+// the HARD CAP certifies that the heartbeat's stderr bytes kept resetting the idle clock (on Linux,
+// where the watcher arms per D4) while the activity-independent WithTimeout shadow still fired —
+// activity is not progress. Platform-uniform: on darwin/windows the watcher is DISARMED and only
+// the cap could ever fire — the same cause line and every assertion below hold unchanged.
+//
+// Cause-string note: for a hard-cap kill RescueError.Cause IS bare context.DeadlineExceeded —
+// Error() "context deadline exceeded" names nothing. The "hard cap (1.5s)" naming lives ONLY in
+// the verbose "DEBUG: cause:" line, so it is asserted there (never via Cause.Error()).
+func TestHardCapHeartbeat_ExitCodeParity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow hard-cap heartbeat parity in -short mode")
+	}
+	repo := initTempRepo(t)
+	stageChange(t, repo)
+	before := headSHA(t, repo)
+
+	bin := stubtest.Build(t)
+	var vbuf bytes.Buffer
+	// Persona (c): chatty-forever — stderr heartbeat every 50ms, NEVER stdout, NEVER answers.
+	m := stubtest.Manifest(bin, stubtest.Options{HeartbeatMS: 50, Out: "feat: never"})
+	cfg := config.Defaults()
+	cfg.IdleTimeout = 1 * time.Second     // SMALLER than the cap: the heartbeat must be keeping this alive…
+	cfg.Timeout = 1500 * time.Millisecond // …while the hard cap still bounds the run (the FR-A2 proof)
+
+	start := time.Now()
+	_, err := generate.CommitStaged(context.Background(), generate.Deps{
+		Git:      git.New(repo),
+		Manifest: m,
+		Verbose:  ui.NewVerbose(&vbuf, true),
+	}, cfg)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a hard-cap rescue, got nil (did the heartbeat starve the cap?)")
+	}
+
+	// (a) The rescue shape: *RescueError, Kind=ErrTimeout, the frozen tree SHA captured.
+	var re *generate.RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %T %v, want *generate.RescueError", err, err)
+	}
+	if !errors.Is(err, generate.ErrTimeout) {
+		t.Errorf("errors.Is(err, generate.ErrTimeout) = false: %v", err)
+	}
+	if re.TreeSHA == "" {
+		t.Error("TreeSHA empty — the snapshot is missing from the rescue")
+	}
+
+	// (b) The rescue MESSAGE carries the tree SHA (the §18.3 "Tree ID:" line the CLI prints).
+	if msg := generate.FormatRescue(re.TreeSHA, re.ParentSHA, re.Candidate); !strings.Contains(msg, "Tree ID: "+re.TreeSHA) {
+		t.Errorf("FormatRescue missing 'Tree ID: %s'; msg=\n%s", re.TreeSHA, msg)
+	}
+
+	// (c) The cause line names the HARD CAP — the only place a hard-cap kill names itself (Cause IS
+	// bare context.DeadlineExceeded). With idle SMALLER than the cap, this line simultaneously
+	// proves the heartbeat kept resetting the idle clock AND that the absolute cap still fired.
+	if !strings.Contains(vbuf.String(), "DEBUG: cause: hard cap") {
+		t.Errorf("verbose missing hard-cap cause line; buf=\n%s", vbuf.String())
+	}
+
+	// (d) THE exit-124 semantics — the reason this file is package generate_test.
+	if code := exitcode.For(err); code != exitcode.Timeout {
+		t.Errorf("exitcode.For(err) = %d, want %d (124)", code, exitcode.Timeout)
+	}
+
+	// (e) NO-retry: exactly ONE Execute invocation — the DeadlineExceeded branch returns from inside
+	// the retry loop on the first hit ("DEBUG: command: " is emitted once per Execute).
+	if n := strings.Count(vbuf.String(), "DEBUG: command: "); n != 1 {
+		t.Errorf("Execute called %d times, want 1 (immediate rescue, NO retry)", n)
+	}
+
+	// (f) Nothing moved + a hang-guard (expected kill ~1.5s + up to 3s WaitDelay SIGKILL grace;
+	// 10s is ~5× the expected window — an engine regression that never fires would otherwise ride
+	// a default deadline silently).
+	if got := headSHA(t, repo); got != before {
+		t.Errorf("HEAD moved on the rescued run: %s → %s", before, got)
+	}
+	if elapsed > 10*time.Second {
+		t.Errorf("hard-cap kill took %v; want ≪10s (hang-guard)", elapsed)
+	}
+}

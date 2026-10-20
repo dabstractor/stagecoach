@@ -288,6 +288,46 @@ func TestInvariants(t *testing.T) {
 			},
 		},
 		{
+			// HardCapHeartbeat is the FR-A2 (§9.30) backstop row: a false-alive agent (stderr heartbeat
+			// every 50ms, NEVER an answer) must be BOUNDED by the hard cap — activity is not progress.
+			// The discriminator IS the ordering: idle (1s) < hard (1.5s), so a kill whose cause names
+			// the HARD CAP proves the heartbeat's bytes kept resetting the idle clock (else the idle
+			// would have fired first) while the activity-independent cap still bounded the run.
+			// Platform-uniform: on Linux the watcher arms (D4) and the heartbeat resets it; on
+			// darwin/windows the watcher is DISARMED and only the cap could ever fire — the same cause
+			// line and assertions hold on every platform.
+			name: "HardCapHeartbeat",
+			run: func(t *testing.T, _ context.Context, repo, bin string) (error, string) {
+				if testing.Short() {
+					t.Skip("skipping slow HardCapHeartbeat scenario in -short mode")
+				}
+				var vbuf bytes.Buffer
+				// Persona (c): stderr heartbeat every 50ms forever, NEVER answers — the false-alive pathology.
+				m := stubtest.Manifest(bin, stubtest.Options{HeartbeatMS: 50, Out: "feat: never"})
+				cfg := config.Defaults()
+				cfg.IdleTimeout = 1 * time.Second     // SMALLER than the cap: without the heartbeat's resets the IDLE would fire first
+				cfg.Timeout = 1500 * time.Millisecond // tiny hard cap: the absolute backstop (activity never resets it)
+				deps := Deps{Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(&vbuf, true)}
+				_, err := CommitStaged(context.Background(), deps, cfg)
+				if err != nil {
+					if !errors.Is(err, ErrTimeout) {
+						t.Errorf("HardCapHeartbeat: errors.Is(err, ErrTimeout) = false, got %v", err)
+					}
+					// FR-A2: the cause names the HARD CAP — the only place a hard-cap kill names itself
+					// (Cause IS bare context.DeadlineExceeded; the naming lives in the verbose line).
+					if !strings.Contains(vbuf.String(), "DEBUG: cause: hard cap") {
+						t.Errorf("HardCapHeartbeat: verbose missing hard-cap cause line; buf=\n%s", vbuf.String())
+					}
+					// NO-retry: exactly ONE Execute invocation — the DeadlineExceeded branch returns from
+					// inside the retry loop on the first hit (retries only parse-fail/duplicate).
+					if n := strings.Count(vbuf.String(), "DEBUG: command: "); n != 1 {
+						t.Errorf("HardCapHeartbeat: Execute called %d times, want 1 (immediate rescue, NO retry)", n)
+					}
+				}
+				return err, "" // → treeSHAFromErr + assertInvariants (I1/I2/I3: no index/HEAD mutation, snapshot immutable)
+			},
+		},
+		{
 			name: "SigintContextCancel",
 			run: func(t *testing.T, ctx context.Context, repo, bin string) (error, string) {
 				if testing.Short() {
