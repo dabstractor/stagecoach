@@ -355,7 +355,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T1.S2",
                   "title": "pi (--mode json) verification + disposition",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P2.M2.T1.S1"
@@ -372,7 +372,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T1.S3",
                   "title": "claude / cursor / agy (--output-format stream-json family) verification + disposition",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M2.T1.S1"
@@ -392,7 +392,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T1.S4",
                   "title": "codex (--json) verification + heartbeat judgment",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P2.M2.T1.S1"
