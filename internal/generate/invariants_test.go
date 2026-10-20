@@ -17,12 +17,14 @@
 package generate
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +32,7 @@ import (
 	"github.com/dabstractor/stagecoach/internal/config"
 	"github.com/dabstractor/stagecoach/internal/git"
 	"github.com/dabstractor/stagecoach/internal/stubtest"
+	"github.com/dabstractor/stagecoach/internal/ui"
 )
 
 // waitForMarker blocks until the file at path exists (the stub agent writes it
@@ -231,6 +234,57 @@ func TestInvariants(t *testing.T) {
 					}
 				}
 				return err, ""
+			},
+		},
+		{
+			// IdleKill is the FR-A5 (§9.30) end-to-end parity row: an idle-deadline kill must be
+			// downstream-IDENTICAL to the hard-cap Timeout row above — same *RescueError{ErrTimeout}
+			// (→ treeSHAFromErr + assertInvariants below), same immediate-rescue NO-retry — with the
+			// ONLY observable difference being the --verbose cause line naming the idle deadline
+			// (executor D2: ErrIdleDeadline.Is() ⇒ context.DeadlineExceeded routes the kill into the
+			// SAME DeadlineExceeded rescue branch as a hard cap).
+			//
+			// Config (the LARGE-hard/SMALL-idle discriminator): the stub sleeps SILENTLY past both
+			// deadlines. On Linux the 150ms idle fires at the first ~500ms watcher tick — the bounded
+			// 3s hard cap mathematically cannot fire first, so a kill here PROVES the idle deadline.
+			// The hard cap is BOUNDED (not the 600s default) because on non-Linux the idle watcher is
+			// DISARMED (executor D4: no rchar channel; ProgressiveStdout is always false until P2) and
+			// the cap must land instead — the same platform-safe idiom as TestCallPlanner_IdleTimeout
+			// and TestCommitStaged_WorkDescription_MessageRoleIdleTimeout. Both paths funnel through
+			// the same rescue branch, so the invariants below hold identically on every platform.
+			name: "IdleKill",
+			run: func(t *testing.T, _ context.Context, repo, bin string) (error, string) {
+				if testing.Short() {
+					t.Skip("skipping slow IdleKill scenario in -short mode")
+				}
+				var vbuf bytes.Buffer
+				m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: slow", SleepMS: 5000}) // persona (a): silent hang
+				cfg := config.Defaults()
+				cfg.Timeout = 3 * time.Second            // BOUNDED hard cap (non-Linux D4 kill path)
+				cfg.IdleTimeout = 150 * time.Millisecond // SMALL idle: the only deadline that can kill on Linux
+				deps := Deps{Git: git.New(repo), Manifest: m, Verbose: ui.NewVerbose(&vbuf, true)}
+				_, err := CommitStaged(context.Background(), deps, cfg)
+				if err != nil {
+					if !errors.Is(err, ErrTimeout) {
+						t.Errorf("IdleKill: errors.Is(err, ErrTimeout) = false, got %v", err)
+					}
+					// FR-A5's ONLY observable difference — the cause line names WHICH deadline
+					// fired: the idle deadline on Linux; the bounded hard cap where D4 disarms
+					// the watcher (macOS/Windows).
+					if runtime.GOOS == "linux" {
+						if !strings.Contains(vbuf.String(), "DEBUG: cause: idle deadline") {
+							t.Errorf("IdleKill: verbose missing idle cause line; buf=\n%s", vbuf.String())
+						}
+					} else if !strings.Contains(vbuf.String(), "DEBUG: cause: hard cap") {
+						t.Errorf("IdleKill: verbose missing hard-cap cause line (D4-disarmed platform); buf=\n%s", vbuf.String())
+					}
+					// NO-retry: exactly ONE Execute invocation — the DeadlineExceeded branch returns
+					// from inside the retry loop on the first hit (retries only parse-fail/duplicate).
+					if n := strings.Count(vbuf.String(), "DEBUG: command: "); n != 1 {
+						t.Errorf("IdleKill: Execute called %d times, want 1 (immediate rescue, NO retry)", n)
+					}
+				}
+				return err, "" // → treeSHAFromErr + assertInvariants (I1/I2/I3: no index/HEAD mutation, snapshot immutable)
 			},
 		},
 		{

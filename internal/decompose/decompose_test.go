@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dabstractor/stagecoach/internal/config"
+	"github.com/dabstractor/stagecoach/internal/exitcode"
 	"github.com/dabstractor/stagecoach/internal/generate"
 	"github.com/dabstractor/stagecoach/internal/git"
 	"github.com/dabstractor/stagecoach/internal/prompt"
@@ -1871,6 +1872,120 @@ func TestDecompose_MessageRescuePartial(t *testing.T) {
 	// (f) arbiter NOT called
 	data, err := os.ReadFile(counterFile)
 	if err == nil {
+		count := strings.TrimSpace(string(data))
+		if count != "" && count != "0" {
+			t.Errorf("arbiter call count = %q, want 0 (rescue should skip arbiter)", count)
+		}
+	}
+}
+
+// TestDecompose_MessageIdleKillParity is the FR-A5 (§9.30) end-to-end parity proof through FULL
+// Decompose: an idle-deadline kill on a message concept is downstream-IDENTICAL to the hard-cap
+// path — message.go's errors.Is(execErr, context.DeadlineExceeded) branch (TRUE for ErrIdleDeadline
+// via its Is() — the D2 linchpin) wraps *RescueError{Kind: ErrTimeout} → the runLoop wraps it in a
+// DecomposeRescueError (Unwrap → e.Rescue) → errors.Is(generate.ErrTimeout) traverses →
+// exitcode.For == 124. Nothing lands: concept 0 dies inside its message call BEFORE any commit is
+// published (HEAD + commit count unchanged — the delta from TestDecompose_MessageRescuePartial,
+// whose concept 0 SUCCEEDED and whose partial-commit assertions therefore do not apply here).
+//
+// The harness mirrors TestDecompose_MessageRescuePartial verbatim (dcm helpers + the deliberately
+// NON-disjoint plannerJSON that pins the tooled-stager path + dcmStagerSeam); ONLY the message
+// manifest (a HUNG plain Manifest — concept 0's call hangs, no Script) and the cfg change.
+//
+// Platform note (executor D4): the idle watcher arms only on Linux; elsewhere the BOUNDED 3s hard
+// cap lands — BOTH route through the same DeadlineExceeded rescue branch, so every assertion here
+// except the idle cause line is platform-safe (the cause line is asserted on Linux, mirrored as a
+// hard-cap assertion elsewhere). The Execute COUNT is deliberately NOT asserted: Decompose's planner
+// Execute + concept 0's message Execute both appear in the buffer (2 lines by design).
+func TestDecompose_MessageIdleKillParity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow decompose idle-kill test in -short mode")
+	}
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	dcmInitRepo(t, repo)
+	dcmCommitRaw(t, repo, "initial") // resolvable HEAD: the unchanged-HEAD assertion below diffs rev-parse before/after
+
+	// Create files for 3 concepts.
+	dcmWriteFile(t, repo, "a.txt", "aaa\n")
+	dcmWriteFile(t, repo, "b.txt", "bbb\n")
+	dcmWriteFile(t, repo, "c.txt", "ccc\n")
+
+	// KEEP the model's non-disjoint JSON (a.txt shared across c1/c2 ⇒ tooled-stager path; switching
+	// to a disjoint partition would flip the run onto the fast-path — a DIFFERENT code path).
+	plannerJSON := `{"count":3,"single":false,"commits":[{"title":"c1","description":"a.txt","files":["a.txt"]},{"title":"c2","description":"b.txt","files":["a.txt"]},{"title":"c3","description":"c.txt","files":["c.txt"]}]}`
+	plannerM := dcmPlannerManifest(t, bin, plannerJSON)
+
+	// HUNG message stub: concept 0's message call sleeps SILENTLY past both deadlines.
+	messageM := stubtest.Manifest(bin, stubtest.Options{Out: "feat: hang", SleepMS: 5000})
+
+	stagerM := tooledStubManifest(t, bin, stubtest.Options{Out: ""})
+
+	// Arbiter counter: must NOT be called on the rescue.
+	counterDir := t.TempDir()
+	counterFile := counterDir + "/counter"
+	arbiterM := stubtest.Manifest(bin, stubtest.Options{Script: counterDir + "/script.txt", Counter: counterFile})
+
+	roles := RoleManifests{Planner: plannerM, Stager: stagerM, StagerAvailable: true, Message: messageM, Arbiter: arbiterM}
+	deps, _ := dcmOutBuffer(t, repo, roles)
+	cfg := config.Defaults()
+	cfg.MaxDuplicateRetries = 0
+	cfg.Timeout = 3 * time.Second // BOUNDED global hard cap (non-Linux D4 kill path)
+	cfg.Roles = map[string]config.RoleConfig{
+		"message": {IdleTimeout: 100 * time.Millisecond}, // SMALL role idle → kills concept 0's call (Linux)
+	}
+	deps.Config = cfg
+
+	var vbuf bytes.Buffer
+	deps.Verbose = ui.NewVerbose(&vbuf, true) // dcmOutBuffer sets nil — REQUIRED for the cause assertion
+
+	deps.stager = dcmStagerSeam(t, repo, map[string][]string{
+		"c1": {"a.txt"},
+		"c2": {"b.txt"},
+		"c3": {"c.txt"},
+	})
+
+	before := dcmHeadSHA(t, repo)
+	beforeCount := dcmLogCount(t, repo)
+
+	_, err := Decompose(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected DecomposeRescueError on the message idle kill, got nil")
+	}
+
+	// (a) The DecomposeRescueError traversal: wrap → *RescueError{ErrTimeout} → exit 124.
+	var dre *DecomposeRescueError
+	if !errors.As(err, &dre) {
+		t.Fatalf("error = %v, want *DecomposeRescueError", err)
+	}
+	if !errors.Is(err, generate.ErrTimeout) {
+		t.Errorf("errors.Is(err, generate.ErrTimeout) = false: %v", err)
+	}
+	// THE exit-124 semantics (decompose tests CAN import exitcode — no cycle).
+	if code := exitcode.For(err); code != exitcode.Timeout {
+		t.Errorf("exitcode.For(err) = %d, want %d (124)", code, exitcode.Timeout)
+	}
+
+	// (b) FR-A5's ONLY observable difference — the cause line names WHICH deadline fired.
+	if runtime.GOOS == "linux" {
+		if !strings.Contains(vbuf.String(), "DEBUG: cause: idle deadline") {
+			t.Errorf("missing idle cause line; buf=\n%s", vbuf.String())
+		}
+	} else if !strings.Contains(vbuf.String(), "DEBUG: cause: hard cap") {
+		t.Errorf("missing hard-cap cause line (D4-disarmed platform); buf=\n%s", vbuf.String())
+	}
+
+	// (c) Nothing landed: concept 0 died in its message call; no commit was published.
+	if got := dcmHeadSHA(t, repo); got != before {
+		t.Errorf("HEAD moved on the rescued run: %s → %s", before, got)
+	}
+	if got := dcmLogCount(t, repo); got != beforeCount {
+		t.Errorf("commit count changed on the rescued run: %d → %d", beforeCount, got)
+	}
+
+	// (d) The arbiter is NOT called on the rescue (mirrors the model's counter check).
+	data, readErr := os.ReadFile(counterFile)
+	if readErr == nil {
 		count := strings.TrimSpace(string(data))
 		if count != "" && count != "0" {
 			t.Errorf("arbiter call count = %q, want 0 (rescue should skip arbiter)", count)

@@ -295,6 +295,46 @@ func TestRun_TimeoutNeverBlock(t *testing.T) {
 	}
 }
 
+// TestRun_IdleTimeoutNeverBlock is the FR-A5 (§9.30) hook mirror of TestRun_TimeoutNeverBlock: an
+// idle-deadline kill never blocks the hook — the same "timed out" error (hook/exec.go maps
+// DeadlineExceeded, which ErrIdleDeadline satisfies via its Is() — the D2 linchpin) and the same
+// byte-identical msg-file.
+//
+// Platform note (executor D4): the idle watcher arms only on Linux; elsewhere the BOUNDED 3s hard
+// cap lands (the stub sleeps past both) — either deadline produces the identical never-block
+// outcome, so the assertions are platform-safe.
+func TestRun_IdleTimeoutNeverBlock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow hook idle-timeout test in -short mode")
+	}
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+
+	changePath := filepath.Join(repoDir, "new.txt")
+	mustWriteFile(t, changePath, []byte("new content\n"))
+	runGit(t, repoDir, "add", "new.txt")
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	orig := "# original comments\n"
+	mustWriteFile(t, msgFile, []byte(orig))
+
+	m := stubtest.Manifest(stubBin, stubtest.Options{SleepMS: 5000}) // silent past both deadlines
+	cfg := config.Config{Timeout: 3 * time.Second, IdleTimeout: 50 * time.Millisecond, MaxDuplicateRetries: 2}
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err == nil {
+		t.Error("expected timeout error, got nil")
+	}
+	if err != nil && !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected timeout error, got: %v", err)
+	}
+
+	data, _ := os.ReadFile(msgFile)
+	if string(data) != orig {
+		t.Errorf("msg-file was modified on timeout; got:\n%s", string(data))
+	}
+}
+
 // TestRun_MessageRoleTimeoutNeverBlock verifies FR-R7 on the hook one-shot path: the message role's
 // resolved timeout (ResolveRoleTimeout("message", cfg)) — NOT the flat cfg.Timeout — bounds the hook
 // one-shot Execute. Sets the GLOBAL large (30s, which would NOT time out against a 5000ms stub sleep)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -402,6 +403,67 @@ func TestCallPlanner_IdleTimeout(t *testing.T) {
 	// The %w chain should reach context.DeadlineExceeded (idle kill or hard cap — FR-A5 parity).
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("errors.Is(err, context.DeadlineExceeded) = false, error = %v", err)
+	}
+}
+
+// TestCallPlanner_IdleDeadline is the FR-A5 (§9.30) end-to-end parity proof on the planner: an
+// idle-deadline kill is downstream-IDENTICAL to the hard-cap TestCallPlanner_Timeout above — the
+// same ErrPlannerFailed + context.DeadlineExceeded %w traversal (planner.go's DeadlineExceeded ⇒
+// ErrPlannerFailed mapping is NON-rescue: NO DecomposeRescueError, no retry) — with the ONLY
+// observable difference the --verbose cause line naming the idle deadline.
+//
+// Platform note (executor D4): the idle watcher arms only on Linux; elsewhere the BOUNDED 3s hard
+// cap lands instead (the stub sleeps past both), so the traversal assertions stay platform-safe and
+// the idle-specific cause line is asserted on Linux only (mirrored as a hard-cap assertion
+// elsewhere). plannerDeps leaves Verbose nil — it is OVERRIDDEN here because the cause-line and
+// Execute-count assertions are no-ops against a nil Verbose.
+func TestCallPlanner_IdleDeadline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow planner idle-deadline test in -short mode")
+	}
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "a.txt", "new content") // UNSTAGED
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: validMultiJSON, SleepMS: 5000}) // silent past both deadlines
+	cfg := config.Defaults()
+	cfg.Timeout = 3 * time.Second // BOUNDED global hard cap (non-Linux D4 kill path)
+	cfg.Roles = map[string]config.RoleConfig{
+		"planner": {IdleTimeout: 100 * time.Millisecond}, // SMALL role idle → kills (Linux)
+	}
+
+	var vbuf bytes.Buffer
+	deps := plannerDeps(t, repo, m)
+	deps.Config = cfg
+	deps.Verbose = ui.NewVerbose(&vbuf, true) // plannerDeps sets nil — REQUIRED for cause/count below
+	baseTree, tStart := freezeForPlanner(t, repo, false)
+
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
+	if err == nil {
+		t.Fatal("expected error on idle deadline, got nil")
+	}
+	// The traversal UNCHANGED from the hard-cap model (TestCallPlanner_Timeout): non-rescue
+	// ErrPlannerFailed wrapping the DeadlineExceeded cause — NO DecomposeRescueError (that wrap
+	// belongs to the MESSAGE role; asserting errors.As here would be WRONG).
+	if !errors.Is(err, ErrPlannerFailed) {
+		t.Errorf("errors.Is(err, ErrPlannerFailed) = false, error = %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("errors.Is(err, context.DeadlineExceeded) = false, error = %v", err)
+	}
+	// FR-A5's ONLY observable difference — the cause line names WHICH deadline fired.
+	if runtime.GOOS == "linux" {
+		if !strings.Contains(vbuf.String(), "DEBUG: cause: idle deadline") {
+			t.Errorf("missing idle cause line; buf=\n%s", vbuf.String())
+		}
+	} else if !strings.Contains(vbuf.String(), "DEBUG: cause: hard cap") {
+		t.Errorf("missing hard-cap cause line (D4-disarmed platform); buf=\n%s", vbuf.String())
+	}
+	// NO-retry: exactly ONE Execute invocation — the deadline abort returns on the first hit.
+	if n := strings.Count(vbuf.String(), "DEBUG: command: "); n != 1 {
+		t.Errorf("Execute called %d times, want 1 (no retry on deadline)", n)
 	}
 }
 
