@@ -88,7 +88,8 @@ config_version = 3
 provider = "claude"
 reasoning = "off"   # off|low|medium|high; off by default for every role
 # model          = ""
-# timeout        = "120s"   # global fallback for every role; the planner role defaults to 480s
+# timeout        = "600s"   # global hard-cap fallback for every role; every role also resolves a 60s idle deadline
+# idle_timeout   = "60s"   # idle deadline — kill after N seconds of silence (the primary productivity signal)
 # auto_stage_all = true
 # verbose        = false
 
@@ -96,7 +97,8 @@ reasoning = "off"   # off|low|medium|high; off by default for every role
 
 # [role.planner]
 # model = "haiku"
-# timeout = "600s"   # per-role generation timeout; overrides the planner's 480s built-in
+# timeout = "600s"   # per-role hard-cap timeout; no planner special-case — roles resolve idle+hard-cap like model/provider
+# idle_timeout = "90s"   # per-role idle deadline (kill on silence)
 # [role.stager]
 # model = "sonnet"
 # [role.message]
@@ -135,7 +137,8 @@ These are the values when no config file, env var, git-config key, or flag sets 
 |--------|---------|--------|
 | `provider` | `""` (auto-detect) | `config.Defaults` |
 | `model` | `""` (manifest `default_model`) | `config.Defaults` |
-| `timeout` | `120s` | `config.Defaults` |
+| `timeout` | `600s` (hard cap) | `config.Defaults` |
+| `idle_timeout` | `60s` | `config.Defaults` |
 | `auto_stage_all` | `true` | `config.Defaults` |
 | `verbose` | `false` | `config.Defaults` |
 | `max_diff_bytes` | `300000` | `config.Defaults` |
@@ -190,7 +193,8 @@ All `STAGECOACH_*` variables override the config file and are overridden by CLI 
 |----------|-------------|-------------|---------|
 | `STAGECOACH_PROVIDER` | `--provider` | Default provider/agent | `STAGECOACH_PROVIDER=claude stagecoach` |
 | `STAGECOACH_MODEL` | `--model` | Model override | `STAGECOACH_MODEL=sonnet stagecoach` |
-| `STAGECOACH_TIMEOUT` | `--timeout` | Global generation timeout — the fallback for every role; the planner role defaults to 480s and is NOT changed by this | `STAGECOACH_TIMEOUT=60s stagecoach` |
+| `STAGECOACH_TIMEOUT` | `--timeout` | Global hard-cap generation timeout — the fallback for every role; every role also resolves a 60s idle deadline (`STAGECOACH_IDLE_TIMEOUT`) | `STAGECOACH_TIMEOUT=600s stagecoach` |
+| `STAGECOACH_IDLE_TIMEOUT` | `--idle-timeout` | Global idle deadline — kill on N seconds of silence; the fallback for every role | `STAGECOACH_IDLE_TIMEOUT=45s stagecoach` |
 | `STAGECOACH_CONFIG` | `--config` | Config file path | `STAGECOACH_CONFIG=./alt.toml stagecoach` |
 | `STAGECOACH_VERBOSE` | `--verbose` | Print resolved command and output. Accepts `true`/`false`/`1`/`0`. (`2` is documented as a future payload-contents level but **not yet implemented** — it is rejected with a clear message.) | `STAGECOACH_VERBOSE=true stagecoach` |
 | `STAGECOACH_NO_COLOR` | `--no-color` | Disable color | `STAGECOACH_NO_COLOR=true stagecoach` |
@@ -209,10 +213,14 @@ All `STAGECOACH_*` variables override the config file and are overridden by CLI 
 | `STAGECOACH_STAGER_REASONING` | `--stager-reasoning` | Per-role: stager reasoning | `STAGECOACH_STAGER_REASONING=low stagecoach` |
 | `STAGECOACH_MESSAGE_REASONING` | `--message-reasoning` | Per-role: message reasoning | `STAGECOACH_MESSAGE_REASONING=low stagecoach` |
 | `STAGECOACH_ARBITER_REASONING` | `--arbiter-reasoning` | Per-role: arbiter reasoning | `STAGECOACH_ARBITER_REASONING=low stagecoach` |
-| `STAGECOACH_PLANNER_TIMEOUT` | `--planner-timeout` | Per-role: planner generation timeout (; planner built-in 480s) | `STAGECOACH_PLANNER_TIMEOUT=600s stagecoach` |
-| `STAGECOACH_STAGER_TIMEOUT` | `--stager-timeout` | Per-role: stager generation timeout (; inherits 120s) | `STAGECOACH_STAGER_TIMEOUT=300s stagecoach` |
-| `STAGECOACH_MESSAGE_TIMEOUT` | `--message-timeout` | Per-role: message generation timeout (; the single-commit path's only role; inherits 120s) | `STAGECOACH_MESSAGE_TIMEOUT=120s stagecoach` |
-| `STAGECOACH_ARBITER_TIMEOUT` | `--arbiter-timeout` | Per-role: arbiter generation timeout (; inherits 120s) | `STAGECOACH_ARBITER_TIMEOUT=120s stagecoach` |
+| `STAGECOACH_PLANNER_TIMEOUT` | `--planner-timeout` | Per-role: planner hard-cap generation timeout (no planner special-case; roles resolve idle+hard-cap exactly like model/provider) | `STAGECOACH_PLANNER_TIMEOUT=600s stagecoach` |
+| `STAGECOACH_STAGER_TIMEOUT` | `--stager-timeout` | Per-role: stager hard-cap generation timeout (; inherits the 600s global hard cap) | `STAGECOACH_STAGER_TIMEOUT=300s stagecoach` |
+| `STAGECOACH_MESSAGE_TIMEOUT` | `--message-timeout` | Per-role: message hard-cap generation timeout (; the single-commit path's only role; inherits the 600s global hard cap) | `STAGECOACH_MESSAGE_TIMEOUT=120s stagecoach` |
+| `STAGECOACH_ARBITER_TIMEOUT` | `--arbiter-timeout` | Per-role: arbiter hard-cap generation timeout (; inherits the 600s global hard cap) | `STAGECOACH_ARBITER_TIMEOUT=120s stagecoach` |
+| `STAGECOACH_PLANNER_IDLE_TIMEOUT` | `--planner-idle-timeout` | Per-role: planner idle deadline — kill on N seconds of silence (fresh idle clock per invocation) | `STAGECOACH_PLANNER_IDLE_TIMEOUT=45s stagecoach` |
+| `STAGECOACH_STAGER_IDLE_TIMEOUT` | `--stager-idle-timeout` | Per-role: stager idle deadline (fresh idle clock per invocation) | `STAGECOACH_STAGER_IDLE_TIMEOUT=45s stagecoach` |
+| `STAGECOACH_MESSAGE_IDLE_TIMEOUT` | `--message-idle-timeout` | Per-role: message idle deadline (fresh idle clock per invocation) | `STAGECOACH_MESSAGE_IDLE_TIMEOUT=45s stagecoach` |
+| `STAGECOACH_ARBITER_IDLE_TIMEOUT` | `--arbiter-idle-timeout` | Per-role: arbiter idle deadline (fresh idle clock per invocation) | `STAGECOACH_ARBITER_IDLE_TIMEOUT=45s stagecoach` |
 | `STAGECOACH_FORMAT` | `--format` | Message format: `<base>[+body]` — auto\|conventional\|gitmoji\|plain; append `+body` to force a subject+body; unknown = hard error (exit 1) | `STAGECOACH_FORMAT=conventional+body stagecoach` |
 | `STAGECOACH_LOCALE` | `--locale` | Message language (free-form; never validated) | `STAGECOACH_LOCALE=ja stagecoach` |
 | `STAGECOACH_TEMPLATE` | `--template` | Message template; `$msg` = generated message; must contain `$msg` (hard error) | `STAGECOACH_TEMPLATE='$msg (#205)' stagecoach` |
@@ -229,7 +237,8 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 [stagecoach]
     provider = pi
     model = claude-haiku
-    timeout = 120s
+    timeout = 600s
+    idleTimeout = 60s
     autoStageAll = true
 ```
 
@@ -237,8 +246,10 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 |-----|------|-----------|-------------|
 | `stagecoach.provider` | string | `git config --get stagecoach.provider` | Default provider |
 | `stagecoach.model` | string | `git config --get stagecoach.model` | Model override |
-| `stagecoach.timeout` | string | `git config --get stagecoach.timeout` | Generation timeout (duration string) |
-| `stagecoach.role.<role>.timeout` | string | `git config --get stagecoach.role.<role>.timeout` | Per-role generation timeout; `<role>` ∈ `planner`\|`stager`\|`message`\|`arbiter`. Duration string (`"600s"` or bare `600`); unset ⇒ inherit global `stagecoach.timeout`. |
+| `stagecoach.timeout` | string | `git config --get stagecoach.timeout` | Hard-cap generation timeout (duration string; default 600s) |
+| `stagecoach.idleTimeout` | string | `git config --get stagecoach.idleTimeout` | Idle deadline — kill on silence (default 60s) |
+| `stagecoach.role.<role>.timeout` | string | `git config --get stagecoach.role.<role>.timeout` | Per-role hard-cap generation timeout; `<role>` ∈ `planner`\|`stager`\|`message`\|`arbiter`. Duration string (`"600s"` or bare `600`); unset ⇒ inherit global `stagecoach.timeout`. No planner 480s built-in exception — every role resolves idle+hard-cap exactly like model/provider. |
+| `stagecoach.role.<role>.idleTimeout` | string | `git config --get stagecoach.role.<role>.idleTimeout` | Per-role idle deadline — kill on silence; unset ⇒ inherit global `stagecoach.idleTimeout`. |
 | `stagecoach.autoStageAll` | bool | `git config --get --bool stagecoach.autoStageAll` | Auto-stage all when nothing staged |
 | `stagecoach.output` | string | `git config --get stagecoach.output` | Agent output mode: `raw` \| `json` (overrides per-provider default) |
 | `stagecoach.stripCodeFence` | bool | `git config --get --bool stagecoach.stripCodeFence` | Strip ``` fences from agent output (overrides per-provider default) |
@@ -251,7 +262,7 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | `stagecoach.noParentWatchdog` | bool | `git config --get --bool stagecoach.noParentWatchdog` | Opt out of the parent-death lock watchdog. Default false (the watchdog runs by default); set true for intentional-detach workflows (`nohup`/`setsid`/`systemd-run`). |
 
 > [!NOTE]
-> The git-config layer has per-role **timeout** keys (`stagecoach.role.<role>.timeout`), but **no** per-role provider/model/reasoning keys — those are CLI flags (`--planner-provider`, etc.), env vars (`STAGECOACH_PLANNER_*`), and config-file `[role.*]` blocks only. There is no `stagecoach.commits` and no `stagecoach.max_commits` (decompose settings `--commits`/`--single`/`--no-decompose` are flag/env only; `--max-commits` also reads from the `[generation]` config-file section). There is also no `stagecoach.exclude` git-config key and no `STAGECOACH_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.
+> The git-config layer has per-role **timeout** and **idle-timeout** keys (`stagecoach.role.<role>.timeout` / `stagecoach.role.<role>.idleTimeout`), but **no** per-role provider/model/reasoning keys — those are CLI flags (`--planner-provider`, etc.), env vars (`STAGECOACH_PLANNER_*`), and config-file `[role.*]` blocks only. There is no `stagecoach.commits` and no `stagecoach.max_commits` (decompose settings `--commits`/`--single`/`--no-decompose` are flag/env only; `--max-commits` also reads from the `[generation]` config-file section). There is also no `stagecoach.exclude` git-config key and no `STAGECOACH_EXCLUDE` env var (deliberate — see [Exclusion globs](#exclusion-globs-generationexclude) below); exclusions are config-file + `--exclude`/`-x` only.
 
 ### Decompose config keys
 
@@ -261,7 +272,7 @@ These keys live in `.git/config` (set with `git config --local` or `git config -
 | Single-commit | `--single` / `--no-decompose` | — | — | `false` | Bypass decompose → v1 single-commit |
 | Max commits | `--max-commits <N>` | — | `[generation].max_commits` | `12` | Safety cap on auto-decompose count |
 
-Per-role provider/model overrides (flag > env > `[role.<role>]` config > `[defaults]` > built-in): see [providers.md](providers.md#per-role-default-models-fr-d4) for the compiled-in defaults per provider. Every role (including message) exposes `--<role>-provider`/`--<role>-model`/`--<role>-reasoning`/`--<role>-timeout` (/). Each role also resolves its **own generation timeout**: the **planner defaults to 480s** (the heavy role that reasons over the full frozen diff), while **stager/message/arbiter inherit the global `120s`**. Override a role with `--<role>-timeout` / `STAGECOACH_<ROLE>_TIMEOUT` / `[role.<role>].timeout` / `stagecoach.role.<role>.timeout` (precedence: flag > env > `[role.<role>]` > built-in > `[defaults]`). Note the global `--timeout` does **not** change the planner — it has a 480s built-in that wins; set `--planner-timeout` to override it.
+Per-role provider/model overrides (flag > env > `[role.<role>]` config > `[defaults]` > built-in): see [providers.md](providers.md#per-role-default-models-fr-d4) for the compiled-in defaults per provider. Every role (including message) exposes `--<role>-provider`/`--<role>-model`/`--<role>-reasoning`/`--<role>-timeout`/`--<role>-idle-timeout` (/). Each role resolves TWO deadlines on the same ladder — an **idle deadline** (default 60s: kill the agent after N seconds with no output — the primary productivity signal) and a **hard cap** (default 600s: the absolute backstop) — via the same flag > env > `[role.<role>]` > `[defaults]` chain; there is **no planner special-case** (no role has a built-in deadline) and no separate built-in precedence tier. Override a role with `--<role>-timeout`/`--<role>-idle-timeout`, `STAGECOACH_<ROLE>_TIMEOUT`/`STAGECOACH_<ROLE>_IDLE_TIMEOUT`, `[role.<role>].timeout`/`.idle_timeout`, or `stagecoach.role.<role>.timeout`/`.idleTimeout` (precedence: flag > env > `[role.<role>]` > `[defaults]`). Note the global `--timeout` now applies to the planner too — every role resolves idle+hard-cap exactly like model/provider.
 
 > [!IMPORTANT]
 > **Precedence gotcha:** because per-role config beats the global `[defaults]`, a `[role.<role>]` entry silently shadows an explicit `--model`/`--provider` (which set the GLOBAL default only) for that role. This is correct per but an easy footgun — e.g. a `[role.message] model = "…"` config means `stagecoach --model X` uses the config's model for the commit. Use `--message-model` (or `--message-provider`) to override the message role specifically, or run with `--verbose` to see a `DEBUG: note: --model shadowed by [role.message].model; use --message-model to override` hint when shadowing is active. See [cli.md](cli.md#global-flags) for the full precedence note.

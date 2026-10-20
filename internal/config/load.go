@@ -469,6 +469,17 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			}
 		}
 	}
+	// §9.30 FR-R7 / FR25 — global idle deadline via CLI flag (layer 7, DIRECT-set). Mirrors the
+	// --timeout arm above EXACTLY: Changed→GetString→parseTimeout→set. loadFlags has NO error return,
+	// so a malformed value is silently ignored (the documented flag-layer asymmetry — the env layer is
+	// the hard-error layer); parseTimeout accepts "90s" and bare "90".
+	if fs.Changed("idle-timeout") {
+		if v, err := fs.GetString("idle-timeout"); err == nil {
+			if d, perr := parseTimeout(v); perr == nil {
+				cfg.IdleTimeout = d
+			}
+		}
+	}
 	if fs.Changed("verbose") {
 		if v, err := fs.GetBool("verbose"); err == nil {
 			cfg.Verbose = v // DIRECT set — can be false (escape hatch)
@@ -505,6 +516,17 @@ func loadFlags(cfg *Config, fs *pflag.FlagSet) {
 			if v, err := fs.GetString(role + "-timeout"); err == nil {
 				if d, perr := parseTimeout(v); perr == nil {
 					cfg.setRoleTimeout(role, d)
+				}
+			}
+		}
+		// §9.30 FR-R7 — per-role idle deadline via CLI flag. Mirrors the -timeout arm above EXACTLY:
+		// Changed→GetString→parseTimeout→set (setRoleIdleTimeout, S2). loadFlags has NO error return,
+		// so a malformed value is silently ignored (same as --timeout / --idle-timeout); the env layer
+		// is the hard-error layer. parseTimeout accepts "90s" and bare "90".
+		if fs.Changed(role + "-idle-timeout") {
+			if v, err := fs.GetString(role + "-idle-timeout"); err == nil {
+				if d, perr := parseTimeout(v); perr == nil {
+					cfg.setRoleIdleTimeout(role, d)
 				}
 			}
 		}

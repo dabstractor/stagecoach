@@ -47,15 +47,17 @@ func chdir(t *testing.T, dir string) {
 }
 
 // newFlagSet returns a fresh *pflag.FlagSet with the Config-backed flags pre-registered:
-// provider/model as String "", timeout as String "", verbose as Bool false, no-color as Bool false,
-// plus the V2 per-role flags (4 role×2 = 8 String flags) and decompose flags (commits/single/
-// no-decompose/max-commits). Extending is behavior-neutral for existing tests that don't Set them.
+// provider/model as String "", timeout AND idle-timeout as String "", verbose as Bool false,
+// no-color as Bool false, plus the V2 per-role flags (4 role×3 = 12 String flags incl. the
+// per-role idle-timeout flags) and decompose flags (commits/single/no-decompose/max-commits).
+// Extending is behavior-neutral for existing tests that don't Set them.
 func newFlagSet(t *testing.T) *pflag.FlagSet {
 	t.Helper()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	fs.String("provider", "", "")
 	fs.String("model", "", "")
 	fs.String("timeout", "", "")
+	fs.String("idle-timeout", "", "")
 	fs.Bool("verbose", false, "")
 	fs.Bool("no-color", false, "")
 	// V2 per-role flags (PRD §9.15 FR-R3, §15.2)
@@ -63,6 +65,7 @@ func newFlagSet(t *testing.T) *pflag.FlagSet {
 		fs.String(role+"-provider", "", "")
 		fs.String(role+"-model", "", "")
 		fs.String(role+"-timeout", "", "")
+		fs.String(role+"-idle-timeout", "", "") // §9.30 FR-R7 per-role idle deadline
 	}
 	// V2 decompose flags (PRD §9.14 FR-M2, §15.2)
 	fs.Int("commits", 0, "")
@@ -667,6 +670,87 @@ func TestLoadFlags_PerRoleTimeout_MalformedIgnored(t *testing.T) {
 	}
 }
 
+// TestLoadFlags_IdleTimeoutString proves the global --idle-timeout flag branch in loadFlags (§9.30
+// FR-R7): duration form ("90s") AND bare-int form ("90" — proves parseTimeout, NOT
+// time.ParseDuration) both land in cfg.IdleTimeout, and a malformed value is SILENTLY ignored
+// (loadFlags has NO error return — the documented flag-layer asymmetry; the env layer is the
+// hard-error layer). 90s is the S3 flag sentinel (distinct from S2's 45s env/git/file and the
+// 60s/120s/600s timeout values so no assertion can pass through the wrong field).
+func TestLoadFlags_IdleTimeoutString(t *testing.T) {
+	// Duration form.
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	if err := fs.Set("idle-timeout", "90s"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if cfg.IdleTimeout != 90*time.Second {
+		t.Errorf("IdleTimeout=%v want 90s", cfg.IdleTimeout)
+	}
+
+	// Bare-int form (proves parseTimeout, not time.ParseDuration).
+	cfg = Defaults()
+	fs = newFlagSet(t)
+	if err := fs.Set("idle-timeout", "90"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if cfg.IdleTimeout != 90*time.Second {
+		t.Errorf("IdleTimeout=%v want 90s (bare int via parseTimeout)", cfg.IdleTimeout)
+	}
+
+	// Malformed → silently ignored; IdleTimeout stays at the lower layers' value (Defaults' 60s here).
+	cfg = Defaults()
+	fs = newFlagSet(t)
+	if err := fs.Set("idle-timeout", "abc"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs) // MUST NOT panic / MUST NOT error (loadFlags returns nothing)
+	if cfg.IdleTimeout != 60*time.Second {
+		t.Errorf("malformed --idle-timeout should be ignored; IdleTimeout=%v want the Defaults 60s", cfg.IdleTimeout)
+	}
+}
+
+// TestLoadFlags_PerRoleIdleTimeout proves the per-role -idle-timeout flag branch in loadFlags (§9.30
+// FR-R7): duration form AND bare-int form parse via parseTimeout into Roles[role].IdleTimeout, and a
+// per-role idle flag does NOT clobber other per-role fields on the same role (field-merge with
+// --planner-provider, mirroring TestLoadFlags_PerRoleTimeout). 90s sentinels throughout.
+func TestLoadFlags_PerRoleIdleTimeout(t *testing.T) {
+	cfg := Defaults()
+	fs := newFlagSet(t)
+	if err := fs.Set("planner-idle-timeout", "90s"); err != nil { // duration form
+		t.Fatal(err)
+	}
+	if err := fs.Set("stager-idle-timeout", "90"); err != nil { // bare-int form (proves parseTimeout)
+		t.Fatal(err)
+	}
+	if err := fs.Set("planner-provider", "agy"); err != nil { // field-merge: same role, different field
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs)
+	if rc := cfg.Roles["planner"]; rc.IdleTimeout != 90*time.Second || rc.Provider != "agy" {
+		t.Errorf("Roles[planner]=%+v want IdleTimeout=90s Provider=agy (field-merge)", rc)
+	}
+	if rc := cfg.Roles["stager"]; rc.IdleTimeout != 90*time.Second {
+		t.Errorf("Roles[stager].IdleTimeout=%v want 90s (bare int via parseTimeout)", rc.IdleTimeout)
+	}
+	// unset role: message has no -idle-timeout → IdleTimeout stays 0 (Changed==false → skipped)
+	if rc, ok := cfg.Roles["message"]; ok && rc.IdleTimeout != 0 {
+		t.Errorf("message idle-timeout should be 0/absent, got %v", rc.IdleTimeout)
+	}
+
+	// Malformed → silently ignored; planner.IdleTimeout stays 0 (no lower layer set it).
+	cfg = Defaults()
+	fs = newFlagSet(t)
+	if err := fs.Set("planner-idle-timeout", "not-a-dur"); err != nil {
+		t.Fatal(err)
+	}
+	loadFlags(&cfg, fs) // MUST NOT panic / MUST NOT error (loadFlags returns nothing)
+	if rc, ok := cfg.Roles["planner"]; ok && rc.IdleTimeout != 0 {
+		t.Errorf("malformed --planner-idle-timeout should be ignored, got Roles[planner].IdleTimeout=%v", rc.IdleTimeout)
+	}
+}
+
 func TestLoadFlags_Decompose(t *testing.T) {
 	cfg := Defaults()
 	fs := newFlagSet(t)
@@ -1246,6 +1330,26 @@ func TestLoad_PerRoleTimeout_FlagBeatsEnv(t *testing.T) {
 	}
 	if rc := cfg.Roles["planner"]; rc.Timeout != 600*time.Second {
 		t.Errorf("Roles[planner].Timeout=%v want 600s (flag > env)", rc.Timeout)
+	}
+}
+
+// TestLoad_IdleTimeout_FlagBeatsEnv proves the flag layer (7) beats the env layer (5) for the GLOBAL
+// idle deadline (§9.30 FR-R7): STAGECOACH_IDLE_TIMEOUT=45s (S2's env sentinel) is overridden by
+// --idle-timeout 90s (S3's flag sentinel). Mirrors TestLoad_PerRoleTimeout_FlagBeatsEnv.
+func TestLoad_IdleTimeout_FlagBeatsEnv(t *testing.T) {
+	_, repo, _ := loadEnvSetup(t)
+	chdir(t, repo)
+	t.Setenv("STAGECOACH_IDLE_TIMEOUT", "45s") // env layer 5
+	fs := newFlagSet(t)
+	if err := fs.Set("idle-timeout", "90s"); err != nil { // flag layer 7 (wins)
+		t.Fatal(err)
+	}
+	cfg, err := Load(context.Background(), LoadOpts{RepoDir: repo, Flags: fs})
+	if err != nil {
+		t.Fatalf("Load err=%v", err)
+	}
+	if cfg.IdleTimeout != 90*time.Second {
+		t.Errorf("IdleTimeout=%v want 90s (flag > env)", cfg.IdleTimeout)
 	}
 }
 

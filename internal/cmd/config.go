@@ -646,7 +646,8 @@ const exampleConfigTemplate = `# Stagecoach configuration file.
 # Environment variables — override this file, are overridden by CLI flags:
 #   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "agy")
 #   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
-#   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
+#   STAGECOACH_TIMEOUT    hard-cap generation timeout, e.g. "600s" or 600 (seconds)
+#   STAGECOACH_IDLE_TIMEOUT   idle deadline (kill on silence), e.g. "60s" or 60 (seconds)
 #   STAGECOACH_CONFIG     path to a config file, overrides discovery
 #   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
 #   STAGECOACH_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
@@ -672,7 +673,8 @@ const exampleConfigTemplate = `# Stagecoach configuration file.
 # Git config keys — alternative to this file, scoped to one repo:
 #   git config stagecoach.provider pi
 #   git config stagecoach.model ""
-#   git config stagecoach.timeout 120s
+#   git config stagecoach.timeout 600s
+#   git config stagecoach.idleTimeout 60s
 #   git config stagecoach.autoStageAll true
 #   (read via ` + "`git config --get stagecoach.<key>`" + `)
 
@@ -691,7 +693,8 @@ const exampleConfigTemplate = `# Stagecoach configuration file.
 # [defaults]
 # provider       = "pi"     # default agent; "" -> auto-detect (first installed built-in)
 # model          = ""       # "" -> use the provider manifest's default_model
-# timeout        = "120s"   # generation timeout (Go duration string, e.g. "2m", or bare seconds)
+# timeout        = "600s"   # hard-cap generation timeout (Go duration string, e.g. "10m", or bare seconds)
+# idle_timeout   = "60s"    # idle deadline — kill after N seconds of silence
 # auto_stage_all = true     # run ` + "`git add -A`" + ` when nothing is staged
 # verbose        = false    # print the resolved command, raw agent output, and retries
 ` + config.GenerationSection + `

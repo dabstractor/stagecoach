@@ -498,3 +498,40 @@ func extractCommentedTargetRoleBlock(content, role string) string {
 	}
 	return rest[:nextIdx]
 }
+
+// TestGenerateBootstrapConfig_DeadlineDefaults proves the generated bootstrap template tells the
+// v3.5 deadline truth (§9.30 FR-R7 / P1.M1.T1.S3): the populated [defaults] block documents BOTH
+// deadlines with their shipped defaults — `# timeout = "600s"` (the hard-cap backstop) and
+// `# idle_timeout = "60s"` (the primary signal, kill on silence) — the stale 120s default is gone,
+// and S2's env/git doc lines for the idle deadline are present (verified, not re-added).
+func TestGenerateBootstrapConfig_DeadlineDefaults(t *testing.T) {
+	out := GenerateBootstrapConfig("pi")
+
+	// The template body documents BOTH deadlines at their shipped defaults.
+	if !strings.Contains(out, `# idle_timeout   = "60s"`) {
+		t.Errorf("generated template missing `# idle_timeout   = \"60s\"`; got:\n%s", out)
+	}
+	if !strings.Contains(out, `# timeout        = "600s"`) {
+		t.Errorf("generated template missing `# timeout        = \"600s\"`; got:\n%s", out)
+	}
+	// idle sits directly below timeout (drift inventory: "directly below, mirroring the timeout line").
+	timeoutIdx := strings.Index(out, `# timeout        = "600s"`)
+	idleIdx := strings.Index(out, `# idle_timeout   = "60s"`)
+	if timeoutIdx < 0 || idleIdx < 0 || idleIdx < timeoutIdx {
+		t.Errorf("idle_timeout line must appear directly below the timeout line (timeoutIdx=%d idleIdx=%d)", timeoutIdx, idleIdx)
+	}
+
+	// The stale 120s default is gone from the populated template (S2's idle doc lines use 45s as an
+	// arbitrary example — acceptable; a DEFAULT-implying 120s is not).
+	if strings.Contains(out, `"120s"`) {
+		t.Errorf(`generated template still contains the stale default "120s"; got:\n%s`, out)
+	}
+
+	// S2's idle doc lines (env block + git block) are present — verify, don't re-add.
+	if !strings.Contains(out, "STAGECOACH_IDLE_TIMEOUT") {
+		t.Error("generated template missing the STAGECOACH_IDLE_TIMEOUT env doc line (S2)")
+	}
+	if !strings.Contains(out, "stagecoach.idleTimeout") {
+		t.Error("generated template missing the stagecoach.idleTimeout git-config doc line (S2)")
+	}
+}

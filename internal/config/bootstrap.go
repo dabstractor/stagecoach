@@ -171,7 +171,7 @@ func buildBootstrapConfig(target string, installed []string, overrides map[strin
 	}
 	b.WriteString("\n")
 	b.WriteString("reasoning = \"off\"   # off|low|medium|high; off by default for every role — opt in per role below\n")
-	b.WriteString("# model          = \"\"\n# timeout        = \"120s\"\n# auto_stage_all = true\n# verbose        = false\n")
+	b.WriteString("# model          = \"\"\n# timeout        = \"600s\"  # hard cap — the absolute backstop (the idle deadline is the primary signal)\n# idle_timeout   = \"60s\"   # idle deadline — kill the agent after N seconds of silence\n# auto_stage_all = true\n# verbose        = false\n")
 
 	// [role.*] for the target (UNCOMMENTED), canonical order: planner, stager, message, arbiter
 	models := DefaultModelsForProvider(target) // non-nil (target is a validated built-in)
@@ -356,7 +356,7 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 # Environment variables — override this file, are overridden by CLI flags:
 #   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "agy")
 #   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
-#   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
+#   STAGECOACH_TIMEOUT    hard-cap generation timeout, e.g. "600s" or 600 (seconds)
 #   STAGECOACH_IDLE_TIMEOUT   idle deadline (kill on silence), e.g. "45s" or 45 (seconds)
 #   STAGECOACH_CONFIG     path to a config file, overrides discovery
 #   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
@@ -373,7 +373,7 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 # Git config keys — alternative to this file, scoped to one repo:
 #   git config stagecoach.provider pi
 #   git config stagecoach.model ""
-#   git config stagecoach.timeout 120s
+#   git config stagecoach.timeout 600s
 #   git config stagecoach.idleTimeout 45s
 #   git config stagecoach.autoStageAll true
 #   (read via ` + "`git config --get stagecoach.<key>`" + `)

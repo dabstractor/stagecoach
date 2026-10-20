@@ -48,12 +48,13 @@ var Version string
 // Config-backed flags (resolved by config.Load via fs.Changed; registered at ZERO default so Changed
 // reflects "user passed it"). See design §2 (timeout is a STRING) and §3 (zero defaults).
 var (
-	flagProvider string
-	flagModel    string
-	flagConfig   string // --config → LoadOpts.ConfigPathOverride (NOT a Config field)
-	flagTimeout  string // STRING — config.Load reads via fs.GetString("timeout") (FINDING 7)
-	flagVerbose  bool
-	flagNoColor  bool
+	flagProvider    string
+	flagModel       string
+	flagConfig      string // --config → LoadOpts.ConfigPathOverride (NOT a Config field)
+	flagTimeout     string // STRING — config.Load reads via fs.GetString("timeout") (FINDING 7)
+	flagIdleTimeout string // STRING — idle deadline (§9.30); config.Load reads via fs.GetString("idle-timeout")
+	flagVerbose     bool
+	flagNoColor     bool
 )
 
 // Decompose/per-role flags (resolved by config.Load via fs.Changed; P4.M1.T1.S1). loadFlags reads
@@ -61,27 +62,31 @@ var (
 // exactly as flagProvider/flagModel do. Do NOT read these vars directly — cfg.Commits/Single/...
 // is the source of truth after PersistentPreRunE.
 var (
-	flagCommits          int
-	flagSingle           bool
-	flagNoDecompose      bool
-	flagMaxCommits       int
-	flagReasoning        string
-	flagPlannerProvider  string
-	flagPlannerModel     string
-	flagPlannerReasoning string
-	flagStagerProvider   string
-	flagStagerModel      string
-	flagStagerReasoning  string
-	flagMessageProvider  string
-	flagMessageModel     string
-	flagMessageReasoning string
-	flagArbiterProvider  string
-	flagArbiterModel     string
-	flagArbiterReasoning string
-	flagPlannerTimeout   string
-	flagStagerTimeout    string
-	flagMessageTimeout   string
-	flagArbiterTimeout   string
+	flagCommits            int
+	flagSingle             bool
+	flagNoDecompose        bool
+	flagMaxCommits         int
+	flagReasoning          string
+	flagPlannerProvider    string
+	flagPlannerModel       string
+	flagPlannerReasoning   string
+	flagStagerProvider     string
+	flagStagerModel        string
+	flagStagerReasoning    string
+	flagMessageProvider    string
+	flagMessageModel       string
+	flagMessageReasoning   string
+	flagArbiterProvider    string
+	flagArbiterModel       string
+	flagArbiterReasoning   string
+	flagPlannerTimeout     string
+	flagStagerTimeout      string
+	flagMessageTimeout     string
+	flagArbiterTimeout     string
+	flagPlannerIdleTimeout string
+	flagStagerIdleTimeout  string
+	flagMessageIdleTimeout string
+	flagArbiterIdleTimeout string
 )
 
 // Behavioral flags (NOT Config fields; read directly by the default-action RunE in S2 / dry-run in S4).
@@ -166,7 +171,10 @@ func init() {
 	pf.StringVar(&flagProvider, "provider", "", "Provider/agent to use (env STAGECOACH_PROVIDER, git stagecoach.provider; default auto-detected)")
 	pf.StringVar(&flagModel, "model", "", "Model override (env STAGECOACH_MODEL, git stagecoach.model; default per-manifest default_model). Sets the GLOBAL default — a [role.<role>] model in config (or a --<role>-model flag) takes precedence for that role (FR-R3); use --message-model to override the message role (a --verbose run notes the shadowing)")
 	pf.StringVar(&flagConfig, "config", "", "Path to a config file, overrides discovery (env STAGECOACH_CONFIG)")
-	pf.StringVar(&flagTimeout, "timeout", "", "Generation timeout, e.g. \"120s\" or 120 (env STAGECOACH_TIMEOUT, git stagecoach.timeout; default 120s)")
+	pf.StringVar(&flagTimeout, "timeout", "",
+		"Hard-cap generation timeout (the backstop for the idle deadline), e.g. \"600s\" or 600 (env STAGECOACH_TIMEOUT, git stagecoach.timeout; default 600s)")
+	pf.StringVar(&flagIdleTimeout, "idle-timeout", "",
+		"Idle deadline — kill the agent after N seconds with no output, e.g. \"60s\" or 60 (env STAGECOACH_IDLE_TIMEOUT, git stagecoach.idleTimeout; default 60s)")
 	pf.BoolVarP(&flagVerbose, "verbose", "v", false, "Print resolved command, raw output, retries (env STAGECOACH_VERBOSE)")
 	pf.BoolVar(&flagNoColor, "no-color", false, "Disable color (env STAGECOACH_NO_COLOR, NO_COLOR; default TTY-aware)")
 	// §15.2 behavioral flags (read by S2/S4 RunE; not Config fields).
@@ -256,14 +264,25 @@ func init() {
 	pf.StringVar(&flagArbiterReasoning, "arbiter-reasoning", "",
 		"Per-role reasoning override for the leftover arbiter (env STAGECOACH_ARBITER_REASONING; git stagecoach.role.arbiter)")
 	// §9.15 FR-R7 / §15.2 — per-role generation timeout flags (string, zero default; loadFlags reads via fs.Changed).
+	// Each role resolves TWO deadlines (§9.30 FR-R7): the idle deadline (the primary productivity
+	// signal) and the hard cap (the absolute backstop) — no planner special-case anymore.
 	pf.StringVar(&flagPlannerTimeout, "planner-timeout", "",
-		"Per-role generation timeout for the decomposition planner, e.g. \"600s\" or 600 (env STAGECOACH_PLANNER_TIMEOUT; git stagecoach.role.planner.timeout)")
+		"Per-role hard-cap generation timeout for the decomposition planner, e.g. \"600s\" or 600 (env STAGECOACH_PLANNER_TIMEOUT; git stagecoach.role.planner.timeout)")
 	pf.StringVar(&flagStagerTimeout, "stager-timeout", "",
-		"Per-role generation timeout for the (tooled) staging agent, e.g. \"300s\" or 300 (env STAGECOACH_STAGER_TIMEOUT; git stagecoach.role.stager.timeout)")
+		"Per-role hard-cap generation timeout for the (tooled) staging agent, e.g. \"300s\" or 300 (env STAGECOACH_STAGER_TIMEOUT; git stagecoach.role.stager.timeout)")
 	pf.StringVar(&flagMessageTimeout, "message-timeout", "",
-		"Per-role generation timeout for the message composer, e.g. \"120s\" or 120 (env STAGECOACH_MESSAGE_TIMEOUT; git stagecoach.role.message.timeout)")
+		"Per-role hard-cap generation timeout for the message composer, e.g. \"90s\" or 90 (env STAGECOACH_MESSAGE_TIMEOUT; git stagecoach.role.message.timeout)")
 	pf.StringVar(&flagArbiterTimeout, "arbiter-timeout", "",
-		"Per-role generation timeout for the leftover arbiter, e.g. \"120s\" or 120 (env STAGECOACH_ARBITER_TIMEOUT; git stagecoach.role.arbiter.timeout)")
+		"Per-role hard-cap generation timeout for the leftover arbiter, e.g. \"90s\" or 90 (env STAGECOACH_ARBITER_TIMEOUT; git stagecoach.role.arbiter.timeout)")
+	// §9.30 FR-R7 — per-role idle-deadline flags (string, zero default; loadFlags reads via fs.Changed).
+	pf.StringVar(&flagPlannerIdleTimeout, "planner-idle-timeout", "",
+		"Per-role idle deadline for the decomposition planner, e.g. \"90s\" or 90 (env STAGECOACH_PLANNER_IDLE_TIMEOUT; git stagecoach.role.planner.idleTimeout)")
+	pf.StringVar(&flagStagerIdleTimeout, "stager-idle-timeout", "",
+		"Per-role idle deadline for the (tooled) staging agent, e.g. \"90s\" or 90 (env STAGECOACH_STAGER_IDLE_TIMEOUT; git stagecoach.role.stager.idleTimeout)")
+	pf.StringVar(&flagMessageIdleTimeout, "message-idle-timeout", "",
+		"Per-role idle deadline for the message composer, e.g. \"90s\" or 90 (env STAGECOACH_MESSAGE_IDLE_TIMEOUT; git stagecoach.role.message.idleTimeout)")
+	pf.StringVar(&flagArbiterIdleTimeout, "arbiter-idle-timeout", "",
+		"Per-role idle deadline for the leftover arbiter, e.g. \"90s\" or 90 (env STAGECOACH_ARBITER_IDLE_TIMEOUT; git stagecoach.role.arbiter.idleTimeout)")
 	// --version is auto-added by cobra (Version field above); --help/-h is cobra's built-in.
 
 	// Wrap flag-usage text to the live terminal width. Cobra's default usage template calls

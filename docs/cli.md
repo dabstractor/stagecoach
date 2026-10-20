@@ -24,7 +24,8 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--provider <name>` | string | "" (auto-detect) | `STAGECOACH_PROVIDER` | `stagecoach.provider` | Provider/agent to use |
 | `--model <name>` | string | "" (manifest default) | `STAGECOACH_MODEL` | `stagecoach.model` | Model override. Sets the GLOBAL default — a `[role.<role>]` model in config (or a `--<role>-model` flag) takes precedence for that role, so a populated config can silently shadow `--model`; use `--message-model` to override the message role, or run with `--verbose` to see a note when `--model`/`--provider` is shadowed |
 | `--config <path>` | string | "" | `STAGECOACH_CONFIG` | — | Path to a config file, overrides discovery. A path pointing at a **missing** file fails fast with exit 1 (like a malformed or directory path), rather than falling back to discovery. |
-| `--timeout <dur>` | string | "120s" | `STAGECOACH_TIMEOUT` | `stagecoach.timeout` | Generation timeout (e.g. `"120s"` or `120`) |
+| `--timeout <dur>` | string | "600s" | `STAGECOACH_TIMEOUT` | `stagecoach.timeout` | Hard-cap generation timeout — the backstop for the idle deadline (e.g. `"600s"` or `600`) |
+| `--idle-timeout <dur>` | string | "60s" | `STAGECOACH_IDLE_TIMEOUT` | `stagecoach.idleTimeout` | Idle deadline — kills the agent after N seconds with no output (e.g. `"60s"` or `60`) |
 | `--verbose`, `-v` | bool | false | `STAGECOACH_VERBOSE` | — | Print resolved command, raw output, retries (`STAGECOACH_VERBOSE` accepts `true`/`false`/`1`/`0`; `2` is documented but not yet implemented and is rejected with a clear message) |
 | `--no-color` | bool | TTY-aware | `STAGECOACH_NO_COLOR` | — | Disable color (also honors `NO_COLOR`) |
 | `--all`, `-a` | bool | false | — | — | Run `git add -A` before snapshotting, even if something is staged |
@@ -57,10 +58,14 @@ With no subcommand, `stagecoach` runs the **default action**. The routing depend
 | `--message-model <name>` | string | "" | `STAGECOACH_MESSAGE_MODEL` | — | Per-role model override for the message composer |
 | `--message-reasoning <level>` | string | "" | `STAGECOACH_MESSAGE_REASONING` | — | Per-role reasoning for the message composer |
 | `--arbiter-reasoning <level>` | string | "" | `STAGECOACH_ARBITER_REASONING` | — | Per-role reasoning for the arbiter |
-| `--planner-timeout <dur>` | string | "" | `STAGECOACH_PLANNER_TIMEOUT` | — | Per-role generation timeout for the planner (e.g. `"600s"` or `600`) |
-| `--stager-timeout <dur>` | string | "" | `STAGECOACH_STAGER_TIMEOUT` | — | Per-role generation timeout for the (tooled) staging agent (e.g. `"300s"` or `300`) |
-| `--message-timeout <dur>` | string | "" | `STAGECOACH_MESSAGE_TIMEOUT` | — | Per-role generation timeout for the message composer (e.g. `"120s"` or `120`) |
-| `--arbiter-timeout <dur>` | string | "" | `STAGECOACH_ARBITER_TIMEOUT` | — | Per-role generation timeout for the leftover arbiter (e.g. `"120s"` or `120`) |
+| `--planner-timeout <dur>` | string | "" | `STAGECOACH_PLANNER_TIMEOUT` | `stagecoach.role.planner.timeout` | Per-role hard-cap generation timeout for the planner (e.g. `"600s"` or `600`) |
+| `--stager-timeout <dur>` | string | "" | `STAGECOACH_STAGER_TIMEOUT` | `stagecoach.role.stager.timeout` | Per-role hard-cap generation timeout for the (tooled) staging agent (e.g. `"300s"` or `300`) |
+| `--message-timeout <dur>` | string | "" | `STAGECOACH_MESSAGE_TIMEOUT` | `stagecoach.role.message.timeout` | Per-role hard-cap generation timeout for the message composer (e.g. `"90s"` or `90`) |
+| `--arbiter-timeout <dur>` | string | "" | `STAGECOACH_ARBITER_TIMEOUT` | `stagecoach.role.arbiter.timeout` | Per-role hard-cap generation timeout for the leftover arbiter (e.g. `"90s"` or `90`) |
+| `--planner-idle-timeout <dur>` | string | "" | `STAGECOACH_PLANNER_IDLE_TIMEOUT` | `stagecoach.role.planner.idleTimeout` | Per-role idle deadline for the planner — kills after N seconds with no output (e.g. `"90s"` or `90`) |
+| `--stager-idle-timeout <dur>` | string | "" | `STAGECOACH_STAGER_IDLE_TIMEOUT` | `stagecoach.role.stager.idleTimeout` | Per-role idle deadline for the (tooled) staging agent — kills after N seconds with no output (e.g. `"90s"` or `90`) |
+| `--message-idle-timeout <dur>` | string | "" | `STAGECOACH_MESSAGE_IDLE_TIMEOUT` | `stagecoach.role.message.idleTimeout` | Per-role idle deadline for the message composer — kills after N seconds with no output (e.g. `"90s"` or `90`) |
+| `--arbiter-idle-timeout <dur>` | string | "" | `STAGECOACH_ARBITER_IDLE_TIMEOUT` | `stagecoach.role.arbiter.idleTimeout` | Per-role idle deadline for the leftover arbiter — kills after N seconds with no output (e.g. `"90s"` or `90`) |
 | `--version` | — | — | — | — | Print the build version (`"dev"` for a local build; the release tag for a released binary) |
 | `--help`, `-h` | — | — | — | — | Print help |
 
@@ -449,9 +454,9 @@ Exit codes: `0` (up to date, upgraded, or `--check` found nothing newer), `1` (f
 | `3` | Rescue condition (snapshot taken, commit not created — manual recovery printed). |
 | `5` | Busy — another stagecoach run holds the per-repo lock; retry after it finishes. |
 | `6` | Update available (`stagecoach upgrade --check` found a newer release); upgrade-path only — never returned by the commit path. |
-| `124` | Timeout (generation exceeded `--timeout`). |
+| `124` | Deadline exceeded (idle or hard cap) — generation exceeded the idle deadline (`--idle-timeout`, default 60s of silence) or the hard cap (`--timeout`, default 600s). |
 
-Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A timeout is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code `6` is upgrade-path only: it is produced solely by `stagecoach upgrade --check` and is walled off from the commit path, so a commit run never exits 6.
+Exit codes mirror the constants in `internal/exitcode/exitcode.go`. A deadline kill (idle or hard cap) is reported as `124` (matching GNU `timeout`), not `3`. With `--dry-run`, generation failures (timeout or parse/duplicate-check exhaustion) report exit **1** with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code `6` is upgrade-path only: it is produced solely by `stagecoach upgrade --check` and is walled off from the commit path, so a commit run never exits 6.
 
 Code `5` (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits **0** ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits **5** with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits **5** (Busy) rather than 0 — the holder publishes a working-tree snapshot (`T_start`) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.
 
@@ -466,6 +471,7 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--provider` | `STAGECOACH_PROVIDER` | `stagecoach.provider` |
 | `--model` | `STAGECOACH_MODEL` | `stagecoach.model` |
 | `--timeout` | `STAGECOACH_TIMEOUT` | `stagecoach.timeout` |
+| `--idle-timeout` | `STAGECOACH_IDLE_TIMEOUT` | `stagecoach.idleTimeout` |
 | `--config` | `STAGECOACH_CONFIG` | — |
 | `--verbose` | `STAGECOACH_VERBOSE` | — |
 | `--no-color` | `STAGECOACH_NO_COLOR` (also honors `NO_COLOR`) | — |
@@ -497,6 +503,10 @@ Config-backed flags can also be set via environment variables or git-config keys
 | `--stager-timeout` | `STAGECOACH_STAGER_TIMEOUT` | `stagecoach.role.stager.timeout` |
 | `--message-timeout` | `STAGECOACH_MESSAGE_TIMEOUT` | `stagecoach.role.message.timeout` |
 | `--arbiter-timeout` | `STAGECOACH_ARBITER_TIMEOUT` | `stagecoach.role.arbiter.timeout` |
+| `--planner-idle-timeout` | `STAGECOACH_PLANNER_IDLE_TIMEOUT` | `stagecoach.role.planner.idleTimeout` |
+| `--stager-idle-timeout` | `STAGECOACH_STAGER_IDLE_TIMEOUT` | `stagecoach.role.stager.idleTimeout` |
+| `--message-idle-timeout` | `STAGECOACH_MESSAGE_IDLE_TIMEOUT` | `stagecoach.role.message.idleTimeout` |
+| `--arbiter-idle-timeout` | `STAGECOACH_ARBITER_IDLE_TIMEOUT` | `stagecoach.role.arbiter.idleTimeout` |
 | — (no flag) | `STAGECOACH_NO_PARENT_WATCHDOG` | `stagecoach.noParentWatchdog` (also `[generation].no_parent_watchdog` in config) |
 
 ## Examples
