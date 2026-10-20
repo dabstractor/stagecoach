@@ -72,6 +72,59 @@ func main() {
 		_ = os.WriteFile(argsFile, []byte(strings.Join(os.Args, "\x00")), 0o644)
 	}
 
+	// 1d. (P1.M3.T1.S1) Progressive-emit phase — the "slow-but-emitting" stub persona (§9.6 (b)) and
+	//     its unbounded stdout-chatty variant. If STAGECOACH_STUB_EMIT_MS > 0, write the emit payload
+	//     to stdout every interval, for STAGECOACH_STUB_EMIT_TOTAL_MS (0 ⇒ tick FOREVER and never
+	//     answer; >0 ⇒ tick for that long, then fall through to the normal pipeline — the final answer
+	//     is emitted AFTER the ticks, so the answer is the stdout SUFFIX). The ticks ARE the
+	//     byte-activity an idle watcher observes (Execute buffers stdout; a deadline kill returns the
+	//     PARTIAL ticks alongside the error). Ordering: AFTER the stdin drain (deadlock guard) and
+	//     AFTER the marker (deterministic races); BEFORE the sleep/stdout/exit. os.Stdout is
+	//     unbuffered — each write is immediately observable; do NOT wrap it in bufio. Zero-config:
+	//     EMIT_MS unset/0 ⇒ this phase is a no-op.
+	if emitMS := envInt("STAGECOACH_STUB_EMIT_MS", 0); emitMS > 0 {
+		line := os.Getenv("STAGECOACH_STUB_EMIT_LINE")
+		if line == "" {
+			line = "."
+		}
+		total := time.Duration(envInt("STAGECOACH_STUB_EMIT_TOTAL_MS", 0)) * time.Millisecond
+		deadline := time.Time{} // zero ⇒ forever
+		if total > 0 {
+			deadline = time.Now().Add(total)
+		}
+		ticker := time.NewTicker(time.Duration(emitMS) * time.Millisecond)
+		for range ticker.C {
+			fmt.Fprint(os.Stdout, line)
+			if !deadline.IsZero() && time.Now().After(deadline) {
+				ticker.Stop()
+				break // bounded ⇒ the normal pipeline continues (the answer follows)
+			}
+		}
+	}
+
+	// 1e. (P1.M3.T1.S1) Chatty-heartbeat phase — the false-alive persona (§9.6 (c)). If
+	//     STAGECOACH_STUB_HEARTBEAT_MS > 0, write a short tick line to STDERR every interval, forever
+	//     (STAGECOACH_STUB_HEARTBEAT_TOTAL_MS == 0) or until the bound (>0 ⇒ loop ends and the normal
+	//     pipeline continues). Heartbeat mode NEVER writes stdout (the persona's defining property —
+	//     no answer ever arrives; step 4's write is suppressed below). Same ordering constraints as
+	//     1d (after drain + marker). Zero-config ⇒ no-op.
+	heartbeat := envInt("STAGECOACH_STUB_HEARTBEAT_MS", 0) > 0
+	if heartbeat {
+		total := time.Duration(envInt("STAGECOACH_STUB_HEARTBEAT_TOTAL_MS", 0)) * time.Millisecond
+		deadline := time.Time{} // zero ⇒ forever
+		if total > 0 {
+			deadline = time.Now().Add(total)
+		}
+		ticker := time.NewTicker(time.Duration(envInt("STAGECOACH_STUB_HEARTBEAT_MS", 0)) * time.Millisecond)
+		for range ticker.C {
+			fmt.Fprintln(os.Stderr, "tick")
+			if !deadline.IsZero() && time.Now().After(deadline) {
+				ticker.Stop()
+				break // bounded ⇒ continue to exit (still never answering)
+			}
+		}
+	}
+
 	// 2. Sleep AFTER draining (timeout simulation). The parent isn't blocked on stdin anymore.
 	//    (P1.M1.T1.S5) When MATCHFILE is set, selectMatched may return an OPTIONAL per-match sleepMs
 	//    (the 3rd '|sleepMs' field of a rule line); that sleep is added to the uniform SLEEP_MS so a
@@ -103,7 +156,11 @@ func main() {
 	} else if scriptFile := os.Getenv("STAGECOACH_STUB_SCRIPT"); scriptFile != "" {
 		out = selectScripted(scriptFile)
 	}
-	fmt.Fprint(os.Stdout, out) // EXACTLY `out` — no extra newline (ParseOutput trims; assertions stay byte-exact)
+	// §9.6 (c): heartbeat mode NEVER writes stdout — the false-alive pathology only holds if no
+	// answer ever arrives (stderr ticks keep the idle clock resetting while stdout stays empty).
+	if !heartbeat {
+		fmt.Fprint(os.Stdout, out) // EXACTLY `out` — no extra newline (ParseOutput trims; assertions stay byte-exact)
+	}
 
 	// 4b. (P1.M1.T1.S5) Append the concurrency-interval record if the probe is armed. One atomic
 	//     O_APPEND write of a single <4096B line. Default-off (intervalStart is the zero sentinel).

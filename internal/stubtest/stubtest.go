@@ -30,6 +30,19 @@ type Options struct {
 	StripCodeFence *bool  // manifest StripCodeFence; nil → true
 	ArgsFile       string // STAGECOACH_STUB_ARGSFILE (writes the stub's os.Args to this path — observe rendered argv)
 	Marker         string // STAGECOACH_STUB_MARKER (writes "1" to this path once stdin is drained — generation in-flight signal)
+
+	// Progressive-emit phase (P1.M3.T1.S1) — the "slow-but-emitting" persona: stdout ticks keep an
+	// idle watcher's clock resetting, then (when bounded) the answer arrives as the stdout SUFFIX.
+	// Pick tick intervals well below the engine's ~500ms watcher tick (e.g. 20-100ms) so several
+	// ticks land between polls.
+	EmitMS      int    // STAGECOACH_STUB_EMIT_MS (stdout tick interval; >0 enables the emit phase)
+	EmitLine    string // STAGECOACH_STUB_EMIT_LINE (tick payload; "" ⇒ ".")
+	EmitTotalMS int    // STAGECOACH_STUB_EMIT_TOTAL_MS (0 ⇒ emit forever and NEVER answer; >0 ⇒ bounded, then the answer)
+
+	// Chatty-heartbeat phase (P1.M3.T1.S1) — the false-alive persona: stderr ticks forever while
+	// stdout stays empty, so ONLY the hard deadline cap can kill it. Same cadence guidance as EmitMS.
+	HeartbeatMS      int // STAGECOACH_STUB_HEARTBEAT_MS (stderr tick interval; >0 enables; NEVER writes stdout)
+	HeartbeatTotalMS int // STAGECOACH_STUB_HEARTBEAT_TOTAL_MS (0 ⇒ heartbeat forever; >0 ⇒ bounded then exit)
 }
 
 var (
@@ -112,6 +125,24 @@ func optsEnvMap(o Options) map[string]string {
 	}
 	if o.Marker != "" {
 		m["STAGECOACH_STUB_MARKER"] = o.Marker
+	}
+	// Emit/heartbeat knobs (P1.M3.T1.S1) are TIMING behaviors orthogonal to output selection — set
+	// them UNCONDITIONALLY of the Script/Out branch (unlike STAGECOACH_STUB_OUT, which is
+	// intentionally script-conditional), so script-mode invocations can tick too.
+	if o.EmitMS > 0 {
+		m["STAGECOACH_STUB_EMIT_MS"] = strconv.Itoa(o.EmitMS)
+	}
+	if o.EmitLine != "" {
+		m["STAGECOACH_STUB_EMIT_LINE"] = o.EmitLine
+	}
+	if o.EmitTotalMS > 0 {
+		m["STAGECOACH_STUB_EMIT_TOTAL_MS"] = strconv.Itoa(o.EmitTotalMS)
+	}
+	if o.HeartbeatMS > 0 {
+		m["STAGECOACH_STUB_HEARTBEAT_MS"] = strconv.Itoa(o.HeartbeatMS)
+	}
+	if o.HeartbeatTotalMS > 0 {
+		m["STAGECOACH_STUB_HEARTBEAT_TOTAL_MS"] = strconv.Itoa(o.HeartbeatTotalMS)
 	}
 	if o.Script != "" {
 		m["STAGECOACH_STUB_SCRIPT"] = o.Script

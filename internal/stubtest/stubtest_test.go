@@ -210,3 +210,143 @@ func TestStub_MalformedEnvNoPanic(t *testing.T) {
 		t.Errorf("stdout = %q, want %q", out, "x")
 	}
 }
+
+// TestStub_EmitThenAnswer (P1.M3.T1.S1, persona b — bounded) proves the emit phase ticks stdout for
+// EMIT_TOTAL_MS and THEN the final answer arrives as the stdout SUFFIX (ticks prefix + answer).
+func TestStub_EmitThenAnswer(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: answer", EmitMS: 50, EmitTotalMS: 300})
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	start := time.Now()
+	out, _, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 5 * time.Second}, nil)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasSuffix(out, "feat: answer") {
+		t.Errorf("stdout = %q, want suffix %q (the answer must be emitted AFTER the ticks)", out, "feat: answer")
+	}
+	if strings.Count(out, ".") < 1 {
+		t.Errorf("stdout = %q, want >=1 emit tick (default payload \".\")", out)
+	}
+	if elapsed < 300*time.Millisecond {
+		t.Errorf("elapsed = %v, want >= 300ms (the emit bound must elapse before the answer)", elapsed)
+	}
+}
+
+// TestStub_EmitCadence (P1.M3.T1.S1) proves the emit interval is honored: 280ms / 40ms ≈ 7 ticks,
+// asserted over a slack-tolerant window (never an exact count — scheduler/CI variance).
+func TestStub_EmitCadence(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: x", EmitMS: 40, EmitTotalMS: 280})
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	out, _, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 5 * time.Second}, nil)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ticks := strings.Count(out, "."); ticks < 6 || ticks > 9 {
+		t.Errorf("tick count = %d, want in [6, 9] (280ms / 40ms ≈ 7; slack-tolerant window)", ticks)
+	}
+	if !strings.HasSuffix(out, "feat: x") {
+		t.Errorf("stdout = %q, want suffix %q", out, "feat: x")
+	}
+}
+
+// TestStub_EmitForeverHardCapKilled (P1.M3.T1.S1, persona b — unbounded) proves EMIT_TOTAL_MS==0 ⇒
+// ticks forever and NEVER answers: the hard cap kills it, the PARTIAL ticks are still captured in
+// the returned stdout buffer (§9.6 partial-capture contract), and the answer is absent.
+func TestStub_EmitForeverHardCapKilled(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: never", EmitMS: 50}) // no total ⇒ emit forever, never answer
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	start := time.Now()
+	out, _, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 250 * time.Millisecond}, nil)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context.DeadlineExceeded (the hard cap must kill the unbounded emitter)", err)
+	}
+	if !strings.Contains(out, ".") {
+		t.Errorf("partial stdout = %q, want >=1 tick (§9.6: the buffer returns even on kill)", out)
+	}
+	if strings.Contains(out, "feat: never") {
+		t.Errorf("unbounded emit must NEVER answer; stdout = %q", out)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Execute took %v; process-group kill should have fired promptly", elapsed)
+	}
+}
+
+// TestStub_HeartbeatHardCapKilled (P1.M3.T1.S1, persona c — the false-alive pathology) proves an
+// unbounded stderr heartbeat is killed ONLY by the hard cap: DeadlineExceeded + stderr ticks +
+// stdout EMPTY (heartbeat mode never answers).
+func TestStub_HeartbeatHardCapKilled(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: never", HeartbeatMS: 50}) // forever
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	start := time.Now()
+	out, errb, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 250 * time.Millisecond}, nil)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context.DeadlineExceeded (only the hard cap can kill a heartbeat)", err)
+	}
+	if !strings.Contains(errb, "tick") {
+		t.Errorf("stderr = %q, want >=1 heartbeat tick", errb)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty (heartbeat mode NEVER answers)", out)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Execute took %v; process-group kill should have fired promptly", elapsed)
+	}
+}
+
+// TestStub_HeartbeatBoundedExit (P1.M3.T1.S1, persona c — bounded) proves the heartbeat loop ends
+// normally at HEARTBEAT_TOTAL_MS: nil error, stdout still empty (never answers), stderr ticks seen.
+func TestStub_HeartbeatBoundedExit(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: never", HeartbeatMS: 20, HeartbeatTotalMS: 100})
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	out, errb, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 5 * time.Second}, nil)
+	if err != nil {
+		t.Fatalf("Execute: %v (the bounded heartbeat should exit normally)", err)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty (heartbeat mode NEVER answers even when bounded)", out)
+	}
+	if !strings.Contains(errb, "tick") {
+		t.Errorf("stderr = %q, want >=1 heartbeat tick", errb)
+	}
+}
+
+// TestStub_EmitZeroConfigDefault (P1.M3.T1.S1) is the byte-identical-default guard: with none of the
+// emit/heartbeat knobs set, the stub behaves exactly as before (no ticks, no extra bytes).
+func TestStub_EmitZeroConfigDefault(t *testing.T) {
+	bin := Build(t)
+	m := Manifest(bin, Options{Out: "feat: plain"})
+	spec, err := m.Render("", "", "payload", "off")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	out, _, err := provider.Execute(context.Background(), *spec, provider.Deadlines{Hard: 5 * time.Second}, nil)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out != "feat: plain" {
+		t.Errorf("stdout = %q, want EXACTLY %q (zero-config default must stay byte-identical — no ticks leaked)", out, "feat: plain")
+	}
+}
