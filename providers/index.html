@@ -473,6 +473,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#event-stream-capability-event_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event-stream capability (event_stream)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -650,6 +661,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#event-stream-capability-event_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event-stream capability (event_stream)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -758,7 +780,7 @@
 <p>A manifest describes one AI provider's CLI interface — how to invoke it, deliver the prompt, and parse its output. Seven providers are compiled in as built-ins (zero config needed). Users can override built-in fields or define brand-new providers via <code>[provider.&lt;name&gt;]</code> sections in their config file.</p>
 <p>See the <a href="https://github.com/dabstractor/stagecoach/tree/main/providers/">shipped <code>providers/*.toml</code> files</a> for human-readable reference manifests — <code>providers/pi.toml</code> is the cleanest template.</p>
 <h2 id="the-schema">The schema<a class="headerlink" href="#the-schema" title="Permanent link">&para;</a></h2>
-<p>Each manifest has 22 fields (matching the TOML tags in <code>internal/provider/manifest.go</code>):</p>
+<p>Each manifest has 23 fields (matching the TOML tags in <code>internal/provider/manifest.go</code>):</p>
 <table>
 <thead>
 <tr>
@@ -848,6 +870,12 @@
 <td>Multi-turn fallback capability. <code>""</code> (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; <code>"append"</code> = re-invoking the same session id appends a recallable turn. <strong>Only pi ships <code>"append"</code></strong> (VERIFIED 2026-07-05). Requires a verified, reproducible append-turn rendering — see below.</td>
 </tr>
 <tr>
+<td><code>event_stream</code></td>
+<td>list of string</td>
+<td><code>[]</code> (none)</td>
+<td>VERIFIED JSON-event output flags for progressive-stdout mode (§9.30 FR-S1); appended after the mode flags and before <code>print_flag</code>, and arms the executor's progressive-stdout idle channel. REQUIRES a registered per-provider event extractor — render errors if set for a provider without one (FR-S2: never speculative; no built-in ships it yet).</td>
+</tr>
+<tr>
 <td><code>bare_flags</code></td>
 <td>list of string</td>
 <td><code>[]</code> (none)</td>
@@ -911,6 +939,12 @@
 </ul>
 <p><strong>Only <code>pi</code> ships <code>session_mode = "append"</code> today</strong> — VERIFIED 2026-07-05 via a live run (<code>pi --session-id X &lt;isolation-flags-minus-no-session&gt; -p "remember BANANA"</code>, then a same-<code>--session-id</code> recall turn returning "BANANA"). Every other built-in (claude, opencode, codex, cursor, agy) ships <code>""</code>.</p>
 <p>** verification bar.** A manifest MUST NOT declare <code>"append"</code> speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to 's model-token verification duty). Until a provider's append mechanism is verified, its <code>session_mode</code> stays <code>""</code> and multi-turn is silently skipped for it. See (/) for the full contract.</p>
+<h3 id="event-stream-capability-event_stream">Event-stream capability (<code>event_stream</code>)<a class="headerlink" href="#event-stream-capability-event_stream" title="Permanent link">&para;</a></h3>
+<p>A provider supports Stagecoach's <strong>event-stream output mode</strong> (§9.30 FR-S1) if its CLI has a native progressive JSON-event mode whose flags the <code>event_stream</code> manifest field declares (e.g. <code>["--output-format", "stream-json"]</code>). When set, the renderer appends the tokens after the mode flags and strictly before <code>print_flag</code>, and arms the executor's <strong>progressive-stdout idle channel</strong> — making idle detection portable to macOS/Windows (the Linux procfs read-counter of FR-A3(b) is no longer the only honest signal for that provider). In event mode the agent's stdout is an NDJSON-ish event stream, <strong>not</strong> a message: stagecoach assembles the final commit message from the TERMINAL message event via a per-provider event extractor, runs it through the same cleanup steps as print mode (fence-strip, newline normalization, trim), and surfaces in-stream error/abort events through the empty-output cause line (FR-S3 — a failed response does NOT reliably produce a nonzero exit, so detection keys on the stream, not the exit code).</p>
+<p><strong>Verification bar (FR-S2).</strong> A manifest MUST NOT set <code>event_stream</code> speculatively. Enabling it requires a <strong>dated, recorded empirical run</strong> proving (i) progressive stdout emission across the generation — events <em>during</em>, not only at, completion — (ii) the terminal-event shape the message is assembled from, and (iii) how in-stream error/abort events surface. Render refuses <code>event_stream</code> for any provider without a registered extractor, so an unverified event mode fails loudly instead of shipping.</p>
+<p><strong>Naming trap (verified).</strong> claude/cursor/agy each offer BOTH <code>json</code> (a single buffered result object — NOT progressive) and <code>stream-json</code> (progressive); only <code>stream-json</code> qualifies. pi (<code>--mode json</code>), codex (<code>--json</code>, JSONL events), and opencode (<code>--format json</code>, "raw JSON events") are the progressive ones.</p>
+<p><strong>Known measured pitfalls (FR-S2, verbatim).</strong> <em>Heartbeat-only streams</em> (codex: steady timer events continue while the network is dead — liveness, not progress; the read-counter channel remains the honest signal even in event mode). <em>Sparse emitters</em> (opencode <code>--format json</code>: one mid-run event + an answer burst, ~3s stdout gaps on a trivial prompt — fine for a 60s idle clock, fatal for a naive sub-second one).</p>
+<p><strong>Status.</strong> No built-in ships <code>event_stream</code> today: population is per-provider, gated on the verification bar above, and requires a registered per-provider event extractor (render errors otherwise).</p>
 <h2 id="command-rendering">Command rendering<a class="headerlink" href="#command-rendering" title="Permanent link">&para;</a></h2>
 <p>The renderer assembles the command invocation from the manifest fields and the resolved model, provider, system prompt, and user payload. Token order:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>args = [subcommand...]
