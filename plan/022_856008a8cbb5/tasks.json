@@ -11,14 +11,14 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Config surface: two deadlines, five precedence layers, planner 480s retired",
-          "status": "Ready",
+          "status": "Complete",
           "description": "idle_timeout config plumbing end-to-end: core fields + role resolution ladder, env/git/file precedence seams, CLI flags, bootstrap template, and the Mode-A user-facing docs for every new knob. Timeout default 120s→600s; defaultRoleTimeouts (planner 480s) deleted; no role ships a built-in deadline.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "idle_timeout config plumbing end-to-end + flag/help/template text",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Add IdleTimeout to Config/RoleConfig with 60s default, raise Timeout default to 600s, delete the planner built-in, add ResolveRoleDeadlines, wire STAGECOACH_IDLE_TIMEOUT / --idle-timeout / stagecoach.idleTimeout / [defaults].idle_timeout plus per-role variants through every precedence layer, and update CLI help, bootstrap template, and the touched user-facing docs.",
               "subtasks": [
                 {
@@ -62,7 +62,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S3",
                   "title": "CLI flags (--idle-timeout + 4 per-role), bootstrap template, and Mode-A docs (cli.md + configuration.md)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S2"
@@ -103,7 +103,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "activity infrastructure: countingWriter + Linux procfs group read-counter poller",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §2 — internal/provider/procgroup_unix.go (!windows build tag) already does Setpgid so PGID==PID is kernel-guaranteed; procgroup_windows.go is the platform-split precedent to mirror with //go:build linux / //go:build !linux files. external_procfs_notes.md — pgrp is FIELD 5 of /proc/[pid]/stat; comm (field 2) may contain spaces/parens so the robust parse splits after the LAST ')'; a reaped pid's stat open fails ENOENT (tolerate as member-gone, never alias); rchar (/proc/<pid>/io) counts bytes returned by SUCCESSFUL read-family calls (pipes/tty/sockets count, pagecache hits count, failed reads count nothing); a reaped child's ioac folds into its parent's rchar (inflates group sums — safe direction, can only false-positive activity within the group, never false-negative); /proc/<pid>/io is readable for same-uid dumpable processes (PTRACE_MODE_READ_FSCREDS), no root; a full /proc sweep over ~1100 pids costs ~13ms (~2.6% duty at 2Hz).\n2. INPUT: none — new files (internal/provider/activity.go, activity_linux.go, activity_other.go); leaf subtask.\n3. LOGIC: Implement FR-A3's two channels as standalone primitives, NO Execute changes here: (a) activity.go — countingWriter: wraps a bytes.Buffer behind a mutex, satisfies io.Writer, records an atomic last-write monotonic timestamp on every Write; exposes LastWrite() time.Time and a Bytes() snapshot (buffer growth during Wait is the activity signal — no data races); (b) activity_linux.go — groupReadBytes(pgid int) (uint64, bool): scan /proc/[0-9]*/stat, parse each stat after the LAST ')' to read pgrp (field 5), filter pgrp == pgid, sum members' /proc/<pid>/io rchar; per-member ENOENT tolerated; returns (_, false) when /proc is unavailable; (c) activity_other.go (!linux) — stub returning (_, false) so non-Linux builds compile and report 'no channel'. Tests ride: poller against the test's own process group (spawn a child that reads a known number of bytes; assert the counter moves; ENOENT race tolerated); countingWriter concurrency test under go test -race; GOOS-gated build check for the stub.\n4. OUTPUT: provider.countingWriter + provider.groupReadBytes — consumed by P1.M2.T1.S2 (the Execute idle watcher).\n5. DOCS: none — no user-facing/config/API surface change (internal primitives).",
@@ -118,7 +118,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S2",
                   "title": "Execute rework: Deadlines struct, idle watcher + arming rule, ErrIdleDeadline sentinel, VerboseCause, models.go call",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
