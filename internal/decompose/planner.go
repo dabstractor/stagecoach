@@ -136,11 +136,21 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 			// Non-zero exit — stdout may be partial; fall through to parse.
 		}
 
+		// FR-S1 (§9.30): in event mode the raw stdout is an NDJSON event stream — unwrap the assembled
+		// terminal message BEFORE ParsePlannerOutput. The raw stream is kept for the FR-S3 error hint
+		// below (the error events are only visible in the raw text).
+		rawOut := out
+		out = provider.UnwrapEventOutput(out, deps.Roles.Planner)
+
 		parsed, perr := prompt.ParsePlannerOutput(out)
 		if perr != nil {
 			// Empty stdout almost always means the agent errored before generating (invalid/unentitled
-			// model, auth, quota) — the cause is on stderr. Surface it instead of the opaque parse error.
-			if h := provider.StderrHint(out, stderr); h != "" {
+			// model, auth, quota) — the cause is on stderr. FR-S3: in event mode the cause may instead
+			// be an in-stream error event (exit code unreliable), and StderrHint yields "" whenever
+			// stdout has events — so the event hint is consulted FIRST. Print mode unchanged.
+			if h := provider.EventErrorHint(rawOut, deps.Roles.Planner); h != "" {
+				lastErr = errors.New(h)
+			} else if h := provider.StderrHint(out, stderr); h != "" {
 				lastErr = errors.New(h)
 			} else {
 				lastErr = perr

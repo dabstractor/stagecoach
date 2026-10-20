@@ -10,8 +10,14 @@ import (
 // captures stdout; ParseOutput (T6) turns that stdout into the commit message. It is a pure function
 // over the captured stdout string and the manifest's three output fields.
 //
-// THE 5-STEP PIPELINE (PRD §12.9, AUTHORITATIVE — implement in EXACTLY this order):
+// THE PIPELINE (PRD §12.9, AUTHORITATIVE — implement in EXACTLY this order):
 //
+//  0. EVENT MODE (§9.30 FR-S1, event_stream set): the raw stdout is an NDJSON-ish event stream, not
+//     a message — assemble the message from the TERMINAL event via ParseEventStream + the provider's
+//     registered Extractor. The assembled text then flows through the EXISTING steps 1/2/4/5 below
+//     (fence-strip, newline-normalize, trim) exactly as a print-mode message would. No terminal event
+//     ⇒ s="" ⇒ step 5's ok==false drives the existing FR29 retry. Print mode (event_stream empty)
+//     skips this branch entirely and is byte-identical to the pre-FR-S1 pipeline.
 //  1. s = strings.TrimSpace(raw).
 //  2. If m.strip_code_fence and s starts with ``` or ~~~: remove the first line (fence opener +
 //     language tag) and everything from the LAST fence closer onward. Re-trim.
@@ -43,6 +49,19 @@ func ParseOutput(raw string, m Manifest) (msg string, ok bool, fellback bool) {
 
 	// Step 1: trim leading/trailing whitespace.
 	s := strings.TrimSpace(raw)
+
+	// Step 0 (§9.30 FR-S1, event mode): assemble the message from the TERMINAL event. Steps 2/4/5
+	// below then apply to the ASSEMBLED text (fence-strip, normalize, trim) exactly as in print
+	// mode. No terminal event ⇒ s="" ⇒ step 5's ok==false drives the existing FR29 retry; fellback
+	// stays false (event mode never "falls back" — the fallback flag is a json-mode concept). Print
+	// mode (EventStream empty) never enters this branch: byte-identical to the pre-event pipeline.
+	if len(r.EventStream) > 0 {
+		if a, okA, _ := ParseEventStream(s, m); okA {
+			s = a
+		} else {
+			s = ""
+		}
+	}
 
 	// Step 2: optional single-layer code-fence unwrap (``` or ~~~). PREFIX check only.
 	if *r.StripCodeFence {

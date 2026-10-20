@@ -49,6 +49,18 @@ A provider supports Stagecoach's **lossless multi-turn fallback** (— used when
 
 ** verification bar.** A manifest MUST NOT declare `"append"` speculatively. Setting it requires a verified, reproducible append-turn rendering — the exact flag set confirmed per provider (analogous to 's model-token verification duty). Until a provider's append mechanism is verified, its `session_mode` stays `""` and multi-turn is silently skipped for it. See (/) for the full contract.
 
+### Event-stream capability (`event_stream`)
+
+A provider supports Stagecoach's **event-stream output mode** (§9.30 FR-S1) if its CLI has a native progressive JSON-event mode whose flags the `event_stream` manifest field declares (e.g. `["--output-format", "stream-json"]`). When set, the renderer appends the tokens after the mode flags and strictly before `print_flag`, and arms the executor's **progressive-stdout idle channel** — making idle detection portable to macOS/Windows (the Linux procfs read-counter of FR-A3(b) is no longer the only honest signal for that provider). In event mode the agent's stdout is an NDJSON-ish event stream, **not** a message: stagecoach assembles the final commit message from the TERMINAL message event via a per-provider event extractor, runs it through the same cleanup steps as print mode (fence-strip, newline normalization, trim), and surfaces in-stream error/abort events through the empty-output cause line (FR-S3 — a failed response does NOT reliably produce a nonzero exit, so detection keys on the stream, not the exit code).
+
+**Verification bar (FR-S2).** A manifest MUST NOT set `event_stream` speculatively. Enabling it requires a **dated, recorded empirical run** proving (i) progressive stdout emission across the generation — events *during*, not only at, completion — (ii) the terminal-event shape the message is assembled from, and (iii) how in-stream error/abort events surface. Render refuses `event_stream` for any provider without a registered extractor, so an unverified event mode fails loudly instead of shipping.
+
+**Naming trap (verified).** claude/cursor/agy each offer BOTH `json` (a single buffered result object — NOT progressive) and `stream-json` (progressive); only `stream-json` qualifies. pi (`--mode json`), codex (`--json`, JSONL events), and opencode (`--format json`, "raw JSON events") are the progressive ones.
+
+**Known measured pitfalls (FR-S2, verbatim).** *Heartbeat-only streams* (codex: steady timer events continue while the network is dead — liveness, not progress; the read-counter channel remains the honest signal even in event mode). *Sparse emitters* (opencode `--format json`: one mid-run event + an answer burst, ~3s stdout gaps on a trivial prompt — fine for a 60s idle clock, fatal for a naive sub-second one).
+
+**Status.** No built-in ships `event_stream` today: population is per-provider, gated on the verification bar above, and requires a registered per-provider event extractor (render errors otherwise).
+
 ## Command rendering
 
 The renderer assembles the command invocation from the manifest fields and the resolved model, provider, system prompt, and user payload. Token order:

@@ -109,6 +109,10 @@ func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDi
 		// Non-zero exit — stdout may be partial/valid; fall through to parse (mirrors callPlanner/generate).
 	}
 
+	// FR-S1 (§9.30): in event mode the raw stdout is an NDJSON event stream — unwrap the assembled
+	// terminal message BEFORE ParseArbiterOutput. Print mode: passthrough, unchanged.
+	out = provider.UnwrapEventOutput(out, deps.Roles.Arbiter)
+
 	// 6. Parse the arbiter's JSON output. Parse failure → graceful null (NOT an error — "when in doubt, null").
 	parsed, perr := prompt.ParseArbiterOutput(out)
 	if perr != nil {

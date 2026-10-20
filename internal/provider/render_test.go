@@ -785,9 +785,13 @@ func containsToken(args []string, token string) bool {
 // ---------------------------------------------------------------------------
 
 // fakeExtractor is the D8 test double registered to exercise the event-stream happy path.
+// S2 refined the interface to Extract(line) EventOutcome — the terminal-only shape (every line
+// is the terminal message) is all S1's render tests need.
 type fakeExtractor struct{}
 
-func (fakeExtractor) Extract(string) (string, bool, error) { return "fake", true, nil }
+func (fakeExtractor) Extract(string) EventOutcome {
+	return EventOutcome{Kind: EventTerminal, Message: "fake"}
+}
 
 // registerFakeExtractor installs a fake extractor for name and restores the map on cleanup
 // (same-package seam-var idiom — no exported test setter).

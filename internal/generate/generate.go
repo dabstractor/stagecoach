@@ -398,9 +398,14 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 		if !ok {
 			parseFail = true
 			candidate = m
-			// Empty stdout ⇒ the agent errored before generating (invalid/unentitled model, auth, quota);
-			// stderr has the cause — record it so the eventual rescue surfaces the real reason.
-			if h := provider.StderrHint(out, stderr); h != "" {
+			// Empty/unparseable stdout ⇒ record the cause for the eventual rescue. FR-S3 (§9.30): in
+			// event mode the cause may be an in-stream error/abort event — which does NOT reliably
+			// produce a nonzero exit — and StderrHint yields "" whenever stdout has events, so the
+			// event hint is consulted FIRST. Print mode (event_stream unset ⇒ hint is always "") keeps
+			// the stderr path unchanged.
+			if h := provider.EventErrorHint(out, deps.Manifest); h != "" {
+				lastCause = errors.New(h)
+			} else if h := provider.StderrHint(out, stderr); h != "" {
 				lastCause = errors.New(h)
 			}
 			deps.Verbose.VerboseRetry(attempt+1, "parse failed (no valid commit message)")
