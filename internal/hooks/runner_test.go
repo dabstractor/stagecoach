@@ -17,6 +17,7 @@ package hooks
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -658,5 +659,53 @@ func TestRunCommitHooks_PrepareCommitMsg_ArgcIsOne(t *testing.T) {
 	got := strings.TrimSpace(string(data))
 	if got != "ARGC=1" {
 		t.Errorf("prepare-commit-msg $# = %q, want \"ARGC=1\" (git githooks(5): plain commit passes 1 arg; $2 unset)", got)
+	}
+}
+
+// --- 20. containerized-hook contract: git-owned paths handed to hooks live under $GIT_DIR ---
+
+// A hook may exec its checks inside a container (docker compose run, devcontainer) that mounts only
+// the repo and the git dir at their host paths — the wrapper passes the message-file path and
+// GIT_INDEX_FILE straight through, exactly as it would under `git commit`. Under git the paths it
+// sees are git-owned files under $GIT_DIR (.git/COMMIT_EDITMSG, .git/index); a path in the HOST's
+// /tmp is ENOENT inside the container (commit-msg dies) or reads as an empty index (pre-commit
+// silently lints nothing). These tests encode the contract: every path stagecoach hands a hook
+// must exist and be readable at the SAME path inside $GIT_DIR.
+func TestRunCommitHooks_MsgFileUnderGitDir_ContainerContract(t *testing.T) {
+	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
+
+	gitDir := execGit(t, repo, "rev-parse", "--absolute-git-dir")
+	// A container-style commit-msg: the file must be readable AND live under $GIT_DIR — anything
+	// else is a host-only temp path that would be ENOENT once the wrapper re-execs in a container.
+	installHook(t, repo, "commit-msg", fmt.Sprintf(
+		`[ -f "$1" ] && [ -r "$1" ] || { echo "msg file unreadable: $1" >&2; exit 1; }
+case "$1" in %s/*) exit 0 ;; *) echo "msg file outside git dir: $1" >&2; exit 1 ;; esac`,
+		shellPath(gitDir)))
+
+	if _, _, err := RunCommitHooks(context.Background(), g, defaultCfg(), snapshotTree, parentSHA,
+		"feat: a change", HookOpts{}); err != nil {
+		t.Fatalf("RunCommitHooks err = %v (msg file must be handed to commit-msg under $GIT_DIR)", err)
+	}
+}
+
+// TestRunCommitHooks_ScopedIndexUnderGitDir_ContainerContract asserts the pre-commit contract: the
+// scoped GIT_INDEX_FILE stagecoach exports must point inside $GIT_DIR (readable there), so a
+// containerized hook reading the index it was told about sees the SNAPSHOT's staged entries — not
+// git's empty-index fallback for a missing file.
+func TestRunCommitHooks_ScopedIndexUnderGitDir_ContainerContract(t *testing.T) {
+	repo, snapshotTree, parentSHA, g := primeRunnerRepo(t)
+
+	gitDir := execGit(t, repo, "rev-parse", "--absolute-git-dir")
+	// A container-style pre-commit: the index must exist, be readable, live under $GIT_DIR, and
+	// actually contain the snapshot's staged entry (a.go) — proving it is the primed scoped index.
+	installHook(t, repo, "pre-commit", fmt.Sprintf(
+		`[ -f "$GIT_INDEX_FILE" ] && [ -r "$GIT_INDEX_FILE" ] || { echo "index unreadable: $GIT_INDEX_FILE" >&2; exit 1; }
+case "$GIT_INDEX_FILE" in %s/*) ;; *) echo "index outside git dir: $GIT_INDEX_FILE" >&2; exit 1 ;; esac
+git ls-files --cached -- a.go | grep -q . || { echo "scoped index lost a.go" >&2; exit 1; }`,
+		shellPath(gitDir)))
+
+	if _, _, err := RunCommitHooks(context.Background(), g, defaultCfg(), snapshotTree, parentSHA,
+		"feat: a change", HookOpts{}); err != nil {
+		t.Fatalf("RunCommitHooks err = %v (scoped index must be under $GIT_DIR and primed)", err)
 	}
 }

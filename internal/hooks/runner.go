@@ -95,7 +95,14 @@ func RunCommitHooks(ctx context.Context, g git.Git, cfg config.Config, snapshotT
 	// (c)+(d) MESSAGE-FILE LIFECYCLE — ONE shared temp file for prepare-commit-msg + commit-msg (FR-V2
 	// git parity: commit-msg sees prepare's output). Strip ONLY at the final read-back (git cleanup=strip,
 	// honoring core.commentChar) — NEVER between the two hooks.
-	msgFile, err := os.CreateTemp("", "stagecoach-hookmsg-*.txt")
+	//
+	// The file lives under $GIT_DIR, NOT os.TempDir, because hooks are USER SCRIPTS that may exec into
+	// a container/sandbox (docker compose run, devcontainer) which mounts only the repo + git dir at
+	// their host paths; a host-/tmp path handed to such a hook is ENOENT inside the container (git's
+	// own COMMIT_EDITMSG — the file git hands these same hooks — lives under $GIT_DIR for exactly this
+	// reason). In a linked worktree $GIT_DIR is the per-worktree dir, still under the common dir such
+	// setups mount. FR-V2: the hook must see what a plain `git commit` would hand it.
+	msgFile, err := os.CreateTemp(gitDir, "stagecoach-hookmsg-*.txt")
 	if err != nil {
 		return "", "", fmt.Errorf("hooks: create message file: %w", err)
 	}
@@ -153,7 +160,7 @@ func runPreCommitScoped(ctx context.Context, g git.Git, cfg config.Config, opts 
 	if !hookExecutable(hookPath) {
 		return snapshotTree, nil // absent/non-executable → silent skip (git access(X_OK) parity)
 	}
-	tmpIndex, err := tmpIndexPath() // throwaway path (os.TempDir + rand)
+	tmpIndex, err := tmpIndexPath(gitDir) // throwaway path ($GIT_DIR + unique name; see tmpIndexPath)
 	if err != nil {
 		return "", fmt.Errorf("hooks: create scoped index: %w", err)
 	}
@@ -479,10 +486,15 @@ func stripCommentLines(s, commentChar string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// tmpIndexPath returns a throwaway path for a scoped index file (os.TempDir + a unique name). The
-// caller owns the lifecycle (defer os.Remove). NOT under .git/ — keeps the repo clean (open_questions §6).
-func tmpIndexPath() (string, error) {
-	f, err := os.CreateTemp("", "stagecoach-hook-*.idx")
+// tmpIndexPath returns a throwaway path for a scoped index file under $GIT_DIR (gitDir + a unique
+// name). The caller owns the lifecycle (defer os.Remove). Under $GIT_DIR — NOT os.TempDir — because
+// GIT_INDEX_FILE is exported to the hook subprocess, and containerized hooks (docker compose run,
+// devcontainer) mount only the repo + git dir at their host paths: a host-/tmp index is invisible
+// inside the container, so git silently reads an EMPTY index and the hook lints nothing. git's own
+// index lives under $GIT_DIR for the same reason. Still outside the worktree, so the repo stays
+// clean (open_questions §6 intent preserved).
+func tmpIndexPath(gitDir string) (string, error) {
+	f, err := os.CreateTemp(gitDir, "stagecoach-hook-*.idx")
 	if err != nil {
 		return "", err
 	}
