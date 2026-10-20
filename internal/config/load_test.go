@@ -399,6 +399,96 @@ func TestLoadEnv_PerRoleTimeout_BadValueErrors(t *testing.T) {
 	}
 }
 
+// --- idle-timeout env twins (FR-R7 / §9.30; 45s sentinels — the timeout tests use 90s/300s/480s/600s,
+// so no assertion can pass through the wrong field) ---
+
+// TestLoadEnv_IdleTimeout is the idle twin of TestLoadEnv_StringsTimeoutBools + TestLoadEnv_BadTimeoutErrors:
+// the global STAGECOACH_IDLE_TIMEOUT is presence-semantic, parsed via parseTimeout (both "45s" and bare
+// "45"), set DIRECTLY on cfg.IdleTimeout (bypassing overlay), and a malformed value is a HARD error
+// naming the var.
+func TestLoadEnv_IdleTimeout(t *testing.T) {
+	// Subtests isolate t.Setenv (restored at each subtest's end) so the unset phase sees no var.
+	t.Run("duration form", func(t *testing.T) {
+		cfg := Defaults()
+		t.Setenv("STAGECOACH_IDLE_TIMEOUT", "45s")
+		if err := loadEnv(&cfg); err != nil {
+			t.Fatalf("loadEnv err=%v", err)
+		}
+		if cfg.IdleTimeout != 45*time.Second {
+			t.Errorf("IdleTimeout=%v want 45s", cfg.IdleTimeout)
+		}
+	})
+	// Bare-int form proves parseTimeout was used (time.ParseDuration rejects "45").
+	t.Run("bare int form", func(t *testing.T) {
+		cfg := Defaults()
+		t.Setenv("STAGECOACH_IDLE_TIMEOUT", "45")
+		if err := loadEnv(&cfg); err != nil {
+			t.Fatalf("loadEnv(bare int) err=%v", err)
+		}
+		if cfg.IdleTimeout != 45*time.Second {
+			t.Errorf("IdleTimeout=%v want 45s (bare int via parseTimeout)", cfg.IdleTimeout)
+		}
+	})
+	// Unset: no var → IdleTimeout untouched (Defaults seeds 60s; loadEnv must not disturb it).
+	t.Run("unset", func(t *testing.T) {
+		cfg := Defaults()
+		if err := loadEnv(&cfg); err != nil {
+			t.Fatalf("loadEnv(unset) err=%v", err)
+		}
+		if cfg.IdleTimeout != 60*time.Second {
+			t.Errorf("IdleTimeout=%v want 60s (Defaults seed; no env set)", cfg.IdleTimeout)
+		}
+	})
+}
+
+func TestLoadEnv_BadIdleTimeoutErrors(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGECOACH_IDLE_TIMEOUT", "abc")
+	err := loadEnv(&cfg)
+	if err == nil {
+		t.Fatal("loadEnv err=nil, want error for bad idle timeout")
+	}
+	if !strings.Contains(err.Error(), "STAGECOACH_IDLE_TIMEOUT") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_IDLE_TIMEOUT'", err)
+	}
+}
+
+// TestLoadEnv_PerRoleIdleTimeout is the idle twin of TestLoadEnv_PerRoleTimeout: duration + bare-int
+// forms, field-merge with a sibling env var on the SAME role, and no spurious population of unset roles.
+func TestLoadEnv_PerRoleIdleTimeout(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGECOACH_PLANNER_IDLE_TIMEOUT", "45s") // duration form
+	t.Setenv("STAGECOACH_STAGER_IDLE_TIMEOUT", "45")   // bare-int form (proves parseTimeout)
+	t.Setenv("STAGECOACH_PLANNER_PROVIDER", "agy")     // field-merge: same role, different field
+	if err := loadEnv(&cfg); err != nil {
+		t.Fatalf("loadEnv err=%v", err)
+	}
+	// planner: duration form + field-merge with _PROVIDER (FR-R3).
+	if rc := cfg.Roles["planner"]; rc.IdleTimeout != 45*time.Second || rc.Provider != "agy" {
+		t.Errorf("Roles[planner]=%+v want IdleTimeout=45s Provider=agy", rc)
+	}
+	// stager: bare-int form proves parseTimeout was used.
+	if rc := cfg.Roles["stager"]; rc.IdleTimeout != 45*time.Second {
+		t.Errorf("Roles[stager].IdleTimeout=%v want 45s (bare int via parseTimeout)", rc.IdleTimeout)
+	}
+	// unset role: no _IDLE_TIMEOUT → absent or IdleTimeout==0 (no spurious population).
+	if rc, ok := cfg.Roles["message"]; ok && rc.IdleTimeout != 0 {
+		t.Errorf("Roles[message].IdleTimeout=%v want 0/absent (no env set)", rc.IdleTimeout)
+	}
+}
+
+func TestLoadEnv_PerRoleIdleTimeout_BadValueErrors(t *testing.T) {
+	cfg := Defaults()
+	t.Setenv("STAGECOACH_PLANNER_IDLE_TIMEOUT", "not-a-dur")
+	err := loadEnv(&cfg)
+	if err == nil {
+		t.Fatal("loadEnv err=nil, want error for bad per-role idle timeout")
+	}
+	if !strings.Contains(err.Error(), "STAGECOACH_PLANNER_IDLE_TIMEOUT") {
+		t.Errorf("err=%v, want it to contain 'STAGECOACH_PLANNER_IDLE_TIMEOUT'", err)
+	}
+}
+
 func TestLoadEnv_PerRolePartial(t *testing.T) {
 	cfg := Defaults()
 	t.Setenv("STAGECOACH_PLANNER_MODEL", "codex-2.5-pro")

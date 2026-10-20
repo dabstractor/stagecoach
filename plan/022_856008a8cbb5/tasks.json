@@ -42,7 +42,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "precedence layers: STAGECOACH_IDLE_TIMEOUT env, stagecoach.idleTimeout git key, [defaults].idle_timeout file key (+ per-role variants)",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"

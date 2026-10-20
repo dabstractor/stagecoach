@@ -155,14 +155,29 @@ func loadGitConfig(repoDir string) (*Config, error) {
 		c.Timeout = d
 	}
 
-	// §9.15 FR-R7 / §9.8 FR36 / §16.1 layer 4 — per-role generation timeout via git config
-	// (NEW infrastructure: git.go read NO per-role keys before this). Mirrors the global
-	// stagecoach.timeout block above EXACTLY: gitConfigGet → parseTimeout → wrapped error →
-	// setRoleTimeout. gitConfigGet maps a missing key (git exit 1) to found=false (no-op), so a
-	// role with no stagecoach.role.<role>.timeout key is untouched. parseTimeout accepts "600s"
-	// and bare "600". A malformed value is a HARD ERROR (loadGitConfig has an error return) —
-	// the OPPOSITE of S2's loadFlags silent-ignore. Per-role provider/model/reasoning git keys
-	// are intentionally NOT read here (file/env/flag only); this loop is timeout-only.
+	// --- idleTimeout: accepts both "45" (seconds) and "45s" (Go duration) forms. CAMELCASE — git
+	// rejects underscores in the final config-key segment, so a snake_case idle_timeout key would be
+	// un-settable (§16.3's `idleTimeout = 60` example; the autoStageAll convention). ---
+	if v, found, err := gitConfigGet(repoDir, "stagecoach.idleTimeout"); err != nil {
+		return nil, err
+	} else if found {
+		d, perr := parseTimeout(v)
+		if perr != nil {
+			return nil, fmt.Errorf("git config stagecoach.idleTimeout: %w", perr)
+		}
+		c.IdleTimeout = d
+	}
+
+	// §9.15 FR-R7 / §9.8 FR36 / §16.1 layer 4 — per-role generation timeout + idle deadline via git
+	// config (NEW infrastructure: git.go read NO per-role keys before this). Mirrors the global
+	// stagecoach.timeout / stagecoach.idleTimeout blocks above EXACTLY: gitConfigGet → parseTimeout →
+	// wrapped error → setRoleTimeout / setRoleIdleTimeout. gitConfigGet maps a missing key (git exit 1)
+	// to found=false (no-op), so a role with no stagecoach.role.<role>.timeout / .idleTimeout key is
+	// untouched. parseTimeout accepts "600s" and bare "600". A malformed value is a HARD ERROR
+	// (loadGitConfig has an error return) — the OPPOSITE of S2's loadFlags silent-ignore. Per-role
+	// provider/model/reasoning git keys are intentionally NOT read here (file/env/flag only); this
+	// loop is timeout + idle_timeout. The idle key is CAMELCASE (git rejects underscores in the final
+	// key segment — same constraint as the global key above).
 	for _, role := range roleNames {
 		key := "stagecoach.role." + role + ".timeout"
 		if v, found, err := gitConfigGet(repoDir, key); err != nil {
@@ -173,6 +188,16 @@ func loadGitConfig(repoDir string) (*Config, error) {
 				return nil, fmt.Errorf("git config %s: %w", key, perr)
 			}
 			c.setRoleTimeout(role, d)
+		}
+		key2 := "stagecoach.role." + role + ".idleTimeout"
+		if v, found, err := gitConfigGet(repoDir, key2); err != nil {
+			return nil, err
+		} else if found {
+			d, perr := parseTimeout(v)
+			if perr != nil {
+				return nil, fmt.Errorf("git config %s: %w", key2, perr)
+			}
+			c.setRoleIdleTimeout(role, d)
 		}
 	}
 

@@ -344,6 +344,108 @@ func TestLoadGitConfig_PerRoleTimeout_FieldMergeViaOverlay(t *testing.T) {
 	}
 }
 
+// --- idle-timeout git twins (FR-R7 / §9.30; 45s sentinels; CAMELCASE keys — git rejects underscores
+// in the final config-key segment, so stagecoach.idle_timeout would be un-settable) ---
+
+// TestLoadGitConfig_IdleTimeout is the idle twin of TestLoadGitConfig_TimeoutDurationForm: the global
+// stagecoach.idleTimeout key (CAMELCASE) parses both bare-int and duration forms; a missing key is a no-op.
+func TestLoadGitConfig_IdleTimeout(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	initRepo(t, repo)
+
+	// Bare-int form (§16.3's idleTimeout = 60 example shape).
+	setGitConfig(t, repo, "stagecoach.idleTimeout", "45")
+	cfg, err := loadGitConfig(repo)
+	if err != nil {
+		t.Fatalf("loadGitConfig err=%v, want nil", err)
+	}
+	if cfg.IdleTimeout != 45*time.Second {
+		t.Errorf("IdleTimeout=%v want 45s (bare int via parseTimeout)", cfg.IdleTimeout)
+	}
+
+	// Duration form.
+	repo2 := t.TempDir()
+	initRepo(t, repo2)
+	setGitConfig(t, repo2, "stagecoach.idleTimeout", "45s")
+	cfg2, err := loadGitConfig(repo2)
+	if err != nil {
+		t.Fatalf("loadGitConfig(duration) err=%v, want nil", err)
+	}
+	if cfg2.IdleTimeout != 45*time.Second {
+		t.Errorf("IdleTimeout=%v want 45s (duration form)", cfg2.IdleTimeout)
+	}
+
+	// Missing key: IdleTimeout stays zero (loadGitConfig returns a fresh Config; absent key = untouched).
+	repo3 := t.TempDir()
+	initRepo(t, repo3)
+	cfg3, err := loadGitConfig(repo3)
+	if err != nil {
+		t.Fatalf("loadGitConfig(missing) err=%v, want nil", err)
+	}
+	if cfg3.IdleTimeout != 0 {
+		t.Errorf("IdleTimeout=%v want 0 (no key set)", cfg3.IdleTimeout)
+	}
+}
+
+// TestLoadGitConfig_PerRoleIdleTimeout is the idle twin of TestLoadGitConfig_PerRoleTimeout: per-role
+// CAMELCASE keys, duration + bare-int forms, unset roles untouched.
+func TestLoadGitConfig_PerRoleIdleTimeout(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	initRepo(t, repo)
+	setGitConfig(t, repo, "stagecoach.role.planner.idleTimeout", "45s") // duration form
+	setGitConfig(t, repo, "stagecoach.role.stager.idleTimeout", "45")   // bare-int form (proves parseTimeout)
+
+	cfg, err := loadGitConfig(repo)
+	if err != nil {
+		t.Fatalf("loadGitConfig err=%v, want nil", err)
+	}
+	if rc := cfg.Roles["planner"]; rc.IdleTimeout != 45*time.Second {
+		t.Errorf("Roles[planner].IdleTimeout=%v want 45s", rc.IdleTimeout)
+	}
+	if rc := cfg.Roles["stager"]; rc.IdleTimeout != 45*time.Second {
+		t.Errorf("Roles[stager].IdleTimeout=%v want 45s (bare int via parseTimeout)", rc.IdleTimeout)
+	}
+	// Unset role: message has no key → absent or IdleTimeout==0 (loop does not touch it).
+	if rc, ok := cfg.Roles["message"]; ok && rc.IdleTimeout != 0 {
+		t.Errorf("Roles[message].IdleTimeout=%v want 0 (unset role untouched)", rc.IdleTimeout)
+	}
+}
+
+// TestLoadGitConfig_BadIdleTimeout is the idle twin of TestLoadGitConfig_BadTimeout: a malformed global
+// idle value is a HARD error naming the camelCase key.
+func TestLoadGitConfig_BadIdleTimeout(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	initRepo(t, repo)
+	setGitConfig(t, repo, "stagecoach.idleTimeout", "notanumber")
+
+	_, err := loadGitConfig(repo)
+	if err == nil {
+		t.Fatal("loadGitConfig err=nil, want non-nil for bad idle timeout")
+	}
+	if !strings.Contains(err.Error(), "stagecoach.idleTimeout") {
+		t.Errorf("err=%v, want it to contain 'stagecoach.idleTimeout'", err)
+	}
+}
+
+// TestLoadGitConfig_PerRoleIdleTimeout_BadValue is the idle twin of TestLoadGitConfig_PerRoleTimeout_BadValue.
+func TestLoadGitConfig_PerRoleIdleTimeout_BadValue(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	initRepo(t, repo)
+	setGitConfig(t, repo, "stagecoach.role.planner.idleTimeout", "notanumber")
+
+	_, err := loadGitConfig(repo)
+	if err == nil {
+		t.Fatal("loadGitConfig err=nil, want non-nil for bad per-role idle timeout")
+	}
+	if !strings.Contains(err.Error(), "stagecoach.role.planner.idleTimeout") {
+		t.Errorf("err=%v, want it to contain 'stagecoach.role.planner.idleTimeout'", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Test E: GitBinaryMissing — LookPath miss path
 // ---------------------------------------------------------------------------

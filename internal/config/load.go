@@ -75,6 +75,18 @@ func (c *Config) setRoleTimeout(role string, d time.Duration) {
 	c.Roles[role] = rc
 }
 
+// setRoleIdleTimeout sets the IdleTimeout field for a role in cfg.Roles, lazily allocating the map.
+// Map-value-copy write-back is REQUIRED (same idiom as setRoleTimeout).
+// Setting IdleTimeout does NOT clobber existing Provider/Model/Reasoning/Timeout — FR-R3 field-merge.
+func (c *Config) setRoleIdleTimeout(role string, d time.Duration) {
+	if c.Roles == nil {
+		c.Roles = make(map[string]RoleConfig)
+	}
+	rc := c.Roles[role]
+	rc.IdleTimeout = d
+	c.Roles[role] = rc
+}
+
 // Load resolves the full Stagecoach configuration by applying PRD §16.1 layers in precedence order
 // (lowest → highest): (1) built-in Defaults(); (2) global TOML; (3) repo-local TOML; (4) repo git
 // config; (5) STAGECOACH_* env vars; (7) CLI flags (only explicitly-set ones). Higher wins. Returns one
@@ -276,6 +288,16 @@ func loadEnv(cfg *Config) error {
 		}
 		cfg.Timeout = d
 	}
+	// FR-R7 / §9.30 FR25 — global idle deadline via env (mirrors STAGECOACH_TIMEOUT EXACTLY: presence-
+	// semantic DIRECT-set bypassing overlay, parseTimeout accepts "45s" and bare "45", malformed = HARD
+	// error naming the var — the silent-ignore asymmetry is loadFlags-only).
+	if v, ok := os.LookupEnv("STAGECOACH_IDLE_TIMEOUT"); ok && v != "" {
+		d, err := parseTimeout(v)
+		if err != nil {
+			return fmt.Errorf("STAGECOACH_IDLE_TIMEOUT: %w", err)
+		}
+		cfg.IdleTimeout = d
+	}
 	if v, ok := os.LookupEnv("STAGECOACH_VERBOSE"); ok && v != "" {
 		// VERBOSE=2 is advertised by PRD §19 / docs as the level that would additionally log the
 		// stdin CONTENTS. It is NOT implemented today (Config.Verbose is a bool, and logging payload
@@ -322,6 +344,16 @@ func loadEnv(cfg *Config) error {
 				return fmt.Errorf("%s_TIMEOUT: %w", prefix, err)
 			}
 			cfg.setRoleTimeout(role, d)
+		}
+		// FR-R7 / §9.30 — per-role idle deadline via env (presence-semantic, DIRECT-set via
+		// setRoleIdleTimeout — bypasses overlay; mirrors the global STAGECOACH_IDLE_TIMEOUT case and this
+		// loop's _TIMEOUT read above). parseTimeout accepts "45s" and bare "45".
+		if v, ok := os.LookupEnv(prefix + "_IDLE_TIMEOUT"); ok && v != "" {
+			d, err := parseTimeout(v)
+			if err != nil {
+				return fmt.Errorf("%s_IDLE_TIMEOUT: %w", prefix, err)
+			}
+			cfg.setRoleIdleTimeout(role, d)
 		}
 	}
 

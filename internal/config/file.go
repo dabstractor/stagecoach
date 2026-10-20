@@ -22,10 +22,11 @@ import (
 // each to a typed RoleConfig (parsing the Timeout duration string via parseTimeout). Both fields "" (and
 // Timeout "") ⇒ the role inherits the global [defaults] (FR-R2).
 type fileRoleConfig struct {
-	Provider  string `toml:"provider"`
-	Model     string `toml:"model"`
-	Reasoning string `toml:"reasoning"`
-	Timeout   string `toml:"timeout"` // §16.4 duration string, e.g. "480s"; parsed in materialize (parseTimeout accepts "480s" OR bare "480")
+	Provider    string `toml:"provider"`
+	Model       string `toml:"model"`
+	Reasoning   string `toml:"reasoning"`
+	Timeout     string `toml:"timeout"`      // §16.4 duration string, e.g. "480s"; parsed in materialize (parseTimeout accepts "480s" OR bare "480")
+	IdleTimeout string `toml:"idle_timeout"` // §9.30 idle deadline duration string, e.g. "45s"; parsed in materialize (parseTimeout accepts "45s" OR bare "45")
 }
 
 // fileUpgrade is the FILE decode twin of config.UpgradeConfig (§9.29 FR-U10). A global [upgrade]
@@ -54,6 +55,7 @@ type fileDefaults struct {
 	Model        string `toml:"model"`
 	Reasoning    string `toml:"reasoning"`
 	Timeout      string `toml:"timeout"`        // §16.2 duration string, e.g. "120s"; parsed in loadTOML
+	IdleTimeout  string `toml:"idle_timeout"`   // §9.30 idle deadline duration string, e.g. "45s"; parsed in loadTOML (BARE time.ParseDuration — bare ints rejected here, mirroring the timeout seam)
 	AutoStageAll *bool  `toml:"auto_stage_all"` // *bool (nil ⇒ unset; non-nil incl. *false ⇒ explicit) — mirrors Config.AutoStageAll
 	Verbose      bool   `toml:"verbose"`
 }
@@ -202,6 +204,18 @@ func loadTOML(path string) (*Config, error) {
 		}
 	}
 
+	// §9.30 FR-R7 — parse the [defaults].idle_timeout duration string up front (mirrors the timeout
+	// seam above EXACTLY, including the parser: BARE time.ParseDuration, so a bare int "45" is a hard
+	// parse error here — the per-role file key, env, and git DO use parseTimeout (both forms). That
+	// pre-existing asymmetry is preserved deliberately).
+	var idleTimeout time.Duration
+	if fc.Defaults.IdleTimeout != "" {
+		idleTimeout, err = time.ParseDuration(fc.Defaults.IdleTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("parse config %s: invalid idle_timeout %q: %w", path, fc.Defaults.IdleTimeout, err)
+		}
+	}
+
 	// §9.25 FR-V6 — parse the [generation].hook_timeout duration string up front (mirrors Timeout:
 	// a malformed value must fail at LOAD with the path in the error, not at merge/run time).
 	var hookTimeout time.Duration
@@ -212,7 +226,7 @@ func loadTOML(path string) (*Config, error) {
 		}
 	}
 
-	cfg, err := materialize(&fc, timeout, hookTimeout)
+	cfg, err := materialize(&fc, timeout, idleTimeout, hookTimeout)
 	if err != nil {
 		return nil, err // surface role-context error verbatim (avoid double "parse config" wrap)
 	}
@@ -228,11 +242,12 @@ func loadTOML(path string) (*Config, error) {
 // a file cannot override a field to its zero value (false, 0, ""). See the v1
 // limitation documented on Config.Providers and in the PRP design call #3.
 // The per-role table is built FIELD-BY-FIELD (not via RoleConfig(frc) conversion,
-// which would break now that RoleConfig.Timeout is time.Duration while fileRoleConfig.Timeout
-// is string) and each role's Timeout string is parsed via parseTimeout, with the role name
-// wrapped into any parse error (the role name is only in scope inside the roles loop).
-func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) (*Config, error) {
-	c := &Config{Timeout: timeout, HookTimeout: hookTimeout} // zero if file didn't set one (overlay skips zero — correct)
+// which would break now that RoleConfig.Timeout/IdleTimeout are time.Duration while
+// fileRoleConfig.Timeout/IdleTimeout are string) and each role's Timeout/IdleTimeout string is
+// parsed via parseTimeout, with the role name wrapped into any parse error (the role name is only
+// in scope inside the roles loop).
+func materialize(fc *fileConfig, timeout, idleTimeout, hookTimeout time.Duration) (*Config, error) {
+	c := &Config{Timeout: timeout, IdleTimeout: idleTimeout, HookTimeout: hookTimeout} // zero if file didn't set one (overlay skips zero — correct)
 	d, g := &fc.Defaults, &fc.Generation
 
 	if d.Provider != "" {
@@ -351,11 +366,23 @@ func materialize(fc *fileConfig, timeout, hookTimeout time.Duration) (*Config, e
 				}
 				rt = d
 			}
+			// §9.30 FR-R7 — per-role idle deadline (parseTimeout: "45s" OR bare "45"; unlike the global
+			// [defaults].idle_timeout seam, which is bare time.ParseDuration — the existing timeout
+			// asymmetry, preserved).
+			var rit time.Duration
+			if frc.IdleTimeout != "" { // "" ⇒ inherit (stay 0)
+				d, perr := parseTimeout(frc.IdleTimeout)
+				if perr != nil {
+					return nil, fmt.Errorf("parse config: [role.%s].idle_timeout: %w", role, perr)
+				}
+				rit = d
+			}
 			c.Roles[role] = RoleConfig{
-				Provider:  frc.Provider,
-				Model:     frc.Model,
-				Reasoning: frc.Reasoning,
-				Timeout:   rt, // 0 ⇒ inherit global [defaults].timeout
+				Provider:    frc.Provider,
+				Model:       frc.Model,
+				Reasoning:   frc.Reasoning,
+				Timeout:     rt,  // 0 ⇒ inherit global [defaults].timeout
+				IdleTimeout: rit, // 0 ⇒ inherit global [defaults].idle_timeout
 			}
 		}
 	}
@@ -390,6 +417,11 @@ func overlay(dst, src *Config) {
 	}
 	if src.Timeout != 0 {
 		dst.Timeout = src.Timeout
+	}
+	// §9.30 FR-R7 — global idle deadline (time.Duration; 0 ⇒ inherit lower layer). Mirrors the Timeout
+	// guard above exactly: a plain value type, so the guard is != 0 (NOT != nil).
+	if src.IdleTimeout != 0 {
+		dst.IdleTimeout = src.IdleTimeout
 	}
 	// *bool: nil ⇒ src omits the key ⇒ inherit lower layer; non-nil (incl. *false) ⇒ explicit override
 	// (pointer copy, NOT deref — a deref guard would re-introduce only-true-propagates). Mirrors the
@@ -506,6 +538,11 @@ func overlay(dst, src *Config) {
 			// fields where *0/*false are meaningful explicit values; timeout has no meaningful "explicit 0").
 			if rc.Timeout != 0 {
 				existing.Timeout = rc.Timeout
+			}
+			// FR-R7 — per-role idle deadline (0 ⇒ inherit the global [defaults].idle_timeout). Mirrors
+			// the Timeout guard above; field-merge preserves sibling RoleConfig fields (e.g. Timeout).
+			if rc.IdleTimeout != 0 {
+				existing.IdleTimeout = rc.IdleTimeout
 			}
 			dst.Roles[role] = existing
 		}

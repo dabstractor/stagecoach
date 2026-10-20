@@ -357,6 +357,7 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 #   STAGECOACH_PROVIDER   default provider/agent (e.g. "pi", "claude", "agy")
 #   STAGECOACH_MODEL      model override ("" -> provider manifest default_model)
 #   STAGECOACH_TIMEOUT    generation timeout, e.g. "120s" or 120 (seconds)
+#   STAGECOACH_IDLE_TIMEOUT   idle deadline (kill on silence), e.g. "45s" or 45 (seconds)
 #   STAGECOACH_CONFIG     path to a config file, overrides discovery
 #   STAGECOACH_VERBOSE    "true"/"false" — print resolved command, raw output, retries
 #   STAGECOACH_NO_COLOR   "true"/"false" — disable color (also honors NO_COLOR)
@@ -373,6 +374,7 @@ const bootstrapHeader = `# Stagecoach configuration file (populated bootstrap).
 #   git config stagecoach.provider pi
 #   git config stagecoach.model ""
 #   git config stagecoach.timeout 120s
+#   git config stagecoach.idleTimeout 45s
 #   git config stagecoach.autoStageAll true
 #   (read via ` + "`git config --get stagecoach.<key>`" + `)
 #

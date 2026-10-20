@@ -43,7 +43,7 @@ func TestMaterializeOverlay_MultiTurn(t *testing.T) {
 				MultiTurnFallback:    tc.fileFallback,
 				MultiTurnChunkTokens: tc.fileChunk,
 			}}
-			c, err := materialize(fc, 0, 0)
+			c, err := materialize(fc, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -88,7 +88,7 @@ func TestMaterializeOverlay_MultiTurn(t *testing.T) {
 			g, err := materialize(&fileConfig{Generation: fileGeneration{
 				MultiTurnFallback:    tc.fileFallback,
 				MultiTurnChunkTokens: tc.fileChunk,
-			}}, 0, 0)
+			}}, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -105,7 +105,7 @@ func TestMaterializeOverlay_MultiTurn(t *testing.T) {
 	// ---- (e) overlay precedence: repo-file overrides global-file for chunk tokens ----
 	t.Run("overlay/repo_overrides_global_chunk_tokens", func(t *testing.T) {
 		cfg := Defaults() // 32000
-		global, err := materialize(&fileConfig{Generation: fileGeneration{MultiTurnChunkTokens: 48000}}, 0, 0)
+		global, err := materialize(&fileConfig{Generation: fileGeneration{MultiTurnChunkTokens: 48000}}, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("materialize: %v", err)
 		}
@@ -113,7 +113,7 @@ func TestMaterializeOverlay_MultiTurn(t *testing.T) {
 		if cfg.MultiTurnChunkTokens != 48000 {
 			t.Fatalf("after global overlay: MultiTurnChunkTokens = %d, want 48000", cfg.MultiTurnChunkTokens)
 		}
-		repo, err := materialize(&fileConfig{Generation: fileGeneration{MultiTurnChunkTokens: 16000}}, 0, 0)
+		repo, err := materialize(&fileConfig{Generation: fileGeneration{MultiTurnChunkTokens: 16000}}, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("materialize: %v", err)
 		}

@@ -65,7 +65,7 @@ func TestBootstrapValidateModels(t *testing.T) {
 			if err := toml.Unmarshal([]byte(content), &fc); err != nil {
 				t.Fatalf("buildBootstrapConfig(%q, %v): invalid TOML: %v\n%s", tc.target, tc.installed, err, content)
 			}
-			cfg, err := materialize(&fc, 120*time.Second, 10*time.Minute)
+			cfg, err := materialize(&fc, 120*time.Second, 0, 10*time.Minute)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}

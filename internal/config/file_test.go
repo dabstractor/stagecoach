@@ -586,6 +586,112 @@ timeout = "480s"
 	}
 }
 
+// --- idle-timeout file twins (FR-R7 / §9.30; 45s sentinels). PARSER ASYMMETRY (preserved deliberately,
+// mirroring the timeout seam): the GLOBAL [defaults].idle_timeout is parsed with BARE time.ParseDuration
+// (a bare int "45" is a hard parse error there), while the PER-ROLE [role.<role>].idle_timeout uses
+// parseTimeout (both "45s" and "45"). ---
+
+// TestLoadTOMLIdleTimeout proves [defaults].idle_timeout parses (duration form) through
+// loadTOML→materialize onto Config.IdleTimeout.
+func TestLoadTOMLIdleTimeout(t *testing.T) {
+	body := `
+[defaults]
+idle_timeout = "45s"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if err != nil || cfg == nil {
+		t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+	}
+	if cfg.IdleTimeout != 45*time.Second {
+		t.Errorf("IdleTimeout = %v, want 45s", cfg.IdleTimeout)
+	}
+}
+
+// TestLoadTOMLInvalidIdleTimeout proves a malformed global idle_timeout fails at LOAD with the
+// "invalid idle_timeout" message (idle twin of TestLoadTOMLInvalidTimeout).
+func TestLoadTOMLInvalidIdleTimeout(t *testing.T) {
+	body := `
+[defaults]
+idle_timeout = "abc"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if cfg != nil {
+		t.Errorf("invalid idle_timeout: cfg=%v, want nil", cfg)
+	}
+	if err == nil {
+		t.Fatal("invalid idle_timeout: err=nil, want error")
+	}
+	if !strings.Contains(err.Error(), "invalid idle_timeout") {
+		t.Errorf("err=%q, want 'invalid idle_timeout'", err.Error())
+	}
+}
+
+// TestLoadTOMLIdleTimeout_BareIntRejected PINS the parser seam: the global file key is BARE
+// time.ParseDuration (mirroring [defaults].timeout), so a bare int "45" is a hard parse error —
+// unlike env/git/the per-role file key, which accept bare ints via parseTimeout.
+func TestLoadTOMLIdleTimeout_BareIntRejected(t *testing.T) {
+	body := `
+[defaults]
+idle_timeout = "45"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if cfg != nil {
+		t.Errorf("bare-int global idle_timeout: cfg=%v, want nil", cfg)
+	}
+	if err == nil {
+		t.Fatal("bare-int global idle_timeout: err=nil, want error (BARE time.ParseDuration seam)")
+	}
+	if !strings.Contains(err.Error(), "invalid idle_timeout") {
+		t.Errorf("err=%q, want 'invalid idle_timeout'", err.Error())
+	}
+}
+
+// TestLoadTOMLRoleIdleTimeoutMalformed proves a malformed [role.<role>].idle_timeout fails at LOAD
+// time with the role context in the error (idle twin of TestLoadTOMLRoleTimeoutMalformed).
+func TestLoadTOMLRoleIdleTimeoutMalformed(t *testing.T) {
+	body := `
+[defaults]
+provider = "pi"
+
+[role.planner]
+idle_timeout = "not-a-duration"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if cfg != nil {
+		t.Errorf("malformed role idle_timeout: cfg=%v, want nil", cfg)
+	}
+	if err == nil {
+		t.Fatal("malformed role idle_timeout: err=nil, want error")
+	}
+	if !strings.Contains(err.Error(), "[role.planner].idle_timeout") {
+		t.Errorf("err=%q, want it to contain '[role.planner].idle_timeout'", err.Error())
+	}
+}
+
+// TestLoadTOMLRoleIdleTimeoutValid proves a valid per-role idle_timeout parses via parseTimeout
+// (bare-int form proves parseTimeout, NOT the global bare-parser seam).
+func TestLoadTOMLRoleIdleTimeoutValid(t *testing.T) {
+	body := `
+[defaults]
+provider = "pi"
+
+[role.planner]
+idle_timeout = "45"
+`
+	path := writeTempTOML(t, body)
+	cfg, err := loadTOML(path)
+	if err != nil || cfg == nil {
+		t.Fatalf("loadTOML: cfg=%v err=%v", cfg, err)
+	}
+	if cfg.Roles["planner"].IdleTimeout != 45*time.Second {
+		t.Errorf("Roles[planner].IdleTimeout = %v, want 45s (bare int via parseTimeout)", cfg.Roles["planner"].IdleTimeout)
+	}
+}
+
 // --- TestLoadTOML_V2Fields ---
 
 // TestLoadTOML_V2Fields proves the v2 file keys decode + materialize: config_version, [generation]
@@ -733,6 +839,63 @@ func TestOverlayRolesFieldMerge_Timeout(t *testing.T) {
 	}
 	if msg := dst.Roles["message"]; msg.Provider != "pi" || msg.Model != "gpt-5.4-nano" {
 		t.Errorf("message=%+v want {pi gpt-5.4-nano} (untouched role must survive)", msg)
+	}
+}
+
+// TestOverlayRolesFieldMerge_IdleTimeout is the idle twin of TestOverlayRolesFieldMerge_Timeout: a higher
+// layer setting IDLE only overrides the lower-layer idle AND the lower-layer siblings (provider/model/
+// timeout) SURVIVE; a zero src idle preserves the lower-layer idle (the != 0 guard).
+func TestOverlayRolesFieldMerge_IdleTimeout(t *testing.T) {
+	// (a) higher layer sets IDLE only → overrides lower idle; siblings (incl. Timeout) survive.
+	dst := &Config{
+		Roles: map[string]RoleConfig{
+			"planner": {
+				Provider:    "agy",
+				Model:       "gemini-3.1-pro",
+				Timeout:     300 * time.Second,
+				IdleTimeout: 30 * time.Second,
+			},
+		},
+	}
+	src := &Config{
+		Roles: map[string]RoleConfig{
+			"planner": {IdleTimeout: 45 * time.Second}, // higher layer sets IDLE only
+		},
+	}
+	overlay(dst, src)
+
+	rc := dst.Roles["planner"]
+	if rc.IdleTimeout != 45*time.Second {
+		t.Errorf("planner.idleTimeout=%v want 45s (higher layer wins)", rc.IdleTimeout)
+	}
+	if rc.Provider != "agy" || rc.Model != "gemini-3.1-pro" || rc.Timeout != 300*time.Second {
+		t.Errorf("planner=%+v want siblings intact (idle merge must not erase Timeout/provider/model)", rc)
+	}
+
+	// (b) the != 0 guard: a src that OMITS idle (sets only Model) must NOT clobber a lower-layer idle.
+	dst2 := &Config{Roles: map[string]RoleConfig{"planner": {IdleTimeout: 30 * time.Second}}}
+	src2 := &Config{Roles: map[string]RoleConfig{"planner": {Model: "x"}}} // no idle
+	overlay(dst2, src2)
+	if got := dst2.Roles["planner"].IdleTimeout; got != 30*time.Second {
+		t.Errorf("planner.idleTimeout=%v want 30s (zero src must not clobber)", got)
+	}
+	if got := dst2.Roles["planner"].Model; got != "x" {
+		t.Errorf("planner.model=%q want x (sibling field still merges when idle omitted)", got)
+	}
+}
+
+// TestOverlayIdleTimeout_Global is the global idle twin of TestOverlayPartial's timeout rows: a non-zero
+// src IdleTimeout overrides; a zero src IdleTimeout preserves dst's.
+func TestOverlayIdleTimeout_Global(t *testing.T) {
+	dst := &Config{IdleTimeout: 30 * time.Second}
+	overlay(dst, &Config{IdleTimeout: 45 * time.Second})
+	if dst.IdleTimeout != 45*time.Second {
+		t.Errorf("IdleTimeout=%v want 45s (non-zero src wins)", dst.IdleTimeout)
+	}
+	dst2 := &Config{IdleTimeout: 30 * time.Second}
+	overlay(dst2, &Config{Model: "x"}) // no idle
+	if dst2.IdleTimeout != 30*time.Second {
+		t.Errorf("IdleTimeout=%v want 30s (zero src preserves dst)", dst2.IdleTimeout)
 	}
 }
 
@@ -945,7 +1108,7 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range materializeCases {
 		t.Run("materialize/"+tc.name, func(t *testing.T) {
 			fc := &fileConfig{Generation: fileGeneration{DiffContext: tc.fileDC, TokenLimit: tc.fileTL}}
-			c, err := materialize(fc, 0, 0)
+			c, err := materialize(fc, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -1001,12 +1164,12 @@ func TestMaterializeOverlay_DiffContext_TokenLimit(t *testing.T) {
 	for _, tc := range overlayCases {
 		t.Run("overlay/"+tc.name, func(t *testing.T) {
 			cfg := Defaults() // DiffContext = intPtr(1); TokenLimit = 0
-			g, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0, 0)
+			g, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.global.dc, TokenLimit: tc.global.tl}}, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
 			overlay(&cfg, g)
-			r, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0, 0)
+			r, err := materialize(&fileConfig{Generation: fileGeneration{DiffContext: tc.repo.dc, TokenLimit: tc.repo.tl}}, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -1114,7 +1277,7 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 				Defaults:   fileDefaults{AutoStageAll: tc.fileASA},
 				Generation: fileGeneration{MultiTurnFallback: tc.fileMTF},
 			}
-			c, err := materialize(fc, 0, 0)
+			c, err := materialize(fc, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -1183,7 +1346,7 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 			g, err := materialize(&fileConfig{
 				Defaults:   fileDefaults{AutoStageAll: tc.global.asa},
 				Generation: fileGeneration{MultiTurnFallback: tc.global.mtf},
-			}, 0, 0)
+			}, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize: %v", err)
 			}
@@ -1191,7 +1354,7 @@ func TestMaterializeOverlay_AutoStageAll_MultiTurnFallback(t *testing.T) {
 			r, err := materialize(&fileConfig{
 				Defaults:   fileDefaults{AutoStageAll: tc.repo.asa},
 				Generation: fileGeneration{MultiTurnFallback: tc.repo.mtf},
-			}, 0, 0)
+			}, 0, 0, 0)
 			if err != nil {
 				t.Fatalf("materialize repo: %v", err)
 			}
@@ -1305,7 +1468,7 @@ func TestMaterializeRoleTimeout(t *testing.T) {
 				frc.Timeout = "" // mirrors a [role.planner] table with no timeout key
 			}
 			fc := &fileConfig{Role: map[string]fileRoleConfig{"planner": frc}}
-			cfg, err := materialize(fc, 0, 0)
+			cfg, err := materialize(fc, 0, 0, 0)
 			if tc.wantError != "" {
 				if err == nil {
 					t.Fatalf("materialize: err=nil, want error containing %q", tc.wantError)
@@ -1337,7 +1500,7 @@ func TestMaterializeRoleTimeout(t *testing.T) {
 			"planner": {Timeout: "480s"},
 			"stager":  {}, // omitted ⇒ 0 ⇒ inherit global
 		}}
-		cfg, err := materialize(fc, 0, 0)
+		cfg, err := materialize(fc, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("materialize: %v", err)
 		}
@@ -1356,7 +1519,7 @@ func TestMaterializeRoleTimeout(t *testing.T) {
 // 4th role is cheap insurance against a future role-specific regression in the parse path.
 func TestMaterializeRoleTimeout_ArbiterRole(t *testing.T) {
 	fc := &fileConfig{Role: map[string]fileRoleConfig{"arbiter": {Timeout: "200s"}}}
-	cfg, err := materialize(fc, 0, 0)
+	cfg, err := materialize(fc, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("materialize([role.arbiter].timeout='200s'): %v", err)
 	}
