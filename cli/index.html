@@ -1126,10 +1126,18 @@
 <tr>
 <td><code>--timeout &lt;dur&gt;</code></td>
 <td>string</td>
-<td>"120s"</td>
+<td>"600s"</td>
 <td><code>STAGECOACH_TIMEOUT</code></td>
 <td><code>stagecoach.timeout</code></td>
-<td>Generation timeout (e.g. <code>"120s"</code> or <code>120</code>)</td>
+<td>Hard-cap generation timeout — the backstop for the idle deadline (e.g. <code>"600s"</code> or <code>600</code>)</td>
+</tr>
+<tr>
+<td><code>--idle-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>"60s"</td>
+<td><code>STAGECOACH_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.idleTimeout</code></td>
+<td>Idle deadline — kills the agent after N seconds with no output (e.g. <code>"60s"</code> or <code>60</code>)</td>
 </tr>
 <tr>
 <td><code>--verbose</code>, <code>-v</code></td>
@@ -1392,32 +1400,64 @@
 <td>string</td>
 <td>""</td>
 <td><code>STAGECOACH_PLANNER_TIMEOUT</code></td>
-<td>—</td>
-<td>Per-role generation timeout for the planner (e.g. <code>"600s"</code> or <code>600</code>)</td>
+<td><code>stagecoach.role.planner.timeout</code></td>
+<td>Per-role hard-cap generation timeout for the planner (e.g. <code>"600s"</code> or <code>600</code>)</td>
 </tr>
 <tr>
 <td><code>--stager-timeout &lt;dur&gt;</code></td>
 <td>string</td>
 <td>""</td>
 <td><code>STAGECOACH_STAGER_TIMEOUT</code></td>
-<td>—</td>
-<td>Per-role generation timeout for the (tooled) staging agent (e.g. <code>"300s"</code> or <code>300</code>)</td>
+<td><code>stagecoach.role.stager.timeout</code></td>
+<td>Per-role hard-cap generation timeout for the (tooled) staging agent (e.g. <code>"300s"</code> or <code>300</code>)</td>
 </tr>
 <tr>
 <td><code>--message-timeout &lt;dur&gt;</code></td>
 <td>string</td>
 <td>""</td>
 <td><code>STAGECOACH_MESSAGE_TIMEOUT</code></td>
-<td>—</td>
-<td>Per-role generation timeout for the message composer (e.g. <code>"120s"</code> or <code>120</code>)</td>
+<td><code>stagecoach.role.message.timeout</code></td>
+<td>Per-role hard-cap generation timeout for the message composer (e.g. <code>"90s"</code> or <code>90</code>)</td>
 </tr>
 <tr>
 <td><code>--arbiter-timeout &lt;dur&gt;</code></td>
 <td>string</td>
 <td>""</td>
 <td><code>STAGECOACH_ARBITER_TIMEOUT</code></td>
-<td>—</td>
-<td>Per-role generation timeout for the leftover arbiter (e.g. <code>"120s"</code> or <code>120</code>)</td>
+<td><code>stagecoach.role.arbiter.timeout</code></td>
+<td>Per-role hard-cap generation timeout for the leftover arbiter (e.g. <code>"90s"</code> or <code>90</code>)</td>
+</tr>
+<tr>
+<td><code>--planner-idle-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_PLANNER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.planner.idleTimeout</code></td>
+<td>Per-role idle deadline for the planner — kills after N seconds with no output (e.g. <code>"90s"</code> or <code>90</code>)</td>
+</tr>
+<tr>
+<td><code>--stager-idle-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_STAGER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.stager.idleTimeout</code></td>
+<td>Per-role idle deadline for the (tooled) staging agent — kills after N seconds with no output (e.g. <code>"90s"</code> or <code>90</code>)</td>
+</tr>
+<tr>
+<td><code>--message-idle-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_MESSAGE_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.message.idleTimeout</code></td>
+<td>Per-role idle deadline for the message composer — kills after N seconds with no output (e.g. <code>"90s"</code> or <code>90</code>)</td>
+</tr>
+<tr>
+<td><code>--arbiter-idle-timeout &lt;dur&gt;</code></td>
+<td>string</td>
+<td>""</td>
+<td><code>STAGECOACH_ARBITER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.arbiter.idleTimeout</code></td>
+<td>Per-role idle deadline for the leftover arbiter — kills after N seconds with no output (e.g. <code>"90s"</code> or <code>90</code>)</td>
 </tr>
 <tr>
 <td><code>--version</code></td>
@@ -1447,7 +1487,7 @@
 <p>Install stagecoach's <code>prepare-commit-msg</code> hook in the current repo. Writes an executable (0755) script containing the marker <code># stagecoach prepare-commit-msg hook v1</code> at the repo's hooks directory. Re-running overwrites an existing stagecoach hook (idempotent — reports "Installed" on first run, "Updated" on subsequent).</p>
 <p>The hook script calls <code>stagecoach hook exec "$@"</code> (runtime lands in P1.M3.T2.S1 — not yet shipped).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w">             </span><span class="c1"># write the hook</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w">             </span><span class="c1"># → &quot;Updated stagecoach prepare-commit-msg hook.&quot; (idempotent)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w">             </span><span class="c1"># → "Updated stagecoach prepare-commit-msg hook." (idempotent)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w"> </span>--strict<span class="w">    </span><span class="c1"># bake --strict into the script body</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install<span class="w"> </span>--print<span class="w">     </span><span class="c1"># print the script to stdout, no disk write (works outside a repo)</span>
 </span></code></pre></div>
@@ -1472,8 +1512,8 @@
 <p><strong>Foreign-hook policy (never-clobber,):</strong> If a <code>prepare-commit-msg</code> already exists WITHOUT stagecoach's marker, <code>install</code> refuses (exit 1) and prints the one-line manual invocation you can add to your existing hook. There is <strong>no <code>--force</code></strong> — this is by design. Stagecoach will never overwrite someone else's hook.</p>
 <h3 id="hook-uninstall"><code>hook uninstall</code><a class="headerlink" href="#hook-uninstall" title="Permanent link">&para;</a></h3>
 <p>Remove stagecoach's <code>prepare-commit-msg</code> hook. Only removes the file when the marker is present. If no hook exists, prints an informational note and exits 0 (idempotent). A foreign hook is refused (exit 1, untouched).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># → &quot;Removed stagecoach prepare-commit-msg hook.&quot;</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># (no hook) → &quot;No stagecoach prepare-commit-msg hook to remove.&quot; (exit 0)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># → "Removed stagecoach prepare-commit-msg hook."</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>uninstall<span class="w">            </span><span class="c1"># (no hook) → "No stagecoach prepare-commit-msg hook to remove." (exit 0)</span>
 </span></code></pre></div>
 <h3 id="hook-status"><code>hook status</code><a class="headerlink" href="#hook-status" title="Permanent link">&para;</a></h3>
 <p>Report the current state of the repo's <code>prepare-commit-msg</code> hook. Prints exactly one line:</p>
@@ -1499,9 +1539,9 @@
 </tr>
 </tbody>
 </table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → &quot;none&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → "none"</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>install
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → &quot;stagecoach (v1)&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>stagecoach<span class="w"> </span>hook<span class="w"> </span>status<span class="w">              </span><span class="c1"># → "stagecoach (v1)"</span>
 </span></code></pre></div>
 <h3 id="hook-exec"><code>hook exec</code><a class="headerlink" href="#hook-exec" title="Permanent link">&para;</a></h3>
 <p>Generate a commit message into git's <code>prepare-commit-msg</code> file. Called by stagecoach's installed hook — not by users directly. When <code>git commit</code> fires the hook, stagecoach generates a message for the staged diff and writes it at the <strong>top</strong> of <code>&lt;msg-file&gt;</code>, preserving git's comment block beneath.</p>
@@ -1622,9 +1662,9 @@
 <h3 id="config-upgrade"><code>config upgrade</code><a class="headerlink" href="#config-upgrade" title="Permanent link">&para;</a></h3>
 <p>Upgrade an existing config's <code>config_version</code> to the current schema version (3) in place. For multi-backend providers, the former <code>default_provider</code> is folded into a slash-prefix on the model (<code>default_provider = "X"</code> + <code>model = "Y"</code> → <code>model = "X/Y"</code>) and the <code>default_provider</code> key is deleted. Every other line is preserved. Idempotent — running it twice leaves the file unchanged. No flags.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>stagecoach<span class="w"> </span>config<span class="w"> </span>upgrade
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Already at version 3 →  &quot;Config at ~/.config/stagecoach/config.toml is already at version 3 (no changes).&quot;</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Upgraded from v1  →  &quot;Backed up previous config to &lt;path&gt;.bak.&lt;ts&gt;&quot; then &quot;Upgraded config at ~/.config/stagecoach/config.toml to version 3.&quot;</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># No file          →  &quot;no config file at &lt;path&gt; (run &#39;stagecoach config init&#39; first)&quot;  (exit 1)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Already at version 3 →  "Config at ~/.config/stagecoach/config.toml is already at version 3 (no changes)."</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Upgraded from v1  →  "Backed up previous config to &lt;path&gt;.bak.&lt;ts&gt;" then "Upgraded config at ~/.config/stagecoach/config.toml to version 3."</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># No file          →  "no config file at &lt;path&gt; (run 'stagecoach config init' first)"  (exit 1)</span>
 </span></code></pre></div>
 <p>At load time, a missing or outdated <code>config_version</code> triggers an advisory pointing at <code>config upgrade</code>; a <strong>newer-than-binary</strong> <code>config_version</code> triggers an advisory to <strong>upgrade stagecoach</strong>. The advisory never suggests <code>config init --force</code> — that would regenerate at the older binary's schema and destroy a config the binary cannot read.</p>
 <h3 id="config-path"><code>config path</code><a class="headerlink" href="#config-path" title="Permanent link">&para;</a></h3>
@@ -1713,12 +1753,12 @@
 <h4 id="lazygit-target"><code>lazygit</code> target<a class="headerlink" href="#lazygit-target" title="Permanent link">&para;</a></h4>
 <p>Adds a <code>customCommands</code> entry to lazygit's <code>config.yml</code> via a <strong>comment-preserving YAML round-trip</strong> (<code>gopkg.in/yaml.v3</code> Node API). Press <code>&lt;c-a&gt;</code> in lazygit's files panel to run <code>stagecoach</code> and generate an AI commit message — <code>output: 'none'</code> keeps you in the UI (US8).</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">customCommands</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;&lt;c-a&gt;&#39;</span><span class="w">   </span><span class="c1"># stagecoach-integration</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;files&#39;</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;stagecoach&#39;</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">loadingText</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;Generating</span><span class="nv"> </span><span class="s">commit</span><span class="nv"> </span><span class="s">message…&#39;</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">output</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;none&#39;</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;stagecoach:</span><span class="nv"> </span><span class="s">AI</span><span class="nv"> </span><span class="s">commit&#39;</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">'&lt;c-a&gt;'</span><span class="w">   </span><span class="c1"># stagecoach-integration</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="s">'files'</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">'stagecoach'</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">loadingText</span><span class="p">:</span><span class="w"> </span><span class="s">'Generating</span><span class="nv"> </span><span class="s">commit</span><span class="nv"> </span><span class="s">message…'</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">output</span><span class="p">:</span><span class="w"> </span><span class="s">'none'</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">'stagecoach:</span><span class="nv"> </span><span class="s">AI</span><span class="nv"> </span><span class="s">commit'</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -1793,7 +1833,7 @@
 </ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w">               </span><span class="c1"># install with default key (&lt;c-a&gt;)</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w"> </span>--yes<span class="w">         </span><span class="c1"># skip confirmation</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w"> </span>--key<span class="w"> </span><span class="s1">&#39;&lt;c-s&gt;&#39;</span><span class="w"> </span><span class="c1"># custom binding</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>install<span class="w"> </span>lazygit<span class="w"> </span>--key<span class="w"> </span><span class="s1">'&lt;c-s&gt;'</span><span class="w"> </span><span class="c1"># custom binding</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>lazygit<span class="w">                </span><span class="c1"># remove stagecoach entry</span>
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>stagecoach<span class="w"> </span>integrate<span class="w"> </span>remove<span class="w"> </span>lazygit<span class="w"> </span>--yes<span class="w">          </span><span class="c1"># skip confirmation</span>
 </span></code></pre></div>
@@ -1805,8 +1845,8 @@
 </ol>
 <p>Stagecoach never makes an HTTP call to list models — the agent CLI is the only model authority.</p>
 <p>With no argument, the <strong>resolved default provider</strong> is shown. With <code>--all</code>, every <strong>detected</strong> provider (command on <code>$PATH</code>) is shown, one block at a time. An unknown or undetected named provider exits 1.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>stagecoach<span class="w"> </span>models<span class="w">           </span><span class="c1"># show the default provider&#39;s models</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>claude<span class="w">    </span><span class="c1"># show claude&#39;s models</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>stagecoach<span class="w"> </span>models<span class="w">           </span><span class="c1"># show the default provider's models</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>claude<span class="w">    </span><span class="c1"># show claude's models</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>--all<span class="w">     </span><span class="c1"># show all detected providers</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>stagecoach<span class="w"> </span>models<span class="w"> </span>--help<span class="w">    </span><span class="c1"># see the models-scoped --all text</span>
 </span></code></pre></div>
@@ -1836,7 +1876,7 @@
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>  orphaned:  true (holder reparented — launcher has exited)
 </span></code></pre></div>
 <p>The <code>orphaned:</code> line has three outcomes: <code>true (holder reparented — launcher has exited)</code> (Unix; the holder's parent is now process 1 — its launcher closed without killing it, so the kernel reparented the holder to init), <code>false</code> (alive and its parent is not init — Windows always lands here), or <code>unknown (holder is dead)</code> (the holder process is no longer alive). This is a <em>display-only snapshot hint</em>: it reports whether the holder currently appears reparented to init (<code>ppid == 1</code>), not whether its parent changed at runtime, so under a subreaper (systemd, Docker/containerd, supervisord) a reparented holder can read <code>false</code>. The authoritative backstop is the parent-death watchdog, which detects a parent-pid <em>change</em> at runtime and self-exits + releases the lock regardless (see <a href="../how-it-works/#per-repo-run-lock-fr52">how-it-works.md — Per-repo run lock</a>). With no lock held, the output is <code>no run lock for &lt;repo&gt;</code> (exit 0). Exit is <strong>0 in all cases</strong> — even when the holder is dead or orphaned — the read is the help; the action (kill/rm) is yours.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>status<span class="w">    </span><span class="c1"># → &quot;no run lock for &lt;cwd&gt;&quot; (exit 0) when nothing holds it</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>status<span class="w">    </span><span class="c1"># → "no run lock for &lt;cwd&gt;" (exit 0) when nothing holds it</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>status<span class="w">    </span><span class="c1"># → the block above when a holder exists</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>stagecoach<span class="w"> </span>lock<span class="w"> </span>--help<span class="w">    </span><span class="c1"># the `lock` command group (bare `lock` prints help)</span>
 </span></code></pre></div>
@@ -1934,11 +1974,11 @@
 </tr>
 <tr>
 <td><code>124</code></td>
-<td>Timeout (generation exceeded <code>--timeout</code>).</td>
+<td>Deadline exceeded (idle or hard cap) — generation exceeded the idle deadline (<code>--idle-timeout</code>, default 60s of silence) or the hard cap (<code>--timeout</code>, default 600s).</td>
 </tr>
 </tbody>
 </table>
-<p>Exit codes mirror the constants in <code>internal/exitcode/exitcode.go</code>. A timeout is reported as <code>124</code> (matching GNU <code>timeout</code>), not <code>3</code>. With <code>--dry-run</code>, generation failures (timeout or parse/duplicate-check exhaustion) report exit <strong>1</strong> with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code <code>6</code> is upgrade-path only: it is produced solely by <code>stagecoach upgrade --check</code> and is walled off from the commit path, so a commit run never exits 6.</p>
+<p>Exit codes mirror the constants in <code>internal/exitcode/exitcode.go</code>. A deadline kill (idle or hard cap) is reported as <code>124</code> (matching GNU <code>timeout</code>), not <code>3</code>. With <code>--dry-run</code>, generation failures (timeout or parse/duplicate-check exhaustion) report exit <strong>1</strong> with a short stderr message (not 3/124 + the recovery recipe) — codes 3 and 124 remain the non-dry-run (commit-path) semantics. Code <code>6</code> is upgrade-path only: it is produced solely by <code>stagecoach upgrade --check</code> and is walled off from the commit path, so a commit run never exits 6.</p>
 <p>Code <code>5</code> (Busy) is distinct from the commit-failure codes so scripts can tell "busy, retry" from "failed." Contention on the per-repo run lock has two behaviors. On the single-commit path (changes staged): if a contending run's staged changes are already covered by the in-progress run's published index snapshot, it exits <strong>0</strong> ("nothing to do — an in-progress run already covers your staged changes"); if genuinely new work is staged, it exits <strong>5</strong> with the holder's pid/host and leaves the new changes staged for a re-run. On the decompose path (nothing staged, working tree dirty): an accidental double-run exits <strong>5</strong> (Busy) rather than 0 — the holder publishes a working-tree snapshot (<code>T_start</code>) that a lock-free contender cannot reproduce from the index alone, so it conservatively refuses. Stagecoach never force-breaks the lock.</p>
 <p><code>SIGHUP</code> (Unix) and the parent-death watchdog route through the <strong>rescue path</strong> (exit <code>3</code> when a snapshot is armed) rather than introducing signal-specific exit codes — see <a href="../how-it-works/#per-repo-run-lock-fr52">how-it-works.md — Per-repo run lock</a>.</p>
 <h2 id="flag-env-git-config-map">Flag ↔ env ↔ git-config map<a class="headerlink" href="#flag-env-git-config-map" title="Permanent link">&para;</a></h2>
@@ -1966,6 +2006,11 @@
 <td><code>--timeout</code></td>
 <td><code>STAGECOACH_TIMEOUT</code></td>
 <td><code>stagecoach.timeout</code></td>
+</tr>
+<tr>
+<td><code>--idle-timeout</code></td>
+<td><code>STAGECOACH_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.idleTimeout</code></td>
 </tr>
 <tr>
 <td><code>--config</code></td>
@@ -2123,6 +2168,26 @@
 <td><code>stagecoach.role.arbiter.timeout</code></td>
 </tr>
 <tr>
+<td><code>--planner-idle-timeout</code></td>
+<td><code>STAGECOACH_PLANNER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.planner.idleTimeout</code></td>
+</tr>
+<tr>
+<td><code>--stager-idle-timeout</code></td>
+<td><code>STAGECOACH_STAGER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.stager.idleTimeout</code></td>
+</tr>
+<tr>
+<td><code>--message-idle-timeout</code></td>
+<td><code>STAGECOACH_MESSAGE_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.message.idleTimeout</code></td>
+</tr>
+<tr>
+<td><code>--arbiter-idle-timeout</code></td>
+<td><code>STAGECOACH_ARBITER_IDLE_TIMEOUT</code></td>
+<td><code>stagecoach.role.arbiter.idleTimeout</code></td>
+</tr>
+<tr>
 <td>— (no flag)</td>
 <td><code>STAGECOACH_NO_PARENT_WATCHDOG</code></td>
 <td><code>stagecoach.noParentWatchdog</code> (also <code>[generation].no_parent_watchdog</code> in config)</td>
@@ -2172,8 +2237,8 @@
 </span><span id="__span-20-40"><a id="__codelineno-20-40" name="__codelineno-20-40" href="#__codelineno-20-40"></a>
 </span><span id="__span-20-41"><a id="__codelineno-20-41" name="__codelineno-20-41" href="#__codelineno-20-41"></a><span class="c1"># Per-repo per-role config (.stagecoach.toml)</span>
 </span><span id="__span-20-42"><a id="__codelineno-20-42" name="__codelineno-20-42" href="#__codelineno-20-42"></a><span class="c1"># [role.planner]</span>
-</span><span id="__span-20-43"><a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a><span class="c1"># provider = &quot;claude&quot;</span>
-</span><span id="__span-20-44"><a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a><span class="c1"># model = &quot;opus&quot;</span>
+</span><span id="__span-20-43"><a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a><span class="c1"># provider = "claude"</span>
+</span><span id="__span-20-44"><a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a><span class="c1"># model = "opus"</span>
 </span></code></pre></div>
 
 

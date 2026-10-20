@@ -893,10 +893,10 @@
 <h3 id="schema-versioning-config-upgrade">Schema versioning (<code>config upgrade</code>)<a class="headerlink" href="#schema-versioning-config-upgrade" title="Permanent link">&para;</a></h3>
 <p><code>stagecoach config upgrade</code> rewrites an existing config's top-level <code>config_version</code> line to the current schema version (3) in place — For multi-backend providers, the former <code>default_provider</code> is folded into a slash-prefix on the model and the key is deleted. Every other line is preserved. Idempotent: running it twice leaves the file unchanged. No flags.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$ stagecoach config upgrade
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a># Already at version 3 →  &quot;Config at &lt;path&gt; is already at version 3 (no changes).&quot;
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># Upgraded from v1  →  &quot;Upgraded config at &lt;path&gt; to version 3.&quot;
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a># No file          →  &quot;no config file at &lt;path&gt; (run &#39;stagecoach config init&#39; first)&quot;  (exit 1)
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># Not valid TOML   →  &quot;config &lt;path&gt; is not valid TOML: &lt;err&gt;&quot;  (exit 1, file untouched)
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a># Already at version 3 →  "Config at &lt;path&gt; is already at version 3 (no changes)."
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># Upgraded from v1  →  "Upgraded config at &lt;path&gt; to version 3."
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a># No file          →  "no config file at &lt;path&gt; (run 'stagecoach config init' first)"  (exit 1)
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># Not valid TOML   →  "config &lt;path&gt; is not valid TOML: &lt;err&gt;"  (exit 1, file untouched)
 </span></code></pre></div>
 <p>At load time, if <code>config_version</code> is missing or older, stagecoach prints an advisory to stderr pointing at <code>config upgrade</code> (never <code>config init --force</code> — that is a re-bootstrap, not an upgrade, per). If <code>config_version</code> is <strong>newer than the binary supports</strong>, the advisory says only to <strong>upgrade stagecoach</strong> (regenerating would discard a schema the binary cannot read). The current schema (version 3) includes per-role models, reasoning levels, the inference-provider model-prefix, multi-commit decomposition, and binary filtering.</p>
 <div class="admonition note">
@@ -909,44 +909,46 @@
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">config_version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">[defaults]</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;claude&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">reasoning</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;off&quot;</span><span class="w">   </span><span class="c1"># off|low|medium|high; off by default for every role</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># model          = &quot;&quot;</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># timeout        = &quot;120s&quot;   # global fallback for every role; the planner role defaults to 480s</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># auto_stage_all = true</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># verbose        = false</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># --- per-role models for the default provider &quot;claude&quot; ---</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># [role.planner]</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># model = &quot;haiku&quot;</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># timeout = &quot;600s&quot;   # per-role generation timeout; overrides the planner&#39;s 480s built-in</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># [role.stager]</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># model = &quot;sonnet&quot;</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># [role.message]</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># model = &quot;haiku&quot;</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># [role.arbiter]</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># model = &quot;haiku&quot;</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="k">[generation]</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="c1"># max_diff_bytes        = 300000  # ignored when token_limit is set</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="c1"># max_md_lines          = 100     # ignored when token_limit is set</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="n">token_limit</span><span class="w">           </span><span class="o">=</span><span class="w"> </span><span class="mi">50000</span><span class="w">   </span><span class="c1"># holistic token budget; the populated config ships 50000 active — set 0 (or delete) for no cap</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="c1"># diff_context          = 1       # 0 = changed-lines-only, 1 = one anchor (default), 3 = git default; ; valid range 0–3 — out-of-range rejected at config load</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="c1"># multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion; set false to DISABLE (now honored via file/git-config — see &quot;Multi-turn fallback&quot; below)</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="c1"># multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens; does NOT interact with token_limit</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="c1"># work_desc_read_rounds  = 5       # max READ rounds in work-description mode; flag/env activate the mode, not this knob</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="c1"># exclude               = []   # UNIONS across layers — see &quot;Exclusion globs&quot; below</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="c1"># format                = &quot;auto&quot;   # &lt;base&gt;[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c1"># locale                = &quot;&quot;       # free-form language name or BCP-47 tag; never validated</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="c1"># template              = &quot;&quot;       # wrap every message; must contain literal $msg, e.g. &quot;$msg (#205)&quot;</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="c1"># hook_timeout          = &quot;10m&quot;    # per-hook execution timeout; file + default only</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="c1"># no_verify             = false    # skip pre-commit and commit-msg hooks (; mirrors `git commit --no-verify`); CANNOT disable-via-file is N/A (default is already false)</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="c1"># no_parent_watchdog    = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="c1"># [upgrade]                              # self-update; GLOBAL config only — no per-repo meaning</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="c1"># channel     = &quot;stable&quot;                  # stable | prerelease (admits -rc/-beta tags; = --prerelease)</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="c1"># source_repo = &quot;dabstractor/stagecoach&quot;  # release source; override for a fork. Compile-time default.</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="c1"># ...</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"claude"</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">reasoning</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"off"</span><span class="w">   </span><span class="c1"># off|low|medium|high; off by default for every role</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># model          = ""</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># timeout        = "600s"   # global hard-cap fallback for every role; every role also resolves a 60s idle deadline</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># idle_timeout   = "60s"   # idle deadline — kill after N seconds of silence (the primary productivity signal)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># auto_stage_all = true</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># verbose        = false</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># --- per-role models for the default provider "claude" ---</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># [role.planner]</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># model = "haiku"</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># timeout = "600s"   # per-role hard-cap timeout; no planner special-case — roles resolve idle+hard-cap like model/provider</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># idle_timeout = "90s"   # per-role idle deadline (kill on silence)</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># [role.stager]</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># model = "sonnet"</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># [role.message]</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># model = "haiku"</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># [role.arbiter]</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="c1"># model = "haiku"</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="k">[generation]</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="c1"># max_diff_bytes        = 300000  # ignored when token_limit is set</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="c1"># max_md_lines          = 100     # ignored when token_limit is set</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="n">token_limit</span><span class="w">           </span><span class="o">=</span><span class="w"> </span><span class="mi">50000</span><span class="w">   </span><span class="c1"># holistic token budget; the populated config ships 50000 active — set 0 (or delete) for no cap</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="c1"># diff_context          = 1       # 0 = changed-lines-only, 1 = one anchor (default), 3 = git default; ; valid range 0–3 — out-of-range rejected at config load</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="c1"># multi_turn_fallback     = true   # lossless multi-turn fallback on one-shot exhaustion; set false to DISABLE (now honored via file/git-config — see "Multi-turn fallback" below)</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="c1"># multi_turn_chunk_tokens = 32000  # per-turn chunk budget in tokens; does NOT interact with token_limit</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="c1"># work_desc_read_rounds  = 5       # max READ rounds in work-description mode; flag/env activate the mode, not this knob</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c1"># exclude               = []   # UNIONS across layers — see "Exclusion globs" below</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="c1"># format                = "auto"   # &lt;base&gt;[+body]: auto|conventional|gitmoji|plain, each optionally +body; unknown = hard error (exit 1)</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="c1"># locale                = ""       # free-form language name or BCP-47 tag; never validated</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="c1"># template              = ""       # wrap every message; must contain literal $msg, e.g. "$msg (#205)"</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="c1"># hook_timeout          = "10m"    # per-hook execution timeout; file + default only</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="c1"># no_verify             = false    # skip pre-commit and commit-msg hooks (; mirrors `git commit --no-verify`); CANNOT disable-via-file is N/A (default is already false)</span>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="c1"># no_parent_watchdog    = false    # opt out of the parent-death lock watchdog — set true if you launch via nohup/setsid/systemd-run</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="c1"># [upgrade]                              # self-update; GLOBAL config only — no per-repo meaning</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="c1"># channel     = "stable"                  # stable | prerelease (admits -rc/-beta tags; = --prerelease)</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="c1"># source_repo = "dabstractor/stagecoach"  # release source; override for a fork. Compile-time default.</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="c1"># ...</span>
 </span></code></pre></div>
 <p><strong>Inert template</strong> (<code>config init --template</code>): every line is commented out EXCEPT the <code>[generation]</code> table header (kept active so uncommenting a single generation key lands in the right table — it holds no keys, so the file is still functionally inert / <code>IsInert</code> is true). <code>[defaults]</code>, <code>[provider.*]</code>, and <code>[role.*]</code> sections are fully commented — documents every available option without changing any defaults.</p>
 <h2 id="built-in-defaults">Built-in defaults<a class="headerlink" href="#built-in-defaults" title="Permanent link">&para;</a></h2>
@@ -972,7 +974,12 @@
 </tr>
 <tr>
 <td><code>timeout</code></td>
-<td><code>120s</code></td>
+<td><code>600s</code> (hard cap)</td>
+<td><code>config.Defaults</code></td>
+</tr>
+<tr>
+<td><code>idle_timeout</code></td>
+<td><code>60s</code></td>
 <td><code>config.Defaults</code></td>
 </tr>
 <tr>
@@ -1139,8 +1146,14 @@
 <tr>
 <td><code>STAGECOACH_TIMEOUT</code></td>
 <td><code>--timeout</code></td>
-<td>Global generation timeout — the fallback for every role; the planner role defaults to 480s and is NOT changed by this</td>
-<td><code>STAGECOACH_TIMEOUT=60s stagecoach</code></td>
+<td>Global hard-cap generation timeout — the fallback for every role; every role also resolves a 60s idle deadline (<code>STAGECOACH_IDLE_TIMEOUT</code>)</td>
+<td><code>STAGECOACH_TIMEOUT=600s stagecoach</code></td>
+</tr>
+<tr>
+<td><code>STAGECOACH_IDLE_TIMEOUT</code></td>
+<td><code>--idle-timeout</code></td>
+<td>Global idle deadline — kill on N seconds of silence; the fallback for every role</td>
+<td><code>STAGECOACH_IDLE_TIMEOUT=45s stagecoach</code></td>
 </tr>
 <tr>
 <td><code>STAGECOACH_CONFIG</code></td>
@@ -1253,26 +1266,50 @@
 <tr>
 <td><code>STAGECOACH_PLANNER_TIMEOUT</code></td>
 <td><code>--planner-timeout</code></td>
-<td>Per-role: planner generation timeout (; planner built-in 480s)</td>
+<td>Per-role: planner hard-cap generation timeout (no planner special-case; roles resolve idle+hard-cap exactly like model/provider)</td>
 <td><code>STAGECOACH_PLANNER_TIMEOUT=600s stagecoach</code></td>
 </tr>
 <tr>
 <td><code>STAGECOACH_STAGER_TIMEOUT</code></td>
 <td><code>--stager-timeout</code></td>
-<td>Per-role: stager generation timeout (; inherits 120s)</td>
+<td>Per-role: stager hard-cap generation timeout (; inherits the 600s global hard cap)</td>
 <td><code>STAGECOACH_STAGER_TIMEOUT=300s stagecoach</code></td>
 </tr>
 <tr>
 <td><code>STAGECOACH_MESSAGE_TIMEOUT</code></td>
 <td><code>--message-timeout</code></td>
-<td>Per-role: message generation timeout (; the single-commit path's only role; inherits 120s)</td>
+<td>Per-role: message hard-cap generation timeout (; the single-commit path's only role; inherits the 600s global hard cap)</td>
 <td><code>STAGECOACH_MESSAGE_TIMEOUT=120s stagecoach</code></td>
 </tr>
 <tr>
 <td><code>STAGECOACH_ARBITER_TIMEOUT</code></td>
 <td><code>--arbiter-timeout</code></td>
-<td>Per-role: arbiter generation timeout (; inherits 120s)</td>
+<td>Per-role: arbiter hard-cap generation timeout (; inherits the 600s global hard cap)</td>
 <td><code>STAGECOACH_ARBITER_TIMEOUT=120s stagecoach</code></td>
+</tr>
+<tr>
+<td><code>STAGECOACH_PLANNER_IDLE_TIMEOUT</code></td>
+<td><code>--planner-idle-timeout</code></td>
+<td>Per-role: planner idle deadline — kill on N seconds of silence (fresh idle clock per invocation)</td>
+<td><code>STAGECOACH_PLANNER_IDLE_TIMEOUT=45s stagecoach</code></td>
+</tr>
+<tr>
+<td><code>STAGECOACH_STAGER_IDLE_TIMEOUT</code></td>
+<td><code>--stager-idle-timeout</code></td>
+<td>Per-role: stager idle deadline (fresh idle clock per invocation)</td>
+<td><code>STAGECOACH_STAGER_IDLE_TIMEOUT=45s stagecoach</code></td>
+</tr>
+<tr>
+<td><code>STAGECOACH_MESSAGE_IDLE_TIMEOUT</code></td>
+<td><code>--message-idle-timeout</code></td>
+<td>Per-role: message idle deadline (fresh idle clock per invocation)</td>
+<td><code>STAGECOACH_MESSAGE_IDLE_TIMEOUT=45s stagecoach</code></td>
+</tr>
+<tr>
+<td><code>STAGECOACH_ARBITER_IDLE_TIMEOUT</code></td>
+<td><code>--arbiter-idle-timeout</code></td>
+<td>Per-role: arbiter idle deadline (fresh idle clock per invocation)</td>
+<td><code>STAGECOACH_ARBITER_IDLE_TIMEOUT=45s stagecoach</code></td>
 </tr>
 <tr>
 <td><code>STAGECOACH_FORMAT</code></td>
@@ -1323,8 +1360,9 @@
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[stagecoach]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="na">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">pi</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="na">model</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">claude-haiku</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="na">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">120s</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="na">autoStageAll</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="na">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">600s</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="na">idleTimeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60s</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="na">autoStageAll</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -1352,13 +1390,25 @@
 <td><code>stagecoach.timeout</code></td>
 <td>string</td>
 <td><code>git config --get stagecoach.timeout</code></td>
-<td>Generation timeout (duration string)</td>
+<td>Hard-cap generation timeout (duration string; default 600s)</td>
+</tr>
+<tr>
+<td><code>stagecoach.idleTimeout</code></td>
+<td>string</td>
+<td><code>git config --get stagecoach.idleTimeout</code></td>
+<td>Idle deadline — kill on silence (default 60s)</td>
 </tr>
 <tr>
 <td><code>stagecoach.role.&lt;role&gt;.timeout</code></td>
 <td>string</td>
 <td><code>git config --get stagecoach.role.&lt;role&gt;.timeout</code></td>
-<td>Per-role generation timeout; <code>&lt;role&gt;</code> ∈ <code>planner</code>|<code>stager</code>|<code>message</code>|<code>arbiter</code>. Duration string (<code>"600s"</code> or bare <code>600</code>); unset ⇒ inherit global <code>stagecoach.timeout</code>.</td>
+<td>Per-role hard-cap generation timeout; <code>&lt;role&gt;</code> ∈ <code>planner</code>|<code>stager</code>|<code>message</code>|<code>arbiter</code>. Duration string (<code>"600s"</code> or bare <code>600</code>); unset ⇒ inherit global <code>stagecoach.timeout</code>. No planner 480s built-in exception — every role resolves idle+hard-cap exactly like model/provider.</td>
+</tr>
+<tr>
+<td><code>stagecoach.role.&lt;role&gt;.idleTimeout</code></td>
+<td>string</td>
+<td><code>git config --get stagecoach.role.&lt;role&gt;.idleTimeout</code></td>
+<td>Per-role idle deadline — kill on silence; unset ⇒ inherit global <code>stagecoach.idleTimeout</code>.</td>
 </tr>
 <tr>
 <td><code>stagecoach.autoStageAll</code></td>
@@ -1424,7 +1474,7 @@
 </table>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The git-config layer has per-role <strong>timeout</strong> keys (<code>stagecoach.role.&lt;role&gt;.timeout</code>), but <strong>no</strong> per-role provider/model/reasoning keys — those are CLI flags (<code>--planner-provider</code>, etc.), env vars (<code>STAGECOACH_PLANNER_*</code>), and config-file <code>[role.*]</code> blocks only. There is no <code>stagecoach.commits</code> and no <code>stagecoach.max_commits</code> (decompose settings <code>--commits</code>/<code>--single</code>/<code>--no-decompose</code> are flag/env only; <code>--max-commits</code> also reads from the <code>[generation]</code> config-file section). There is also no <code>stagecoach.exclude</code> git-config key and no <code>STAGECOACH_EXCLUDE</code> env var (deliberate — see <a href="#exclusion-globs-generationexclude">Exclusion globs</a> below); exclusions are config-file + <code>--exclude</code>/<code>-x</code> only.</p>
+<p>The git-config layer has per-role <strong>timeout</strong> and <strong>idle-timeout</strong> keys (<code>stagecoach.role.&lt;role&gt;.timeout</code> / <code>stagecoach.role.&lt;role&gt;.idleTimeout</code>), but <strong>no</strong> per-role provider/model/reasoning keys — those are CLI flags (<code>--planner-provider</code>, etc.), env vars (<code>STAGECOACH_PLANNER_*</code>), and config-file <code>[role.*]</code> blocks only. There is no <code>stagecoach.commits</code> and no <code>stagecoach.max_commits</code> (decompose settings <code>--commits</code>/<code>--single</code>/<code>--no-decompose</code> are flag/env only; <code>--max-commits</code> also reads from the <code>[generation]</code> config-file section). There is also no <code>stagecoach.exclude</code> git-config key and no <code>STAGECOACH_EXCLUDE</code> env var (deliberate — see <a href="#exclusion-globs-generationexclude">Exclusion globs</a> below); exclusions are config-file + <code>--exclude</code>/<code>-x</code> only.</p>
 </div>
 <h3 id="decompose-config-keys">Decompose config keys<a class="headerlink" href="#decompose-config-keys" title="Permanent link">&para;</a></h3>
 <table>
@@ -1465,14 +1515,14 @@
 </tr>
 </tbody>
 </table>
-<p>Per-role provider/model overrides (flag &gt; env &gt; <code>[role.&lt;role&gt;]</code> config &gt; <code>[defaults]</code> &gt; built-in): see <a href="../providers/#per-role-default-models-fr-d4">providers.md</a> for the compiled-in defaults per provider. Every role (including message) exposes <code>--&lt;role&gt;-provider</code>/<code>--&lt;role&gt;-model</code>/<code>--&lt;role&gt;-reasoning</code>/<code>--&lt;role&gt;-timeout</code> (/). Each role also resolves its <strong>own generation timeout</strong>: the <strong>planner defaults to 480s</strong> (the heavy role that reasons over the full frozen diff), while <strong>stager/message/arbiter inherit the global <code>120s</code></strong>. Override a role with <code>--&lt;role&gt;-timeout</code> / <code>STAGECOACH_&lt;ROLE&gt;_TIMEOUT</code> / <code>[role.&lt;role&gt;].timeout</code> / <code>stagecoach.role.&lt;role&gt;.timeout</code> (precedence: flag &gt; env &gt; <code>[role.&lt;role&gt;]</code> &gt; built-in &gt; <code>[defaults]</code>). Note the global <code>--timeout</code> does <strong>not</strong> change the planner — it has a 480s built-in that wins; set <code>--planner-timeout</code> to override it.</p>
+<p>Per-role provider/model overrides (flag &gt; env &gt; <code>[role.&lt;role&gt;]</code> config &gt; <code>[defaults]</code> &gt; built-in): see <a href="../providers/#per-role-default-models-fr-d4">providers.md</a> for the compiled-in defaults per provider. Every role (including message) exposes <code>--&lt;role&gt;-provider</code>/<code>--&lt;role&gt;-model</code>/<code>--&lt;role&gt;-reasoning</code>/<code>--&lt;role&gt;-timeout</code>/<code>--&lt;role&gt;-idle-timeout</code> (/). Each role resolves TWO deadlines on the same ladder — an <strong>idle deadline</strong> (default 60s: kill the agent after N seconds with no output — the primary productivity signal) and a <strong>hard cap</strong> (default 600s: the absolute backstop) — via the same flag &gt; env &gt; <code>[role.&lt;role&gt;]</code> &gt; <code>[defaults]</code> chain; there is <strong>no planner special-case</strong> (no role has a built-in deadline) and no separate built-in precedence tier. Override a role with <code>--&lt;role&gt;-timeout</code>/<code>--&lt;role&gt;-idle-timeout</code>, <code>STAGECOACH_&lt;ROLE&gt;_TIMEOUT</code>/<code>STAGECOACH_&lt;ROLE&gt;_IDLE_TIMEOUT</code>, <code>[role.&lt;role&gt;].timeout</code>/<code>.idle_timeout</code>, or <code>stagecoach.role.&lt;role&gt;.timeout</code>/<code>.idleTimeout</code> (precedence: flag &gt; env &gt; <code>[role.&lt;role&gt;]</code> &gt; <code>[defaults]</code>). Note the global <code>--timeout</code> now applies to the planner too — every role resolves idle+hard-cap exactly like model/provider.</p>
 <div class="admonition tip">
 <p class="admonition-title">Important</p>
 <p><strong>Precedence gotcha:</strong> because per-role config beats the global <code>[defaults]</code>, a <code>[role.&lt;role&gt;]</code> entry silently shadows an explicit <code>--model</code>/<code>--provider</code> (which set the GLOBAL default only) for that role. This is correct per but an easy footgun — e.g. a <code>[role.message] model = "…"</code> config means <code>stagecoach --model X</code> uses the config's model for the commit. Use <code>--message-model</code> (or <code>--message-provider</code>) to override the message role specifically, or run with <code>--verbose</code> to see a <code>DEBUG: note: --model shadowed by [role.message].model; use --message-model to override</code> hint when shadowing is active. See <a href="../cli/#global-flags">cli.md</a> for the full precedence note.</p>
 </div>
 <h3 id="exclusion-globs-generationexclude">Exclusion globs (<code>[generation].exclude</code>)<a class="headerlink" href="#exclusion-globs-generationexclude" title="Permanent link">&para;</a></h3>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[generation]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">exclude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.min.js&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dist/*&quot;</span><span class="p">]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">exclude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"*.min.js"</span><span class="p">,</span><span class="w"> </span><span class="s2">"dist/*"</span><span class="p">]</span>
 </span></code></pre></div>
 <p><code>[generation].exclude</code> (config file, both global and repo-local) and the repeatable <code>--exclude &lt;glob&gt;</code> / <code>-x &lt;glob&gt;</code> CLI flag exclude matching files' <strong>diff content</strong> from the agent payload — a placeholder line stands in for the diff; the file is still captured and committed normally. Patterns are gitignore-style globs.</p>
 <div class="admonition tip">
