@@ -17,8 +17,11 @@ func TestDefaults(t *testing.T) {
 	if c.Model != "" {
 		t.Errorf("Model = %q, want %q", c.Model, "")
 	}
-	if c.Timeout != 120*time.Second {
-		t.Errorf("Timeout = %v, want 120s", c.Timeout)
+	if c.Timeout != 600*time.Second {
+		t.Errorf("Timeout = %v, want 600s", c.Timeout)
+	}
+	if c.IdleTimeout != 60*time.Second {
+		t.Errorf("IdleTimeout = %v, want 60s", c.IdleTimeout)
 	}
 	if !c.AutoStageAllValue() {
 		t.Errorf("AutoStageAll = false, want true")

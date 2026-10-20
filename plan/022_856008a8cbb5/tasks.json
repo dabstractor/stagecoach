@@ -4,52 +4,82 @@
       "type": "Phase",
       "id": "P1",
       "title": "Activity-based generation deadlines (FR-A1–A5, FR-R7, FR25, → G30)",
-      "status": "Ready",
+      "status": "Planned",
       "description": "The core v3.5 rework: two deadlines (idle 60s primary kill criterion + hard cap 600s backstop) resolved per role across all five precedence layers, an idle-detection engine (pipe counting-writer + Linux procfs read-counter) inside provider.Execute, threading through all 13 role call sites, and integration/regression parity. No commit/CAS/rescue/lock/index/freeze changes (FR-A5: downstream invariants unchanged).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Config surface: two deadlines, five precedence layers, planner 480s retired",
-          "status": "Planned",
+          "status": "Ready",
           "description": "idle_timeout config plumbing end-to-end: core fields + role resolution ladder, env/git/file precedence seams, CLI flags, bootstrap template, and the Mode-A user-facing docs for every new knob. Timeout default 120s→600s; defaultRoleTimeouts (planner 480s) deleted; no role ships a built-in deadline.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "idle_timeout config plumbing end-to-end + flag/help/template text",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Add IdleTimeout to Config/RoleConfig with 60s default, raise Timeout default to 600s, delete the planner built-in, add ResolveRoleDeadlines, wire STAGECOACH_IDLE_TIMEOUT / --idle-timeout / stagecoach.idleTimeout / [defaults].idle_timeout plus per-role variants through every precedence layer, and update CLI help, bootstrap template, and the touched user-facing docs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S1",
                   "title": "config core + role resolution: IdleTimeout fields, 600s default, ResolveRoleDeadlines, planner 480s deleted",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.31", "h3.21", "h3.80", "h3.83"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: plan/022_856008a8cbb5/architecture/config_ladder.md §1–2 — Config.Timeout field at internal/config/config.go:85, default seeded at :224 in Defaults() (doc list at L210); defaultRoleTimeouts map at internal/config/roles.go:5–13 (planner 480s at :12); ResolveRoleTimeout ladder at roles.go:96–104 (per-role override → role built-in → global). IdleTimeout slots immediately after Timeout at :85 (toml \"idle_timeout\") and after :224 (60 * time.Second); RoleConfig.IdleTimeout after :42 mirroring the existing '0 ⇒ inherit' comment.\n2. INPUT: none — leaf subtask; current Config/RoleConfig structs are the input.\n3. LOGIC: Implement §9.30/FR-R7 (spec §9.15): (a) add Config.IdleTimeout + RoleConfig.IdleTimeout (0 ⇒ inherit global); (b) change Config.Timeout default 120s→600s; (c) DELETE defaultRoleTimeouts and its planner branch entirely; (d) add ResolveRoleDeadlines(role, cfg) (idle, hard time.Duration) mirroring the existing ladder MINUS the built-in tier: per-role override → cfg global default (60s idle / 600s hard); (e) keep or replace ResolveRoleTimeout as a thin hard-cap accessor — either way NO role ships a built-in deadline; (f) update field doc comments to the two-deadline contract (idle = primary productivity signal, hard cap = absolute backstop, §9.30). No external services; pure config code. Tests ride (TDD implied): config_test.go/roles_test.go — new defaults 600s/60s, planner-480s retirement (planner now inherits global), per-role override beats global, zero-value inherits global, both deadlines resolve independently.\n4. OUTPUT: exported Config.IdleTimeout, RoleConfig.IdleTimeout, config.ResolveRoleDeadlines(role, cfg) — consumed by P1.M1.T1.S2 (precedence layers) and P1.M2.T1.S3 (call-site threading).\n5. DOCS: Mode A — update the in-file doc comments (config.go field list ~L210, roles.go) to the two-deadline contract; no user-facing doc files in this subtask (they ride P1.M1.T1.S3)."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: plan/022_856008a8cbb5/architecture/config_ladder.md §1–2 — Config.Timeout field at internal/config/config.go:85, default seeded at :224 in Defaults() (doc list at L210); defaultRoleTimeouts map at internal/config/roles.go:5–13 (planner 480s at :12); ResolveRoleTimeout ladder at roles.go:96–104 (per-role override → role built-in → global). IdleTimeout slots immediately after Timeout at :85 (toml \"idle_timeout\") and after :224 (60 * time.Second); RoleConfig.IdleTimeout after :42 mirroring the existing '0 ⇒ inherit' comment.\n2. INPUT: none — leaf subtask; current Config/RoleConfig structs are the input.\n3. LOGIC: Implement §9.30/FR-R7 (spec §9.15): (a) add Config.IdleTimeout + RoleConfig.IdleTimeout (0 ⇒ inherit global); (b) change Config.Timeout default 120s→600s; (c) DELETE defaultRoleTimeouts and its planner branch entirely; (d) add ResolveRoleDeadlines(role, cfg) (idle, hard time.Duration) mirroring the existing ladder MINUS the built-in tier: per-role override → cfg global default (60s idle / 600s hard); (e) keep or replace ResolveRoleTimeout as a thin hard-cap accessor — either way NO role ships a built-in deadline; (f) update field doc comments to the two-deadline contract (idle = primary productivity signal, hard cap = absolute backstop, §9.30). No external services; pure config code. Tests ride (TDD implied): config_test.go/roles_test.go — new defaults 600s/60s, planner-480s retirement (planner now inherits global), per-role override beats global, zero-value inherits global, both deadlines resolve independently.\n4. OUTPUT: exported Config.IdleTimeout, RoleConfig.IdleTimeout, config.ResolveRoleDeadlines(role, cfg) — consumed by P1.M1.T1.S2 (precedence layers) and P1.M2.T1.S3 (call-site threading).\n5. DOCS: Mode A — update the in-file doc comments (config.go field list ~L210, roles.go) to the two-deadline contract; no user-facing doc files in this subtask (they ride P1.M1.T1.S3).",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.31",
+                    "h3.21",
+                    "h3.80",
+                    "h3.83"
+                  ]
                 },
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "precedence layers: STAGECOACH_IDLE_TIMEOUT env, stagecoach.idleTimeout git key, [defaults].idle_timeout file key (+ per-role variants)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.24", "h3.31", "h3.80", "h3.81", "h3.82"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §3–4 + FINDING A — env reads: STAGECOACH_TIMEOUT at internal/config/load.go:272–278 (malformed env = HARD error), per-role STAGECOACH_<ROLE>_TIMEOUT at :316–325; git keys: stagecoach.timeout at internal/config/git.go:147–156, per-role stagecoach.role.<role>.timeout at :158–177; parseTimeout at load.go:673–684 (verbatim in the report). CRITICAL: git config REJECTS underscores in key names — idle git keys are CAMELCASE: stagecoach.idleTimeout and stagecoach.role.<role>.idleTimeout (matches spec §16.3 example 'idleTimeout = 60'; FR-R7's snake_case git spelling is git-infeasible — follow §16.3). ALSO: the FILE layer's global timeout is parsed with bare time.ParseDuration at internal/config/file.go:198–201 (NOT parseTimeout) — the idle twin mirrors that seam.\n2. INPUT: Config.IdleTimeout + RoleConfig.IdleTimeout fields and their 0⇒inherit semantics from P1.M1.T1.S1.\n3. LOGIC: Implement FR35/FR36 additions (spec §9.8): (a) load.go — STAGECOACH_IDLE_TIMEOUT global + STAGECOACH_<ROLE>_IDLE_TIMEOUT per-role env reads, reusing parseTimeout, with the same hard-error-on-malformed discipline as STAGECOACH_TIMEOUT; (b) git.go — stagecoach.idleTimeout + stagecoach.role.<role>.idleTimeout keys (camelCase), same read/error style as the timeout block; (c) file.go — [defaults].idle_timeout / [role.<role>].idle_timeout parsing mirroring the timeout seam at :198–201; (d) all errors wrapped in the existing per-layer style. No mocking — pure config; git tests use the existing git-config test harness.\n4. OUTPUT: five-layer idle resolution (flag > env > git > file > default) structurally identical to timeout's — consumed by P1.M1.T1.S3 (flag surface) and behaviorally verified in P1.M3.T1.S4.\n5. DOCS: Mode A — extend the env/git-key doc comments in bootstrap.go ONLY if that is where the existing timeout keys are documented (per config_ladder.md §5); the user-facing env/git tables in docs/ ride P1.M1.T1.S3."
+                  "dependencies": [
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §3–4 + FINDING A — env reads: STAGECOACH_TIMEOUT at internal/config/load.go:272–278 (malformed env = HARD error), per-role STAGECOACH_<ROLE>_TIMEOUT at :316–325; git keys: stagecoach.timeout at internal/config/git.go:147–156, per-role stagecoach.role.<role>.timeout at :158–177; parseTimeout at load.go:673–684 (verbatim in the report). CRITICAL: git config REJECTS underscores in key names — idle git keys are CAMELCASE: stagecoach.idleTimeout and stagecoach.role.<role>.idleTimeout (matches spec §16.3 example 'idleTimeout = 60'; FR-R7's snake_case git spelling is git-infeasible — follow §16.3). ALSO: the FILE layer's global timeout is parsed with bare time.ParseDuration at internal/config/file.go:198–201 (NOT parseTimeout) — the idle twin mirrors that seam.\n2. INPUT: Config.IdleTimeout + RoleConfig.IdleTimeout fields and their 0⇒inherit semantics from P1.M1.T1.S1.\n3. LOGIC: Implement FR35/FR36 additions (spec §9.8): (a) load.go — STAGECOACH_IDLE_TIMEOUT global + STAGECOACH_<ROLE>_IDLE_TIMEOUT per-role env reads, reusing parseTimeout, with the same hard-error-on-malformed discipline as STAGECOACH_TIMEOUT; (b) git.go — stagecoach.idleTimeout + stagecoach.role.<role>.idleTimeout keys (camelCase), same read/error style as the timeout block; (c) file.go — [defaults].idle_timeout / [role.<role>].idle_timeout parsing mirroring the timeout seam at :198–201; (d) all errors wrapped in the existing per-layer style. No mocking — pure config; git tests use the existing git-config test harness.\n4. OUTPUT: five-layer idle resolution (flag > env > git > file > default) structurally identical to timeout's — consumed by P1.M1.T1.S3 (flag surface) and behaviorally verified in P1.M3.T1.S4.\n5. DOCS: Mode A — extend the env/git-key doc comments in bootstrap.go ONLY if that is where the existing timeout keys are documented (per config_ladder.md §5); the user-facing env/git tables in docs/ ride P1.M1.T1.S3.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.24",
+                    "h3.31",
+                    "h3.80",
+                    "h3.81",
+                    "h3.82"
+                  ]
                 },
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T1.S3",
                   "title": "CLI flags (--idle-timeout + 4 per-role), bootstrap template, and Mode-A docs (cli.md + configuration.md)",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
-                  "dependencies": ["P1.M1.T1.S2"],
-                  "prd_selectors": ["h2.10", "h2.16", "h3.46", "h3.31", "h3.75", "h3.76", "h3.80", "h3.81", "h3.82", "h3.83"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §5–6 + docs_drift_inventory.md — internal/cmd/root.go: --timeout flag at :169 (help says 120s — retitle to 600s hard cap), four --<role>-timeout flags at :258–266; ALL are STRING flags parsed only in loadFlags (silent-ignore on malformed — env is the hard-error layer); internal/config/bootstrap.go: template line :174 ('# timeout = \"120s\"'), env-doc comment :359, git-doc comment :375 (camelCase convention shown by autoStageAll at :376). Docs anchors: docs/cli.md flag table L23–65 (L27 --timeout row; per-role rows L60–63) + flag↔env↔git map at L468/L496–499 + L452 exit table; docs/configuration.md L91 (config example), L99, L138 (defaults table), L193 (env table), L212–215 (per-role env), L232/L240–241/L254 (+L264) (git keys/examples).\n2. INPUT: idle env/git/file seams from P1.M1.T1.S2; IdleTimeout fields from P1.M1.T1.S1.\n3. LOGIC: (a) root.go — add global --idle-timeout + --{planner,stager,message,arbiter}-idle-timeout ×4 as STRING flags exactly mirroring the timeout flags' registration and loadFlags parsing; update --timeout help text to the 600s hard-cap wording; (b) bootstrap.go — template gains '# idle_timeout = \"60s\"' and '# timeout = \"600s\"' with one-line comments (idle = kill on silence; timeout = hard cap), env/git doc comments gain the idle variants (git key camelCase: stagecoach.idleTimeout); (c) docs per the inventory. Tests ride: newFlagSet/bootstrap tests assert the new flags exist, parse, and default correctly; template content test asserts both lines.\n4. OUTPUT: the complete five-layer idle surface visible at the CLI; behaviorally verified in P1.M3.T1.S4.\n5. DOCS: Mode A — docs/cli.md: retitle L27 --timeout row (default 600s, 'hard cap'), add --idle-timeout row + four per-role idle rows after L60–63, extend the flag↔env↔git map; docs/configuration.md: defaults table L138 (idle 60s / hard cap 600s), config-file example L91 (+idle_timeout), env table L193 + per-role L212–215, git example/table L232/L240–241/L254 with idleTimeout camelCase. Execute the exact line list in docs_drift_inventory.md."
+                  "dependencies": [
+                    "P1.M1.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §5–6 + docs_drift_inventory.md — internal/cmd/root.go: --timeout flag at :169 (help says 120s — retitle to 600s hard cap), four --<role>-timeout flags at :258–266; ALL are STRING flags parsed only in loadFlags (silent-ignore on malformed — env is the hard-error layer); internal/config/bootstrap.go: template line :174 ('# timeout = \"120s\"'), env-doc comment :359, git-doc comment :375 (camelCase convention shown by autoStageAll at :376). Docs anchors: docs/cli.md flag table L23–65 (L27 --timeout row; per-role rows L60–63) + flag↔env↔git map at L468/L496–499 + L452 exit table; docs/configuration.md L91 (config example), L99, L138 (defaults table), L193 (env table), L212–215 (per-role env), L232/L240–241/L254 (+L264) (git keys/examples).\n2. INPUT: idle env/git/file seams from P1.M1.T1.S2; IdleTimeout fields from P1.M1.T1.S1.\n3. LOGIC: (a) root.go — add global --idle-timeout + --{planner,stager,message,arbiter}-idle-timeout ×4 as STRING flags exactly mirroring the timeout flags' registration and loadFlags parsing; update --timeout help text to the 600s hard-cap wording; (b) bootstrap.go — template gains '# idle_timeout = \"60s\"' and '# timeout = \"600s\"' with one-line comments (idle = kill on silence; timeout = hard cap), env/git doc comments gain the idle variants (git key camelCase: stagecoach.idleTimeout); (c) docs per the inventory. Tests ride: newFlagSet/bootstrap tests assert the new flags exist, parse, and default correctly; template content test asserts both lines.\n4. OUTPUT: the complete five-layer idle surface visible at the CLI; behaviorally verified in P1.M3.T1.S4.\n5. DOCS: Mode A — docs/cli.md: retitle L27 --timeout row (default 600s, 'hard cap'), add --idle-timeout row + four per-role idle rows after L60–63, extend the flag↔env↔git map; docs/configuration.md: defaults table L138 (idle 60s / hard cap 600s), config-file example L91 (+idle_timeout), env table L193 + per-role L212–215, git example/table L232/L240–241/L254 with idleTimeout camelCase. Execute the exact line list in docs_drift_inventory.md.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.16",
+                    "h3.46",
+                    "h3.31",
+                    "h3.75",
+                    "h3.76",
+                    "h3.80",
+                    "h3.81",
+                    "h3.82",
+                    "h3.83"
+                  ]
                 }
               ]
             }
@@ -76,8 +106,13 @@
                   "status": "Planned",
                   "story_points": 2,
                   "dependencies": [],
-                  "prd_selectors": ["h2.10", "h3.46", "h2.21", "h3.97"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §2 — internal/provider/procgroup_unix.go (!windows build tag) already does Setpgid so PGID==PID is kernel-guaranteed; procgroup_windows.go is the platform-split precedent to mirror with //go:build linux / //go:build !linux files. external_procfs_notes.md — pgrp is FIELD 5 of /proc/[pid]/stat; comm (field 2) may contain spaces/parens so the robust parse splits after the LAST ')'; a reaped pid's stat open fails ENOENT (tolerate as member-gone, never alias); rchar (/proc/<pid>/io) counts bytes returned by SUCCESSFUL read-family calls (pipes/tty/sockets count, pagecache hits count, failed reads count nothing); a reaped child's ioac folds into its parent's rchar (inflates group sums — safe direction, can only false-positive activity within the group, never false-negative); /proc/<pid>/io is readable for same-uid dumpable processes (PTRACE_MODE_READ_FSCREDS), no root; a full /proc sweep over ~1100 pids costs ~13ms (~2.6% duty at 2Hz).\n2. INPUT: none — new files (internal/provider/activity.go, activity_linux.go, activity_other.go); leaf subtask.\n3. LOGIC: Implement FR-A3's two channels as standalone primitives, NO Execute changes here: (a) activity.go — countingWriter: wraps a bytes.Buffer behind a mutex, satisfies io.Writer, records an atomic last-write monotonic timestamp on every Write; exposes LastWrite() time.Time and a Bytes() snapshot (buffer growth during Wait is the activity signal — no data races); (b) activity_linux.go — groupReadBytes(pgid int) (uint64, bool): scan /proc/[0-9]*/stat, parse each stat after the LAST ')' to read pgrp (field 5), filter pgrp == pgid, sum members' /proc/<pid>/io rchar; per-member ENOENT tolerated; returns (_, false) when /proc is unavailable; (c) activity_other.go (!linux) — stub returning (_, false) so non-Linux builds compile and report 'no channel'. Tests ride: poller against the test's own process group (spawn a child that reads a known number of bytes; assert the counter moves; ENOENT race tolerated); countingWriter concurrency test under go test -race; GOOS-gated build check for the stub.\n4. OUTPUT: provider.countingWriter + provider.groupReadBytes — consumed by P1.M2.T1.S2 (the Execute idle watcher).\n5. DOCS: none — no user-facing/config/API surface change (internal primitives)."
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §2 — internal/provider/procgroup_unix.go (!windows build tag) already does Setpgid so PGID==PID is kernel-guaranteed; procgroup_windows.go is the platform-split precedent to mirror with //go:build linux / //go:build !linux files. external_procfs_notes.md — pgrp is FIELD 5 of /proc/[pid]/stat; comm (field 2) may contain spaces/parens so the robust parse splits after the LAST ')'; a reaped pid's stat open fails ENOENT (tolerate as member-gone, never alias); rchar (/proc/<pid>/io) counts bytes returned by SUCCESSFUL read-family calls (pipes/tty/sockets count, pagecache hits count, failed reads count nothing); a reaped child's ioac folds into its parent's rchar (inflates group sums — safe direction, can only false-positive activity within the group, never false-negative); /proc/<pid>/io is readable for same-uid dumpable processes (PTRACE_MODE_READ_FSCREDS), no root; a full /proc sweep over ~1100 pids costs ~13ms (~2.6% duty at 2Hz).\n2. INPUT: none — new files (internal/provider/activity.go, activity_linux.go, activity_other.go); leaf subtask.\n3. LOGIC: Implement FR-A3's two channels as standalone primitives, NO Execute changes here: (a) activity.go — countingWriter: wraps a bytes.Buffer behind a mutex, satisfies io.Writer, records an atomic last-write monotonic timestamp on every Write; exposes LastWrite() time.Time and a Bytes() snapshot (buffer growth during Wait is the activity signal — no data races); (b) activity_linux.go — groupReadBytes(pgid int) (uint64, bool): scan /proc/[0-9]*/stat, parse each stat after the LAST ')' to read pgrp (field 5), filter pgrp == pgid, sum members' /proc/<pid>/io rchar; per-member ENOENT tolerated; returns (_, false) when /proc is unavailable; (c) activity_other.go (!linux) — stub returning (_, false) so non-Linux builds compile and report 'no channel'. Tests ride: poller against the test's own process group (spawn a child that reads a known number of bytes; assert the counter moves; ENOENT race tolerated); countingWriter concurrency test under go test -race; GOOS-gated build check for the stub.\n4. OUTPUT: provider.countingWriter + provider.groupReadBytes — consumed by P1.M2.T1.S2 (the Execute idle watcher).\n5. DOCS: none — no user-facing/config/API surface change (internal primitives).",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h2.21",
+                    "h3.97"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -85,9 +120,18 @@
                   "title": "Execute rework: Deadlines struct, idle watcher + arming rule, ErrIdleDeadline sentinel, VerboseCause, models.go call",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M2.T1.S1"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.21", "h3.29", "h3.78", "h3.93"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §1 + call_sites_and_error_contract.md — Execute today: internal/provider/executor.go:65 'Execute(ctx, spec CmdSpec, timeout time.Duration, vb *ui.Verbose) (stdout, stderr string, err error)'; timeout applied via shadowing context.WithTimeout at :66–70; stdout/stderr captured into separate bytes.Buffers at :76–78; kill path = exec.CommandContext + setupProcessGroup + signal.RegisterChild/ClearChild (cmd.Cancel = SIGTERM to process group -pid, WaitDelay 3s); timeout currently returns BARE context.DeadlineExceeded at :96; the StderrHint cause mechanism lives in executor.go:23–38; every downstream consumer branches on errors.Is(err, context.DeadlineExceeded) (generate.go:376, workdesc.go:340, exit-124 mapping, no-retry rules, FR-T7 aborts) — see call_sites_and_error_contract.md §2–3.\n2. INPUT: provider.countingWriter + provider.groupReadBytes from P1.M2.T1.S1. The provider.Deadlines{Idle, Hard time.Duration} struct is DEFINED here (design decision D1).\n3. LOGIC: (a) signature → Execute(ctx, spec CmdSpec, dl Deadlines, vb *ui.Verbose) — hard cap keeps the existing WithTimeout shadow (dl.Hard; Hard <= 0 ⇒ unbounded as today when timeout==0 if that is current behavior); stdout/stderr become countingWriter instances (FR-A3(a) pipe channel, always recorded); (b) idle watcher goroutine per D3/D4: armed iff dl.Idle > 0 AND (runtime.GOOS == \"linux\" OR spec.ProgressiveStdout); ~0.5s tick; single idle clock reset by whichever channel moved last (max of pipe last-write timestamp, poller last rchar-change); on expiry it triggers the SAME group-kill as the hard cap (cancel via a dedicated context.WithCancel wrapping the same cmd.Cancel path) and records the idle cause; the watcher observes ctx.Done() (hard cap / parent cancel / interrupt) and exits; (c) define here the CmdSpec.ProgressiveStdout bool field (Render sets it in P2.M1.T1.S1; it stays false until then ⇒ non-Linux + print-mode = idle disarmed = exactly v3.4 behavior); (d) idle kill returns an ErrIdleDeadline sentinel whose Is() method satisfies errors.Is(err, context.DeadlineExceeded) (D2/FR-A5) so EVERY existing branch works unchanged; hard cap keeps returning context.DeadlineExceeded; (e) new ui.VerboseCause(reason) helper (internal/ui) emitting 'DEBUG: cause: idle deadline (60s without observable activity)' / 'DEBUG: cause: hard cap (600s)', invoked by Execute on either deadline kill (D6); extend the Execute doc comment: error contract now 'idle OR hard cap ⇒ errors.Is(err, context.DeadlineExceeded)'; (f) internal/cmd/models.go:150 call site passes Deadlines{Idle: 0, Hard: <existing cfg.Timeout bound>} with a comment (not a role call — idle unarmed). Mock: none — stub shell scripts per the existing executor_test.go harness. Tests ride: hard-cap test updated to the new signature; NEW — silent stub killed at tiny idle (Linux, or any platform with ProgressiveStdout forced true in the test spec); healthy-slow stub emitting a byte every ~0.5s for ~3× idle NOT killed (ProgressiveStdout forced true — portable pipe-activity proof); Linux-only build-tagged test: stdout-silent stdin-reader stub kept alive past idle by the read counter.\n4. OUTPUT: the new Execute contract + ui.VerboseCause + CmdSpec.ProgressiveStdout — consumed by P1.M2.T1.S3 (call sites) and P2.M1.T1.S1/S2 (event mode).\n5. DOCS: none — internal API change; the user-facing exit-124 wording rides P1.M2.T1.S3's docs."
+                  "dependencies": [
+                    "P1.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §1 + call_sites_and_error_contract.md — Execute today: internal/provider/executor.go:65 'Execute(ctx, spec CmdSpec, timeout time.Duration, vb *ui.Verbose) (stdout, stderr string, err error)'; timeout applied via shadowing context.WithTimeout at :66–70; stdout/stderr captured into separate bytes.Buffers at :76–78; kill path = exec.CommandContext + setupProcessGroup + signal.RegisterChild/ClearChild (cmd.Cancel = SIGTERM to process group -pid, WaitDelay 3s); timeout currently returns BARE context.DeadlineExceeded at :96; the StderrHint cause mechanism lives in executor.go:23–38; every downstream consumer branches on errors.Is(err, context.DeadlineExceeded) (generate.go:376, workdesc.go:340, exit-124 mapping, no-retry rules, FR-T7 aborts) — see call_sites_and_error_contract.md §2–3.\n2. INPUT: provider.countingWriter + provider.groupReadBytes from P1.M2.T1.S1. The provider.Deadlines{Idle, Hard time.Duration} struct is DEFINED here (design decision D1).\n3. LOGIC: (a) signature → Execute(ctx, spec CmdSpec, dl Deadlines, vb *ui.Verbose) — hard cap keeps the existing WithTimeout shadow (dl.Hard; Hard <= 0 ⇒ unbounded as today when timeout==0 if that is current behavior); stdout/stderr become countingWriter instances (FR-A3(a) pipe channel, always recorded); (b) idle watcher goroutine per D3/D4: armed iff dl.Idle > 0 AND (runtime.GOOS == \"linux\" OR spec.ProgressiveStdout); ~0.5s tick; single idle clock reset by whichever channel moved last (max of pipe last-write timestamp, poller last rchar-change); on expiry it triggers the SAME group-kill as the hard cap (cancel via a dedicated context.WithCancel wrapping the same cmd.Cancel path) and records the idle cause; the watcher observes ctx.Done() (hard cap / parent cancel / interrupt) and exits; (c) define here the CmdSpec.ProgressiveStdout bool field (Render sets it in P2.M1.T1.S1; it stays false until then ⇒ non-Linux + print-mode = idle disarmed = exactly v3.4 behavior); (d) idle kill returns an ErrIdleDeadline sentinel whose Is() method satisfies errors.Is(err, context.DeadlineExceeded) (D2/FR-A5) so EVERY existing branch works unchanged; hard cap keeps returning context.DeadlineExceeded; (e) new ui.VerboseCause(reason) helper (internal/ui) emitting 'DEBUG: cause: idle deadline (60s without observable activity)' / 'DEBUG: cause: hard cap (600s)', invoked by Execute on either deadline kill (D6); extend the Execute doc comment: error contract now 'idle OR hard cap ⇒ errors.Is(err, context.DeadlineExceeded)'; (f) internal/cmd/models.go:150 call site passes Deadlines{Idle: 0, Hard: <existing cfg.Timeout bound>} with a comment (not a role call — idle unarmed). Mock: none — stub shell scripts per the existing executor_test.go harness. Tests ride: hard-cap test updated to the new signature; NEW — silent stub killed at tiny idle (Linux, or any platform with ProgressiveStdout forced true in the test spec); healthy-slow stub emitting a byte every ~0.5s for ~3× idle NOT killed (ProgressiveStdout forced true — portable pipe-activity proof); Linux-only build-tagged test: stdout-silent stdin-reader stub kept alive past idle by the read counter.\n4. OUTPUT: the new Execute contract + ui.VerboseCause + CmdSpec.ProgressiveStdout — consumed by P1.M2.T1.S3 (call sites) and P2.M1.T1.S1/S2 (event mode).\n5. DOCS: none — internal API change; the user-facing exit-124 wording rides P1.M2.T1.S3's docs.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.21",
+                    "h3.29",
+                    "h3.78",
+                    "h3.93"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -95,9 +139,21 @@
                   "title": "thread the 13 role call sites to ResolveRoleDeadlines + multiturn '(worst case)' budget line + Mode-A docs",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M2.T1.S2", "P1.M1.T1.S1"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.30", "h3.40", "h3.41", "h3.42", "h3.72", "h3.78"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §1 — the 13 role Execute sites (generate.go:374; multiturn.go:172/183/194 with msgTimeout resolved at :153; workdesc.go:82/131/149 resolved at :71; decompose/planner.go:128 ← :69, stager.go:119 ← :98, message.go:173 ← :145, arbiter.go:101 ← :83; hook/exec.go:187 ← :167) — all 8 ResolveRoleTimeout consumers; multiturn budget line verbatim at generate.go:465–477 (vars turns/totalMin) plus its hook twin; NOTE the existing exit asymmetry (one-shot/workdesc deadline → ErrTimeout exit 124; multiturn turn-deadline → ErrRescue exit 3) — DO NOT change it (FR-A5).\n2. INPUT: provider.Execute(ctx, spec, dl Deadlines, vb) from P1.M2.T1.S2; config.ResolveRoleDeadlines(role, cfg) from P1.M1.T1.S1.\n3. LOGIC: at each of the 13 sites replace the 'xTimeout := config.ResolveRoleTimeout(role, ...)' + positional-duration call with 'dl := config.ResolveRoleDeadlines(role, cfg)' passed as the new Deadlines argument — mechanical, no error-branch edits (branches already match DeadlineExceeded; FR-A5 guarantees parity); update the stale FR-R7 comments at the former ResolveRoleTimeout sites to name BOTH deadlines (idle + hard cap, fresh idle clock per invocation per FR-A4 — structural: one Execute per turn/round); generate.go:465–477 budget line: multiply the resolved message HARD cap by (N+1) and append '(worst case)'; same edit for the hook twin. Tests riding: existing per-caller tests pass with the new call shape; where a harness exists, assert resolved Deadlines actually reach Execute for one site per family (generate / multiturn turn / workdesc round / decompose role / hook).\n4. OUTPUT: every role invocation deadline-bound per FR-A4; consumed by P1.M3.T1.S2–S4 (pipeline tests).\n5. DOCS: Mode A — docs/how-it-works.md L346 per-turn deadline prose (two deadlines, fresh idle clock per turn); docs/cli.md L452 exit-124 row reworded to 'Deadline exceeded (idle or hard cap)'. Per docs_drift_inventory.md."
+                  "dependencies": [
+                    "P1.M2.T1.S2",
+                    "P1.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §1 — the 13 role Execute sites (generate.go:374; multiturn.go:172/183/194 with msgTimeout resolved at :153; workdesc.go:82/131/149 resolved at :71; decompose/planner.go:128 ← :69, stager.go:119 ← :98, message.go:173 ← :145, arbiter.go:101 ← :83; hook/exec.go:187 ← :167) — all 8 ResolveRoleTimeout consumers; multiturn budget line verbatim at generate.go:465–477 (vars turns/totalMin) plus its hook twin; NOTE the existing exit asymmetry (one-shot/workdesc deadline → ErrTimeout exit 124; multiturn turn-deadline → ErrRescue exit 3) — DO NOT change it (FR-A5).\n2. INPUT: provider.Execute(ctx, spec, dl Deadlines, vb) from P1.M2.T1.S2; config.ResolveRoleDeadlines(role, cfg) from P1.M1.T1.S1.\n3. LOGIC: at each of the 13 sites replace the 'xTimeout := config.ResolveRoleTimeout(role, ...)' + positional-duration call with 'dl := config.ResolveRoleDeadlines(role, cfg)' passed as the new Deadlines argument — mechanical, no error-branch edits (branches already match DeadlineExceeded; FR-A5 guarantees parity); update the stale FR-R7 comments at the former ResolveRoleTimeout sites to name BOTH deadlines (idle + hard cap, fresh idle clock per invocation per FR-A4 — structural: one Execute per turn/round); generate.go:465–477 budget line: multiply the resolved message HARD cap by (N+1) and append '(worst case)'; same edit for the hook twin. Tests riding: existing per-caller tests pass with the new call shape; where a harness exists, assert resolved Deadlines actually reach Execute for one site per family (generate / multiturn turn / workdesc round / decompose role / hook).\n4. OUTPUT: every role invocation deadline-bound per FR-A4; consumed by P1.M3.T1.S2–S4 (pipeline tests).\n5. DOCS: Mode A — docs/how-it-works.md L346 per-turn deadline prose (two deadlines, fresh idle clock per turn); docs/cli.md L452 exit-124 row reworded to 'Deadline exceeded (idle or hard cap)'. Per docs_drift_inventory.md.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.30",
+                    "h3.40",
+                    "h3.41",
+                    "h3.42",
+                    "h3.72",
+                    "h3.78"
+                  ]
                 }
               ]
             }
@@ -123,9 +179,17 @@
                   "title": "stubagent knobs: progressive-emit + chatty-heartbeat stub modes",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S2"],
-                  "prd_selectors": ["h2.10", "h2.21", "h3.46", "h3.97", "h3.101"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §harness/recipes — the stubtest harness (internal/stubtest stubtest.go/editor.go) drives cmd/stubagent; TODAY only a hung stub (SleepMS) is expressible; the report specifies the missing knobs and their wiring constraints: STAGECOACH_STUB_EMIT_* (emit a byte every N ms for M seconds, then emit the answer) and STAGECOACH_STUB_HEARTBEAT_MS (write an N-byte stderr heartbeat every N ms forever, never answer), with stdin-drain guard, marker-before-tick, and partial-buffer return on kill so the executor observes exactly the intended byte pattern.\n2. INPUT: existing cmd/stubagent main + stubtest harness; the ~0.5s watcher-tick semantics of the engine from P1.M2.T1.S2 (the knobs' cadences are chosen against it).\n3. LOGIC: extend cmd/stubagent with the two knob families exactly per the report's recipes, env-driven, zero-config default behavior unchanged (existing tests stay deterministic); output the final answer only after the emit phase completes (slow-emitting stub) or never (heartbeat stub). Mock: none — this IS the mock infrastructure. Tests ride: stubagent unit tests for emit cadence, heartbeat cadence, post-phase answer emission, and kill-time partial output.\n4. OUTPUT: three stub personas — (a) hung (exists), (b) slow-but-emitting, (c) chatty-forever heartbeat — consumable by P1.M3.T1.S2 and P1.M3.T1.S3.\n5. DOCS: none — test infrastructure."
+                  "dependencies": [
+                    "P1.M2.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §harness/recipes — the stubtest harness (internal/stubtest stubtest.go/editor.go) drives cmd/stubagent; TODAY only a hung stub (SleepMS) is expressible; the report specifies the missing knobs and their wiring constraints: STAGECOACH_STUB_EMIT_* (emit a byte every N ms for M seconds, then emit the answer) and STAGECOACH_STUB_HEARTBEAT_MS (write an N-byte stderr heartbeat every N ms forever, never answer), with stdin-drain guard, marker-before-tick, and partial-buffer return on kill so the executor observes exactly the intended byte pattern.\n2. INPUT: existing cmd/stubagent main + stubtest harness; the ~0.5s watcher-tick semantics of the engine from P1.M2.T1.S2 (the knobs' cadences are chosen against it).\n3. LOGIC: extend cmd/stubagent with the two knob families exactly per the report's recipes, env-driven, zero-config default behavior unchanged (existing tests stay deterministic); output the final answer only after the emit phase completes (slow-emitting stub) or never (heartbeat stub). Mock: none — this IS the mock infrastructure. Tests ride: stubagent unit tests for emit cadence, heartbeat cadence, post-phase answer emission, and kill-time partial output.\n4. OUTPUT: three stub personas — (a) hung (exists), (b) slow-but-emitting, (c) chatty-forever heartbeat — consumable by P1.M3.T1.S2 and P1.M3.T1.S3.\n5. DOCS: none — test infrastructure.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.21",
+                    "h3.46",
+                    "h3.97",
+                    "h3.101"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -133,9 +197,20 @@
                   "title": "idle-kill end-to-end parity: exit-124 semantics, rescue, no-retry, cause line, no lock/index/HEAD mutation",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P1.M3.T1.S1", "P1.M2.T1.S3"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.26", "h3.21", "h3.78", "h3.93", "h3.94"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §2–3 + §harness — the exit-124 chain: internal/exitcode/exitcode.go:32 For() → ErrTimeout (generate.go:85) → handleGenError (internal/cmd/default_action.go:378–385) → FormatRescue with 'Tree ID:' print; no-retry-on-timeout sites at generate.go:376 ('immediate rescue, NO retry'), decompose/message.go:175, hook/exec.go:190, decompose/planner.go:130; invariants I1/I2/I3 incl. the Timeout row in internal/generate/invariants_test.go; EXISTING asymmetry to preserve: one-shot/workdesc → ErrTimeout exit 124, multiturn turn-deadline → ErrRescue exit 3, decompose planner → DecomposeRescueError traversal.\n2. INPUT: hung stub persona from P1.M3.T1.S1; the threaded engine from P1.M2.T1.S3.\n3. LOGIC: integration test over generate.CommitStaged (+ one decompose case): hung message-role stub with a tiny --idle-timeout → idle kill → assert EXACT parity with the old timeout path (FR-A5): exit 124 (one-shot path), ErrTimeout rescue message with tree SHA, NO retry, --verbose output contains the 'DEBUG: cause:' line naming 'idle'; decompose planner case asserts the DecomposeRescueError traversal unchanged; one explicit assertion of no lock/index/HEAD mutation on the deadline path (mirror the invariants_test Timeout row). Mock: the stub agent IS the mock; no external services.\n4. OUTPUT: FR-A5 parity proof through the real pipeline; consumed by P1.M3.T1.S4 (same harness).\n5. DOCS: none — tests only."
+                  "dependencies": [
+                    "P1.M3.T1.S1",
+                    "P1.M2.T1.S3"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md §2–3 + §harness — the exit-124 chain: internal/exitcode/exitcode.go:32 For() → ErrTimeout (generate.go:85) → handleGenError (internal/cmd/default_action.go:378–385) → FormatRescue with 'Tree ID:' print; no-retry-on-timeout sites at generate.go:376 ('immediate rescue, NO retry'), decompose/message.go:175, hook/exec.go:190, decompose/planner.go:130; invariants I1/I2/I3 incl. the Timeout row in internal/generate/invariants_test.go; EXISTING asymmetry to preserve: one-shot/workdesc → ErrTimeout exit 124, multiturn turn-deadline → ErrRescue exit 3, decompose planner → DecomposeRescueError traversal.\n2. INPUT: hung stub persona from P1.M3.T1.S1; the threaded engine from P1.M2.T1.S3.\n3. LOGIC: integration test over generate.CommitStaged (+ one decompose case): hung message-role stub with a tiny --idle-timeout → idle kill → assert EXACT parity with the old timeout path (FR-A5): exit 124 (one-shot path), ErrTimeout rescue message with tree SHA, NO retry, --verbose output contains the 'DEBUG: cause:' line naming 'idle'; decompose planner case asserts the DecomposeRescueError traversal unchanged; one explicit assertion of no lock/index/HEAD mutation on the deadline path (mirror the invariants_test Timeout row). Mock: the stub agent IS the mock; no external services.\n4. OUTPUT: FR-A5 parity proof through the real pipeline; consumed by P1.M3.T1.S4 (same harness).\n5. DOCS: none — tests only.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.26",
+                    "h3.21",
+                    "h3.78",
+                    "h3.93",
+                    "h3.94"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -143,9 +218,16 @@
                   "title": "false-kill regression (productive-slow survives) + hard-cap heartbeat pathology (FR-A1/FR-A2)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M3.T1.S1", "P1.M2.T1.S3"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.40"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md recipes (b)/(c); provider_subsystem.md §1 — the counting-writer pipe channel resets the idle clock on any stdout/stderr byte; the hard cap keeps the WithTimeout shadow independent of activity.\n2. INPUT: slow-emitting + heartbeat stub personas from P1.M3.T1.S1; threaded engine from P1.M2.T1.S3.\n3. LOGIC: over generate.CommitStaged with test-scaled deadlines: (b) FALSE-KILL REGRESSION — progressive stub emits a byte every ~0.5s for well past a tiny idle (e.g. idle 2s, emitting for ~3× idle) then answers ⇒ generation SUCCEEDS and the commit is created (this is the motivating v3.4-false-kill scenario; note the stub's test manifest or Linux arming per the D4 rule); (c) HEARTBEAT PATHOLOGY — chatty-forever stub (steady stderr heartbeat, never answers) with a tiny hard cap ⇒ hard-cap kill despite continuous activity (FR-A2: activity is not progress), verbose cause names 'hard cap', rescue parity as in P1.M3.T1.S2. Mock: stub agents only.\n4. OUTPUT: regression proofs for FR-A1 (productive-slow survives) and FR-A2 (false-alive bounded).\n5. DOCS: none — tests only."
+                  "dependencies": [
+                    "P1.M3.T1.S1",
+                    "P1.M2.T1.S3"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: call_sites_and_error_contract.md recipes (b)/(c); provider_subsystem.md §1 — the counting-writer pipe channel resets the idle clock on any stdout/stderr byte; the hard cap keeps the WithTimeout shadow independent of activity.\n2. INPUT: slow-emitting + heartbeat stub personas from P1.M3.T1.S1; threaded engine from P1.M2.T1.S3.\n3. LOGIC: over generate.CommitStaged with test-scaled deadlines: (b) FALSE-KILL REGRESSION — progressive stub emits a byte every ~0.5s for well past a tiny idle (e.g. idle 2s, emitting for ~3× idle) then answers ⇒ generation SUCCEEDS and the commit is created (this is the motivating v3.4-false-kill scenario; note the stub's test manifest or Linux arming per the D4 rule); (c) HEARTBEAT PATHOLOGY — chatty-forever stub (steady stderr heartbeat, never answers) with a tiny hard cap ⇒ hard-cap kill despite continuous activity (FR-A2: activity is not progress), verbose cause names 'hard cap', rescue parity as in P1.M3.T1.S2. Mock: stub agents only.\n4. OUTPUT: regression proofs for FR-A1 (productive-slow survives) and FR-A2 (false-alive bounded).\n5. DOCS: none — tests only.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.40"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -153,9 +235,19 @@
                   "title": "config observability: every precedence layer observably binds per role",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M3.T1.S2", "P1.M1.T1.S3"],
-                  "prd_selectors": ["h2.10", "h3.46", "h3.24", "h3.31", "h3.80", "h3.83"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §checklist — the ten seam groups and the five-layer ladder (flag > env > git > file > default); per config_ladder.md FINDING A the git keys are camelCase (stagecoach.idleTimeout, stagecoach.role.<role>.idleTimeout).\n2. INPUT: the full five-layer idle surface (P1.M1.T1.S1→S3) and the pipeline harness from P1.M3.T1.S2.\n3. LOGIC: end-to-end behavioral assertions that each layer observably changes deadline behavior for a role: --idle-timeout 1s kills a hung stub; [role.message].idle_timeout file key ditto; STAGECOACH_MESSAGE_IDLE_TIMEOUT env overrides the file; --message-idle-timeout flag overrides all; unset ⇒ default 60s does NOT kill a short healthy run; hard-cap equivalents for --timeout (600s default asserted via config, small override asserted via behavior). Git-key observability via the existing git-config test harness. Mock: stub agents only.\n4. OUTPUT: proof that FR-R7's per-role two-deadline ladder binds end-to-end; closes P1.\n5. DOCS: none — tests only."
+                  "dependencies": [
+                    "P1.M3.T1.S2",
+                    "P1.M1.T1.S3"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: config_ladder.md §checklist — the ten seam groups and the five-layer ladder (flag > env > git > file > default); per config_ladder.md FINDING A the git keys are camelCase (stagecoach.idleTimeout, stagecoach.role.<role>.idleTimeout).\n2. INPUT: the full five-layer idle surface (P1.M1.T1.S1→S3) and the pipeline harness from P1.M3.T1.S2.\n3. LOGIC: end-to-end behavioral assertions that each layer observably changes deadline behavior for a role: --idle-timeout 1s kills a hung stub; [role.message].idle_timeout file key ditto; STAGECOACH_MESSAGE_IDLE_TIMEOUT env overrides the file; --message-idle-timeout flag overrides all; unset ⇒ default 60s does NOT kill a short healthy run; hard-cap equivalents for --timeout (600s default asserted via config, small override asserted via behavior). Git-key observability via the existing git-config test harness. Mock: stub agents only.\n4. OUTPUT: proof that FR-R7's per-role two-deadline ladder binds end-to-end; closes P1.\n5. DOCS: none — tests only.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h3.46",
+                    "h3.24",
+                    "h3.31",
+                    "h3.80",
+                    "h3.83"
+                  ]
                 }
               ]
             }
@@ -190,9 +282,18 @@
                   "title": "manifest EventStream field + render insertion + ProgressiveStdout + no-extractor guard",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M2.T1.S2"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.58", "h3.59", "h3.66"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §3–5 — internal/provider/manifest.go: 20 fields, optional scalars are POINTERS (SessionMode precedent: field :67, validate :129–132, Resolve→\"\" :211–212); merge.go regimes: regime-1 non-nil pointer wins, regime-2 NON-EMPTY SLICE REPLACES WHOLESALE (EventStream is regime-2), maps key-merge, Name never merged; render.go token order: subcommand → provider-fold → model → reasoning → sys → mode flag-set (:148–159) → close (:160) → print_flag LAST (:161–162) → delivery switch — the event_stream tokens insert between :160 and the print_flag guard, AND the same insertion must be mirrored in RenderMultiTurn (render.go:275–278); CmdSpec already has ProgressiveStdout from P1.M2.T1.S2; builtin.go:61 carries the dated 'VERIFIED 2026-07-05' comment precedent.\n2. INPUT: CmdSpec.ProgressiveStdout (added in P1.M2.T1.S2, still always false from Render's side until this subtask).\n3. LOGIC: (a) manifest.go — add EventStream []string `toml:\"event_stream\"` (nil ⇒ []), default empty, validated like other optional capability fields; (b) merge.go — regime-2 slice merge (non-empty replaces wholesale) so a user layer can set/clear it; (c) render.go — in BOTH Render and RenderMultiTurn append the tokens after the mode flag-set, BEFORE print_flag, and set CmdSpec.ProgressiveStdout = len(m.EventStream) > 0; (d) introduce the per-provider extractor REGISTRY TYPE here (new sibling file, map[providerName]Extractor — Registry itself stays pure data per provider_subsystem.md §7), initially EMPTY of real providers; Render returns a HARD configuration error when a manifest (built-in or user) declares non-empty event_stream for a provider with no registered extractor (D8 — a test registers a fake extractor to exercise the happy path); (e) NO built-in manifest declares event_stream in this subtask (all ship [] — FR-S2: never speculative). Tests ride: manifest_test/merge_test field-merge regime; render_test token position (before print_flag, after mode flags, in both Render and RenderMultiTurn) + ProgressiveStdout propagation + the no-extractor error; builtin_test asserting every built-in ships empty event_stream.\n4. OUTPUT: the manifest field + arming propagation + registry type — consumed by P2.M1.T1.S2 (execution path) and populated by P2.M2.T1.S2–S5.\n5. DOCS: Mode A — docs/providers.md manifest-field table: '22 fields' → 23 and the new event_stream row mirroring the session_mode row (~L29) per docs_drift_inventory.md."
+                  "dependencies": [
+                    "P1.M2.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §3–5 — internal/provider/manifest.go: 20 fields, optional scalars are POINTERS (SessionMode precedent: field :67, validate :129–132, Resolve→\"\" :211–212); merge.go regimes: regime-1 non-nil pointer wins, regime-2 NON-EMPTY SLICE REPLACES WHOLESALE (EventStream is regime-2), maps key-merge, Name never merged; render.go token order: subcommand → provider-fold → model → reasoning → sys → mode flag-set (:148–159) → close (:160) → print_flag LAST (:161–162) → delivery switch — the event_stream tokens insert between :160 and the print_flag guard, AND the same insertion must be mirrored in RenderMultiTurn (render.go:275–278); CmdSpec already has ProgressiveStdout from P1.M2.T1.S2; builtin.go:61 carries the dated 'VERIFIED 2026-07-05' comment precedent.\n2. INPUT: CmdSpec.ProgressiveStdout (added in P1.M2.T1.S2, still always false from Render's side until this subtask).\n3. LOGIC: (a) manifest.go — add EventStream []string `toml:\"event_stream\"` (nil ⇒ []), default empty, validated like other optional capability fields; (b) merge.go — regime-2 slice merge (non-empty replaces wholesale) so a user layer can set/clear it; (c) render.go — in BOTH Render and RenderMultiTurn append the tokens after the mode flag-set, BEFORE print_flag, and set CmdSpec.ProgressiveStdout = len(m.EventStream) > 0; (d) introduce the per-provider extractor REGISTRY TYPE here (new sibling file, map[providerName]Extractor — Registry itself stays pure data per provider_subsystem.md §7), initially EMPTY of real providers; Render returns a HARD configuration error when a manifest (built-in or user) declares non-empty event_stream for a provider with no registered extractor (D8 — a test registers a fake extractor to exercise the happy path); (e) NO built-in manifest declares event_stream in this subtask (all ship [] — FR-S2: never speculative). Tests ride: manifest_test/merge_test field-merge regime; render_test token position (before print_flag, after mode flags, in both Render and RenderMultiTurn) + ProgressiveStdout propagation + the no-extractor error; builtin_test asserting every built-in ships empty event_stream.\n4. OUTPUT: the manifest field + arming propagation + registry type — consumed by P2.M1.T1.S2 (execution path) and populated by P2.M2.T1.S2–S5.\n5. DOCS: Mode A — docs/providers.md manifest-field table: '22 fields' → 23 and the new event_stream row mirroring the session_mode row (~L29) per docs_drift_inventory.md.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.58",
+                    "h3.59",
+                    "h3.66"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -200,9 +301,17 @@
                   "title": "event-mode execution: NDJSON parse, per-provider terminal-event extractor, FR-S3 error surfacing",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P2.M1.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.58", "h3.67"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §6 — internal/provider/parse.go is a 5-step pipeline; empty output yields ok==false (no error); the StderrHint empty-output CAUSE mechanism lives in executor.go:23–38 (this is the path FR-S3 feeds); all five native event modes are NDJSON-ish (FR-S1) with the verified naming trap: claude/cursor/agy offer BOTH json (single buffered object) and stream-json (progressive) — only stream-json qualifies; pi --mode json, codex --json, opencode --format json are the progressive ones.\n2. INPUT: spec.ProgressiveStdout + the Extractor registry type from P2.M1.T1.S1; the countingWriter stdout from P1.M2.T1.S2; the existing parse pipeline unchanged for print mode.\n3. LOGIC: (a) when spec.ProgressiveStdout: parse stdout as a sequence of JSON events; a per-provider Extractor (registered against the manifest Name) identifies the TERMINAL MESSAGE EVENT and returns the assembled final message (D8: extraction is code living in Go alongside the built-ins; per-provider terminal-event shapes are recorded at verification time in P2.M2); (b) FR-S3: an error/abort event with no terminal message event surfaces its text through the EXISTING StderrHint empty-output cause path (or a precedence sibling when event mode produced no message) — replacing the opaque empty-stdout parse failure; a failed response does NOT reliably produce a nonzero exit (pi documents this) so detection must key on the event stream, not the exit code; (c) print-mode path completely untouched. Mock: stub JSONL agents only — NO real CLIs here (empirical verification is P2.M2's duty). Tests ride: fake JSONL stub emitting progressive events + a terminal message → assembled message AND not idle-killed under a tiny idle (the portable pipe-activity payoff of FR-A3 — runs on every platform); error-event stream → cause surfaced, empty message handled by the existing parse-retry path; unregistered-extractor guard from S1.\n4. OUTPUT: the complete event-mode execution path; consumed by P2.M2.T1.S1 (verification harness) and P2.M2.T1.S2–S5 (extractor registration + population).\n5. DOCS: Mode A — docs/providers.md gains a session_mode-style capability section (~L40–49 precedent): the FR-S2 verification bar (dated empirical run: progressive emission DURING generation, terminal-event shape, error surfacing), the json-vs-stream-json trap, and the heartbeat/sparse pitfalls verbatim from §9.30."
+                  "dependencies": [
+                    "P2.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §6 — internal/provider/parse.go is a 5-step pipeline; empty output yields ok==false (no error); the StderrHint empty-output CAUSE mechanism lives in executor.go:23–38 (this is the path FR-S3 feeds); all five native event modes are NDJSON-ish (FR-S1) with the verified naming trap: claude/cursor/agy offer BOTH json (single buffered object) and stream-json (progressive) — only stream-json qualifies; pi --mode json, codex --json, opencode --format json are the progressive ones.\n2. INPUT: spec.ProgressiveStdout + the Extractor registry type from P2.M1.T1.S1; the countingWriter stdout from P1.M2.T1.S2; the existing parse pipeline unchanged for print mode.\n3. LOGIC: (a) when spec.ProgressiveStdout: parse stdout as a sequence of JSON events; a per-provider Extractor (registered against the manifest Name) identifies the TERMINAL MESSAGE EVENT and returns the assembled final message (D8: extraction is code living in Go alongside the built-ins; per-provider terminal-event shapes are recorded at verification time in P2.M2); (b) FR-S3: an error/abort event with no terminal message event surfaces its text through the EXISTING StderrHint empty-output cause path (or a precedence sibling when event mode produced no message) — replacing the opaque empty-stdout parse failure; a failed response does NOT reliably produce a nonzero exit (pi documents this) so detection must key on the event stream, not the exit code; (c) print-mode path completely untouched. Mock: stub JSONL agents only — NO real CLIs here (empirical verification is P2.M2's duty). Tests ride: fake JSONL stub emitting progressive events + a terminal message → assembled message AND not idle-killed under a tiny idle (the portable pipe-activity payoff of FR-A3 — runs on every platform); error-event stream → cause surfaced, empty message handled by the existing parse-retry path; unregistered-extractor guard from S1.\n4. OUTPUT: the complete event-mode execution path; consumed by P2.M2.T1.S1 (verification harness) and P2.M2.T1.S2–S5 (extractor registration + population).\n5. DOCS: Mode A — docs/providers.md gains a session_mode-style capability section (~L40–49 precedent): the FR-S2 verification bar (dated empirical run: progressive emission DURING generation, terminal-event shape, error surfacing), the json-vs-stream-json trap, and the heartbeat/sparse pitfalls verbatim from §9.30.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.58",
+                    "h3.67"
+                  ]
                 }
               ]
             }
@@ -228,9 +337,19 @@
                   "title": "verification harness + recording protocol (dated empirical runs, manifest header records)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M1.T1.S2"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.60", "h3.65", "h4.1", "h4.2"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §7 — built-ins are Go structs in BuiltinManifests() (fresh map per call); the dated-verification comment precedent is builtin.go:61 'VERIFIED 2026-07-05' (the FR-T9 chrome-disable pattern); real-agent tests are CI-gated (realagent_test.go precedent — never required in CI).\n2. INPUT: the Extractor registry + event-mode execution path from P2.M1.T1.S2.\n3. LOGIC: define the verification PROCEDURE as a dated manual/dev runbook (optionally a -short-skipped Go helper, realagent-style): for a candidate CLI run a real generation in its event mode capturing stdout WITH TIMESTAMPS, proving (i) progressive emission DURING generation (events before exit — the FR-S2 core test), (ii) the terminal-event shape (record verbatim; it becomes that provider's Extractor), (iii) how in-stream error/abort events surface (force one, e.g. invalid model). Findings + date recorded in the provider's manifest header comment. Populating event_stream without a passing dated record is FORBIDDEN. Mock: none — this subtask defines the empirical protocol the following subtasks execute.\n4. OUTPUT: the runbook/helper + recording template consumed by P2.M2.T1.S2–S5.\n5. DOCS: none beyond the protocol itself (the providers.md capability section landed with P2.M1.T1.S2)."
+                  "dependencies": [
+                    "P2.M1.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §7 — built-ins are Go structs in BuiltinManifests() (fresh map per call); the dated-verification comment precedent is builtin.go:61 'VERIFIED 2026-07-05' (the FR-T9 chrome-disable pattern); real-agent tests are CI-gated (realagent_test.go precedent — never required in CI).\n2. INPUT: the Extractor registry + event-mode execution path from P2.M1.T1.S2.\n3. LOGIC: define the verification PROCEDURE as a dated manual/dev runbook (optionally a -short-skipped Go helper, realagent-style): for a candidate CLI run a real generation in its event mode capturing stdout WITH TIMESTAMPS, proving (i) progressive emission DURING generation (events before exit — the FR-S2 core test), (ii) the terminal-event shape (record verbatim; it becomes that provider's Extractor), (iii) how in-stream error/abort events surface (force one, e.g. invalid model). Findings + date recorded in the provider's manifest header comment. Populating event_stream without a passing dated record is FORBIDDEN. Mock: none — this subtask defines the empirical protocol the following subtasks execute.\n4. OUTPUT: the runbook/helper + recording template consumed by P2.M2.T1.S2–S5.\n5. DOCS: none beyond the protocol itself (the providers.md capability section landed with P2.M1.T1.S2).",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.60",
+                    "h3.65",
+                    "h4.1",
+                    "h4.2"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -238,9 +357,16 @@
                   "title": "pi (--mode json) verification + disposition",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.60"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §7 — the pi built-in manifest; FR-S3 note: pi documents that a failed response does NOT reliably produce a nonzero exit — error detection must live in the stream parse.\n2. INPUT: verification protocol from P2.M2.T1.S1; the installed pi CLI on this machine (if absent/unauthenticated → ship [] and record why — that IS a valid disposition).\n3. LOGIC: run the dated empirical verification of 'pi --mode json': progressive emission during generation, terminal message-event shape (record verbatim → the pi Extractor), in-stream error surfacing. On pass: register the pi Extractor + populate the pi manifest's EventStream tokens + dated header comment. On fail/absent: EventStream stays [] with the dated negative record. Never speculative (FR-S2). Mock: none — this is the empirical step; machine-local.\n4. OUTPUT: pi manifest disposition (tokens + extractor + dated record, or documented []).\n5. DOCS: Mode A — the dated record IS the doc: builtin.go pi manifest header comment."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: provider_subsystem.md §7 — the pi built-in manifest; FR-S3 note: pi documents that a failed response does NOT reliably produce a nonzero exit — error detection must live in the stream parse.\n2. INPUT: verification protocol from P2.M2.T1.S1; the installed pi CLI on this machine (if absent/unauthenticated → ship [] and record why — that IS a valid disposition).\n3. LOGIC: run the dated empirical verification of 'pi --mode json': progressive emission during generation, terminal message-event shape (record verbatim → the pi Extractor), in-stream error surfacing. On pass: register the pi Extractor + populate the pi manifest's EventStream tokens + dated header comment. On fail/absent: EventStream stays [] with the dated negative record. Never speculative (FR-S2). Mock: none — this is the empirical step; machine-local.\n4. OUTPUT: pi manifest disposition (tokens + extractor + dated record, or documented []).\n5. DOCS: Mode A — the dated record IS the doc: builtin.go pi manifest header comment.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.60"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -248,9 +374,19 @@
                   "title": "claude / cursor / agy (--output-format stream-json family) verification + disposition",
                   "status": "Planned",
                   "story_points": 2,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.61", "h3.63", "h3.65", "h4.0"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S1 verified naming trap — claude/cursor/agy each offer BOTH 'json' (single buffered result object — NOT progressive, does not qualify) and 'stream-json' (progressive); claude additionally takes --include-partial-messages, cursor --stream-partial-output, agy plain stream-json (per §9.30 FR-S1). provider_subsystem.md §7 — three separate built-in manifests to disposition independently.\n2. INPUT: verification protocol from P2.M2.T1.S1; each CLI only if installed/authenticated on this machine.\n3. LOGIC: per CLI, the dated empirical verification of '--output-format stream-json' (+ its partial-message switch where applicable): progressive emission during generation, terminal-event shape → per-CLI Extractor, error surfacing. Populate per-CLI only on pass; otherwise [] + dated negative record. The three dispositions are independent — one CLI failing never blocks another. Mock: none (empirical, machine-local).\n4. OUTPUT: claude/cursor/agy manifest dispositions.\n5. DOCS: Mode A — dated header comments in each dispositioned builtin manifest."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S1 verified naming trap — claude/cursor/agy each offer BOTH 'json' (single buffered result object — NOT progressive, does not qualify) and 'stream-json' (progressive); claude additionally takes --include-partial-messages, cursor --stream-partial-output, agy plain stream-json (per §9.30 FR-S1). provider_subsystem.md §7 — three separate built-in manifests to disposition independently.\n2. INPUT: verification protocol from P2.M2.T1.S1; each CLI only if installed/authenticated on this machine.\n3. LOGIC: per CLI, the dated empirical verification of '--output-format stream-json' (+ its partial-message switch where applicable): progressive emission during generation, terminal-event shape → per-CLI Extractor, error surfacing. Populate per-CLI only on pass; otherwise [] + dated negative record. The three dispositions are independent — one CLI failing never blocks another. Mock: none (empirical, machine-local).\n4. OUTPUT: claude/cursor/agy manifest dispositions.\n5. DOCS: Mode A — dated header comments in each dispositioned builtin manifest.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.61",
+                    "h3.63",
+                    "h3.65",
+                    "h4.0"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -258,9 +394,17 @@
                   "title": "codex (--json) verification + heartbeat judgment",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.65", "h4.1"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S2's recorded pitfall — codex emits a steady ~27-byte stderr heartbeat every ~2s (a timer: liveness, NOT progress) plus periodic ~1.1MB local file re-reads that bump the read counter; per §9.30 the read-counter channel remains the honest signal even in event mode. The spec's own framing is a hypothesis to CONFIRM empirically, not assume.\n2. INPUT: verification protocol from P2.M2.T1.S1; installed codex CLI (else ship [] + record).\n3. LOGIC: dated empirical verification of 'codex --json' (JSONL events): is emission progressive beyond the heartbeat during real generation? Record the terminal-event shape and error surfacing. JUDGMENT to record with the date: event_stream may still qualify IF emission is otherwise progressive (and FR-S3 error surfacing may justify it) — the heartbeat means the idle clock alone is not proof of progress here, which the HARD CAP bounds (FR-A2); if emission is heartbeat-only, ship [] with that finding. Mock: none (empirical).\n4. OUTPUT: codex manifest disposition with the heartbeat judgment recorded.\n5. DOCS: Mode A — dated header comment in the codex builtin manifest."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S2's recorded pitfall — codex emits a steady ~27-byte stderr heartbeat every ~2s (a timer: liveness, NOT progress) plus periodic ~1.1MB local file re-reads that bump the read counter; per §9.30 the read-counter channel remains the honest signal even in event mode. The spec's own framing is a hypothesis to CONFIRM empirically, not assume.\n2. INPUT: verification protocol from P2.M2.T1.S1; installed codex CLI (else ship [] + record).\n3. LOGIC: dated empirical verification of 'codex --json' (JSONL events): is emission progressive beyond the heartbeat during real generation? Record the terminal-event shape and error surfacing. JUDGMENT to record with the date: event_stream may still qualify IF emission is otherwise progressive (and FR-S3 error surfacing may justify it) — the heartbeat means the idle clock alone is not proof of progress here, which the HARD CAP bounds (FR-A2); if emission is heartbeat-only, ship [] with that finding. Mock: none (empirical).\n4. OUTPUT: codex manifest disposition with the heartbeat judgment recorded.\n5. DOCS: Mode A — dated header comment in the codex builtin manifest.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.65",
+                    "h4.1"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -268,9 +412,16 @@
                   "title": "opencode (--format json) verification + disposition",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P2.M2.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.13", "h3.46", "h3.64"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S2's recorded pitfall — opencode '--format json' is a SPARSE emitter (one mid-run event + an answer burst, ~3s stdout gaps on a trivial prompt): fine for a 60s idle clock, fatal only for a naive sub-second one. Confirm empirically.\n2. INPUT: verification protocol from P2.M2.T1.S1; installed opencode CLI (else ship [] + record).\n3. LOGIC: dated empirical verification: events DURING generation (not only at completion), terminal-event shape → Extractor, error surfacing. Populate on pass; else [] + dated record. Mock: none (empirical).\n4. OUTPUT: opencode manifest disposition; completes P2.M2 (if NO provider passed at all, record that outcome — the P2.M1 machinery remains stub-tested and every built-in ships [], which is spec-compliant per FR-S4).\n5. DOCS: Mode A — dated header comment in the opencode builtin manifest."
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: FR-S2's recorded pitfall — opencode '--format json' is a SPARSE emitter (one mid-run event + an answer burst, ~3s stdout gaps on a trivial prompt): fine for a 60s idle clock, fatal only for a naive sub-second one. Confirm empirically.\n2. INPUT: verification protocol from P2.M2.T1.S1; installed opencode CLI (else ship [] + record).\n3. LOGIC: dated empirical verification: events DURING generation (not only at completion), terminal-event shape → Extractor, error surfacing. Populate on pass; else [] + dated record. Mock: none (empirical).\n4. OUTPUT: opencode manifest disposition; completes P2.M2 (if NO provider passed at all, record that outcome — the P2.M1 machinery remains stub-tested and every built-in ships [], which is spec-compliant per FR-S4).\n5. DOCS: Mode A — dated header comment in the opencode builtin manifest.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.13",
+                    "h3.46",
+                    "h3.64"
+                  ]
                 }
               ]
             }
@@ -305,9 +456,40 @@
                   "title": "README.md + docs/how-it-works.md deadline prose (idle 60s / hard cap 600s, planner 480s purged)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T1.S3", "P1.M2.T1.S1", "P1.M2.T1.S2", "P1.M2.T1.S3", "P1.M3.T1.S1", "P1.M3.T1.S2", "P1.M3.T1.S3", "P1.M3.T1.S4", "P2.M1.T1.S1", "P2.M1.T1.S2", "P2.M2.T1.S1", "P2.M2.T1.S2", "P2.M2.T1.S3", "P2.M2.T1.S4", "P2.M2.T1.S5"],
-                  "prd_selectors": ["h2.10", "h2.12", "h2.16", "h3.46", "h3.31", "h3.76", "h3.78", "h3.80", "h3.81", "h3.82", "h3.83", "h3.106"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs_drift_inventory.md — README.md L252 (config example) and L310 (exit-124 blurb); docs/how-it-works.md L173 (per-role deadline prose — the 'planner defaults to 480s' claim MUST NOT survive anywhere), L245 (failure-table row), L346 (per-turn deadlines — already updated at the subtask that touched it; verify coherence).\n2. INPUT: the completed changeset (all 17 implementing subtasks) — this sweep only summarizes what landed.\n3. LOGIC: README.md L252 config example gains idle_timeout + timeout = \"600s\"; L310 exit-124 blurb → 'deadline (idle or hard cap)'; docs/how-it-works.md L173 two-deadline per-role prose (no built-in role deadlines), L245 failure row 'Generation deadline (idle / hard cap) … kill agent process group'; verify every user-facing surface that names a generation bound names BOTH deadlines and states idle 60s / hard cap 600s. Where the event_stream capability landed in any provider (P2.M2 dispositions), surface it in the README feature blurb at the same fidelity as other provider capabilities.\n4. OUTPUT: coherent changeset-level docs; consumed by P3.M1.T1.S2 (the sweep verifies them).\n5. DOCS: Mode B — this IS the changeset-level docs task (README.md + how-it-works.md overview surfaces)."
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T1.S2",
+                    "P1.M1.T1.S3",
+                    "P1.M2.T1.S1",
+                    "P1.M2.T1.S2",
+                    "P1.M2.T1.S3",
+                    "P1.M3.T1.S1",
+                    "P1.M3.T1.S2",
+                    "P1.M3.T1.S3",
+                    "P1.M3.T1.S4",
+                    "P2.M1.T1.S1",
+                    "P2.M1.T1.S2",
+                    "P2.M2.T1.S1",
+                    "P2.M2.T1.S2",
+                    "P2.M2.T1.S3",
+                    "P2.M2.T1.S4",
+                    "P2.M2.T1.S5"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs_drift_inventory.md — README.md L252 (config example) and L310 (exit-124 blurb); docs/how-it-works.md L173 (per-role deadline prose — the 'planner defaults to 480s' claim MUST NOT survive anywhere), L245 (failure-table row), L346 (per-turn deadlines — already updated at the subtask that touched it; verify coherence).\n2. INPUT: the completed changeset (all 17 implementing subtasks) — this sweep only summarizes what landed.\n3. LOGIC: README.md L252 config example gains idle_timeout + timeout = \"600s\"; L310 exit-124 blurb → 'deadline (idle or hard cap)'; docs/how-it-works.md L173 two-deadline per-role prose (no built-in role deadlines), L245 failure row 'Generation deadline (idle / hard cap) … kill agent process group'; verify every user-facing surface that names a generation bound names BOTH deadlines and states idle 60s / hard cap 600s. Where the event_stream capability landed in any provider (P2.M2 dispositions), surface it in the README feature blurb at the same fidelity as other provider capabilities.\n4. OUTPUT: coherent changeset-level docs; consumed by P3.M1.T1.S2 (the sweep verifies them).\n5. DOCS: Mode B — this IS the changeset-level docs task (README.md + how-it-works.md overview surfaces).",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.12",
+                    "h2.16",
+                    "h3.46",
+                    "h3.31",
+                    "h3.76",
+                    "h3.78",
+                    "h3.80",
+                    "h3.81",
+                    "h3.82",
+                    "h3.83",
+                    "h3.106"
+                  ]
                 },
                 {
                   "type": "Subtask",
@@ -315,9 +497,40 @@
                   "title": "cross-file retirement grep + green gates (go test ./..., go vet ./...)",
                   "status": "Planned",
                   "story_points": 1,
-                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T1.S3", "P1.M2.T1.S1", "P1.M2.T1.S2", "P1.M2.T1.S3", "P1.M3.T1.S1", "P1.M3.T1.S2", "P1.M3.T1.S3", "P1.M3.T1.S4", "P2.M1.T1.S1", "P2.M1.T1.S2", "P2.M2.T1.S1", "P2.M2.T1.S2", "P2.M2.T1.S3", "P2.M2.T1.S4", "P2.M2.T1.S5", "P3.M1.T1.S1"],
-                  "prd_selectors": ["h2.10", "h2.16", "h2.21", "h3.46", "h3.76", "h3.78", "h3.80", "h3.81", "h3.82", "h3.83", "h3.97"],
-                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs_drift_inventory.md — 89 hits for 480s|120s classified: 67 MUST-CHANGE (15 user-facing docs/README + 52 internal comments/help-strings/tests encoding retired semantics — the internal ones landed with their implementing subtasks; this sweep proves none remain), 22 UNRELATED (duration-format examples, user-set fixtures, legacy max_md_lines-class values).\n2. INPUT: the fully-landed changeset + P3.M1.T1.S1's prose updates.\n3. LOGIC: (a) run rg -n '480s|\"120s\"|default 120s|120s default' README.md docs/ internal/ and drive every remaining hit to intentional-only (legacy unrelated values allowed; anything encoding the retired defaults is fixed here or bounced to the owning file's correctness); (b) verify flag help, bootstrap template, env tables, and defaults tables all state idle 60s / hard cap 600s consistently; (c) 'go test ./...' green and 'go vet ./...' clean at the final commit; (d) confirm every user-facing surface that names a generation bound names BOTH deadlines.\n4. OUTPUT: the closed v3.5 changeset — documentation coherent, gates green.\n5. DOCS: Mode B (final catch-all) — this subtask IS the verification half of the changeset-level docs task; any doc file it finds stale gets fixed here."
+                  "dependencies": [
+                    "P1.M1.T1.S1",
+                    "P1.M1.T1.S2",
+                    "P1.M1.T1.S3",
+                    "P1.M2.T1.S1",
+                    "P1.M2.T1.S2",
+                    "P1.M2.T1.S3",
+                    "P1.M3.T1.S1",
+                    "P1.M3.T1.S2",
+                    "P1.M3.T1.S3",
+                    "P1.M3.T1.S4",
+                    "P2.M1.T1.S1",
+                    "P2.M1.T1.S2",
+                    "P2.M2.T1.S1",
+                    "P2.M2.T1.S2",
+                    "P2.M2.T1.S3",
+                    "P2.M2.T1.S4",
+                    "P2.M2.T1.S5",
+                    "P3.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: docs_drift_inventory.md — 89 hits for 480s|120s classified: 67 MUST-CHANGE (15 user-facing docs/README + 52 internal comments/help-strings/tests encoding retired semantics — the internal ones landed with their implementing subtasks; this sweep proves none remain), 22 UNRELATED (duration-format examples, user-set fixtures, legacy max_md_lines-class values).\n2. INPUT: the fully-landed changeset + P3.M1.T1.S1's prose updates.\n3. LOGIC: (a) run rg -n '480s|\"120s\"|default 120s|120s default' README.md docs/ internal/ and drive every remaining hit to intentional-only (legacy unrelated values allowed; anything encoding the retired defaults is fixed here or bounced to the owning file's correctness); (b) verify flag help, bootstrap template, env tables, and defaults tables all state idle 60s / hard cap 600s consistently; (c) 'go test ./...' green and 'go vet ./...' clean at the final commit; (d) confirm every user-facing surface that names a generation bound names BOTH deadlines.\n4. OUTPUT: the closed v3.5 changeset — documentation coherent, gates green.\n5. DOCS: Mode B (final catch-all) — this subtask IS the verification half of the changeset-level docs task; any doc file it finds stale gets fixed here.",
+                  "prd_selectors": [
+                    "h2.10",
+                    "h2.16",
+                    "h2.21",
+                    "h3.46",
+                    "h3.76",
+                    "h3.78",
+                    "h3.80",
+                    "h3.81",
+                    "h3.82",
+                    "h3.83",
+                    "h3.97"
+                  ]
                 }
               ]
             }

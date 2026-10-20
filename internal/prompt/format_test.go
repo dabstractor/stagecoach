@@ -231,9 +231,9 @@ func TestFormatForcesBody(t *testing.T) {
 		{"conventional+body", true},
 		{"gitmoji+body", true},
 		{"plain+body", true},
-		{"+body", true},                // empty base — still forces (base validity is the caller's concern)
-		{"Conventional+Body", false},   // case-sensitive suffix does not match
-		{"AUTO+BODY", false},           // case-sensitive suffix does not match
+		{"+body", true},              // empty base — still forces (base validity is the caller's concern)
+		{"Conventional+Body", false}, // case-sensitive suffix does not match
+		{"AUTO+BODY", false},         // case-sensitive suffix does not match
 	}
 	for _, tc := range cases {
 		tc := tc

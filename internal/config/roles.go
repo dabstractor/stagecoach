@@ -2,16 +2,6 @@ package config
 
 import "time"
 
-// defaultRoleTimeouts are the shipped per-role generation-timeout built-ins (PRD §16.1, FR-R7). The
-// planner is the ONLY role with a built-in timeout (480s) — it does open-ended decomposition planning
-// and needs longer than the message/stager/arbiter roles, which inherit cfg.Timeout. A user override
-// (cfg.Roles[role].Timeout, set via [role.<role>].timeout / --<role>-timeout / env / git-config) ALWAYS
-// beats this. This is a role×timeout axis, distinct from role_defaults.go's provider×role→MODEL table
-// (FR-D4) — do not conflate the two. Add a role here only when shipping a non-global default.
-var defaultRoleTimeouts = map[string]time.Duration{
-	"planner": 480 * time.Second,
-}
-
 // ResolveRoleModel returns the (provider, model, reasoning) for a single agent role (PRD §16.4, §9.15
 // FR-R1–R3/R6), applying the precedence:
 //
@@ -67,38 +57,51 @@ func ResolveRoleModel(role string, cfg Config) (provider, model, reasoning strin
 	return provider, model, reasoning
 }
 
-// ResolveRoleTimeout returns the generation timeout for a single agent role (PRD §9.15 FR-R7, §16.1),
-// applying the precedence:
+// ResolveRoleDeadlines returns the (idle, hard) generation deadlines for a single agent role (PRD
+// §9.30 FR-R7/FR25), applying the per-role→global ladder (NO built-in tier):
 //
-//	[role.<role>].timeout  (CLI flag > env > file > git, all already merged into cfg.Roles by the loaders)
-//	> built-in role default  (planner = 480s; FR-R7 — the planner needs more time than message/stager/arbiter)
-//	> [defaults].timeout     (cfg.Timeout — the global; 120s)
+//	[role.<role>].idle_timeout / .timeout   (CLI flag > env > file > git, all already merged into cfg.Roles by the loaders; 0 ⇒ inherit)
+//	> [defaults].idle_timeout / .timeout    (cfg.IdleTimeout / cfg.Timeout — the global Defaults() seeds 60s/600s)
 //
-// By the time this runs, Load() has already overlaid every precedence layer into cfg.Roles[role].Timeout,
-// so this only checks the per-role entry, then the built-in role default, then the global. It does NOT
-// re-walk the layers and does NOT consult any manifest — mirroring ResolveRoleModel.
+// The two deadlines resolve INDEPENDENTLY — a role may override either alone (an idle-only override
+// keeps the global hard cap; a hard-only override keeps the global idle deadline). IDLE is the PRIMARY
+// productivity signal (kill when the agent goes quiet for idle); HARD is the absolute backstop (kill
+// when the total elapsed time exceeds hard, hung or not — §9.30: a wall clock alone cannot distinguish
+// a hung agent from a productive-but-slow one).
 //
-// The planner is the ONLY role with a shipped built-in timeout (480s): it does the open-ended
-// decomposition planning and most often needs longer than the message/stager/arbiter roles (which
-// inherit cfg.Timeout). A non-zero cfg.Roles[role].Timeout ALWAYS wins — even for the planner (a
-// user's --planner-timeout 600s beats the 480s built-in). A role absent from cfg.Roles (or with
-// Timeout==0) inherits: planner → 480s built-in; stager/message/arbiter → cfg.Timeout.
+// NO role ships a built-in deadline: the v2.8 per-role wall-clock built-in (a planner-only special
+// case) is RETIRED as moot — it existed only because the old 120s global starved a thinking planner,
+// and under an idle deadline + a 600s hard cap every role is already granted as much time as it stays
+// productive. The planner inherits the globals exactly like every other role. role is an arbitrary
+// string (canonical: planner/stager/message/arbiter); a non-canonical name or an absent Roles entry
+// inherits both globals — same leniency as ResolveRoleModel.
+func ResolveRoleDeadlines(role string, cfg Config) (idle, hard time.Duration) {
+	idle, hard = cfg.IdleTimeout, cfg.Timeout
+	if rc, ok := cfg.Roles[role]; ok {
+		if rc.IdleTimeout != 0 {
+			idle = rc.IdleTimeout
+		}
+		if rc.Timeout != 0 {
+			hard = rc.Timeout
+		}
+	}
+	return idle, hard
+}
+
+// ResolveRoleTimeout returns the HARD-CAP generation deadline for a single agent role (PRD §9.15
+// FR-R7, §9.30) — the thin hard-cap accessor over ResolveRoleDeadlines (which owns the whole ladder):
+// per-role override (cfg.Roles[role].Timeout, 0 ⇒ inherit) > the global cfg.Timeout (Defaults() seeds
+// 600s; no role ships a built-in — the retired v2.8 planner wall-clock built-in is gone, §9.30).
 //
-// The zero-value sentinel (RoleConfig.Timeout == 0 ⇒ "inherit") mirrors the "" string fields of
-// ResolveRoleModel. A RESOLVED timeout should never be 0 at an Execute call site; the consumers
-// (P1.M3) guard a 0 if it ever occurs (Execute treats timeout<=0 as "no deadline"). This function
-// returns cfg.Timeout unchanged for non-planner roles (do not collapse a 0 global into a built-in
-// here — the built-in is role-specific, planner-only).
+// KEPT for its 11 existing callers (decompose arbiter/planner/stager, generate message/multiturn/
+// workdesc/generate, hook/exec); new code should prefer ResolveRoleDeadlines (which also returns the
+// idle deadline — the PRIMARY §9.30 productivity signal). The zero-value sentinel
+// (RoleConfig.Timeout == 0 ⇒ "inherit") mirrors the "" string fields of ResolveRoleModel; a RESOLVED
+// timeout should never be 0 at an Execute call site (Execute treats timeout<=0 as "no deadline").
 //
-// role is an arbitrary string (one of "planner","stager","message","arbiter" in practice); a
-// non-canonical name misses the cfg.Roles lookup AND the built-in map, so it inherits cfg.Timeout
-// (no error) — same leniency as ResolveRoleModel.
+// role is an arbitrary string (canonical: planner/stager/message/arbiter); a non-canonical name simply
+// misses the cfg.Roles lookup and inherits the global (no error) — same leniency as ResolveRoleModel.
 func ResolveRoleTimeout(role string, cfg Config) time.Duration {
-	if rc, ok := cfg.Roles[role]; ok && rc.Timeout != 0 {
-		return rc.Timeout
-	}
-	if d, ok := defaultRoleTimeouts[role]; ok {
-		return d
-	}
-	return cfg.Timeout
+	_, hard := ResolveRoleDeadlines(role, cfg)
+	return hard
 }

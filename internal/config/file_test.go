@@ -895,7 +895,7 @@ func TestOverlayNilSrc(t *testing.T) {
 	if dst.Provider != "" {
 		t.Errorf("Provider changed: %q", dst.Provider)
 	}
-	if dst.Timeout != 120*time.Second {
+	if dst.Timeout != 600*time.Second {
 		t.Errorf("Timeout changed: %v", dst.Timeout)
 	}
 	if !dst.AutoStageAllValue() {

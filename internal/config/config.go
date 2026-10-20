@@ -36,10 +36,11 @@ const CurrentConfigVersion = 3
 // materialize/overlay into this typed map — the same raw-map→typed-field pattern
 // Config.Providers uses.
 type RoleConfig struct {
-	Provider  string        `toml:"provider"`
-	Model     string        `toml:"model"`
-	Reasoning string        `toml:"reasoning"` // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default)
-	Timeout   time.Duration `toml:"timeout"`   // per-role generation timeout (FR-R7); 0 ⇒ inherit global [defaults].timeout (toml tag is cosmetic — Config.Roles is toml:"-")
+	Provider    string        `toml:"provider"`
+	Model       string        `toml:"model"`
+	Reasoning   string        `toml:"reasoning"`    // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default)
+	Timeout     time.Duration `toml:"timeout"`      // per-role hard-cap deadline (FR-R7); 0 ⇒ inherit global [defaults].timeout (toml tag is cosmetic — Config.Roles is toml:"-")
+	IdleTimeout time.Duration `toml:"idle_timeout"` // per-role idle deadline (§9.30 FR-R7); 0 ⇒ inherit global [defaults].idle_timeout. Resolves INDEPENDENTLY of Timeout (a role may override either alone) (toml tag is cosmetic — Config.Roles is toml:"-")
 }
 
 // UpgradeConfig is the global-only self-update configuration (PRD §9.29 FR-U10): which release
@@ -82,7 +83,8 @@ type Config struct {
 	Provider     string        `toml:"provider"`       // "" => auto-detect (PRD §15.2)
 	Model        string        `toml:"model"`          // "" => provider manifest default_model
 	Reasoning    string        `toml:"reasoning"`      // off|low|medium|high (FR-R6); "" ⇒ inherit global [defaults].reasoning (off by default; config init writes "off")
-	Timeout      time.Duration `toml:"timeout"`        // generation timeout; Defaults: 120s
+	Timeout      time.Duration `toml:"timeout"`        // hard-cap generation deadline (§9.30 FR-R7/FR25): the ABSOLUTE backstop — kills a hung agent regardless of activity. Defaults: 600s. The PRIMARY productivity signal is IdleTimeout (below): an agent is killed when it goes quiet for idle_timeout OR when timeout elapses, whichever comes first.
+	IdleTimeout  time.Duration `toml:"idle_timeout"`   // idle deadline (§9.30 FR-R7/FR25): seconds without new output before the agent is considered hung and killed — the PRIMARY productivity signal (a wall clock alone cannot distinguish a hung agent from a productive-but-slow one). Defaults: 60s. 0 in a RoleConfig ⇒ inherit this global.
 	AutoStageAll *bool         `toml:"auto_stage_all"` // git add -A when nothing staged (PRD §9.4); *bool — nil ⇒ inherit lower layer (Defaults seeds true); non-nil incl. *false ⇒ explicit override
 	Verbose      bool          `toml:"verbose"`        // print resolved cmd, raw output, retries
 
@@ -204,9 +206,12 @@ type Config struct {
 	ConfigVersion int `toml:"config_version"`
 }
 
-// Defaults returns the built-in Layer-1 configuration (PRD §16.1): timeout 120s, auto_stage_all
-// true, max_diff_bytes 300000, max_md_lines 100, max_duplicate_retries 3, subject_target_chars 50,
-// max_commits 12. Output and StripCodeFence are nil (deferred to the manifest's Resolve() — §12.1).
+// Defaults returns the built-in Layer-1 configuration (PRD §16.1): idle_timeout 60s, timeout 600s,
+// auto_stage_all true, max_diff_bytes 300000, max_md_lines 100, max_duplicate_retries 3,
+// subject_target_chars 50, max_commits 12. The v2.8 120s wall clock grew to a 600s hard cap (§9.30):
+// an IDLE deadline of 60s is the primary hung-agent signal (a productive-but-slow planner is no longer
+// starved — the retired v2.8 planner-480s built-in was a workaround for exactly that 120s starvation).
+// Output and StripCodeFence are nil (deferred to the manifest's Resolve() — §12.1).
 // Provider and Model are "" (Layer 1 does not pin them): empty Provider => auto-detect (PRD §15.2);
 // empty Model => the manifest default_model (§16.2). Verbose/NoColor/Single are false; Commits is 0
 // (auto-decompose). Roles and BinaryExtensions are nil (no per-role overrides → all roles use the
@@ -221,8 +226,9 @@ func Defaults() Config {
 		Provider:             "",
 		Model:                "",
 		Reasoning:            "", // FR-R6: off for every role by default; config init writes reasoning = "off" into [defaults] (FR-B1)
-		Timeout:              120 * time.Second,
-		AutoStageAll:         boolPtr(true), // *bool (non-nil): lets a higher layer's explicit *false be the final word after overlay (mirrors DiffContext intPtr(1))
+		Timeout:              600 * time.Second,
+		IdleTimeout:          60 * time.Second, // §9.30: the primary productivity deadline (60s of silence ⇒ hung); hard cap above is the backstop
+		AutoStageAll:         boolPtr(true),    // *bool (non-nil): lets a higher layer's explicit *false be the final word after overlay (mirrors DiffContext intPtr(1))
 		Verbose:              false,
 		NoColor:              false,
 		Commits:              0, // auto-decompose (PRD §9.14 FR-M2); set by --commits in P1.M3.T2/P4.M1.T1

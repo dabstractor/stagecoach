@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -139,9 +138,9 @@ func runModels(cmd *cobra.Command, args []string) error {
 func renderModelBlock(cmd *cobra.Command, t modelTarget, cfg *config.Config) {
 	argv := t.manifest.ListModelsCommand
 	if len(argv) > 0 {
-		timeout := 120 * time.Second
+		timeout := config.Defaults().Timeout // FR25 knob; nil-cfg fallback (single-sources the shipped default — 600s since §9.30)
 		if cfg != nil {
-			timeout = cfg.Timeout // bound (FR25 knob; default 120s)
+			timeout = cfg.Timeout // a resolved config's knob wins over the fallback
 		}
 		var vb *ui.Verbose
 		if cfg != nil && cfg.Verbose {

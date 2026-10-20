@@ -196,27 +196,31 @@ func TestResolveRoleModel_ReasoningOffIsNonZero(t *testing.T) {
 
 func TestResolveRoleTimeout_PerRoleOverride(t *testing.T) {
 	cfg := Defaults()
-	cfg.Timeout = 120 * time.Second // distinct from the 480s built-in so the assertion is unambiguous
+	cfg.Timeout = 120 * time.Second // distinct from the override so the assertion is unambiguous
 	cfg.Roles = map[string]RoleConfig{"planner": {Timeout: 600 * time.Second}}
 	got := ResolveRoleTimeout("planner", cfg)
 	if got != 600*time.Second {
-		t.Errorf("ResolveRoleTimeout(planner) = %v, want 600s [per-role beats built-in 480s AND global 120s]", got)
+		t.Errorf("ResolveRoleTimeout(planner) = %v, want 600s [per-role beats global 120s]", got)
 	}
 }
 
-func TestResolveRoleTimeout_PlannerBuiltinBeatsGlobal(t *testing.T) {
+// TestResolveRoleTimeout_PlannerInheritsGlobal replaces the retired built-in test (§9.30): NO role
+// ships a built-in deadline any more (the v2.8 planner-480s wall clock was a workaround for the old
+// 120s global starving a thinking planner — moot under an idle deadline + a 600s hard cap). With no
+// per-role override the planner must resolve to the GLOBAL, exactly like every other role.
+func TestResolveRoleTimeout_PlannerInheritsGlobal(t *testing.T) {
 	cfg := Defaults()
-	cfg.Timeout = 120 * time.Second // DISTINCT from the 480s built-in — makes the assertion unambiguous
-	// Roles nil ⇒ no per-role override; planner must take its 480s BUILT-IN, NOT the 120s global.
+	cfg.Timeout = 120 * time.Second // explicit distinct global — makes the assertion unambiguous
+	// Roles nil ⇒ no per-role override; planner (like every role now) inherits the global. No built-in.
 	got := ResolveRoleTimeout("planner", cfg)
-	if got != 480*time.Second {
-		t.Errorf("ResolveRoleTimeout(planner) = %v, want 480s (built-in beats 120s global)", got)
+	if got != 120*time.Second {
+		t.Errorf("ResolveRoleTimeout(planner) = %v, want 120s (planner inherits the global — no built-in)", got)
 	}
 }
 
 func TestResolveRoleTimeout_NonPlannerGlobalFallback(t *testing.T) {
 	cfg := Defaults()
-	cfg.Timeout = 120 * time.Second // distinct from the 480s planner built-in
+	cfg.Timeout = 120 * time.Second // explicit distinct global (no built-ins exist any more)
 	for _, role := range []string{"stager", "message", "arbiter"} {
 		got := ResolveRoleTimeout(role, cfg)
 		if got != 120*time.Second {
@@ -271,16 +275,16 @@ func TestResolveRoleTimeout_MessagePerRoleOverride(t *testing.T) {
 // TestResolveRoleTimeout_AllCanonicalRoles closes GAP2 (FR-R7 consolidation): the timeout axis had no
 // "all canonical roles" table, unlike TestResolveRoleModel_AllCanonicalRoles (line 108) for the model
 // axis. One table over roleNames proves the full FR-R7 resolution matrix in a single readable place:
-// planner → per-role override (beats the 480s built-in); stager → per-role override (beats the 120s
-// global); message/arbiter (absent from cfg.Roles, no built-in) → 120s global. The 6 LANDED ad-hoc tests
-// cover these branches in isolation; this is the missing consolidated twin.
+// planner → per-role override (beats the global); stager → per-role override (beats the 120s
+// global); message/arbiter (absent from cfg.Roles, no built-in — §9.30 retired them all) → 120s global.
+// The 6 LANDED ad-hoc tests cover these branches in isolation; this is the missing consolidated twin.
 func TestResolveRoleTimeout_AllCanonicalRoles(t *testing.T) {
 	cfg := Defaults()
-	cfg.Timeout = 120 * time.Second // distinct from 480s so the planner built-in is unambiguous
+	cfg.Timeout = 120 * time.Second // explicit global (no built-ins — every non-overridden role lands here)
 	cfg.Roles = map[string]RoleConfig{
-		"planner": {Timeout: 600 * time.Second}, // override beats the 480s built-in
-		"stager":  {Timeout: 60 * time.Second},  // override beats the 120s global
-		// message, arbiter: no entry ⇒ no built-in ⇒ 120s global
+		"planner": {Timeout: 600 * time.Second}, // override beats the global
+		"stager":  {Timeout: 60 * time.Second},  // override beats the global
+		// message, arbiter: no entry ⇒ global (no built-ins exist — §9.30)
 	}
 	want := map[string]time.Duration{
 		"planner": 600 * time.Second, // per-role override
@@ -296,17 +300,132 @@ func TestResolveRoleTimeout_AllCanonicalRoles(t *testing.T) {
 	}
 }
 
-// TestResolveRoleTimeout_PlannerDefaultFromDefaults closes GAP3 (FR-R7 clause (e) explicit): the default
-// change (P1.M2.T2.S1 flipped the global 480s→120s) is proven functionally by _PlannerBuiltinBeatsGlobal
-// (Defaults()+set Timeout=120s — identical, since Defaults().Timeout IS 120s) but no LANDED test calls
-// ResolveRoleTimeout with the literal Defaults(). This one-liner makes "the planner still gets 480s after
-// the global dropped to 120s" a named, greppable assertion.
+// TestResolveRoleTimeout_PlannerDefaultFromDefaults pins the §9.30 retirement functionally: the
+// planner resolves from the LITERAL Defaults() (no test-set globals) to the 600s global hard cap —
+// NO built-in tier exists any more (the v2.8 480s planner wall clock is retired as moot under the
+// idle+hard two-deadline model). This makes "the planner is an ordinary role" a named, greppable
+// assertion.
 func TestResolveRoleTimeout_PlannerDefaultFromDefaults(t *testing.T) {
 	cfg := Defaults()
-	if cfg.Timeout != 120*time.Second {
-		t.Fatalf("Defaults().Timeout = %v, want 120s (the FR-R7 global default)", cfg.Timeout)
+	if cfg.Timeout != 600*time.Second {
+		t.Fatalf("Defaults().Timeout = %v, want 600s (the §9.30 global hard-cap default)", cfg.Timeout)
 	}
-	if got := ResolveRoleTimeout("planner", cfg); got != 480*time.Second {
-		t.Errorf("ResolveRoleTimeout(planner, Defaults()) = %v, want 480s (built-in beats 120s global)", got)
+	if got := ResolveRoleTimeout("planner", cfg); got != 600*time.Second {
+		t.Errorf("ResolveRoleTimeout(planner, Defaults()) = %v, want 600s (planner inherits the global — no built-in)", got)
+	}
+}
+
+// --- ResolveRoleDeadlines tests (§9.30 FR-R7/FR25 two-deadline model) ---
+
+// TestResolveRoleDeadlines pins the two-deadline ladder: per-role override (0 ⇒ inherit) → the global
+// defaults, with the two deadlines resolving INDEPENDENTLY (a role may override either alone — the
+// idle-only and hard-only rows are the independent-resolution assertions). Unknown roles / nil Roles /
+// zero-value RoleConfig fields all inherit the globals. NO built-in tier exists (§9.30 retired it).
+func TestResolveRoleDeadlines(t *testing.T) {
+	const (
+		gIdle = 60 * time.Second
+		gHard = 600 * time.Second
+	)
+	newCfg := func() Config {
+		cfg := Defaults()
+		cfg.IdleTimeout = gIdle
+		cfg.Timeout = gHard
+		return cfg
+	}
+	cases := []struct {
+		name     string
+		role     string
+		roles    map[string]RoleConfig
+		wantIdle time.Duration
+		wantHard time.Duration
+	}{
+		{
+			name:     "per-role BOTH overridden",
+			role:     "planner",
+			roles:    map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second, Timeout: 50 * time.Second}},
+			wantIdle: 5 * time.Second,
+			wantHard: 50 * time.Second,
+		},
+		{
+			name:     "per-role idle ONLY (hard stays global — independent resolution)",
+			role:     "planner",
+			roles:    map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second}},
+			wantIdle: 5 * time.Second,
+			wantHard: gHard,
+		},
+		{
+			name:     "per-role hard ONLY (idle stays global — independent resolution)",
+			role:     "planner",
+			roles:    map[string]RoleConfig{"planner": {Timeout: 50 * time.Second}},
+			wantIdle: gIdle,
+			wantHard: 50 * time.Second,
+		},
+		{
+			name:     "zero-value RoleConfig fields ⇒ both globals",
+			role:     "message",
+			roles:    map[string]RoleConfig{"message": {}},
+			wantIdle: gIdle,
+			wantHard: gHard,
+		},
+		{
+			name:     "unknown role ⇒ both globals",
+			role:     "palnner", // typo / non-canonical
+			roles:    map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second, Timeout: 50 * time.Second}},
+			wantIdle: gIdle,
+			wantHard: gHard,
+		},
+		{
+			name:     "nil Roles ⇒ both globals",
+			role:     "planner",
+			roles:    nil,
+			wantIdle: gIdle,
+			wantHard: gHard,
+		},
+		{
+			name:     "a DIFFERENT role's override does not leak (planner override, message resolves)",
+			role:     "message",
+			roles:    map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second, Timeout: 50 * time.Second}},
+			wantIdle: gIdle,
+			wantHard: gHard,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newCfg()
+			cfg.Roles = tc.roles
+			gotIdle, gotHard := ResolveRoleDeadlines(tc.role, cfg)
+			if gotIdle != tc.wantIdle || gotHard != tc.wantHard {
+				t.Errorf("ResolveRoleDeadlines(%s) = (%v, %v), want (%v, %v)", tc.role, gotIdle, gotHard, tc.wantIdle, tc.wantHard)
+			}
+		})
+	}
+}
+
+// TestResolveRoleTimeout_Delegates pins the delegation contract: ResolveRoleTimeout is the THIN
+// hard-cap accessor over ResolveRoleDeadlines — for every resolution shape it must return EXACTLY the
+// hard deadline (never an independent copy of the ladder logic).
+func TestResolveRoleTimeout_Delegates(t *testing.T) {
+	cases := []struct {
+		name  string
+		role  string
+		roles map[string]RoleConfig
+	}{
+		{"override both", "planner", map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second, Timeout: 50 * time.Second}}},
+		{"override hard only", "planner", map[string]RoleConfig{"planner": {Timeout: 50 * time.Second}}},
+		{"override idle only", "planner", map[string]RoleConfig{"planner": {IdleTimeout: 5 * time.Second}}},
+		{"no entry", "stager", nil},
+		{"zero-value entry", "arbiter", map[string]RoleConfig{"arbiter": {}}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.Roles = tc.roles
+			_, wantHard := ResolveRoleDeadlines(tc.role, cfg)
+			if got := ResolveRoleTimeout(tc.role, cfg); got != wantHard {
+				t.Errorf("ResolveRoleTimeout(%s) = %v, want the ResolveRoleDeadlines hard return %v (delegation contract)", tc.role, got, wantHard)
+			}
+		})
 	}
 }

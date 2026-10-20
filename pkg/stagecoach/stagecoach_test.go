@@ -1135,17 +1135,22 @@ func TestDecompose_Count1Delegates(t *testing.T) {
 }
 
 // TestDecompose_MultiEntry_RoleError verifies that the multi-commit path is entered (not the
-// Single/Count==1 short-circuit). Provider is pinned to "stub" so the test is deterministic
-// regardless of host-installed agents (avoids the FR-M2b one-file short-circuit succeeding with
-// a real agent). Stub has no TooledFlags, so the stager fallback fires; with no tooled provider
-// installed in the stub-only fixture, ResolveRoles fails at the stager. Either that or the
-// planner fails — both prove the multi-commit path was entered.
+// Single/Count==1 short-circuit, and not the FR-M2b one-file shortcut). Provider is pinned to "stub"
+// so the test is deterministic regardless of host-installed agents. TWO files are modified (un-staged)
+// so the FR-M2b one-file shortcut CANNOT fire (it requires exactly one changed path); the PLANNER then
+// actually runs — and the stub (which emits a plain message, not planner JSON) fails it, proving the
+// multi-commit path was entered. (Pre-BUG-003 this fixture errored earlier, at ResolveRoles' no-tooled
+// stager block; since BUG-003/FR-M13 a no-tooled provider is no longer hard-blocked there, so the
+// planner run is the surviving proof of multi-entry routing.)
 func TestDecompose_MultiEntry_RoleError(t *testing.T) {
 	setupTestRepo(t, stubtest.Options{Out: "feat: x"})
 	repoDir, _ := os.Getwd()
 
-	// Dirty, UN-STAGED working tree (nothing staged — precondition FR-M1).
+	// Dirty, UN-STAGED working tree with TWO changed files (nothing staged — precondition FR-M1).
+	// One file would let the FR-M2b one-file shortcut commit directly (planner bypassed ⇒ success),
+	// which is exactly the short-circuit this test exists to rule out.
 	writeFile(t, repoDir, "b.txt", "un-staged change\n")
+	writeFile(t, repoDir, "c.txt", "another un-staged change\n")
 	// Do NOT stageFile — the multi-commit path requires nothing staged.
 
 	res, err := Decompose(context.Background(), DecomposeOptions{
