@@ -4,8 +4,8 @@ package provider
 
 import (
 	"io"
+	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -29,19 +29,35 @@ func TestGroupReadBytes_OwnGroupVisible(t *testing.T) {
 // the reaped member silently excluded (ENOENT tolerance), never a "no channel".
 func TestGroupReadBytes_ChildGroupCounterMoves(t *testing.T) {
 	mustBin(t, "cat")
+	// LIVENESS IS THE LOAD-BEARING PART of the "counter moves while it runs" contract, so the test
+	// must GUARANTEE it, not hope for it. cat is fed through a pipe the test HOLDS OPEN: it drains the
+	// 8MiB and then blocks on the next read, provably alive at both samples. A strings.Reader closes
+	// stdin at EOF, and cat drains 8MiB well inside the 20ms sample gap on a fast runner — the child
+	// then sits exited-unreaped, and a vanished member is indistinguishable in the group sum from a
+	// counter that moved backwards (CI kernels fail this way 100%; some retain zombie io counters,
+	// some do not — the test must not depend on which).
+	feedR, feedW, perr := os.Pipe()
+	if perr != nil {
+		t.Fatalf("os.Pipe: %v", perr)
+	}
 	cmd := exec.Command("cat")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own group ⇒ PGID == cmd.Process.Pid
-	cmd.Stdin = strings.NewReader(strings.Repeat("x", 8<<20))
+	cmd.Stdin = feedR
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	// Feed 8MiB; the write returns once ≤ one pipe buffer (64KiB) remains unread, so the child has
+	// read ≥ 8MiB−64KiB by the time sampling starts. The write end stays open: no EOF, no exit.
+	if _, werr := feedW.Write(make([]byte, 8<<20)); werr != nil {
+		t.Fatalf("feed pipe: %v (child died early?)", werr)
+	}
 
-	// While the child runs: ok==true and the counter moves (>0). exec alone implies loader reads,
-	// and the 8MiB pipe reads accumulate. Re-sample (20ms apart) to absorb a very fast box: the
-	// first sample may land before the loader finished; either sample must show sum>0, and the
-	// sequence must be non-decreasing (rchar is a monotonic counter for a live process).
+	// While the child runs: ok==true and the counter moves (>0). The 8MiB drain is already in rchar
+	// (plus the loader's reads), and a live process's counters are monotonic in the kernel, so two
+	// samples 20ms apart must be non-decreasing — the assertion is sound because the child CANNOT
+	// have exited between them (it is blocked on a read from a pipe we hold open).
 	pid := cmd.Process.Pid
 	sum1, ok := groupReadBytes(pid)
 	if !ok {
@@ -61,6 +77,8 @@ func TestGroupReadBytes_ChildGroupCounterMoves(t *testing.T) {
 
 	// Reap the child; the group is now empty of live members. The sweep must STILL report ok==true
 	// (an empty match set is (0,true) — the channel works; the member is silently excluded).
+	feedW.Close() // EOF — cat exits
+	_ = feedR.Close()
 	_ = cmd.Wait()
 	_, ok = groupReadBytes(pid)
 	if !ok {
