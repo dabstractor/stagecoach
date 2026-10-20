@@ -777,3 +777,161 @@ func containsToken(args []string, token string) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// EventStream rendering (§9.30 FR-S1): token position, ProgressiveStdout arming,
+// the FR-S2 no-extractor guard, and the D8 fake-extractor happy path — in BOTH
+// Render and RenderMultiTurn (the §5.3 sibling rule).
+// ---------------------------------------------------------------------------
+
+// fakeExtractor is the D8 test double registered to exercise the event-stream happy path.
+type fakeExtractor struct{}
+
+func (fakeExtractor) Extract(string) (string, bool, error) { return "fake", true, nil }
+
+// registerFakeExtractor installs a fake extractor for name and restores the map on cleanup
+// (same-package seam-var idiom — no exported test setter).
+func registerFakeExtractor(t *testing.T, name string) {
+	t.Helper()
+	RegisterEventExtractor(name, fakeExtractor{})
+	t.Cleanup(func() { delete(eventExtractors, name) })
+}
+
+// idx returns the first index of token in args, or -1.
+func idx(args []string, token string) int {
+	for i, a := range args {
+		if a == token {
+			return i
+		}
+	}
+	return -1
+}
+
+// eventStreamManifest is a dual-mode manifest with event_stream + print_flag for position tests.
+func eventStreamManifest() Manifest {
+	m := dualModeManifest()
+	m.EventStream = []string{"--mode", "json"}
+	m.PrintFlag = strPtr("-p")
+	return m
+}
+
+func TestRender_EventStreamTokenPosition(t *testing.T) {
+	m := eventStreamManifest()
+	registerFakeExtractor(t, m.Name)
+
+	// Bare mode: ... bare_flags → event_stream → print_flag(LAST).
+	bare, err := m.Render("", "", "U", "off")
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	if i := idx(bare.Args, "--mode"); !(i > idx(bare.Args, "--no-tools") && i < len(bare.Args)-1) {
+		t.Errorf("bare: --mode must land after bare_flags and before print_flag: %v", bare.Args)
+	}
+	if bare.Args[len(bare.Args)-1] != "-p" {
+		t.Errorf("bare: print_flag must stay LAST: %v", bare.Args)
+	}
+
+	// Tooled mode: ... tooled_flags → event_stream → print_flag(LAST).
+	tooled, err := m.Render("", "", "U", "off", RenderTooled)
+	if err != nil {
+		t.Fatalf("Render(tooled) error: %v", err)
+	}
+	if i := idx(tooled.Args, "--mode"); !(i > idx(tooled.Args, "--allowed-tools") && i < len(tooled.Args)-1) {
+		t.Errorf("tooled: --mode must land after tooled_flags and before print_flag: %v", tooled.Args)
+	}
+	if tooled.Args[len(tooled.Args)-1] != "-p" {
+		t.Errorf("tooled: print_flag must stay LAST: %v", tooled.Args)
+	}
+}
+
+func TestRenderMultiTurn_EventStreamTokenPosition(t *testing.T) {
+	m := eventStreamManifest()
+	m.SessionMode = strPtr("append") // RenderMultiTurn's FR-T8/T9 capability gate
+	registerFakeExtractor(t, m.Name)
+
+	spec, err := m.RenderMultiTurn("", "", "U", "off", "sess-1", 1)
+	if err != nil {
+		t.Fatalf("RenderMultiTurn error: %v", err)
+	}
+	// ... session flags → event_stream → print_flag(LAST).
+	if i := idx(spec.Args, "--mode"); !(i > idx(spec.Args, "--session-id") && i < len(spec.Args)-1) {
+		t.Errorf("multi-turn: --mode must land after the session flag-set and before print_flag: %v", spec.Args)
+	}
+	if spec.Args[len(spec.Args)-1] != "-p" {
+		t.Errorf("multi-turn: print_flag must stay LAST: %v", spec.Args)
+	}
+}
+
+func TestRender_ProgressiveStdoutArming(t *testing.T) {
+	// Armed iff len(EventStream) > 0 — in BOTH render paths.
+	withES := eventStreamManifest()
+	registerFakeExtractor(t, withES.Name)
+
+	bare, err := withES.Render("", "", "U", "off")
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	if !bare.ProgressiveStdout {
+		t.Error("Render: ProgressiveStdout must be TRUE when EventStream is non-empty")
+	}
+
+	mt := eventStreamManifest()
+	mt.SessionMode = strPtr("append") // RenderMultiTurn's FR-T8/T9 capability gate
+	registerFakeExtractor(t, mt.Name)
+	mtSpec, err := mt.RenderMultiTurn("", "", "U", "off", "sess-1", 1)
+	if err != nil {
+		t.Fatalf("RenderMultiTurn error: %v", err)
+	}
+	if !mtSpec.ProgressiveStdout {
+		t.Error("RenderMultiTurn: ProgressiveStdout must be TRUE when EventStream is non-empty")
+	}
+
+	// NOT armed for a nil-EventStream manifest (every built-in today).
+	nilES := dualModeManifest()
+	plain, err := nilES.Render("", "", "U", "off")
+	if err != nil {
+		t.Fatalf("Render(nil ES) error: %v", err)
+	}
+	if plain.ProgressiveStdout {
+		t.Error("Render: ProgressiveStdout must be FALSE when EventStream is nil")
+	}
+}
+
+func TestRender_EventStreamNoExtractorErrors(t *testing.T) {
+	m := eventStreamManifest()
+	// NO extractor registered for m.Name (the map is empty — FR-S2).
+	if _, err := m.Render("", "", "U", "off"); err == nil {
+		t.Fatal("expected a hard error for event_stream with no registered extractor, got nil")
+	} else {
+		if !strings.Contains(err.Error(), m.Name) {
+			t.Errorf("error must name the provider %q: %v", m.Name, err)
+		}
+		if !strings.Contains(err.Error(), "event_stream") {
+			t.Errorf("error must mention event_stream: %v", err)
+		}
+	}
+
+	// RenderMultiTurn enforces the SAME guard (the §5.3 sibling rule).
+	mt := m
+	mt.SessionMode = strPtr("append")
+	if _, err := mt.RenderMultiTurn("", "", "U", "off", "sess-1", 1); err == nil {
+		t.Fatal("RenderMultiTurn: expected the same no-extractor hard error, got nil")
+	} else if !strings.Contains(err.Error(), m.Name) {
+		t.Errorf("multi-turn error must name the provider: %v", err)
+	}
+}
+
+func TestRender_EventStreamWithFakeExtractor(t *testing.T) {
+	m := eventStreamManifest()
+	registerFakeExtractor(t, m.Name) // D8 happy path: a registered extractor unblocks rendering
+
+	if _, err := m.Render("", "", "U", "off"); err != nil {
+		t.Errorf("Render with registered extractor should succeed: %v", err)
+	}
+
+	mt := m
+	mt.SessionMode = strPtr("append")
+	if _, err := mt.RenderMultiTurn("", "", "U", "off", "sess-1", 1); err != nil {
+		t.Errorf("RenderMultiTurn with registered extractor should succeed: %v", err)
+	}
+}

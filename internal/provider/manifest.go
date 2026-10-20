@@ -66,6 +66,15 @@ type Manifest struct {
 	//   verified append rendering (FR-T9); never set speculatively. nil => Resolve→"".
 	SessionMode *string `toml:"session_mode"`
 
+	// --- event-stream output (v3.5; §9.30 FR-S1) ---
+	// EventStream carries the provider's VERIFIED JSON-event output flags (e.g. pi "--mode json",
+	// claude "--output-format stream-json"). nil/empty = capability off (every built-in today).
+	// Non-empty: Render appends the tokens after the mode flag-set (before print_flag) and arms
+	// CmdSpec.ProgressiveStdout. REQUIRES a registered per-provider event extractor (events.go);
+	// Render errors when the field is set for a provider without one. FR-S2: never set speculatively —
+	// P2.M2 populates only after dated end-to-end verification (builtin.go VERIFIED-comment style).
+	EventStream []string `toml:"event_stream"`
+
 	// --- bare mode (§12.1) ---
 	BareFlags []string `toml:"bare_flags"` // appended verbatim; nil => none.
 

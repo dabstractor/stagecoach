@@ -89,6 +89,9 @@ func MergeManifest(base, override Manifest) Manifest {
 	if len(override.TooledFlags) > 0 {
 		out.TooledFlags = override.TooledFlags
 	}
+	if len(override.EventStream) > 0 {
+		out.EventStream = override.EventStream // regime-2: non-empty event_stream replaces wholesale (nil/empty preserves base)
+	}
 
 	// --- regime 3: Env map — key-by-key merge into a FRESH map (override keys win; base keys survive) ---
 	// CRITICAL: out.Env currently ALIASES base.Env (out := base copied the map header). We MUST allocate

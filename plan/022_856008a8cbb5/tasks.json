@@ -266,21 +266,21 @@
           "type": "Milestone",
           "id": "P2.M1",
           "title": "Manifest field + event-mode execution path",
-          "status": "Planned",
+          "status": "Ready",
           "description": "EventStream manifest field with SessionMode-precedent semantics, render insertion (both Render and RenderMultiTurn) with the ProgressiveStdout propagation and no-extractor guard, the event-mode execution path with terminal-event assembly, and FR-S3 error surfacing.",
           "tasks": [
             {
               "type": "Task",
               "id": "P2.M1.T1",
               "title": "event_stream manifest field, render, terminal-event assembly, error surfacing",
-              "status": "Planned",
+              "status": "Ready",
               "description": "S1 adds the manifest field + render tokens + extractor-registry skeleton; S2 implements event-mode stdout parsing, per-provider terminal-event extractors, and the in-stream error cause path.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P2.M1.T1.S1",
                   "title": "manifest EventStream field + render insertion + ProgressiveStdout + no-extractor guard",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S2"
@@ -299,7 +299,7 @@
                   "type": "Subtask",
                   "id": "P2.M1.T1.S2",
                   "title": "event-mode execution: NDJSON parse, per-provider terminal-event extractor, FR-S3 error surfacing",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 2,
                   "dependencies": [
                     "P2.M1.T1.S1"
@@ -335,7 +335,7 @@
                   "type": "Subtask",
                   "id": "P2.M2.T1.S1",
                   "title": "verification harness + recording protocol (dated empirical runs, manifest header records)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P2.M1.T1.S2"

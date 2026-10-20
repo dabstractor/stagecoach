@@ -164,6 +164,16 @@ func (m Manifest) Render(model, sysPrompt, userPayload, reasoning string, mode .
 	default: // RenderBare — also the fallback for "" / any unrecognized mode (PRD §12.2 ternary)
 		args = append(args, r.BareFlags...)
 	}
+	// FR-S1: event-stream tokens — after the mode flag-set, STRICTLY BEFORE print_flag (§12.2:
+	// print_flag is ALWAYS LAST). A non-empty event_stream REQUIRES a registered per-provider
+	// extractor (FR-S2: never speculative — an unverified provider must fail loudly here rather
+	// than emit unparseable NDJSON downstream).
+	if len(r.EventStream) > 0 {
+		if LookupEventExtractor(m.Name) == nil {
+			return nil, fmt.Errorf("provider manifest %q: event_stream is set but no event extractor is registered for this provider (FR-S1/FR-S2): event_stream must not be set for an unverified provider", m.Name)
+		}
+		args = append(args, r.EventStream...)
+	}
 	if *r.PrintFlag != "" {
 		args = append(args, *r.PrintFlag) // LAST per §12.2
 	}
@@ -177,7 +187,7 @@ func (m Manifest) Render(model, sysPrompt, userPayload, reasoning string, mode .
 
 	// prompt_delivery switch. stdin → payload to Stdin (nothing appended); positional → trailing arg;
 	// flag → prompt_flag + payload. Default → error (Validate already rejects invalid values).
-	spec := &CmdSpec{Command: *r.Command, Args: args}
+	spec := &CmdSpec{Command: *r.Command, Args: args, ProgressiveStdout: len(r.EventStream) > 0}
 	switch *r.PromptDelivery {
 	case "stdin":
 		spec.Stdin = payload
@@ -280,6 +290,16 @@ func (m Manifest) RenderMultiTurn(model, sysPrompt, userPayload, reasoning, sess
 	sessionArgs = append(sessionArgs, "--session-id", sessionID)
 	args = append(args, sessionArgs...)
 
+	// FR-S1: event-stream tokens — after the session flag-set, STRICTLY BEFORE print_flag (§12.2:
+	// print_flag is ALWAYS LAST). Mirrors Render's block exactly (the §5.3 sibling-divergence rule);
+	// the same FR-S2 no-extractor guard applies.
+	if len(r.EventStream) > 0 {
+		if LookupEventExtractor(m.Name) == nil {
+			return nil, fmt.Errorf("provider manifest %q: event_stream is set but no event extractor is registered for this provider (FR-S1/FR-S2): event_stream must not be set for an unverified provider", m.Name)
+		}
+		args = append(args, r.EventStream...)
+	}
+
 	if *r.PrintFlag != "" {
 		args = append(args, *r.PrintFlag) // LAST per §12.2
 	}
@@ -289,7 +309,7 @@ func (m Manifest) RenderMultiTurn(model, sysPrompt, userPayload, reasoning, sess
 		payload = turnSys + "\n\n" + userPayload
 	}
 
-	spec := &CmdSpec{Command: *r.Command, Args: args}
+	spec := &CmdSpec{Command: *r.Command, Args: args, ProgressiveStdout: len(r.EventStream) > 0}
 	switch *r.PromptDelivery {
 	case "stdin":
 		spec.Stdin = payload

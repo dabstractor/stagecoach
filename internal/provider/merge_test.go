@@ -327,3 +327,36 @@ func TestMergeManifest_MergedResultValidates(t *testing.T) {
 		t.Errorf("merged manifest should validate: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// EventStream (§9.30 FR-S1): regime-2 slice merge
+// ---------------------------------------------------------------------------
+
+func TestMergeManifest_EventStreamReplacedWholesale(t *testing.T) {
+	base := sampleBase()
+	base.EventStream = []string{"--old", "--flags"}
+	override := Manifest{EventStream: []string{"--mode", "json"}}
+	merged := MergeManifest(base, override)
+
+	if !reflect.DeepEqual(merged.EventStream, []string{"--mode", "json"}) {
+		t.Errorf("EventStream = %v, want [--mode json] (wholesale replace)", merged.EventStream)
+	}
+}
+
+func TestMergeManifest_EventStreamNilOrEmptyPreservesBase(t *testing.T) {
+	base := sampleBase()
+	base.EventStream = []string{"--mode", "json"}
+
+	// (a) nil override slice → keep base
+	mergedNil := MergeManifest(base, Manifest{})
+	if !reflect.DeepEqual(mergedNil.EventStream, base.EventStream) {
+		t.Errorf("nil override: EventStream = %v, want %v", mergedNil.EventStream, base.EventStream)
+	}
+
+	// (b) non-nil empty slice → treated as "not overridden" (keep base — documented regime-2 limitation:
+	// an empty [] CANNOT clear a non-empty base; the contract chose this regime for all slices).
+	mergedEmpty := MergeManifest(base, Manifest{EventStream: []string{}})
+	if !reflect.DeepEqual(mergedEmpty.EventStream, base.EventStream) {
+		t.Errorf("empty override: EventStream = %v, want %v", mergedEmpty.EventStream, base.EventStream)
+	}
+}

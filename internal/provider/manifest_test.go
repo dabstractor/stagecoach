@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -538,3 +539,78 @@ func assertNilStr(t *testing.T, field string, got *string) {
 
 // Verify the 4 Default* constants at compile time.
 var _ = fmt.Sprintf("%s %s %v %s", DefaultPromptDelivery, DefaultOutput, DefaultStripCodeFence, DefaultRetryInstruction)
+
+// ---------------------------------------------------------------------------
+// EventStream (§9.30 FR-S1): unmarshal / absent-nil / marshal-omit / validate
+// ---------------------------------------------------------------------------
+
+// eventStreamTOML is a minimal manifest declaring the event_stream slice.
+const eventStreamTOML = `name = "es"
+command = "agent"
+event_stream = ["--mode", "json"]
+`
+
+func TestUnmarshal_EventStream(t *testing.T) {
+	var m Manifest
+	if err := toml.Unmarshal([]byte(eventStreamTOML), &m); err != nil {
+		t.Fatalf("unmarshal event_stream manifest: %v", err)
+	}
+	if !reflect.DeepEqual(m.EventStream, []string{"--mode", "json"}) {
+		t.Errorf("EventStream = %v, want [--mode json]", m.EventStream)
+	}
+
+	// Absent key → nil (the natural absent sentinel for slices — the field is capability-OFF).
+	var absent Manifest
+	if err := toml.Unmarshal([]byte("name = \"es\"\ncommand = \"agent\"\n"), &absent); err != nil {
+		t.Fatalf("unmarshal absent-event_stream manifest: %v", err)
+	}
+	if absent.EventStream != nil {
+		t.Errorf("EventStream = %v, want nil (absent key)", absent.EventStream)
+	}
+}
+
+func TestMarshal_EventStreamNilRoundTripsOff(t *testing.T) {
+	// nil slice → go-toml marshals it as `event_stream = []` (FINDING B: nil slices MAY appear as
+	// [] — do not assert key absence; the existing TestMarshal_OmitsNilPointers documents this).
+	// The property that MATTERS: the round-trip preserves capability-OFF (empty slice).
+	out, err := toml.Marshal(Manifest{Name: "es", Command: strPtr("agent")})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back Manifest
+	if err := toml.Unmarshal(out, &back); err != nil {
+		t.Fatalf("re-unmarshal: %v", err)
+	}
+	if len(back.EventStream) != 0 {
+		t.Errorf("nil EventStream round-trip = %v, want empty (capability off)", back.EventStream)
+	}
+
+	// Non-nil slice → key present with its tokens; round-trip preserves them.
+	out2, err := toml.Marshal(Manifest{Name: "es", Command: strPtr("agent"), EventStream: []string{"--mode", "json"}})
+	if err != nil {
+		t.Fatalf("marshal with EventStream: %v", err)
+	}
+	if !strings.Contains(string(out2), "event_stream") {
+		t.Errorf("non-nil EventStream should appear in marshaled TOML:\n%s", out2)
+	}
+	var back2 Manifest
+	if err := toml.Unmarshal(out2, &back2); err != nil {
+		t.Fatalf("re-unmarshal tokens: %v", err)
+	}
+	if !reflect.DeepEqual(back2.EventStream, []string{"--mode", "json"}) {
+		t.Errorf("EventStream round-trip = %v, want [--mode json]", back2.EventStream)
+	}
+}
+
+func TestValidate_EventStreamTolerant(t *testing.T) {
+	// nil → valid (capability off).
+	nilES := Manifest{Name: "es", Command: strPtr("agent")}
+	if err := nilES.Validate(); err != nil {
+		t.Errorf("nil EventStream should validate: %v", err)
+	}
+	// Non-empty tokens → valid (free token list — no enum; the FR-S2 gate lives at Render time).
+	setES := Manifest{Name: "es", Command: strPtr("agent"), EventStream: []string{"--mode", "json"}}
+	if err := setES.Validate(); err != nil {
+		t.Errorf("non-empty EventStream should validate: %v", err)
+	}
+}

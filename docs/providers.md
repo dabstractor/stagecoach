@@ -10,7 +10,7 @@ See the [shipped `providers/*.toml` files](https://github.com/dabstractor/stagec
 
 ## The schema
 
-Each manifest has 22 fields (matching the TOML tags in `internal/provider/manifest.go`):
+Each manifest has 23 fields (matching the TOML tags in `internal/provider/manifest.go`):
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
@@ -27,6 +27,7 @@ Each manifest has 22 fields (matching the TOML tags in `internal/provider/manife
 | `system_prompt_flag` | string | `""` | Flag for the system prompt. When `""`, the system prompt is prepended to the payload instead. |
 | `provider_flag` | string | `""` | Flag for sub-provider selection (e.g. `"--provider"`). |
 | `session_mode` | string | `""` | Multi-turn fallback capability. `""` (default) = the provider cannot append turns across one-shot calls → multi-turn unavailable; `"append"` = re-invoking the same session id appends a recallable turn. **Only pi ships `"append"`** (VERIFIED 2026-07-05). Requires a verified, reproducible append-turn rendering — see below. |
+| `event_stream` | list of string | `[]` (none) | VERIFIED JSON-event output flags for progressive-stdout mode (§9.30 FR-S1); appended after the mode flags and before `print_flag`, and arms the executor's progressive-stdout idle channel. REQUIRES a registered per-provider event extractor — render errors if set for a provider without one (FR-S2: never speculative; no built-in ships it yet). |
 | `bare_flags` | list of string | `[]` (none) | Extra flags appended verbatim before `print_flag` in bare mode. |
 | `tooled_flags` | list of string | `nil` (none) | Flags for tooled/stager mode — tools ON, git-scoped, non-interactive. `nil`/empty ⇒ not stager-capable. |
 | `output` | string | `"raw"` | Agent output mode: `"raw"` or `"json"`. |

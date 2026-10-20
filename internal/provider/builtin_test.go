@@ -852,3 +852,16 @@ func TestBuiltinManifests_RenderedCommand_Claude_Tooled(t *testing.T) {
 		t.Errorf("claude tooled Stdin = %q, want %q", spec.Stdin, "<user>")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FR-S2: NO built-in declares event_stream (never speculative — P2.M2 populates
+// only after dated verification).
+// ---------------------------------------------------------------------------
+
+func TestBuiltinManifests_EventStreamEmpty(t *testing.T) {
+	for key, m := range BuiltinManifests() {
+		if len(m.EventStream) != 0 {
+			t.Errorf("built-in %q ships EventStream = %v; built-ins must ship empty (FR-S2: never speculative)", key, m.EventStream)
+		}
+	}
+}
