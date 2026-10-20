@@ -41,9 +41,9 @@ func TestRender_GoldenPerProvider(t *testing.T) {
 		wantArgs  []string
 		wantStdin string
 	}{
-		{"pi", pi, "", "pi", // FR-D2: shipped default — no --model/--provider
+		{"pi", pi, "", "pi", // FR-D2: shipped default — no --model/--provider; event-stream mode armed (FR-S1, VERIFIED 2026-10-20)
 			[]string{"--system-prompt", "<sys>",
-				"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session", "-p"},
+				"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-session", "--mode", "json", "-p"},
 			"<user>"}, // stdin; sys via flag → only user via stdin
 		{"claude", claude, "sonnet", "claude",
 			[]string{"--model", "sonnet", "--system-prompt", "<sys>",
@@ -90,7 +90,7 @@ func TestRender_Pi_ByteForByteCommitPi(t *testing.T) {
 	}
 	wantArgs := []string{"--provider", "anthropic", "--model", "claude-haiku", "--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates",
-		"--no-context-files", "--no-session", "-p"}
+		"--no-context-files", "--no-session", "--mode", "json", "-p"} // event-stream BEFORE print_flag (FR-S1, VERIFIED 2026-10-20)
 	if spec.Command != "pi" || !reflect.DeepEqual(spec.Args, wantArgs) || spec.Stdin != "<user>" {
 		t.Errorf("pi not byte-for-byte commit-pi:\n Command=%q\n Args=%v\n Stdin=%q",
 			spec.Command, spec.Args, spec.Stdin)

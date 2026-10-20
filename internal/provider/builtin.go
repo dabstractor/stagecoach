@@ -46,6 +46,29 @@ func BuiltinManifests() map[string]Manifest {
 // are NOT disabled: pi has NO --no-mcp flag (only --mcp-config <path>). --no-tools suppresses MCP
 // tool USE, but configured servers may still be discovered/connected at startup. This is a
 // documented, tracked LIMITATION (FR-C3), never an assumption that MCP is off.
+//
+// EVENT-STREAM (§9.30 FR-S1/FR-S2) — VERIFIED 2026-10-20 (pi 1.0.2), harness P2.M2.T1.S1
+// (`STAGECOACH_RUN_REAL=1 go test -tags integration_real ./internal/generate/ -run TestEventStreamVerify/pi -v`;
+// full evidence: plan/022_856008a8cbb5/P2M2T1S2/research/pi_capture_2026-10-20.log):
+//
+//	(i)   PROGRESSIVE: 41 lines over 1.567s (first @220.9ms, exit @1.788s; max inter-line gap
+//	      848.8ms, 0 gaps >1s) — no exit-burst. The 849ms max gap is first-token latency (session
+//	      header → assistant message_start), then dense message_update deltas while generating:
+//	      liveness AND progress; fits naive sub-second idle clocks and 60s clocks alike.
+//	(ii)  TERMINAL EVENT (verbatim, trimmed): {"type":"message_end","message":{"role":"assistant",
+//	      "content":[{"type":"thinking",…},{"type":"text","text":"stagecoach-event-verify"}],
+//	      "stopReason":"stop",…}} — the authoritative final message; Message = concat of text
+//	      blocks. (The stream's LAST line is {"type":"agent_settled"} — a lifecycle marker, NOT a
+//	      message carrier.) Secondary shapes turn_end/agent_end carry the same message payload.
+//	(iii) ERROR (forced invalid-model probe): exit=0 (EVIDENCE — never asserted; FR-S3's
+//	      no-reliable-nonzero-exit premise proven). Error event (verbatim, trimmed):
+//	      {"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error",
+//	      "errorMessage":"400: {…}",…}} (+ twin message_start; turn_end/agent_end{willRetry:false}
+//	      carry the same payload). No auto_retry events fired (400 is non-retryable).
+//	model override: deepseek/deepseek-flash (harness env STAGECOACH_REAL_MODEL_PI/
+//	      STAGECOACH_REAL_INFERENCE_PI; the seeded anthropic default had no API key on this
+//	      machine — an auth condition, not a mode failure; the mode itself proved out).
+//	extractor: internal/provider/events_pi.go (stateless; registered via init).
 func builtinPi() Manifest {
 	return Manifest{
 		Name:              "pi",
@@ -102,6 +125,10 @@ func builtinPi() Manifest {
 		},
 		Output:         strPtr("raw"),
 		StripCodeFence: boolPtr(true),
+		// EVENT-STREAM (§9.30 FR-S1/FR-S2) — VERIFIED 2026-10-20 via the S1 harness (pi 1.0.2);
+		// extractor: events_pi.go. Progressive; terminal = message_end{assistant}; errors in-stream
+		// (FR-S3 — pi does not reliably exit nonzero on failure). See the ctor doc comment record.
+		EventStream: []string{"--mode", "json"},
 		// Subcommand, PromptFlag, JsonField, RetryInstruction, Env: nil (absent in §12.3).
 	}
 }

@@ -42,6 +42,7 @@ tooled_flags = [
 ]
 output = "raw"
 strip_code_fence = true
+event_stream = ["--mode", "json"]   # FR-S2 VERIFIED 2026-10-20 (harness TestEventStreamVerify/pi)
 
 [reasoning_levels]
 high = ["--thinking", "high"]
@@ -186,6 +187,9 @@ func renderArgs(m Manifest, provider, model, sys string) []string {
 		args = append(args, *r.SystemPromptFlag, sys)
 	}
 	args = append(args, r.BareFlags...)
+	// FR-S1: event-stream tokens — after the session flag-set, STRICTLY BEFORE print_flag (§12.2;
+	// mirrors Render's block; the no-extractor guard lives in the real Render and its own tests).
+	args = append(args, r.EventStream...)
 	if *r.PrintFlag != "" {
 		args = append(args, *r.PrintFlag)
 	}
@@ -259,6 +263,11 @@ func TestBuiltinManifests_PiFields(t *testing.T) {
 	assertStr(t, "Output", m.Output, "raw")
 	if m.StripCodeFence == nil || *m.StripCodeFence != true {
 		t.Errorf("StripCodeFence = %v, want non-nil true", m.StripCodeFence)
+	}
+
+	// EventStream (FR-S1/FR-S2): VERIFIED 2026-10-20 via the S1 harness (ledger + ctor doc record).
+	if !reflect.DeepEqual(m.EventStream, []string{"--mode", "json"}) {
+		t.Errorf("EventStream = %v, want [--mode json]", m.EventStream)
 	}
 
 	// ReasoningLevels: high/medium/low populated (verified pi --thinking); off absent (no-op)
@@ -402,6 +411,7 @@ func TestBuiltinManifests_RenderedCommand_Pi_ShippedDefault(t *testing.T) {
 		"--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",
+		"--mode", "json", // FR-S2 VERIFIED 2026-10-20: event-stream tokens BEFORE print_flag
 		"-p", // §12.2: print_flag LAST
 	}
 	if !reflect.DeepEqual(argv, want) {
@@ -422,6 +432,7 @@ func TestBuiltinManifests_RenderedCommand_Pi_PersonalOverride(t *testing.T) {
 		"--system-prompt", "<sys>",
 		"--no-tools", "--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",
+		"--mode", "json", // FR-S2 VERIFIED 2026-10-20: event-stream tokens BEFORE print_flag
 		"-p", // §12.2: print_flag LAST (matches commit-pi)
 	}
 	if !reflect.DeepEqual(argv, want) {
@@ -816,6 +827,7 @@ func TestBuiltinManifests_RenderedCommand_Pi_Tooled(t *testing.T) {
 		"--system-prompt", "<sys>",
 		"--no-extensions", "--no-skills",
 		"--no-prompt-templates", "--no-context-files", "--no-session",
+		"--mode", "json", // FR-S2 VERIFIED 2026-10-20: event-stream tokens BEFORE print_flag
 		"-p", // print_flag LAST; NO --no-tools (tools on)
 	}
 	if !reflect.DeepEqual(spec.Args, want) {
@@ -854,14 +866,20 @@ func TestBuiltinManifests_RenderedCommand_Claude_Tooled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FR-S2: NO built-in declares event_stream (never speculative — P2.M2 populates
-// only after dated verification).
+// FR-S2: no built-in declares event_stream WITHOUT dated verification (P2.M2.T1.S2–S5
+// populate only alongside a dated eventStreamLedger entry + the VERIFIED doc record —
+// TestEventStreamLedger is the both-directions teeth; this guard still catches any
+// UNRECORDED declaration).
 // ---------------------------------------------------------------------------
 
 func TestBuiltinManifests_EventStreamEmpty(t *testing.T) {
 	for key, m := range BuiltinManifests() {
 		if len(m.EventStream) != 0 {
-			t.Errorf("built-in %q ships EventStream = %v; built-ins must ship empty (FR-S2: never speculative)", key, m.EventStream)
+			if _, verified := eventStreamLedger[key]; verified {
+				continue // FR-S2 POPULATED: dated ledger record + VERIFIED doc record + registered extractor
+			}
+			t.Errorf("built-in %q ships EventStream = %v with NO dated eventStreamLedger entry; "+
+				"populate only after the P2.M2.T1.S1 harness protocol passes (FR-S2: never speculative)", key, m.EventStream)
 		}
 	}
 }

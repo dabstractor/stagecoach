@@ -27,7 +27,8 @@ import (
 // P2.M2.T1.S2–S5 add an entry ONLY together with a passing dated run recorded in builtin.go's
 // constructor doc comment, alongside the EventStream declaration + RegisterEventExtractor call.
 var eventStreamLedger = map[string]string{
-	// "pi": "2026-07-21", // ← the shape S2–S5 will add (dated, probe-named, alongside the builtin.go record)
+	// P2.M2.T1.S2: pi VERIFIED 2026-10-20 (harness TestEventStreamVerify/pi; record in builtinPi's doc comment).
+	"pi": "2026-10-20",
 }
 
 // TestEventStreamLedger is the FR-S2 population guard: every built-in declaring event_stream must

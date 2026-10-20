@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -159,7 +160,14 @@ func main() {
 	// §9.6 (c): heartbeat mode NEVER writes stdout — the false-alive pathology only holds if no
 	// answer ever arrives (stderr ticks keep the idle clock resetting while stdout stays empty).
 	if !heartbeat {
-		fmt.Fprint(os.Stdout, out) // EXACTLY `out` — no extra newline (ParseOutput trims; assertions stay byte-exact)
+		if eventModeRequested(os.Args) {
+			// (P2.M2.T1.S2) Event-mode persona: stagecoach renders VERIFIED event tokens (pi's
+			// "--mode json") into argv when the manifest declares event_stream — the stub mirrors
+			// the real agents and ships the answer as an NDJSON event stream (same selected message).
+			writeEventModeStream(out)
+		} else {
+			fmt.Fprint(os.Stdout, out) // EXACTLY `out` — no extra newline (ParseOutput trims; assertions stay byte-exact)
+		}
 	}
 
 	// 4b. (P1.M1.T1.S5) Append the concurrency-interval record if the probe is armed. One atomic
@@ -173,6 +181,47 @@ func main() {
 
 	// 5. Exit with the configured code (non-zero simulates a failed agent → orchestrator retry/rescue).
 	os.Exit(envInt("STAGECOACH_STUB_EXIT", 0))
+}
+
+// eventModeRequested reports whether the stub was invoked with an event-stream output mode —
+// stagecoach renders its VERIFIED event tokens (e.g. pi's "--mode json") into argv when the
+// provider manifest declares event_stream (FR-S1). In event mode the answer ships as an NDJSON
+// event stream, not bare text.
+func eventModeRequested(args []string) bool {
+	for i, a := range args {
+		if a == "--mode" && i+1 < len(args) && args[i+1] == "json" {
+			return true
+		}
+	}
+	return false
+}
+
+// writeEventModeStream emits the SELECTED message wrapped in the pi event shapes (the 2026-10-20
+// capture; extractor: internal/provider/events_pi.go): session header → one delta-only
+// message_update (proves the parse path skips deltas) → the terminal
+// message_end{role:"assistant"} whose text block carries the message, so ParseEventStream
+// assembles exactly what print mode would have produced (assertions stay byte-identical).
+// STDLIB ONLY (encoding/json) per the stub's contract.
+func writeEventModeStream(msg string) {
+	type textBlock struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	type message struct {
+		Role    string      `json:"role"`
+		Content []textBlock `json:"content"`
+	}
+	term, err := json.Marshal(struct {
+		Type    string  `json:"type"`
+		Message message `json:"message"`
+	}{"message_end", message{"assistant", []textBlock{{"text", msg}}}})
+	if err != nil { // unreachable for string payloads — fall back to bare text
+		fmt.Fprint(os.Stdout, msg)
+		return
+	}
+	fmt.Fprint(os.Stdout, "{\"type\":\"session\",\"version\":3,\"id\":\"stub\"}\n")
+	fmt.Fprint(os.Stdout, "{\"type\":\"message_update\",\"assistantMessageEvent\":{\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"…\"}}\n")
+	fmt.Fprintf(os.Stdout, "%s\n", term)
 }
 
 // selectScripted returns the call-indexed line of the script file, advancing a file-backed counter

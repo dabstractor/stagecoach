@@ -107,6 +107,14 @@ tooled_flags = [
 output = "raw"                      # cleaned stdout IS the commit message (DEFAULT).
 strip_code_fence = true             # strip one layer of ``` / ~~~ if the agent wraps the output.
 
+# --- event stream (§9.30 FR-S1–FR-S3) ---
+event_stream = ["--mode", "json"]   # VERIFIED 2026-10-20 via stagecoach's S1 harness (pi 1.0.2): progressive
+                                    # (41 lines/1.57s span; max gap 849ms = first-token latency, then dense
+                                    # message_update deltas). Terminal = message_end{assistant} (text-block
+                                    # concat); errors in-stream as message_end stopReason:"error" +
+                                    # errorMessage — the forced invalid-model probe exited 0 (FR-S3: exit
+                                    # code is evidence, never an assertion). Extractor: events_pi.go.
+
 # --- absent fields (PRD §12.1) ---
 # subcommand, list_models_command, prompt_flag, json_field, retry_instruction, and [env] are NOT set for pi and therefore
 # omitted above. At resolve time they take their §12.1 defaults: prompt_delivery -> "stdin",
