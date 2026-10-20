@@ -35,6 +35,12 @@ type CmdSpec struct {
 	Stdin        string   // payload to pipe (stdin delivery); "" → executor uses os.DevNull
 	PayloadBytes int      // delivered payload size in bytes (ALL delivery modes); set by Render/RenderMultiTurn; 0 ⇒ none
 	Env          []string // os.Environ() + manifest Env entries as "KEY=VAL" (manifest wins on collision)
+	// ProgressiveStdout reports whether the rendered invocation emits stdout progressively
+	// (event-stream mode, §9.30 FR-S1). Set by Render iff the manifest declares event_stream tokens
+	// (P2.M1.T1.S1 — always false until then, so the idle watcher arms only on Linux, where the
+	// rchar channel covers every provider). Arms the portable pipe-activity idle channel (FR-A3(a)/D4).
+	// Stagecoach never fabricates activity.
+	ProgressiveStdout bool
 }
 
 // RenderMode selects which flag-set Manifest.Render appends after the system-prompt block (PRD §11.5,

@@ -184,7 +184,7 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 			return fmt.Errorf("hook render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return errors.New("stagecoach: hook generation timed out") // no retry; never-block

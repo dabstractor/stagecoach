@@ -566,7 +566,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			return Result{}, fmt.Errorf("render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, cfg.Timeout, deps.Verbose)
+		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: cfg.Timeout}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return Result{}, &generate.RescueError{

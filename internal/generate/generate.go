@@ -371,7 +371,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.

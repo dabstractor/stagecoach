@@ -104,6 +104,35 @@ func TestVerbose_WarnNilWriter(t *testing.T) {
 	v.VerboseWarn("must not panic")
 }
 
+func TestVerbose_CauseWhenOn(t *testing.T) {
+	var buf bytes.Buffer
+	v := NewVerbose(&buf, true)
+	v.VerboseCause("idle deadline (1m0s without observable activity)")
+	want := "DEBUG: cause: idle deadline (1m0s without observable activity)\n"
+	if buf.String() != want {
+		t.Errorf("VerboseCause: got %q, want %q", buf.String(), want)
+	}
+}
+
+func TestVerbose_CauseWhenOff(t *testing.T) {
+	var buf bytes.Buffer
+	v := NewVerbose(&buf, false)
+	v.VerboseCause("hard cap (10m0s)")
+	if buf.Len() != 0 {
+		t.Errorf("off: wrote %q, want zero bytes", buf.String())
+	}
+}
+
+func TestVerbose_CauseNilSafe(t *testing.T) {
+	var v *Verbose = nil
+	v.VerboseCause("must not panic")
+}
+
+func TestVerbose_CauseNilWriter(t *testing.T) {
+	v := NewVerbose(nil, true)
+	v.VerboseCause("must not panic")
+}
+
 func TestVerbose_CommandWhenOn(t *testing.T) {
 	var buf bytes.Buffer
 	v := NewVerbose(&buf, true)

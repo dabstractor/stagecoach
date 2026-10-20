@@ -129,6 +129,20 @@ func (v *Verbose) VerboseWarn(msg string) {
 	fmt.Fprintln(v.w, "DEBUG: "+msg)
 }
 
+// VerboseCause prints WHY an agent run was terminated by a deadline — the §9.30 D6 cause line that
+// distinguishes an idle-deadline kill (FR-A1: no observable activity) from a hard-cap kill (FR-A2:
+// absolute wall clock). Invoked by provider.Execute on either deadline kill; both still surface as
+// context.DeadlineExceeded downstream (D2/FR-A5) — this line is the ONLY observable difference.
+// Format: "DEBUG: cause: <reason>\n". No-op when v==nil, v.w==nil, or !v.on.
+func (v *Verbose) VerboseCause(reason string) {
+	if v == nil || v.w == nil || !v.on {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	fmt.Fprintln(v.w, "DEBUG: cause: "+reason)
+}
+
 // VerboseRetry prints a retry attempt and its reason (PRD §9.13 FR50 — "each retry attempt"). attempt
 // is 1-based (matches Appendix B.4 "Attempt 1"). Format: "DEBUG: attempt <n>: <reason>\n". No-op when
 // v==nil, v.w==nil, or !v.on.

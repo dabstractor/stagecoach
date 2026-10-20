@@ -169,7 +169,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 	if rerr != nil {
 		return "", false, rerr // non-append provider ⇒ RenderMultiTurn's session_mode gate; surface as cause
 	}
-	if _, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose); execErr != nil {
+	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose); execErr != nil {
 		return "", false, execErr // FR-T7: any turn error/timeout/cancel/non-zero-exit aborts
 	}
 
@@ -180,7 +180,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 		if rerr != nil {
 			return "", false, rerr
 		}
-		if _, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose); execErr != nil {
+		if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose); execErr != nil {
 			return "", false, execErr // FR-T7
 		}
 	}
@@ -191,7 +191,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 	if rerr != nil {
 		return "", false, rerr
 	}
-	out, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 	if execErr != nil {
 		return "", false, execErr // (8) FR-T7: final-turn error aborts
 	}

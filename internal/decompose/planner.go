@@ -125,7 +125,7 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 			return prompt.PlannerOutput{}, fmt.Errorf("%w: render: %w", ErrPlannerFailed, rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, plannerTimeout, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: plannerTimeout}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) || errors.Is(execErr, context.Canceled) {
 				return prompt.PlannerOutput{}, fmt.Errorf("%w: %w", ErrPlannerFailed, execErr) // non-rescue; no retry

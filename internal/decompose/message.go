@@ -170,7 +170,7 @@ func generateMessageCore(ctx context.Context, deps Deps, treeA, treeB string, se
 			return "", fmt.Errorf("%w: render: %w", ErrMessageFailed, rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, messageTimeout, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: messageTimeout}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.

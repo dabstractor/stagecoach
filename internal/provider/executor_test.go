@@ -28,7 +28,7 @@ func mustBin(t *testing.T, names ...string) {
 func TestExecute_CatEchoesStdin(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Args: nil, Stdin: "hello world\n", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 0, nil)
+	out, _, err := Execute(context.Background(), spec, Deadlines{}, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -42,7 +42,7 @@ func TestExecute_LargeStdin(t *testing.T) {
 	mustBin(t, "cat")
 	payload := strings.Repeat("x", 1<<20) // 1 MiB
 	spec := CmdSpec{Command: "cat", Stdin: payload, Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 30*time.Second, nil)
+	out, _, err := Execute(context.Background(), spec, Deadlines{Hard: 30 * time.Second}, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -51,19 +51,63 @@ func TestExecute_LargeStdin(t *testing.T) {
 	}
 }
 
-//  3. THE KEYSTONE — timeout kills the process: `sleep 30` + 200ms timeout ⇒ DeadlineExceeded,
+//  3. THE KEYSTONE — timeout kills the process: `sleep 30` + 200ms hard cap ⇒ DeadlineExceeded,
 //     AND Execute returns within seconds (not 30s) — proving cmd.Cancel fired and killed the group.
+//     The idle sentinel must NOT be involved: an unarmed idle (Idle: 0) leaves the hard cap BARE.
 func TestExecute_TimeoutKillsProcess(t *testing.T) {
 	mustBin(t, "sleep")
 	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Stdin: "", Env: os.Environ()}
 	start := time.Now()
-	_, _, err := Execute(context.Background(), spec, 200*time.Millisecond, nil)
+	_, _, err := Execute(context.Background(), spec, Deadlines{Hard: 200 * time.Millisecond}, nil)
 	elapsed := time.Since(start)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
+	if errors.Is(err, ErrIdleDeadline) {
+		t.Errorf("hard cap must stay the bare sentinel: got ErrIdleDeadline for a hard-cap-only kill")
+	}
 	if elapsed > 5*time.Second {
 		t.Fatalf("Execute took %v; the process-group kill should have fired within ~3s (WaitDelay)", elapsed)
+	}
+}
+
+// 3b. THE IDLE KEYSTONE — a silent stub (zero output, zero activity) is killed by the IDLE
+// deadline (300ms), not the 30s hard cap, and the returned sentinel satisfies BOTH errors.Is
+// forms (D2/FR-A5: an idle kill IS a timeout downstream — exit 124 + rescue; only the cause differs).
+func TestExecute_IdleKillsSilentStub(t *testing.T) {
+	mustBin(t, "sleep")
+	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, ProgressiveStdout: true, Env: os.Environ()}
+	start := time.Now()
+	_, _, err := Execute(context.Background(), spec, Deadlines{Idle: 300 * time.Millisecond, Hard: 30 * time.Second}, nil)
+	elapsed := time.Since(start)
+	if !errors.Is(err, ErrIdleDeadline) {
+		t.Fatalf("err = %v, want ErrIdleDeadline", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v; ErrIdleDeadline must satisfy errors.Is(err, context.DeadlineExceeded) (D2/FR-A5)", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Execute took %v; the idle kill should have fired within ~3s (WaitDelay)", elapsed)
+	}
+}
+
+// 3c. FR-A2 — productive-slow survives: an emitter writing a byte every 400ms keeps resetting the
+// idle clock (pipe writes are activity), so it completes with err==nil under a 900ms idle
+// deadline. This is why the idle engine beats a wall clock: hung ≠ productive-slow.
+func TestExecute_IdleSparesBusyEmitter(t *testing.T) {
+	mustBin(t, "sh")
+	spec := CmdSpec{
+		Command:           "sh",
+		Args:              []string{"-c", "for i in 1 2 3 4 5 6 7 8; do echo x; sleep 0.4; done"},
+		ProgressiveStdout: true,
+		Env:               os.Environ(),
+	}
+	out, _, err := Execute(context.Background(), spec, Deadlines{Idle: 900 * time.Millisecond, Hard: 30 * time.Second}, nil)
+	if err != nil {
+		t.Fatalf("Execute: err = %v, want nil (busy emitter must survive idle)", err)
+	}
+	if got := strings.Count(out, "x"); got != 8 {
+		t.Errorf("stdout x-count = %d, want 8 (all 8 emissions captured)", got)
 	}
 }
 
@@ -73,7 +117,7 @@ func TestExecute_ParentContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	spec := CmdSpec{Command: "sleep", Args: []string{"30"}, Env: os.Environ()}
 	go func() { time.Sleep(150 * time.Millisecond); cancel() }()
-	_, _, err := Execute(ctx, spec, 0, nil) // no timeout; rely on parent cancel
+	_, _, err := Execute(ctx, spec, Deadlines{}, nil) // no timeout; rely on parent cancel
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
@@ -83,7 +127,7 @@ func TestExecute_ParentContextCancel(t *testing.T) {
 func TestExecute_StderrCaptureAndNonZeroExit(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Args: []string{"/nonexistent/path/xyz"}, Env: os.Environ()}
-	out, errb, err := Execute(context.Background(), spec, 5*time.Second, nil)
+	out, errb, err := Execute(context.Background(), spec, Deadlines{Hard: 5 * time.Second}, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (non-zero exit)")
 	}
@@ -100,7 +144,7 @@ func TestExecute_EnvPropagation(t *testing.T) {
 	mustBin(t, "printenv")
 	env := append(os.Environ(), "STAGECOACH_TEST_VAR=s3cr3t")
 	spec := CmdSpec{Command: "printenv", Args: []string{"STAGECOACH_TEST_VAR"}, Env: env}
-	out, _, err := Execute(context.Background(), spec, 5*time.Second, nil)
+	out, _, err := Execute(context.Background(), spec, Deadlines{Hard: 5 * time.Second}, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -114,7 +158,7 @@ func TestExecute_EnvPropagation(t *testing.T) {
 func TestExecute_NoStdinDoesNotHang(t *testing.T) {
 	mustBin(t, "cat")
 	spec := CmdSpec{Command: "cat", Stdin: "", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 3*time.Second, nil)
+	out, _, err := Execute(context.Background(), spec, Deadlines{Hard: 3 * time.Second}, nil)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -126,7 +170,7 @@ func TestExecute_NoStdinDoesNotHang(t *testing.T) {
 // 8. Command not found ⇒ wrapped Start() error.
 func TestExecute_CommandNotFound(t *testing.T) {
 	spec := CmdSpec{Command: "definitely-not-a-real-binary-xyz-stagecoach", Env: os.Environ()}
-	_, _, err := Execute(context.Background(), spec, 3*time.Second, nil)
+	_, _, err := Execute(context.Background(), spec, Deadlines{Hard: 3 * time.Second}, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (command not found)")
 	}
@@ -145,7 +189,7 @@ func TestExecute_Verbose(t *testing.T) {
 	var buf bytes.Buffer
 	vb := ui.NewVerbose(&buf, true)
 	spec := CmdSpec{Command: "cat", Stdin: "feat: hello\n", PayloadBytes: len("feat: hello\n"), Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 5*time.Second, vb)
+	out, _, err := Execute(context.Background(), spec, Deadlines{Hard: 5 * time.Second}, vb)
 	if err != nil {
 		t.Fatalf("Execute: err = %v, want nil", err)
 	}
@@ -187,7 +231,7 @@ func TestExecute_VerbosePayload_PositionalDelivery(t *testing.T) {
 		PayloadBytes: len(payload),      // the renderer sets this; we set it directly here
 		Env:          os.Environ(),
 	}
-	if _, _, err := Execute(context.Background(), spec, 3*time.Second, vb); err != nil {
+	if _, _, err := Execute(context.Background(), spec, Deadlines{Hard: 3 * time.Second}, vb); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	got := buf.String()
@@ -201,7 +245,7 @@ func TestExecute_VerbosePayload_PositionalDelivery(t *testing.T) {
 func TestExecute_NonZeroExit(t *testing.T) {
 	mustBin(t, "false")
 	spec := CmdSpec{Command: "false", Env: os.Environ()}
-	out, _, err := Execute(context.Background(), spec, 0, nil)
+	out, _, err := Execute(context.Background(), spec, Deadlines{}, nil)
 	if err == nil {
 		t.Fatal("err = nil, want non-nil (`false` exits 1)")
 	}

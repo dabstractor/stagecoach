@@ -148,7 +148,9 @@ func renderModelBlock(cmd *cobra.Command, t modelTarget, cfg *config.Config) {
 		}
 		out, _, err := provider.Execute(cmd.Context(),
 			provider.CmdSpec{Command: argv[0], Args: argv[1:], Stdin: ""}, // Env nil ⇒ inherit
-			timeout, vb)
+			// Not a role call — idle is intentionally unarmed (a short models probe; the hard cap alone
+			// bounds it). P1.M2.T1.S3 threads the 13 role sites to ResolveRoleDeadlines.
+			provider.Deadlines{Idle: 0, Hard: timeout}, vb)
 		if err == nil {
 			printLiveList(cmd.OutOrStdout(), t.name, out)
 			return

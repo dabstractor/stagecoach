@@ -98,7 +98,7 @@ func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDi
 	}
 
 	// 5. Execute ONCE (NO retry — §17.7 defines no retry instruction; the arbiter is "when in doubt, null").
-	out, _, execErr := provider.Execute(ctx, *spec, arbiterTimeout, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: arbiterTimeout}, deps.Verbose)
 	if execErr != nil {
 		if errors.Is(execErr, context.DeadlineExceeded) || errors.Is(execErr, context.Canceled) {
 			// Timeout / cancel → graceful null (the arbiter OWNS the null decision, §13.6.5).

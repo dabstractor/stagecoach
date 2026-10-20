@@ -79,7 +79,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 	if rerr != nil {
 		return "", false, rerr // non-append provider ⇒ RenderMultiTurn's session_mode gate; surface as cause
 	}
-	out, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 	if execErr != nil {
 		return "", false, execErr // FR-T7 parity: any turn error/timeout/cancel/non-zero-exit aborts
 	}
@@ -128,7 +128,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 			if rerr != nil {
 				return "", false, rerr
 			}
-			out2, _, execErr := provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+			out2, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 			if execErr != nil {
 				return "", false, execErr
 			}
@@ -146,7 +146,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 		if rerr != nil {
 			return "", false, rerr
 		}
-		out, _, execErr = provider.Execute(ctx, *spec, msgTimeout, deps.Verbose)
+		out, _, execErr = provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
 		if execErr != nil {
 			return "", false, execErr // FR-T7 parity
 		}

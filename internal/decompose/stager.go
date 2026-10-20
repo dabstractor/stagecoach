@@ -116,7 +116,7 @@ func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) 
 	}
 
 	// 4. Execute once. NO retry (the orchestrator owns FR-M8); NO parse (no JSON contract).
-	if _, _, execErr := provider.Execute(ctx, *spec, stagerTimeout, deps.Verbose); execErr != nil {
+	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: stagerTimeout}, deps.Verbose); execErr != nil {
 		return fmt.Errorf("%w: %w", ErrStagerFailed, execErr)
 	}
 
