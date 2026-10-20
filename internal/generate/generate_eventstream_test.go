@@ -72,12 +72,15 @@ func registerStreamExtractor(t *testing.T, name string) {
 // extractor, EventStream non-empty (opaque tokens to the executor — what matters is that Render
 // arms spec.ProgressiveStdout and ParseOutput takes the event branch), print_flag set so the
 // token-order assertion (event tokens STRICTLY before print_flag, §12.2) is observable.
+// The tokens are deliberately NOT "--mode json" (pi's VERIFIED tokens): since P2.M2.T1.S2 the
+// stubagent speaks pi's NDJSON shape when invoked with THOSE tokens, which would double-wrap the
+// persona below — this test's fake extractor owns the wire shape here, so it keeps its own.
 func eventStubManifest(t *testing.T, bin, name string, opts stubtest.Options) provider.Manifest {
 	t.Helper()
 	registerStreamExtractor(t, name)
 	m := stubtest.Manifest(bin, opts)
 	m.Name = name
-	m.EventStream = []string{"--mode", "json"}
+	m.EventStream = []string{"--events", "json"}
 	m.PrintFlag = strPtr("--print")
 	return m
 }
@@ -120,10 +123,10 @@ func TestEventStream_HappyPath_PortableIdleSurvival(t *testing.T) {
 		t.Error("spec.ProgressiveStdout = false, want true (event_stream must arm the progressive channel)")
 	}
 	// §12.2 order: event tokens STRICTLY BEFORE print_flag (print_flag is ALWAYS LAST).
-	if idx(spec.Args, "--mode") == -1 || idx(spec.Args, "json") == -1 {
+	if idx(spec.Args, "--events") == -1 || idx(spec.Args, "json") == -1 {
 		t.Errorf("event_stream tokens missing from Args: %v", spec.Args)
 	}
-	if !(idx(spec.Args, "--mode") < idx(spec.Args, "--print")) {
+	if !(idx(spec.Args, "--events") < idx(spec.Args, "--print")) {
 		t.Errorf("event tokens must precede print_flag: %v", spec.Args)
 	}
 
