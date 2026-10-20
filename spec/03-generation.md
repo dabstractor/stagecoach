@@ -53,7 +53,7 @@ This is the workflow the author already uses with `commit-pi` and that lazygit's
 - **Rootless repo (no commits yet):** `PARENT_SHA` is empty. `commit-tree` is called without `-p` (creates a root commit). `update-ref HEAD <new>` is called without the expected-old argument. Handled.
 - **Unresolved merge conflicts in the index:** `write-tree` fails. Stagecoach aborts before any generation with "resolve merge conflicts first."
 - **HEAD moved during generation (user committed elsewhere):** the CAS `update-ref` fails. Stagecoach prints: "HEAD moved from <PARENT> to <actual> while generating; aborting to avoid a non-fast-forward. Your generated message was: <msg>. To commit the snapshot manually: `git commit-tree -p <PARENT> -m \"<msg>\" <TREE> | xargs git update-ref HEAD`." Exit non-zero.
-- **Generation timeout / SIGINT:** kill the agent, enter rescue path (print `TREE_SHA` + manual recovery).
+- **Generation deadline (idle / hard cap, §9.30) / SIGINT:** kill the agent, enter rescue path (print `TREE_SHA` + manual recovery).
 - **Empty diff after auto-stage-all:** exit 2, "nothing to commit."
 - **Agent not on `$PATH`:** `providers list` would have shown it as absent; on direct use, fail fast with "provider 'X' not found: is <command> installed?"
 
@@ -175,7 +175,7 @@ stagecoach/
 │   │   ├── manifest.go            # Manifest struct (+ tooled_flags), Render(mode) → exec.Cmd spec
 │   │   ├── builtin.go             # compiled-in manifests (pi, claude, agy, ...)
 │   │   ├── registry.go            # name → manifest, with override merge
-│   │   ├── executor.go            # run manifest, feed stdin, capture stdout, timeout
+│   │   ├── executor.go            # run manifest, feed stdin, capture stdout, idle+hard-cap deadlines (§9.30)
 │   │   ├── parse.go               # parseOutput() pipeline (§12.9)
 │   │   └── *_test.go
 │   ├── prompt/

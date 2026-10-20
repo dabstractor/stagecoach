@@ -17,7 +17,8 @@ With no command, runs the default action: commit staged changes (auto-staging al
 | `--model <name>`                                 | `stagecoach_MODEL`                       | `stagecoach.model`          | per-manifest `default_model` | Model override — `inference/model` form for multi-backend providers (FR-R5b) — **global default for all roles** (§16.4).                                                      |
 | `--reasoning <level>`                            | `stagecoach_REASONING`                   | `stagecoach.reasoning`      | off                          | Reasoning level (`off\|low\|medium\|high`) — **global default for all roles** (FR-R6); `off` for every role out of the box.                                                   |
 | `--config <path>`                                | `stagecoach_CONFIG`                      | —                           | resolved path                | Path to a config file (overrides discovery).                                                                                                                                  |
-| `--timeout <dur>`                                | `stagecoach_TIMEOUT`                     | `stagecoach.timeout`        | `120s`                       | Generation timeout.                                                                                                                                                           |
+| `--timeout <dur>`                                | `stagecoach_TIMEOUT`                     | `stagecoach.timeout`        | `600s`                       | Generation **hard cap** — absolute wall-clock backstop (§9.30).                                                                                                              |
+| `--idle-timeout <dur>`                           | `stagecoach_IDLE_TIMEOUT`                 | `stagecoach.idle_timeout`   | `60s`                        | Generation **idle deadline** — kill after this long with no observable agent byte activity (§9.30; the primary bound). Per-role `--<role>-idle-timeout` mirrors `--<role>-timeout`. |
 | `--all`, `-a`                                    | —                                        | —                           | —                            | `git add -A` before snapshotting, even if something is staged.                                                                                                                |
 | `--no-auto-stage`                                | —                                        | —                           | —                            | If nothing is staged, exit instead of auto-staging.                                                                                                                           |
 | `--commits <N>`                                  | —                                        | `stagecoach.commits`        | `0` (auto)                   | Force exactly N commits when nothing is staged (skips the planner's count decision; §13.6.1). `1` ≡ `--single`.                                                               |
@@ -62,7 +63,7 @@ With no command, runs the default action: commit staged changes (auto-staging al
 | `1`   | General error (generation failed, parse failed after retries, agent missing, etc.).        |
 | `2`   | Nothing to commit (clean tree after auto-stage, or nothing staged with `--no-auto-stage`). |
 | `3`   | Rescue condition (snapshot taken, commit not created — manual recovery printed).           |
-| `124` | Timeout (generation exceeded `--timeout`).                                                 |
+| `124` | Deadline exceeded (idle `--idle-timeout` or hard cap `--timeout`; §9.30).                           |
 | `5`   | Busy — another stagecoach run holds this repo's run lock (§18.5). Retry after it finishes.  |
 | `6`   | Update available — `stagecoach upgrade --check` found a newer version (informational; §9.29). |
 
@@ -149,7 +150,7 @@ stagecoach --planner-provider agy --planner-model gemini-3.1-pro
 
 ### 16.1 Resolution order (FR34), lowest to highest
 
-1. **Built-in defaults** (`internal/config/defaults.go`): timeout 120s (global fallback for every role; **planner role default 480s** — FR-R7), auto_stage_all true, max_diff_bytes 300000, max_md_lines 100, token_limit 0 (unset ⇒ legacy per-section caps; FR3d), diff_context 1 (FR3f), max_duplicate_retries 3, output raw, strip_code_fence true, multi_turn_fallback true, multi_turn_chunk_tokens 32000 (§9.24 FR-T1/FR-T3), hook_timeout 10m (§9.25 FR-V6), work_desc_read_rounds 5 (§9.26 FR-W6), upgrade channel "stable" + source_repo "dabstractor/stagecoach" (§9.29 FR-U10).
+1. **Built-in defaults** (`internal/config/defaults.go`): idle_timeout 60s + timeout 600s hard cap (the global deadline fallbacks for every role, FR-R7/§9.30; the v2.8 planner 480s special-case is retired — an idle deadline makes it moot), auto_stage_all true, max_diff_bytes 300000, max_md_lines 100, token_limit 0 (unset ⇒ legacy per-section caps; FR3d), diff_context 1 (FR3f), max_duplicate_retries 3, output raw, strip_code_fence true, multi_turn_fallback true, multi_turn_chunk_tokens 32000 (§9.24 FR-T1/FR-T3), hook_timeout 10m (§9.25 FR-V6), work_desc_read_rounds 5 (§9.26 FR-W6), upgrade channel "stable" + source_repo "dabstractor/stagecoach" (§9.29 FR-U10).
 2. **Built-in provider defaults** (`internal/provider/builtin.go`): the manifests in §12.3–12.7.
 3. **Global config file** (`$XDG_CONFIG_HOME/stagecoach/config.toml`, default `~/.config/stagecoach/config.toml`).
 4. **Per-repo config file** (`./.stagecoach.toml`, if present; not committed by default — added to a generated `.gitignore` only on `config init` if the user confirms).
@@ -172,7 +173,8 @@ Higher wins. Agent-platform manifests merge field-by-field (a user override that
 provider = "pi"          # the AGENT PLATFORM (pi, claude, opencode, …)
 model    = "anthropic/claude-haiku"  # inference provider is a slash-PREFIX for multi-backend providers (FR-R5b); bare for single-backend
 reasoning = "off"         # off|low|medium|high; shipped default is off for every role (FR-R6)
-timeout  = "120s"         # global fallback for every role (FR-R7); planner defaults to 480s
+idle_timeout = "60s"     # kill an agent silent this long — the PRIMARY deadline (FR-R7/§9.30)
+timeout  = "600s"         # hard cap — absolute wall-clock backstop (FR-R7/§9.30)
 auto_stage_all = true
 verbose  = false
 
@@ -226,16 +228,17 @@ For users who prefer to keep config with the repo and don't want a `.stagecoach.
 [stagecoach]
     provider = pi          # the agent platform
     model = anthropic/claude-haiku    # inference provider is the slash-prefix (FR-R5b)
-    timeout = 90
+    timeout = 600                  # hard cap (§9.30)
+    idleTimeout = 60               # idle deadline (§9.30)
     autoStageAll = true
     noParentWatchdog = false   # v2.7 (§9.27, FR-K6): opt out of the parent-death lock watchdog
 ```
 
 Read with `git config --get stagecoach.provider`, etc. Booleans via `git config --bool`. This composes naturally with the author's existing `git commit-pi` alias habit and with `git config --local` vs `--global`.
 
-### 16.4 Per-role provider/model configuration (v3; → G12, FR-R1–R6)
+### 16.4 Per-role provider/model/reasoning/deadline configuration (v3; → G12, FR-R1–R7)
 
-The four roles — **planner, stager, message, arbiter** (§13.6.2) — each resolve their **provider** (agent platform), **model** (inference-provider-prefixed for multi-backend providers, FR-R5b), and **reasoning** level (FR-R6) independently. A single global default covers all of them; per-role tables override the fields you care about.
+The four roles — **planner, stager, message, arbiter** (§13.6.2) — each resolve their **provider** (agent platform), **model** (inference-provider-prefixed for multi-backend providers, FR-R5b), **reasoning** level (FR-R6), and **generation deadlines** (idle timeout + hard cap, FR-R7/§9.30) independently. A single global default covers all of them; per-role tables override the fields you care about.
 
 **Resolution for a role's provider/model/reasoning (highest wins), applied independently per field:** CLI flag → env → `[role.<role>]` config → `[defaults]` config (the global) → built-in manifest default. The globals are `[defaults].provider` / `[defaults].model` / `[defaults].reasoning` (i.e. `--provider`/`--model`/`--reasoning`, `stagecoach_PROVIDER`/`stagecoach_MODEL`/`stagecoach_REASONING`). On the single-commit path the only active role is `message`, so setting just the globals is exactly equivalent to v1 — back-compatible.
 
@@ -251,6 +254,8 @@ reasoning = "off"       # global default for every role; off is the shipped defa
 provider = "agy"        # Antigravity quota for the big-context reasoning (single-backend → bare model)
 model    = "gemini-3.1-pro"
 reasoning = "high"      # OPT-IN: turn thinking on for the planner only (off by default; FR-R6)
+idle_timeout = "120s"   # per-role idle deadline override (FR-R7/§9.30): give a thinking planner more silence room
+timeout = "900s"        # per-role hard-cap override (FR-R7/§9.30)
 
 [role.stager]           # tooled provider that runs git; needs tooled_flags in its manifest
 provider = "agy"
@@ -263,7 +268,7 @@ model    = "gemini-3.5-flash"
 # (omit to inherit)
 ```
 
-Env: `stagecoach_<ROLE>_{PROVIDER,MODEL,REASONING}` (e.g. `stagecoach_PLANNER_MODEL`). Flags: `--<role>-provider` / `--<role>-model` / `--<role>-reasoning` (**all four roles, including `message`**). **Model strings are provider-specific** (FR-R5): a role's `model` is interpreted by _that role's_ resolved provider's manifest; for multi-backend providers it is `inference/model` (FR-R5b). A role routed to a provider whose manifest has empty `tooled_flags` cannot serve as the **stager** (it lacks a safe tooled profile); stagecoach rejects that combination up front. **A bare model (no `/`) on a `provider_flag` provider like pi is a hard error** (FR-R5b) — never silently rendered as a bare `--model`.
+Env: `stagecoach_<ROLE>_{PROVIDER,MODEL,REASONING,IDLE_TIMEOUT,TIMEOUT}` (e.g. `stagecoach_PLANNER_MODEL`). Flags: `--<role>-provider` / `--<role>-model` / `--<role>-reasoning` / `--<role>-idle-timeout` / `--<role>-timeout` (**all four roles, including `message`**). Deadlines resolve on the same ladder (FR-R7); defaults are idle `60s` / hard cap `600s` with no role-level built-in. **Model strings are provider-specific** (FR-R5): a role's `model` is interpreted by _that role's_ resolved provider's manifest; for multi-backend providers it is `inference/model` (FR-R5b). A role routed to a provider whose manifest has empty `tooled_flags` cannot serve as the **stager** (it lacks a safe tooled profile); stagecoach rejects that combination up front. **A bare model (no `/`) on a `provider_flag` provider like pi is a hard error** (FR-R5b) — never silently rendered as a bare `--model`.
 
 ---
 

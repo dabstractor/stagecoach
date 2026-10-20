@@ -12,7 +12,7 @@
 | Nothing staged, auto-stage on, but clean tree     | pre-snapshot           | "Nothing to commit."                                           | 2     |
 | Merge conflicts in index                          | `write-tree`           | "Resolve merge conflicts first."                               | 1     |
 | Agent missing on `$PATH`                          | pre-generation         | "Provider 'X': command 'Y' not found. Is the agent installed?" | 1     |
-| Generation timeout                                | executor               | kill agent, rescue                                             | 124/3 |
+| Generation deadline (idle / hard cap, §9.30)      | executor               | kill agent process group, rescue                              | 124/3 |
 | SIGINT/SIGTERM                                    | any time post-snapshot | kill agent, rescue                                             | 3     |
 | Empty/invalid output after retries                | parse                  | rescue                                                         | 3     |
 | Duplicate after all retries                       | dedupe                 | rescue                                                         | 3     |

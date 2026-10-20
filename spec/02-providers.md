@@ -180,6 +180,19 @@ provider_flag = "--provider"
 #   rendering (FR-T9); never set speculatively.
 session_mode = ""
 
+# --- event-stream output (idle-deadline channel + error surfacing, §9.30) -
+# Flag tokens that switch the invocation to the provider's NATIVE progressive
+# event-stream mode (pi ["--mode","json"]; claude/cursor/agy
+# ["--output-format","stream-json"] (+ their partial-message switches); codex
+# ["--json"]; opencode ["--format","json"]). [] (default): the provider stays
+# in buffered print mode (final stdout = the message). In event mode the
+# message is assembled from the terminal message event, stdout becomes a
+# portable activity channel for the idle deadline (FR-A3(a)), and in-stream
+# errors surface (FR-S3). REQUIRES a verified progressive emission +
+# terminal-event shape (FR-S2) — the json-vs-stream-json buffered/progressive
+# trap is real; never set speculatively.
+event_stream = []
+
 # --- bare mode -----------------------------------------------------------
 # Flags appended verbatim to make the call tool-less, session-less,
 # extension-less, chrome-less, and ephemeral. These are agent-specific.
@@ -412,7 +425,7 @@ agy --model "Gemini 3.5 Flash (Low)" --mode accept-edits --dangerously-skip-perm
 2. **RESOLVED — Model flag:** confirmed `--model` (the gemini-cli lineage's `-m` is rejected with "flags provided but not defined"). Model labels are `agy models` display labels VERBATIM, reasoning suffix included (e.g. "Gemini 3.5 Flash (Low)", "GPT-OSS 120B (Medium)"). NOTE: GPT-OSS 120B is subject to transient backend 503 "No capacity available" errors; retries succeed (external capacity issue, not a stagecoach bug).
 3. **RESOLVED — Prompt delivery + read-only mode:** agy v1.1.0 **diverged** from gemini-cli. `-p`/`--print`/`--prompt` is **value-taking** (a bare `-p` fails with "flag needs an argument: -p"); agy reads the prompt from **stdin** when `-p` is absent. `--approval-mode` was **removed**; the read-only equivalent is `--mode plan` (verified to emit clean commit messages with no plan-mode formatting noise). No first-class system-prompt flag (sys is prepended to the payload, §12.2).
 4. **RESOLVED (unscoped) — Tooled (stager) flags:** verified 2026-07-09 against agy v1.1.11 (end-to-end: a stdin stager task stages exactly the requested paths and leaves the rest alone). agy exposes **no** scoped `--allowed-tools`/`--allowed-tools-pattern` allowlist — the only non-interactive tool auto-approve knob is `--dangerously-skip-permissions` (auto-approves ALL tools). The verified combo is `--mode accept-edits --dangerously-skip-permissions` (plus `--add-dir <repo>`, since agy does not auto-adopt its cwd as the workspace). This is the **UNSCOPED** model (§12.7.1) — the same one **pi** uses; the §17.6 stager prompt + the HEAD-movement guard (Issue 2 / §19) + `verifyFreezeSubset` (FR-M1c) are the safety net, not flag-scoping. A scoped git/Read/Edit allowlist remains a desirable future hardening if agy adds one; until then agy is stager-capable via the unscoped path (parity with pi).
-5. **Print-mode timeout:** `agy` exposes `--print-timeout` (default 5m); stagecoach's own `--timeout` (§9.5) governs the kill, but a shorter `--print-timeout` makes `agy` exit cleanly rather than hang — wire it to the same budget.
+5. **Print-mode timeout:** `agy` exposes `--print-timeout` (default 5m); stagecoach's own deadlines (§9.5/§9.30) govern the kill, but a shorter `--print-timeout` makes `agy` exit cleanly rather than hang — wire it to the same budget.
 
 Items 1–4 are cleared; agy is stager-capable. It still ships `experimental = true` (§12.7.2) pending a full `--help` re-verification pass (item 4 itself is resolved).
 
