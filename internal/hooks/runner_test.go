@@ -677,9 +677,13 @@ func TestRunCommitHooks_MsgFileUnderGitDir_ContainerContract(t *testing.T) {
 	gitDir := execGit(t, repo, "rev-parse", "--absolute-git-dir")
 	// A container-style commit-msg: the file must be readable AND live under $GIT_DIR — anything
 	// else is a host-only temp path that would be ENOENT once the wrapper re-execs in a container.
+	// The path is backslash→slash normalized before the prefix match: on Windows git prints $GIT_DIR
+	// with forward slashes while the handed path uses the OS separator, so a raw match would misfire
+	// even though the file genuinely sits under $GIT_DIR.
 	installHook(t, repo, "commit-msg", fmt.Sprintf(
-		`[ -f "$1" ] && [ -r "$1" ] || { echo "msg file unreadable: $1" >&2; exit 1; }
-case "$1" in %s/*) exit 0 ;; *) echo "msg file outside git dir: $1" >&2; exit 1 ;; esac`,
+		`p=$(printf '%%s' "$1" | tr '\\' '/')
+[ -f "$1" ] && [ -r "$1" ] || { echo "msg file unreadable: $1" >&2; exit 1; }
+case "$p" in %s/*) exit 0 ;; *) echo "msg file outside git dir: $1" >&2; exit 1 ;; esac`,
 		shellPath(gitDir)))
 
 	if _, _, err := RunCommitHooks(context.Background(), g, defaultCfg(), snapshotTree, parentSHA,
@@ -698,9 +702,11 @@ func TestRunCommitHooks_ScopedIndexUnderGitDir_ContainerContract(t *testing.T) {
 	gitDir := execGit(t, repo, "rev-parse", "--absolute-git-dir")
 	// A container-style pre-commit: the index must exist, be readable, live under $GIT_DIR, and
 	// actually contain the snapshot's staged entry (a.go) — proving it is the primed scoped index.
+	// Path normalized backslash→slash before the prefix match (Windows separator skew; see above).
 	installHook(t, repo, "pre-commit", fmt.Sprintf(
-		`[ -f "$GIT_INDEX_FILE" ] && [ -r "$GIT_INDEX_FILE" ] || { echo "index unreadable: $GIT_INDEX_FILE" >&2; exit 1; }
-case "$GIT_INDEX_FILE" in %s/*) ;; *) echo "index outside git dir: $GIT_INDEX_FILE" >&2; exit 1 ;; esac
+		`p=$(printf '%%s' "$GIT_INDEX_FILE" | tr '\\' '/')
+[ -f "$GIT_INDEX_FILE" ] && [ -r "$GIT_INDEX_FILE" ] || { echo "index unreadable: $GIT_INDEX_FILE" >&2; exit 1; }
+case "$p" in %s/*) ;; *) echo "index outside git dir: $GIT_INDEX_FILE" >&2; exit 1 ;; esac
 git ls-files --cached -- a.go | grep -q . || { echo "scoped index lost a.go" >&2; exit 1; }`,
 		shellPath(gitDir)))
 
