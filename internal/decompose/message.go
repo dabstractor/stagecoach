@@ -142,7 +142,10 @@ func generateMessageCore(ctx context.Context, deps Deps, treeA, treeB string, se
 	// 5. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("message", deps.Config)
-	messageTimeout := config.ResolveRoleTimeout("message", deps.Config) // FR-R7 (§9.15/§16.1): per-role timeout (no built-in → cfg.Timeout by default)
+	// FR-R7/§9.30 (§16.1): the message role's BOTH deadlines via the per-role ladder — no built-in
+	// ships, so with no override it inherits the 60s/600s globals; each Execute below binds them
+	// individually (FR-A4 fresh idle clock).
+	messageIdle, messageHard := config.ResolveRoleDeadlines("message", deps.Config)
 	resolved := deps.Roles.Message.Resolve()
 	retryInstr := *resolved.RetryInstruction
 
@@ -170,7 +173,7 @@ func generateMessageCore(ctx context.Context, deps Deps, treeA, treeB string, se
 			return "", fmt.Errorf("%w: render: %w", ErrMessageFailed, rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: messageTimeout}, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: messageIdle, Hard: messageHard}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.

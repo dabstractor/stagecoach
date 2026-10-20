@@ -95,7 +95,10 @@ func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) 
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("stager", deps.Config)
-	stagerTimeout := config.ResolveRoleTimeout("stager", deps.Config) // FR-R7 (§9.15/§16.1): per-role timeout (no built-in → cfg.Timeout by default)
+	// FR-R7/§9.30 (§16.1): the stager's BOTH deadlines via the per-role ladder — no built-in ships, so
+	// with no override it inherits the 60s/600s globals; the Execute below binds them (FR-A4 fresh
+	// idle clock).
+	stagerIdle, stagerHard := config.ResolveRoleDeadlines("stager", deps.Config)
 
 	// 2. Build the §17.6 stager task from the concept's title + description.
 	task := prompt.BuildStagerTask(concept.Title, concept.Description, concept.Files)
@@ -116,7 +119,7 @@ func stageConcept(ctx context.Context, deps Deps, concept prompt.PlannerCommit) 
 	}
 
 	// 4. Execute once. NO retry (the orchestrator owns FR-M8); NO parse (no JSON contract).
-	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: stagerTimeout}, deps.Verbose); execErr != nil {
+	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: stagerIdle, Hard: stagerHard}, deps.Verbose); execErr != nil {
 		return fmt.Errorf("%w: %w", ErrStagerFailed, execErr)
 	}
 

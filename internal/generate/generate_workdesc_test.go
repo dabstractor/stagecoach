@@ -324,6 +324,53 @@ func TestCommitStaged_WorkDescription_MessageRoleTimeout(t *testing.T) {
 	}
 }
 
+// TestCommitStaged_WorkDescription_MessageRoleIdleTimeout verifies §9.30 FR-A4/FR-R7 on the
+// work-description read-loop: the message role's resolved IDLE deadline bounds EACH round's Execute
+// (a FRESH idle clock per round). Mirrors TestCommitStaged_WorkDescription_MessageRoleTimeout,
+// swapped to the idle knob: role IdleTimeout 150ms, global hard cap BOUNDED at 3s, stub silent
+// while sleeping past both (4s). On Linux the idle kills turn 1 at 150ms; on non-Linux print-mode
+// the idle is DISARMED (D4) and the 3s cap lands — both reach the unchanged workdesc cause branch
+// (generate.go's errors.Is(wdCause, context.DeadlineExceeded) → ErrTimeout), so the ErrTimeout
+// assertion is platform-safe (FR-A5).
+func TestCommitStaged_WorkDescription_MessageRoleIdleTimeout(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "feature.go", "package main\n\nfunc F() {}\n")
+	stageFile(t, repo, "feature.go")
+
+	// turn-1 Execute sleeps 4000ms silently; the 150ms role idle (Linux) — or the 3s bounded global
+	// hard cap (non-Linux) — kills it before any READ/message.
+	m := stubtest.Manifest(bin, stubtest.Options{Out: "feat: never reached", SleepMS: 4000})
+	appendMode := "append"
+	m.SessionMode = &appendMode // REQUIRED: RunWorkDescription's turn-1 RenderMultiTurn gate
+
+	cfg := config.Defaults()
+	cfg.WorkDescription = "add F"                                                              // activates the workdesc branch (skips one-shot)
+	cfg.Timeout = 3 * time.Second                                                              // BOUNDED global hard cap (non-Linux print-mode kill path)
+	cfg.Roles = map[string]config.RoleConfig{"message": {IdleTimeout: 150 * time.Millisecond}} // SMALL role idle → times out (Linux kill path)
+
+	_, err := CommitStaged(context.Background(), Deps{Git: git.New(repo), Manifest: m}, cfg)
+	if err == nil {
+		t.Fatal("expected *RescueError on message-role idle deadline, got nil")
+	}
+	var re *RescueError
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %T, want *RescueError (workdesc turn-1 deadline → rescue)", err)
+	}
+	// ErrTimeout is minted ONLY by the workdesc cause branch's errors.Is(wdCause,
+	// context.DeadlineExceeded) check, so errors.Is(err, ErrTimeout) proves a deadline (idle on
+	// Linux / hard cap elsewhere) reached turn-1 Execute. RescueError.Unwrap returns Kind (not
+	// Cause), so the raw sentinel is asserted on Cause.
+	if !errors.Is(err, ErrTimeout) {
+		t.Errorf("errors.Is(err, ErrTimeout) = false, want true (FR-A5: the idle kill maps through the unchanged workdesc cause branch)")
+	}
+	if !errors.Is(re.Cause, context.DeadlineExceeded) {
+		t.Errorf("errors.Is(re.Cause, context.DeadlineExceeded) = false, want true (cause = %v; the 150ms role idle — or the 3s cap on non-Linux — should be the kill)", re.Cause)
+	}
+}
+
 // TestCommitStaged_WorkDescription_RoundBudgetForcesConclusion (FR-W6): with a tiny round budget,
 // the model keeps requesting READs past the cap; the forced-conclusion turn demands the message and
 // the run commits the message from that turn (the cap guarantees termination).

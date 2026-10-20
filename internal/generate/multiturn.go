@@ -129,8 +129,8 @@ const finalInstruction = "Now write the commit message for the diff above. Outpu
 //   - Turns 2..N: each chunk's body ("PART i/N:\n<body>"); no system-prompt flag (turn > 1).
 //   - Turn N+1:   the finalInstruction; THIS turn's stdout is the candidate message.
 //
-// Per-turn timeout = msgTimeout = ResolveRoleTimeout("message", cfg) (FR-R7/FR-T5; Execute shadows ctx
-// with WithTimeout). Intermediate turns'
+// Per-turn deadlines = msgIdle/msgHard = ResolveRoleDeadlines("message", cfg) (FR-R7/FR-T5/§9.30;
+// each Execute binds them individually — a FRESH idle clock per turn, FR-A4). Intermediate turns'
 // stdout ("ok") is discarded. Failure handling (FR-T7): ANY turn's Execute error OR any RenderMultiTurn
 // error ⇒ Run aborts and returns the raw error as `cause` (the caller maps it to &RescueError{Cause:
 // cause}). The decision is `execErr != nil` (NOT errors.Is(...)) because FR-T7 treats a turn timeout,
@@ -146,11 +146,11 @@ const finalInstruction = "Now write the commit message for the diff above. Outpu
 func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Manifest,
 	sysPrompt, payload, msgModel, msgReasoning string) (msg string, ok bool, cause error) {
 
-	// FR-R7/FR-T5: resolve the message role's per-turn timeout so [role.message].timeout / --message-timeout
-	// bound each multi-turn turn (and the caller's total-budget display) instead of the flat cfg.Timeout.
-	// With no per-role override ResolveRoleTimeout returns cfg.Timeout (the message role has no built-in) —
-	// behavior-preserving by default.
-	msgTimeout := config.ResolveRoleTimeout("message", cfg)
+	// FR-R7/FR-T5/§9.30: resolve the message role's BOTH deadlines so [role.message].idle_timeout /
+	// .timeout (and their flags) bound EACH multi-turn turn individually — a FRESH idle clock per turn
+	// (FR-A4: structurally one Execute per turn). No per-role override ⇒ the 60s/600s globals
+	// (behavior-preserving by default). Resolved ONCE here; all three Executes below share the pair.
+	msgIdle, msgHard := config.ResolveRoleDeadlines("message", cfg)
 
 	// (1) Chunk the captured payload (FR-T2 lossless; FR-T3 sizing — S1's helper).
 	chunks := chunkPayload(payload, cfg.MultiTurnChunkTokens)
@@ -169,7 +169,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 	if rerr != nil {
 		return "", false, rerr // non-append provider ⇒ RenderMultiTurn's session_mode gate; surface as cause
 	}
-	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose); execErr != nil {
+	if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose); execErr != nil {
 		return "", false, execErr // FR-T7: any turn error/timeout/cancel/non-zero-exit aborts
 	}
 
@@ -180,7 +180,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 		if rerr != nil {
 			return "", false, rerr
 		}
-		if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose); execErr != nil {
+		if _, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose); execErr != nil {
 			return "", false, execErr // FR-T7
 		}
 	}
@@ -191,7 +191,7 @@ func Run(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Ma
 	if rerr != nil {
 		return "", false, rerr
 	}
-	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 	if execErr != nil {
 		return "", false, execErr // (8) FR-T7: final-turn error aborts
 	}

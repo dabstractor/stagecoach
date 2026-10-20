@@ -64,11 +64,11 @@ type readState struct {
 func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manifest provider.Manifest,
 	sysPrompt, payload, skeleton, msgModel, msgReasoning string) (msg string, ok bool, cause error) {
 
-	// FR-R7: resolve the message role's per-turn timeout so [role.message].timeout / --message-timeout
-	// bound each work-description read-loop turn instead of the flat cfg.Timeout. With no per-role
-	// override ResolveRoleTimeout returns cfg.Timeout (the message role has no built-in) — behavior-
-	// preserving by default.
-	msgTimeout := config.ResolveRoleTimeout("message", cfg)
+	// FR-R7/§9.30: resolve the message role's BOTH deadlines so [role.message].idle_timeout / .timeout
+	// bound each work-description read-loop turn individually — a FRESH idle clock per turn/round
+	// (FR-A4: structurally one Execute per turn). No per-role override ⇒ the 60s/600s globals
+	// (behavior-preserving by default). Resolved ONCE here; all three Executes below share the pair.
+	msgIdle, msgHard := config.ResolveRoleDeadlines("message", cfg)
 
 	// Mint a fresh, one-run-scope session id (FR-T6 parity — never resumed on a later run).
 	sessionID := newSessionID()
@@ -79,7 +79,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 	if rerr != nil {
 		return "", false, rerr // non-append provider ⇒ RenderMultiTurn's session_mode gate; surface as cause
 	}
-	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 	if execErr != nil {
 		return "", false, execErr // FR-T7 parity: any turn error/timeout/cancel/non-zero-exit aborts
 	}
@@ -128,7 +128,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 			if rerr != nil {
 				return "", false, rerr
 			}
-			out2, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+			out2, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 			if execErr != nil {
 				return "", false, execErr
 			}
@@ -146,7 +146,7 @@ func RunWorkDescription(ctx context.Context, deps Deps, cfg config.Config, manif
 		if rerr != nil {
 			return "", false, rerr
 		}
-		out, _, execErr = provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+		out, _, execErr = provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 		if execErr != nil {
 			return "", false, execErr // FR-T7 parity
 		}

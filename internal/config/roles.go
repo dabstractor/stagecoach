@@ -93,9 +93,9 @@ func ResolveRoleDeadlines(role string, cfg Config) (idle, hard time.Duration) {
 // per-role override (cfg.Roles[role].Timeout, 0 ⇒ inherit) > the global cfg.Timeout (Defaults() seeds
 // 600s; no role ships a built-in — the retired v2.8 planner wall-clock built-in is gone, §9.30).
 //
-// KEPT for its 11 existing callers (decompose arbiter/planner/stager, generate message/multiturn/
-// workdesc/generate, hook/exec); new code should prefer ResolveRoleDeadlines (which also returns the
-// idle deadline — the PRIMARY §9.30 productivity signal). The zero-value sentinel
+// Retained as the hard-cap accessor (test-pinned; zero production callers since S3 threaded every
+// call site onto ResolveRoleDeadlines); new code should call ResolveRoleDeadlines directly (which
+// also returns the idle deadline — the PRIMARY §9.30 productivity signal). The zero-value sentinel
 // (RoleConfig.Timeout == 0 ⇒ "inherit") mirrors the "" string fields of ResolveRoleModel; a RESOLVED
 // timeout should never be 0 at an Execute call site (Execute treats timeout<=0 as "no deadline").
 //

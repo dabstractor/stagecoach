@@ -501,6 +501,11 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 	// Provider is discarded (manifest is deps.Manifest, selected upstream by buildDeps; P1.M2.T2.S1).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
 	model := msgModel
+	// FR-R7/§9.30 (library twin of CommitStaged's one-shot loop): the message role's BOTH deadlines —
+	// idle (primary) + hard cap — via the per-role ladder. Raw cfg.Timeout before; the ladder now
+	// applies. Each Execute invocation below binds them individually (FR-A4 fresh idle clock); no
+	// per-role override ⇒ the 60s/600s globals.
+	libIdle, libHard := config.ResolveRoleDeadlines("message", cfg)
 	if model == "" {
 		model = *resolved.DefaultModel
 	}
@@ -566,7 +571,7 @@ func runPipeline(ctx context.Context, deps generate.Deps, cfg config.Config, sys
 			return Result{}, fmt.Errorf("render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: cfg.Timeout}, deps.Verbose)
+		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: libIdle, Hard: libHard}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return Result{}, &generate.RescueError{

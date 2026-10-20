@@ -80,7 +80,9 @@ func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDi
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("arbiter", deps.Config)
-	arbiterTimeout := config.ResolveRoleTimeout("arbiter", deps.Config) // FR-R7 (§9.15/§16.1): per-role timeout (no built-in → cfg.Timeout by default)
+	// FR-R7/§9.30 (§16.1): the arbiter's BOTH deadlines via the per-role ladder — no built-in ships,
+	// so with no override it inherits the 60s/600s globals; the Execute below binds them (FR-A4).
+	arbiterIdle, arbiterHard := config.ResolveRoleDeadlines("arbiter", deps.Config)
 
 	// 2. Convert []CommitInfo → []prompt.ArbiterCommit (FileChange→path seam) + build the valid-SHA set.
 	arbiterCommits, validSHAs := convertArbiterCommits(commits)
@@ -98,7 +100,7 @@ func runArbiter(ctx context.Context, deps Deps, commits []CommitInfo, leftoverDi
 	}
 
 	// 5. Execute ONCE (NO retry — §17.7 defines no retry instruction; the arbiter is "when in doubt, null").
-	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: arbiterTimeout}, deps.Verbose)
+	out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: arbiterIdle, Hard: arbiterHard}, deps.Verbose)
 	if execErr != nil {
 		if errors.Is(execErr, context.DeadlineExceeded) || errors.Is(execErr, context.Canceled) {
 			// Timeout / cancel → graceful null (the arbiter OWNS the null decision, §13.6.5).

@@ -63,10 +63,13 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 	// 1. Derive the <role> model — Deps has no Models field. (Provider is the manifest name; it is NOT
 	// passed to Render — v3 FR-R5b folds the inference backend into the model slash-prefix.)
 	_, mdl, rsn := config.ResolveRoleModel("planner", deps.Config)
-	// FR-R7 (§9.15/§16.1): the planner resolves its OWN timeout — the built-in 480s default (longer than
-	// the 120s global) because open-ended decomposition planning needs more time than message/stager/arbiter.
-	// A non-zero cfg.Roles["planner"].Timeout always wins. Behavior was deps.Config.Timeout (pre-FR-R7).
-	plannerTimeout := config.ResolveRoleTimeout("planner", deps.Config)
+	// FR-R7/§9.30 (§16.1): the planner resolves its OWN deadlines via the same per-role ladder as
+	// provider/model — no built-in role deadline ships (the v2.8 planner-only wall-clock special case
+	// is RETIRED as moot: under an idle deadline + hard cap every role, the planner included, is
+	// granted time as long as it stays productive). With no override it inherits the 60s/600s globals;
+	// a non-zero cfg.Roles["planner"] entry always wins. The Execute below binds them individually
+	// (FR-A4 fresh idle clock).
+	plannerIdle, plannerHard := config.ResolveRoleDeadlines("planner", deps.Config)
 
 	// 2. Build the system prompt (style examples) BEFORE the diff so the FR3i prompt-reserve seam
 	// (P1.M4.T1.S2) can measure its worst-case token count and thread it into opts.PromptReserveTokens.
@@ -125,7 +128,7 @@ func callPlanner(ctx context.Context, deps Deps, forcedCount int, isUnborn bool,
 			return prompt.PlannerOutput{}, fmt.Errorf("%w: render: %w", ErrPlannerFailed, rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: plannerTimeout}, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: plannerIdle, Hard: plannerHard}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) || errors.Is(execErr, context.Canceled) {
 				return prompt.PlannerOutput{}, fmt.Errorf("%w: %w", ErrPlannerFailed, execErr) // non-rescue; no retry

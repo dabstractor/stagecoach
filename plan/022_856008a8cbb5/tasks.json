@@ -89,14 +89,14 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Executor idle engine + call-site threading",
-          "status": "Ready",
+          "status": "Complete",
           "description": "The two-deadline execution engine inside internal/provider: counting-writer pipe channel, Linux procfs read-counter poller, the idle watcher goroutine with the D4 arming rule, the DeadlineExceeded-matching idle sentinel preserving the entire downstream error contract, the verbose cause line — then mechanical threading of Deadlines through all 13 role call sites and the multiturn budget line.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "activity channels, two-deadline Execute, 13 call sites, multiturn line",
-              "status": "Ready",
+              "status": "Complete",
               "description": "New activity infrastructure (activity.go/activity_linux.go/activity_other.go), the Execute(ctx, spec, Deadlines, vb) rework with idle watcher and error-contract preservation, and the mechanical rework of every role invocation site plus the FR-T5 worst-case budget line.",
               "subtasks": [
                 {
@@ -137,7 +137,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S3",
                   "title": "thread the 13 role call sites to ResolveRoleDeadlines + multiturn '(worst case)' budget line + Mode-A docs",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S2",
@@ -177,7 +177,7 @@
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "stubagent knobs: progressive-emit + chatty-heartbeat stub modes",
-                  "status": "Researching",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S2"

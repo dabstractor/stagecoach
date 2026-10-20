@@ -160,11 +160,12 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 
 	// Step F: resolve the message role (FR-H6 — exactly like the single-commit path).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
-	// FR-R7/FR-H6: resolve the message role's timeout so [role.message].timeout / --message-timeout bound
-	// the hook one-shot generation (and the multi-turn total budget, FR-T5) instead of the flat cfg.Timeout.
-	// With no per-role override ResolveRoleTimeout returns cfg.Timeout (no message built-in) — behavior-
-	// preserving by default.
-	msgTimeout := config.ResolveRoleTimeout("message", cfg)
+	// FR-R7/FR-H6/§9.30: resolve the message role's BOTH deadlines — idle (primary: kill after 60s
+	// default of silence) + hard cap (600s default backstop) — so [role.message].idle_timeout /
+	// .timeout (and their flags) bound the hook one-shot generation instead of the flat cfg.Timeout.
+	// Each Execute invocation below binds them individually: a FRESH idle clock per invocation (FR-A4).
+	// No per-role override ⇒ the 60s/600s globals (behavior-preserving by default).
+	msgIdle, msgHard := config.ResolveRoleDeadlines("message", cfg)
 	resolved := deps.Manifest.Resolve() // bound: the FR-T1 gate (P1.M3.T1.S2) reads resolved.SessionMode
 	retryInstr := *resolved.RetryInstruction
 
@@ -184,7 +185,7 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 			return fmt.Errorf("hook render: %w", rerr)
 		}
 
-		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+		out, _, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				return errors.New("stagecoach: hook generation timed out") // no retry; never-block
@@ -253,12 +254,15 @@ func Run(ctx context.Context, deps generate.Deps, cfg config.Config, msgFile, so
 
 		// Condition (b): the (now-untruncated) payload must exceed one chunk for multi-turn to help.
 		if git.EstimateTokens(mtPayload) > cfg.MultiTurnChunkTokens {
+			// FR-T5/FR-A4: N+1 INDEPENDENT per-turn deadlines (a fresh idle clock each turn) — the total
+			// shown is the WORST-CASE ceiling: hard cap × (N+1). Each turn's idle window does not scale
+			// with N.
 			turns := generate.ChunkCount(mtPayload, cfg.MultiTurnChunkTokens) + 1 // N chunks + 1 final turn
-			totalMin := int((msgTimeout * time.Duration(turns)).Minutes())
+			totalMin := int((msgHard * time.Duration(turns)).Minutes())
 			if totalMin < 1 {
 				totalMin = 1
 			}
-			fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total\n",
+			fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total (worst case)\n",
 				turns, cfg.MultiTurnChunkTokens, totalMin)
 
 			// FR-T11 verbose trigger line (per-turn verbose is emitted inside generate.Run).

@@ -353,7 +353,7 @@ func materialize(fc *fileConfig, timeout, idleTimeout, hookTimeout time.Duration
 	// and breaks now that RoleConfig.Timeout is time.Duration while fileRoleConfig.Timeout is string). Each
 	// role's Timeout duration string is parsed via parseTimeout (accepts "480s" AND bare "480", mirroring
 	// env/flag/git), with the role name wrapped into any parse error. Empty Timeout ⇒ 0 ⇒ inherit global
-	// (the S2 overlay guard + P1.M2.T1's ResolveRoleTimeout apply it). An all-empty [role.X] ⇒ "inherit global",
+	// (the S2 overlay guard + P1.M2.T1's deadline ladder, ResolveRoleDeadlines, applies it). An all-empty [role.X] ⇒ "inherit global",
 	// harmless — mirrors Providers' whole-map copy.
 	if len(fc.Role) > 0 {
 		c.Roles = make(map[string]RoleConfig, len(fc.Role))

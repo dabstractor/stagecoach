@@ -296,11 +296,12 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 	// No message override ⇒ (cfg.Provider, cfg.Model, cfg.Reasoning) — back-compatible.
 	// Provider is discarded (manifest is deps.Manifest, selected upstream by buildDeps; P1.M2.T2.S1).
 	_, msgModel, msgReasoning := config.ResolveRoleModel("message", cfg)
-	// FR-R7/FR25: resolve the message role's timeout so [role.message].timeout / --message-timeout
-	// bound the message agent's one-shot generation (and the multi-turn total budget, FR-T5) instead
-	// of the flat cfg.Timeout. With no per-role override ResolveRoleTimeout returns cfg.Timeout
-	// (the message role has no built-in) — behavior-preserving by default.
-	msgTimeout := config.ResolveRoleTimeout("message", cfg)
+	// FR-R7/§9.30: resolve the message role's BOTH deadlines — idle (primary: kill after 60s default
+	// of silence) + hard cap (600s default backstop) — via the same per-role ladder as provider/model.
+	// Each Execute invocation below binds them individually: a FRESH idle clock per invocation (FR-A4
+	// — structurally one Execute per attempt/turn/round). No per-role override ⇒ the 60s/600s globals
+	// (behavior-preserving by default).
+	msgIdle, msgHard := config.ResolveRoleDeadlines("message", cfg)
 
 	var rejected []string
 	var candidate string // last generated message (for RescueError.Candidate)
@@ -371,7 +372,7 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 			return Result{}, fmt.Errorf("commit staged: render: %w", rerr)
 		}
 
-		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Hard: msgTimeout}, deps.Verbose)
+		out, stderr, execErr := provider.Execute(ctx, *spec, provider.Deadlines{Idle: msgIdle, Hard: msgHard}, deps.Verbose)
 		if execErr != nil {
 			if errors.Is(execErr, context.DeadlineExceeded) {
 				// §5: immediate rescue, NO retry — agent was killed.
@@ -464,14 +465,15 @@ func CommitStaged(ctx context.Context, deps Deps, cfg config.Config) (Result, er
 
 			// Condition (b): the (now-untruncated) payload must exceed one chunk for multi-turn to help.
 			if git.EstimateTokens(mtPayload) > cfg.MultiTurnChunkTokens {
-				// FR-T5: surface the turn count + total wall-clock budget (timeout × turns) on the progress
-				// line. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
+				// FR-T5/FR-A4: N+1 INDEPENDENT per-turn deadlines (a fresh idle clock each turn) — the total
+				// shown is the WORST-CASE ceiling: hard cap × (N+1). Each turn's idle window does not scale
+				// with N. Deps.Progress is a no-arg callback (can't carry the message) → direct stderr write.
 				turns := len(chunkPayload(mtPayload, cfg.MultiTurnChunkTokens)) + 1 // N chunks + 1 final turn
-				totalMin := int((msgTimeout * time.Duration(turns)).Minutes())
+				totalMin := int((msgHard * time.Duration(turns)).Minutes())
 				if totalMin < 1 {
 					totalMin = 1
 				}
-				fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total\n", turns, cfg.MultiTurnChunkTokens, totalMin)
+				fmt.Fprintf(os.Stderr, "↳ falling back to multi-turn: %d turns (chunks of ~%d tokens), ~%dm total (worst case)\n", turns, cfg.MultiTurnChunkTokens, totalMin)
 
 				// FR-T11: verbose trigger line (per-turn verbose is emitted by provider.Execute inside Run).
 				deps.Verbose.VerboseWarn("one-shot exhausted → multi-turn fallback")

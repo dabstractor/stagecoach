@@ -336,6 +336,48 @@ func TestRun_MessageRoleTimeoutNeverBlock(t *testing.T) {
 	}
 }
 
+// TestRun_MessageRoleIdleNeverBlock verifies §9.30 FR-A4/FR-R7 on the hook one-shot path: the
+// message role's resolved IDLE deadline (config.ResolveRoleDeadlines("message", cfg)) — not just
+// the hard cap — bounds the hook one-shot Execute. Mirrors TestRun_MessageRoleTimeoutNeverBlock,
+// swapped to the idle knob: role IdleTimeout 150ms, global hard cap BOUNDED at 3s, stub silent
+// while sleeping past both (5s). On Linux the idle kills at 150ms; on non-Linux print-mode the
+// idle is DISARMED (D4) and the 3s cap lands — BOTH reach the unchanged never-block branch
+// (errors.Is(execErr, context.DeadlineExceeded) → "hook generation timed out"), so the assertion
+// is platform-safe (FR-A5). Asserting the untouched msg-file proves the hook never blocks on a
+// deadline of either kind.
+func TestRun_MessageRoleIdleNeverBlock(t *testing.T) {
+	stubBin := stubtest.Build(t)
+	repoDir, g := initTempRepo(t)
+
+	changePath := filepath.Join(repoDir, "new.txt")
+	mustWriteFile(t, changePath, []byte("new content\n"))
+	runGit(t, repoDir, "add", "new.txt")
+
+	msgFile := filepath.Join(t.TempDir(), "msg")
+	orig := "# original comments\n"
+	mustWriteFile(t, msgFile, []byte(orig))
+
+	m := stubtest.Manifest(stubBin, stubtest.Options{SleepMS: 5000}) // silent while sleeping
+	cfg := config.Config{
+		Timeout:             3 * time.Second, // BOUNDED global hard cap (non-Linux print-mode kill path)
+		MaxDuplicateRetries: 2,
+		Roles:               map[string]config.RoleConfig{"message": {IdleTimeout: 150 * time.Millisecond}}, // SMALL role idle → times out (Linux kill path)
+	}
+
+	err := Run(context.Background(), generate.Deps{Git: g, Manifest: m}, cfg, msgFile, "")
+	if err == nil {
+		t.Error("expected timeout error, got nil")
+	}
+	if err != nil && !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected timeout error, got: %v", err)
+	}
+
+	data, _ := os.ReadFile(msgFile)
+	if string(data) != orig {
+		t.Errorf("msg-file was modified on message-role idle deadline; got:\n%s", string(data))
+	}
+}
+
 func TestRun_NoPlumbing(t *testing.T) {
 	src, err := os.ReadFile("exec.go")
 	if err != nil {

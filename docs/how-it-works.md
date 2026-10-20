@@ -343,7 +343,7 @@ the entire diff in its session history — then writes one message at the end:
 - **Turn N+1:** "Now write the commit message for the diff above." This turn's output runs through the
   normal parse + duplicate-rejection pipeline, then commits like any other message.
 
-Each turn is a separate provider invocation bounded by the **message role's** resolved timeout (/); total wall-clock ≈ `message-timeout × (N+1)`,
+Each turn is a separate provider invocation bound by BOTH of the **message role's** resolved §9.30 deadlines — the idle deadline (primary: the turn is killed after `idle_timeout`, default 60s, of silence) and the hard cap (`timeout`, default 600s) — with a FRESH idle clock per turn. The progress line's total is therefore a WORST-CASE ceiling: hard cap × (N+1) (N+1 independent per-turn deadlines, not one shared wall-clock budget; each turn's idle window does not scale with N),
 surfaced on the progress line at fallback time. That progress line also reports the per-chunk token budget each chunk targets; with `--verbose`, each turn additionally prints its payload size and raw agent output.
 
 **Failure handling.** If any turn errors, times out, or the final output fails to parse/dedupe, the

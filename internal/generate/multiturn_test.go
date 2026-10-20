@@ -274,6 +274,33 @@ func TestRun_MessageRoleTimeoutBoundsTurn(t *testing.T) {
 	}
 }
 
+// TestRun_MessageRoleIdleBoundsTurn verifies §9.30 FR-A4/FR-R7 on the multi-turn protocol: the
+// message role's resolved IDLE deadline (config.ResolveRoleDeadlines("message", cfg)) bounds EACH
+// turn's Execute — a FRESH idle clock per turn. Mirrors TestRun_MessageRoleTimeoutBoundsTurn's
+// LARGE-global/SMALL-role idiom, swapped to the idle knob: role IdleTimeout 150ms, global hard cap
+// BOUNDED at 3s, stub silent-while-sleeping past both (4s). On Linux the idle kills turn 1 at
+// 150ms; on non-Linux print-mode the idle is DISARMED (D4) and the 3s cap lands — both satisfy
+// errors.Is(cause, context.DeadlineExceeded) (FR-A5), so one assert serves both platforms.
+func TestRun_MessageRoleIdleBoundsTurn(t *testing.T) {
+	bin := stubtest.Build(t)
+	m := stubtest.Manifest(bin, stubtest.Options{SleepMS: 4000}) // silent + slow on EVERY turn
+	appendMode := "append"
+	m.SessionMode = &appendMode // REQUIRED: RenderMultiTurn's session_mode gate must pass to reach Execute
+
+	cfg := config.Defaults()
+	cfg.MultiTurnChunkTokens = 1                                                               // "aaaa\nbbbb\n" ⇒ 2 chunks ⇒ 3 turns (turn 1 is killed)
+	cfg.Timeout = 3 * time.Second                                                              // BOUNDED global hard cap (non-Linux print-mode kill path)
+	cfg.Roles = map[string]config.RoleConfig{"message": {IdleTimeout: 150 * time.Millisecond}} // SMALL role idle → times out (Linux kill path)
+
+	_, _, cause := Run(context.Background(), Deps{}, cfg, m, "sys", "aaaa\nbbbb\n", "anthropic/claude-haiku", "")
+	if cause == nil {
+		t.Fatal("Run cause = nil, want non-nil (message-role 150ms idle should bound turn-1 Execute, not the 3s global cap)")
+	}
+	if !errors.Is(cause, context.DeadlineExceeded) {
+		t.Errorf("cause = %v, want context.DeadlineExceeded (the 150ms message-role idle — or the 3s cap on non-Linux)", cause)
+	}
+}
+
 // TestRun_FinalParseEmpty: the final turn's stdout is empty (script ends with "") ⇒ ParseOutput ok=false.
 // Run returns (msg="", ok=false, cause==nil) — the parse failure is NOT a cause; the caller decides rescue.
 func TestRun_FinalParseEmpty(t *testing.T) {
@@ -846,6 +873,10 @@ func TestCommitStaged_MultiTurnProgressLine_ChunkTokens(t *testing.T) {
 	wantChunk := fmt.Sprintf("chunks of ~%d tokens", cfg.MultiTurnChunkTokens) // "chunks of ~4 tokens"
 	if !strings.Contains(captured, wantChunk) {
 		t.Errorf("progress line missing %q (FR-T11 per-chunk token estimate);\ngot stderr: %q", wantChunk, captured)
+	}
+	// FR-T5/FR-A4 (S3): the total is the WORST-CASE ceiling (hard cap × (N+1)), not a shared budget.
+	if !strings.Contains(captured, "(worst case)") {
+		t.Errorf("progress line missing '(worst case)' (FR-A4: N+1 independent per-turn deadlines);\ngot stderr: %q", captured)
 	}
 	// Sanity: the line is still the multi-turn progress line.
 	if !strings.Contains(captured, "falling back to multi-turn") {

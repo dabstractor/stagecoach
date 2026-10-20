@@ -368,6 +368,43 @@ func TestCallPlanner_Timeout(t *testing.T) {
 	}
 }
 
+// TestCallPlanner_IdleTimeout verifies §9.30 FR-A4/FR-R7 on the planner: the planner's resolved
+// IDLE deadline (config.ResolveRoleDeadlines("planner", cfg)) — not just the hard cap — bounds its
+// Execute. Mirrors TestCallPlanner_Timeout, swapped to the idle knob: role IdleTimeout 100ms,
+// global hard cap BOUNDED at 3s, stub silent while sleeping past both (4s). On Linux the idle
+// kills at 100ms; on non-Linux print-mode the idle is DISARMED (D4) and the 3s cap lands — both
+// satisfy errors.Is(err, context.DeadlineExceeded) (FR-A5), platform-safe.
+func TestCallPlanner_IdleTimeout(t *testing.T) {
+	bin := stubtest.Build(t)
+	repo := t.TempDir()
+	initRepo(t, repo)
+	commitRaw(t, repo, "initial")
+	writeFile(t, repo, "a.txt", "new content") // UNSTAGED
+
+	m := stubtest.Manifest(bin, stubtest.Options{Out: validMultiJSON, SleepMS: 4000})
+	cfg := config.Defaults()
+	cfg.Timeout = 3 * time.Second // BOUNDED global hard cap (non-Linux print-mode kill path)
+	cfg.Roles = map[string]config.RoleConfig{
+		"planner": {IdleTimeout: 100 * time.Millisecond}, // SMALL role idle → times out (Linux kill path)
+	}
+
+	deps := plannerDeps(t, repo, m)
+	deps.Config = cfg
+	baseTree, tStart := freezeForPlanner(t, repo, false)
+
+	_, err := callPlanner(context.Background(), deps, 0, false, baseTree, tStart)
+	if err == nil {
+		t.Fatal("expected error on idle deadline, got nil")
+	}
+	if !errors.Is(err, ErrPlannerFailed) {
+		t.Errorf("errors.Is(err, ErrPlannerFailed) = false, error = %v", err)
+	}
+	// The %w chain should reach context.DeadlineExceeded (idle kill or hard cap — FR-A5 parity).
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("errors.Is(err, context.DeadlineExceeded) = false, error = %v", err)
+	}
+}
+
 func TestCallPlanner_UnbornNilExamples(t *testing.T) {
 	bin := stubtest.Build(t)
 	repo := t.TempDir()
